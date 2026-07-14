@@ -1,0 +1,18 @@
+import { NextResponse } from 'next/server';
+import { cerebroInfo, listDocs } from '@/lib/cerebro';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+export async function GET() {
+  const info = cerebroInfo();
+  return NextResponse.json({
+    status: 'ok',
+    service: 'orvyn-web',
+    backend: 'cerebro-obsidian',
+    cerebroDir: info.dir,
+    cerebroExists: info.exists,
+    docs: info.exists ? listDocs().length : 0,
+    ts: new Date().toISOString(),
+  });
+}

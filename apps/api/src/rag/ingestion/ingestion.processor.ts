@@ -1,0 +1,96 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import { ChunkingService } from '../chunking.service';
+import { EmbeddingsService } from '../embeddings/embeddings.service';
+
+interface DocRow {
+  id: string;
+  tenantId: string | null;
+  escopo: string;
+  nicho: string | null;
+  subespecialidade: string | null;
+}
+
+/**
+ * Processa um documento: parse/chunk -> embed -> upsert de chunks (R1.3).
+ * Idempotente: apaga os chunks do documento antes de reinserir, então
+ * reprocessar N vezes gera a mesma contagem, zero duplicata.
+ * Contextual Retrieval (ADR-03) entra em R2.1; aqui o chunk vai cru.
+ * Bases compartilhadas (global/nicho/sub) são escritas pela role de serviço (BYPASSRLS).
+ */
+@Injectable()
+export class IngestionProcessor {
+  private readonly log = new Logger(IngestionProcessor.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly chunking: ChunkingService,
+    private readonly embeddings: EmbeddingsService,
+  ) {}
+
+  async process(documentId: string, content: string): Promise<{ chunks: number }> {
+    const doc = (await this.prisma.ragDocument.findUnique({
+      where: { id: documentId },
+      select: { id: true, tenantId: true, escopo: true, nicho: true, subespecialidade: true },
+    })) as DocRow | null;
+    if (!doc) throw new Error(`documento ${documentId} não encontrado`);
+
+    try {
+      const chunks = this.chunking.chunk(content);
+      if (!chunks.length) {
+        await this.setStatus(documentId, 'published', null);
+        return { chunks: 0 };
+      }
+      const vectors = await this.embeddings.embed(chunks.map((c) => c.conteudo), 'document');
+      await this.writeChunks(doc, chunks, vectors);
+      await this.setStatus(documentId, 'published', null);
+      return { chunks: chunks.length };
+    } catch (e) {
+      const msg = (e as Error).message;
+      this.log.error(`falha ao processar ${documentId}: ${msg}`);
+      await this.setStatus(documentId, 'failed', msg).catch(() => undefined);
+      throw e;
+    }
+  }
+
+  private async writeChunks(
+    doc: DocRow,
+    chunks: { ordem: number; breadcrumb: string | null; conteudo: string; tokens: number }[],
+    vectors: number[][],
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`DELETE FROM rag_chunks WHERE document_id = $1::uuid`, doc.id);
+      for (let i = 0; i < chunks.length; i++) {
+        const c = chunks[i];
+        const vec = EmbeddingsService.toSqlVector(vectors[i]);
+        await tx.$executeRawUnsafe(
+          `INSERT INTO rag_chunks
+             (document_id, tenant_id, escopo, nicho, subespecialidade, ordem, breadcrumb, conteudo, tokens, embedding, embedding_model, status)
+           VALUES ($1::uuid, $2::uuid, $3::rag_escopo, $4, $5, $6, $7, $8, $9, $10::vector, $11, 'published')`,
+          doc.id,
+          doc.tenantId,
+          doc.escopo,
+          doc.nicho,
+          doc.subespecialidade,
+          c.ordem,
+          c.breadcrumb,
+          c.conteudo,
+          c.tokens,
+          vec,
+          this.embeddings.dims === 1024 ? 'voyage-3-large' : `dims-${this.embeddings.dims}`,
+        );
+      }
+    });
+  }
+
+  private async setStatus(id: string, status: string, erro: string | null): Promise<void> {
+    await this.prisma.ragDocument.update({
+      where: { id },
+      data: {
+        status: status as never,
+        erro,
+        publishedAt: status === 'published' ? new Date() : null,
+      },
+    });
+  }
+}

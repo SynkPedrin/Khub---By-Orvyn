@@ -1,0 +1,258 @@
+// Prisma como CLIENTE TIPADO. As migrações são SQL puro em db/*.sql
+// (RLS/roles/pgvector não são geridos pelo Prisma Migrate). Não rodar
+// `prisma migrate` contra este schema — usar `db/README.md`. R0.3.
+// Fonte da verdade do schema: db/001_rag_schema.sql · Nyro IA/cerebro/Banco.md
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RagEscopo {
+  global
+  nicho
+  sub
+  tenant
+
+  @@map("rag_escopo")
+}
+
+enum RagDocStatus {
+  pending
+  processing
+  published
+  failed
+  superseded
+  candidate
+
+  @@map("rag_doc_status")
+}
+
+model Tenant {
+  id              String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  nome            String
+  templateId      String?       @map("template_id")
+  templateVersion Int?          @map("template_version")
+  plano           String        @default("starter")
+  status          String        @default("active")
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  documents       RagDocument[]
+
+  @@map("tenants")
+}
+
+model RagDocument {
+  id               String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId         String?      @map("tenant_id") @db.Uuid
+  escopo           RagEscopo
+  nicho            String?
+  subespecialidade String?
+  titulo           String
+  fonte            String
+  uri              String?
+  mime             String       @default("text/markdown")
+  contentHash      String       @map("content_hash")
+  versao           Int          @default(1)
+  status           RagDocStatus @default(pending)
+  erro             String?
+  metadados        Json         @default("{}")
+  criadoPor        String?      @map("criado_por") @db.Uuid
+  publishedAt      DateTime?    @map("published_at") @db.Timestamptz(6)
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime     @default(now()) @map("updated_at") @db.Timestamptz(6)
+  tenant           Tenant?      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  chunks           RagChunk[]
+
+  @@map("rag_documents")
+}
+
+model RagChunk {
+  id               String                        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  documentId       String                        @map("document_id") @db.Uuid
+  tenantId         String?                       @map("tenant_id") @db.Uuid
+  escopo           RagEscopo
+  nicho            String?
+  subespecialidade String?
+  ordem            Int
+  breadcrumb       String?
+  contexto         String?
+  conteudo         String
+  tokens           Int                           @default(0)
+  embedding        Unsupported("vector(1024)")?
+  embeddingModel   String                        @default("voyage-3-large") @map("embedding_model")
+  status           RagDocStatus                  @default(published)
+  metadados        Json                          @default("{}")
+  createdAt        DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  document         RagDocument                   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@map("rag_chunks")
+}
+
+model RagQuery {
+  id             String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  conversationId String?  @map("conversation_id") @db.Uuid
+  query          String
+  queryReescrita String?  @map("query_reescrita")
+  escopos        String[]
+  chunkIds       String[] @map("chunk_ids") @db.Uuid
+  scores         Float[]  @db.Real
+  cacheHit       Boolean  @default(false) @map("cache_hit")
+  latenciaMs     Int      @default(0) @map("latencia_ms")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("rag_queries")
+}
+
+model RagFeedback {
+  id             String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  queryId        String?  @map("query_id") @db.Uuid
+  resposta       String
+  chunkIds       String[] @map("chunk_ids") @db.Uuid
+  voto           Int      @db.SmallInt
+  comentario     String?
+  virouDocumento String?  @map("virou_documento") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("rag_feedback")
+}
+
+model NyroGuardrailHit {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  nicho     String?
+  regra     String
+  trecho    String
+  acao      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("nyro_guardrail_hits")
+}
+
+// ============================ CRM Core (F1) ============================
+
+model User {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  email     String
+  nome      String
+  role      String   @default("owner")
+  provider  String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([tenantId, email])
+  @@map("users")
+}
+
+model Pipeline {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  nome      String
+  tipo      String   @default("vendas")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  stages    Stage[]
+  deals     Deal[]
+
+  @@map("pipelines")
+}
+
+model Stage {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  pipelineId String   @map("pipeline_id") @db.Uuid
+  nome       String
+  ordem      Int
+  cor        String   @default("#7B2FBE")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  pipeline   Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  deals      Deal[]
+
+  @@map("stages")
+}
+
+model Contact {
+  id              String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId        String         @map("tenant_id") @db.Uuid
+  nome            String
+  email           String?
+  telefone        String?
+  empresa         String?
+  tag             String         @default("Lead")
+  tags            String[]
+  valorEstimado   Decimal        @default(0) @map("valor_estimado") @db.Decimal(12, 2)
+  camposCustom    Json           @default("{}") @map("campos_custom")
+  ultimoContatoAt DateTime?      @map("ultimo_contato_at") @db.Timestamptz(6)
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime       @default(now()) @map("updated_at") @db.Timestamptz(6)
+  deals           Deal[]
+  conversations   Conversation[]
+
+  @@map("contacts")
+}
+
+model Deal {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  titulo     String
+  contactId  String?  @map("contact_id") @db.Uuid
+  pipelineId String   @map("pipeline_id") @db.Uuid
+  stageId    String   @map("stage_id") @db.Uuid
+  valor      Decimal  @default(0) @db.Decimal(12, 2)
+  origem     String?
+  status     String   @default("aberto")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  contact    Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  pipeline   Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  stage      Stage    @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  @@map("deals")
+}
+
+model Conversation {
+  id           String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  contactId    String?   @map("contact_id") @db.Uuid
+  nome         String
+  canal        String    @default("WhatsApp")
+  status       String    @default("aberta")
+  ultimaPrevia String?   @map("ultima_previa")
+  naoLidas     Int       @default(0) @map("nao_lidas")
+  ultimaHora   String?   @map("ultima_hora")
+  updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  contact      Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  messages     Message[]
+
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId       String       @map("tenant_id") @db.Uuid
+  conversationId String       @map("conversation_id") @db.Uuid
+  autorTipo      String       @default("contato") @map("autor_tipo")
+  corpo          String
+  hora           String?
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+model Activity {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  actor     String
+  acao      String
+  tone      String   @default("neutral")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("activities")
+}

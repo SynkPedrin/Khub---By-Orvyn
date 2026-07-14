@@ -1,0 +1,20 @@
+# deps / build
+node_modules/
+.next/
+dist/
+out/
+.turbo/
+*.tsbuildinfo
+
+# prisma
+**/generated/
+
+# env / secrets — NUNCA commitar
+.env
+.env.*.local
+
+# sistema
+.DS_Store
+
+# obsidian workspace (mantém as notas, ignora estado local do app)
+.obsidian/workspace.json
