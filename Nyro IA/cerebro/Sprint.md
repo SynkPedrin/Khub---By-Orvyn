@@ -114,8 +114,42 @@ Módulo `apps/api/src/rag/` com **24 unit tests verdes** (jest + ts-jest), sem d
 - [x] UI: `/marketing` vira a **Central de Marketing da Nyro** (lista os frameworks, abre no leitor de conhecimento). Verificado.
 - [x] Índice `RAG/conhecimento/global/_INDICE.md` (recuperação por dominio + plano + gate de intenção).
 
-## Próxima sprint (proposta) — FASE 2: CRM completo + Audit
-1. `db/005_crm_full.sql` (`companies`, `tasks`, `notes`, `custom_fields`, `tags`) + RLS + isolamento.
+## Roadmap de finalização (A→G) — "pronto faltando só a Anthropic"
+Ordem do brief do operador. Cada sprint: doc-first → plano → executar → testes (unit + isolamento) → atualizar cérebro.
+- **A** — Integrations foundation + **Meta Ads** (entrega visível) ← **PRÓXIMO, plano abaixo**
+- **B** — TikTok Ads + Google Ads (mesmo contrato `AdsConnector`)
+- **C** — Stripe (billing + pagamentos no funil)
+- **D** — Fechar CRM (F2) + Inbox real + WhatsApp (fecha BUG-003/004/006)
+- **E** — Motor de automações (BullMQ + React Flow, ~15 nós)
+- **F** — Nyro chat + tools (gated em `ANTHROPIC_API_KEY`; 501 sem a chave)
+- **G** — Embeddings plugáveis + backfill (`VOYAGE_API_KEY`; fallback BM25)
+
+Base já entregue: `.env.example` (contrato completo) e RegrasNegocio §6.1/§6.2 (OAuth por tenant + cripto AES-256-GCM; fallback Voyage→BM25).
+
+---
+
+## SPRINT A — Integrations foundation + Meta Ads  *(proposto — aguardando aprovação)*
+
+**Objetivo único:** um tenant conecta uma conta **Meta Ads** por OAuth, os insights populam o banco por BullMQ, e `/marketing/ads` mostra campanhas ordenadas por performance + galeria de criativos com "melhor performando" — tudo isolado por tenant.
+
+### Tasks
+1. **`db/005_integrations_schema.sql`** (aditiva): `integrations`, `ad_accounts`, `ad_campaigns`, `ad_sets`, `ad_creatives`, `ad_insights` (particionada por `date`), `ad_sync_runs`. Todas `tenant_id NOT NULL` + RLS (padrão `003/001a`). + casos no `002_isolation_test`. Prisma models + generate.
+2. **Env/cripto:** adicionar as chaves ao `env.ts` (zod) como **opcionais** (só `JWT_SECRET` fatal); `CryptoService` AES-256-GCM (`INTEGRATIONS_ENCRYPTION_KEY`) para credenciais por tenant. Se a chave de cripto faltar e houver tentativa de conectar → erro claro.
+3. **Módulo `integrations`:** contrato `AdsConnector` + `MetaAdsConnector` (buildAuthUrl → callback grava credencial cifrada → listAdAccounts → syncCampaigns/Creatives/Insights → healthCheck). Última versão estável da Graph API (confirmar na doc na hora).
+4. **BullMQ ligado:** fila `ads-sync` (job on-demand pós-conexão + periódico por integration), idempotente; grava `ad_sync_runs`.
+5. **Webhook:** `POST /v1/webhooks/meta` (verify token + Lead Ads) idempotente via `webhook_events`.
+6. **Rotas:** `GET /v1/integrations` · `GET /v1/integrations/:provider/auth-url` · `GET /v1/integrations/meta/callback` · `POST /v1/integrations/:id/sync` · `GET /v1/ads/overview|campaigns|creatives`.
+7. **Front `/marketing/ads`:** onboarding "Conecte suas contas" (botão Meta OAuth) → seleção de ad account → sync; overview (spend/leads/CPL/ROAS), tabela de campanhas ordenável, galeria de criativos com badge "melhor performando", health das conexões. Estado vazio com CTA (zero tela em branco).
+8. **Testes:** unit do `MetaAdsConnector` com **HTTP mockado** (sem rede); isolamento das 7 tabelas novas; e2e da rota de overview com dados semeados.
+
+### Definição de pronto (Sprint A)
+- Migração aplica limpa; `002` verde incluindo as 7 tabelas novas.
+- Com `META_APP_ID/SECRET` presentes: fluxo OAuth → conta conectada → `ad_insights` populado → `/marketing/ads` renderiza campanhas por performance + melhor criativo. **Sem** as chaves: a tela mostra "Conecte sua conta Meta" (CTA), nada quebra.
+- Nenhum segredo no código; token do cliente cifrado em repouso; suíte verde.
+- Cérebro atualizado: ADR-0007 (arquitetura de conectores + cripto), Banco.md (7 tabelas), APIs.md (novas rotas), Tasks/Bugs.
+
+### Pré-requisito externo (não é código)
+Conectar uma conta **real** exige `META_APP_ID/SECRET` + permissões `ads_read`/`ads_management` (App Review da Meta). Enquanto não houver, entrego construído + testado com mocks; o aceite "conecta conta real" fecha quando as credenciais existirem (RegrasNegocio §6.1).
 2. **Integração R1** (RAG): `VOYAGE_API_KEY` → `node apps/api/scripts/seed-rag.mjs` popula o RAG e liga a busca à Nyro.
 3. Evoluir F1: perfil 360 do contato, edição de deal, envio real no inbox (Evolution API).
 2. **R2**: `ContextualizerService` (Haiku + prompt caching), `RerankerService` (cross-encoder calibrado → liga o corte `RAG_MIN_SCORE`), cache Redis, `GuardrailsService` (CFM/OAB). Consultar skill `claude-api` para o model id do Haiku ao implementar R2.1.

@@ -50,6 +50,20 @@
 - Nenhuma migração destrutiva sem plano de rollback.
 - `localStorage` nunca como fonte de verdade; lógica de negócio não duplicada front/back.
 
+## 6.1 Integrações & credenciais (Ads / Stripe / WhatsApp)
+- **Conexão de anúncios é multi-tenant via OAuth:** cada cliente autentica e gera o **próprio token**. O operador só registra os **apps de desenvolvedor** no `.env` (`META_APP_ID/SECRET`, `TIKTOK_APP_ID/SECRET`, `GOOGLE_ADS_*` incl. **Developer Token**) — **o token do cliente nunca vem do `.env`**. Uma "API key genérica" do Google **não serve** para a Google Ads API.
+- **Tokens OAuth por tenant criptografados em repouso** (AES-256-GCM) com `INTEGRATIONS_ENCRYPTION_KEY` (32 bytes base64). Nunca em log/código.
+- Cada conector implementa o contrato `AdsConnector` (auth/sync/insights/health). Usar a **última versão estável** da API do provider — não hardcodar versão que deprecia; confirmar na doc oficial na implementação.
+- Webhooks (**Meta Lead Ads**, **Stripe**) **idempotentes** via `webhook_events` (dedupe por evento). Refresh automático de token; **health da conexão** exposto na UI; circuit breaker + rate limit por tenant/provider.
+- **Pré-requisitos EXTERNOS (não são código):** Meta `ads_read`/`ads_management` e **Google Ads Developer Token** exigem **App Review/aprovação** do provider antes de operar em produção. Build e testes usam **mocks** (+ sandbox quando houver); a conexão real fecha o aceite quando as credenciais/aprovações existirem.
+
+## 6.2 Retrieval: semântico atrás de `VOYAGE_API_KEY`, fallback BM25
+- A **Anthropic não fornece embeddings.** A busca **semântica** (vetorial, pgvector) fica atrás de `VOYAGE_API_KEY`.
+- **Sem a chave → fallback automático para BM25** (`tsvector pt_unaccent`, já funcional). O RAG **nunca quebra** por ausência de Voyage; degrada para lexical.
+- **Com a chave →** backfill de embeddings + híbrido (vetorial + BM25 por RRF) + reranker cross-encoder. Toda mudança de chunking/embedding roda `rag:eval` e reporta o delta.
+- `ANTHROPIC_API_KEY` liga chat/contextualizer/guardrails da Nyro; **ausente → endpoints da Nyro respondem 501** explicando, sem afetar o resto da plataforma.
+- **Alvo de prontidão:** com `.env` completo **exceto** `ANTHROPIC_API_KEY`, todo o resto opera; plugar a chave liga a Nyro **sem alterar código**.
+
 ---
 
 ## 7. Nichos MVP e subespecialidades
