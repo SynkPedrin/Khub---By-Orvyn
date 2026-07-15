@@ -53,6 +53,10 @@ WHERE titulo IN ('DOC_A','DOC_B','DOC_GLOBAL');
 -- seed de tabelas de auth/tenant (audit_logs, webhook_events) — criadas no 004
 INSERT INTO audit_logs (tenant_id, actor_type, acao) VALUES (:'tenant_a', 'humano', 'acao A'), (:'tenant_b', 'humano', 'acao B');
 INSERT INTO webhook_events (tenant_id, provider, event_id) VALUES (:'tenant_a', 'stripe', 'evt_A'), (:'tenant_b', 'stripe', 'evt_B');
+-- integrações de anúncios (criadas no 005)
+INSERT INTO integrations (tenant_id, provider, status) VALUES (:'tenant_a', 'meta', 'connected'), (:'tenant_b', 'meta', 'connected');
+INSERT INTO ad_insights (tenant_id, level, provider, external_ref_id, date, spend)
+VALUES (:'tenant_a', 'account', 'meta', 'acc_A', current_date, 10), (:'tenant_b', 'account', 'meta', 'acc_B', current_date, 20);
 
 -- ---------- ACT + ASSERT (como aplicação, tenant = A) ----------
 SET LOCAL ROLE orvyn_app;
@@ -135,6 +139,17 @@ BEGIN
   SELECT count(*) INTO v_wh FROM webhook_events WHERE event_id = 'evt_B';
   IF v_wh <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[webhook_events]: tenant A leu % evento(s) de B', v_wh; END IF;
   RAISE NOTICE 'OK isolamento auth: audit_logs e webhook_events isolados';
+END $$;
+
+-- 7. Isolamento das tabelas de integração (integrations, ad_insights)
+DO $$
+DECLARE v_int int; v_ins int;
+BEGIN
+  SELECT count(*) INTO v_int FROM integrations WHERE provider = 'meta' AND external_business_id IS NULL;
+  IF v_int <> 1 THEN RAISE EXCEPTION 'VAZAMENTO[integrations]: tenant A vê % (esperado 1)', v_int; END IF;
+  SELECT count(*) INTO v_ins FROM ad_insights WHERE external_ref_id = 'acc_B';
+  IF v_ins <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[ad_insights]: tenant A leu % insight(s) de B', v_ins; END IF;
+  RAISE NOTICE 'OK isolamento integrações: integrations e ad_insights isolados';
 END $$;
 
 RESET ROLE;

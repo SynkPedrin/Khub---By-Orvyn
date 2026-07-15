@@ -1,0 +1,176 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { Badge, Button, Card } from '@/components/ui';
+import { Icon } from '@/components/icons';
+import { brl } from '@/lib/crm';
+import { ads, type AdsOverview, type Campaign, type Creative } from '@/lib/ads';
+
+const HEALTH: Record<string, 'green' | 'amber' | 'neutral'> = { ok: 'green', degraded: 'amber', down: 'amber', unknown: 'neutral' };
+type SortKey = 'spend' | 'roas' | 'leads' | 'cpl';
+
+export default function AdsPage() {
+  const [ov, setOv] = useState<AdsOverview | null>(null);
+  const [camps, setCamps] = useState<Campaign[]>([]);
+  const [creatives, setCreatives] = useState<Creative[]>([]);
+  const [sort, setSort] = useState<SortKey>('spend');
+  const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = () => {
+    setLoading(true);
+    Promise.all([ads.overview(), ads.campaigns(), ads.creatives()])
+      .then(([o, c, cr]) => { setOv(o); setCamps(c); setCreatives(cr); })
+      .catch(() => setMsg({ kind: 'err', text: 'Não consegui carregar os dados de anúncios.' }))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get('connected')) setMsg({ kind: 'ok', text: `Conta ${q.get('connected')} conectada! Sincronizando…` });
+    if (q.get('error')) setMsg({ kind: 'err', text: decodeURIComponent(q.get('error') || 'Falha ao conectar.') });
+    load();
+  }, []);
+
+  const connect = async () => {
+    try {
+      const { url } = await ads.authUrl('meta');
+      window.location.href = url;
+    } catch {
+      setMsg({ kind: 'err', text: 'META_APP_ID / cripto não configurados no servidor. Configure para conectar.' });
+    }
+  };
+
+  const sorted = useMemo(() => [...camps].sort((a, b) => (b[sort] ?? 0) - (a[sort] ?? 0)), [camps, sort]);
+  const connected = (ov?.connections?.length ?? 0) > 0;
+  const kpis = ov?.totals;
+
+  return (
+    <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <Link href="/marketing" className="mb-1 inline-flex items-center gap-1 text-xs text-muted hover:text-brand">
+            <Icon name="chevronRight" size={13} className="rotate-180" /> Central de Marketing
+          </Link>
+          <h1 className="text-xl font-extrabold tracking-tight text-fg">Anúncios · cross-plataforma</h1>
+          <p className="text-sm text-muted">Meta hoje · TikTok e Google chegam no Sprint B.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {ov?.connections.map((c) => (
+            <Badge key={c.id} tone={HEALTH[c.health] ?? 'neutral'}>● {c.provider} · {c.health}</Badge>
+          ))}
+          <Button onClick={connect}><Icon name="plus" size={16} /> Conectar Meta</Button>
+        </div>
+      </div>
+
+      {msg && (
+        <div className={`rounded-xl px-4 py-2.5 text-sm ${msg.kind === 'ok' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'}`}>
+          {msg.text}
+        </div>
+      )}
+
+      {!loading && !connected && !ov?.totals.spend ? (
+        <Card className="border-dashed p-10 text-center">
+          <div className="text-3xl">📣</div>
+          <h2 className="mt-2 text-lg font-bold text-fg">Conecte suas contas de anúncios</h2>
+          <p className="mx-auto mt-1 max-w-md text-sm text-muted">Traga Meta (e em breve TikTok e Google) para a Nyro analisar CPL, ROAS e destacar o melhor criativo.</p>
+          <Button className="mt-4" onClick={connect}><Icon name="marketing" size={16} /> Conectar Meta Ads</Button>
+        </Card>
+      ) : (
+        <>
+          {/* KPIs agregados */}
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              { l: 'Investido (30d)', v: kpis ? brl(kpis.spend) : '—', icon: 'finance' as const },
+              { l: 'Leads', v: kpis ? String(kpis.leads) : '—', icon: 'contacts' as const },
+              { l: 'CPL médio', v: kpis ? brl(kpis.cpl) : '—', icon: 'trend' as const },
+              { l: 'ROAS', v: kpis ? `${kpis.roas.toFixed(2)}x` : '—', icon: 'pipeline' as const },
+            ].map((k) => (
+              <Card key={k.l} className="p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted">{k.l}</p>
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand/12 text-brand"><Icon name={k.icon} size={17} /></span>
+                </div>
+                <p className="mt-2 text-2xl font-extrabold text-fg">{k.v}</p>
+              </Card>
+            ))}
+          </div>
+
+          {/* Campanhas */}
+          <Card className="overflow-hidden p-0">
+            <div className="flex items-center justify-between border-b border-line px-5 py-3">
+              <h2 className="font-bold text-fg">Campanhas</h2>
+              <div className="flex gap-1 text-xs">
+                {(['spend', 'roas', 'leads', 'cpl'] as SortKey[]).map((k) => (
+                  <button key={k} onClick={() => setSort(k)} className="rounded-lg px-2 py-1 font-semibold" style={{ background: sort === k ? 'color-mix(in srgb, var(--brand) 14%, transparent)' : 'transparent', color: sort === k ? 'var(--brand)' : 'var(--muted)' }}>
+                    {k.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="overflow-x-auto scrollbar-thin">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
+                    <th className="px-5 py-2.5 font-semibold">Campanha</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">Invest.</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">Leads</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">CPL</th>
+                    <th className="px-3 py-2.5 text-right font-semibold">CTR</th>
+                    <th className="px-5 py-2.5 text-right font-semibold">ROAS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sorted.map((c) => (
+                    <tr key={c.id} className="border-b border-line last:border-0 hover:bg-surface2">
+                      <td className="px-5 py-2.5">
+                        <p className="font-semibold text-fg">{c.nome}</p>
+                        <p className="text-[11px] text-muted">{c.objetivo ?? '—'} · {c.status}</p>
+                      </td>
+                      <td className="px-3 py-2.5 text-right text-fg">{brl(c.spend)}</td>
+                      <td className="px-3 py-2.5 text-right text-fg">{c.leads}</td>
+                      <td className="px-3 py-2.5 text-right text-fg">{brl(c.cpl)}</td>
+                      <td className="px-3 py-2.5 text-right text-muted">{c.ctr.toFixed(1)}%</td>
+                      <td className="px-5 py-2.5 text-right font-bold text-brand">{c.roas.toFixed(2)}x</td>
+                    </tr>
+                  ))}
+                  {sorted.length === 0 && <tr><td colSpan={6} className="px-5 py-8 text-center text-sm text-muted">Sem campanhas ainda.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          {/* Criativos */}
+          {creatives.length > 0 && (
+            <div>
+              <h2 className="mb-3 font-bold text-fg">Criativos</h2>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {creatives.map((cr) => (
+                  <Card key={cr.externalId} className="overflow-hidden p-0">
+                    <div className="relative aspect-[3/2] bg-surface3">
+                      {cr.thumbnailUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={cr.thumbnailUrl} alt={cr.nome ?? 'criativo'} className="h-full w-full object-cover" />
+                      )}
+                      {cr.melhor && (
+                        <span className="absolute left-2 top-2 rounded-full bg-brand px-2 py-0.5 text-[10px] font-bold text-white shadow">★ Melhor performando</span>
+                      )}
+                    </div>
+                    <div className="p-3">
+                      <p className="truncate font-semibold text-fg">{cr.nome ?? cr.externalId}</p>
+                      <div className="mt-1.5 flex items-center justify-between text-xs">
+                        <span className="text-muted">{cr.format ?? '—'}{cr.cta ? ` · ${cr.cta}` : ''}</span>
+                        <span className="font-semibold text-brand">{cr.roas.toFixed(2)}x ROAS</span>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}

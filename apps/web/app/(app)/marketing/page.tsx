@@ -34,8 +34,9 @@ export default function MarketingPage() {
           gerar demanda, lançar ofertas e medir o que funciona — sempre ancorada no seu funil e nos seus dados.
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
-          <Link href="/nyro" className="btn btn-primary"><Icon name="sparkles" size={16} /> Perguntar à Nyro</Link>
-          <Link href="/conhecimento" className="btn btn-ghost">Ver base de conhecimento</Link>
+          <Link href="/marketing/ads" className="btn btn-primary"><Icon name="marketing" size={16} /> Anúncios (Meta/Google/TikTok)</Link>
+          <Link href="/nyro" className="btn btn-ghost"><Icon name="sparkles" size={16} /> Perguntar à Nyro</Link>
+          <Link href="/conhecimento" className="btn btn-ghost">Base de conhecimento</Link>
         </div>
       </section>
 

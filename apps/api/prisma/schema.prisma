@@ -340,3 +340,135 @@ model Activity {
 
   @@map("activities")
 }
+
+// ======================= Integrações de anúncios (Sprint A) =======================
+
+model Integration {
+  id                   String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId             String    @map("tenant_id") @db.Uuid
+  provider             String
+  status               String    @default("pending")
+  externalBusinessId   String?   @map("external_business_id")
+  credentialsEncrypted String?   @map("credentials_encrypted")
+  scopes               String[]
+  connectedBy          String?   @map("connected_by") @db.Uuid
+  connectedAt          DateTime? @map("connected_at") @db.Timestamptz(6)
+  lastSyncAt           DateTime? @map("last_sync_at") @db.Timestamptz(6)
+  health               String    @default("unknown")
+  erro                 String?
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([tenantId, provider, externalBusinessId])
+  @@map("integrations")
+}
+
+model AdAccount {
+  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  integrationId String   @map("integration_id") @db.Uuid
+  provider      String
+  externalId    String   @map("external_id")
+  name          String
+  currency      String?
+  timezone      String?
+  status        String   @default("active")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([tenantId, provider, externalId])
+  @@map("ad_accounts")
+}
+
+model AdCampaign {
+  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  adAccountId    String    @map("ad_account_id") @db.Uuid
+  externalId     String    @map("external_id")
+  name           String
+  objective      String?
+  status         String    @default("active")
+  dailyBudget    Decimal?  @map("daily_budget") @db.Decimal(14, 2)
+  lifetimeBudget Decimal?  @map("lifetime_budget") @db.Decimal(14, 2)
+  startAt        DateTime? @map("start_at") @db.Timestamptz(6)
+  stopAt         DateTime? @map("stop_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([tenantId, externalId])
+  @@map("ad_campaigns")
+}
+
+model AdSet {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  campaignId String   @map("campaign_id") @db.Uuid
+  externalId String   @map("external_id")
+  name       String
+  status     String   @default("active")
+  targeting  Json     @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([tenantId, externalId])
+  @@map("ad_sets")
+}
+
+model AdCreative {
+  id           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  adAccountId  String   @map("ad_account_id") @db.Uuid
+  campaignId   String?  @map("campaign_id") @db.Uuid
+  adSetId      String?  @map("ad_set_id") @db.Uuid
+  externalId   String   @map("external_id")
+  name         String?
+  format       String?
+  thumbnailUrl String?  @map("thumbnail_url")
+  previewUrl   String?  @map("preview_url")
+  body         String?
+  cta          String?
+  status       String   @default("active")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([tenantId, externalId])
+  @@map("ad_creatives")
+}
+
+model AdInsight {
+  id            String   @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  level         String
+  provider      String
+  externalRefId String   @map("external_ref_id")
+  date          DateTime @db.Date
+  spend         Decimal  @default(0) @db.Decimal(14, 2)
+  impressions   BigInt   @default(0)
+  clicks        BigInt   @default(0)
+  ctr           Decimal  @default(0) @db.Decimal(8, 4)
+  cpc           Decimal  @default(0) @db.Decimal(12, 4)
+  cpm           Decimal  @default(0) @db.Decimal(12, 4)
+  reach         BigInt   @default(0)
+  frequency     Decimal  @default(0) @db.Decimal(10, 4)
+  leads         BigInt   @default(0)
+  conversions   BigInt   @default(0)
+  revenue       Decimal  @default(0) @db.Decimal(14, 2)
+  roas          Decimal  @default(0) @db.Decimal(12, 4)
+  cpl           Decimal  @default(0) @db.Decimal(12, 4)
+  cpa           Decimal  @default(0) @db.Decimal(12, 4)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@id([id, date])
+  @@unique([tenantId, provider, level, externalRefId, date])
+  @@map("ad_insights")
+}
+
+model AdSyncRun {
+  id            String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  integrationId String?   @map("integration_id") @db.Uuid
+  provider      String
+  status        String    @default("running")
+  startedAt     DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  finishedAt    DateTime? @map("finished_at") @db.Timestamptz(6)
+  erro          String?
+  records       Int       @default(0)
+
+  @@map("ad_sync_runs")
+}

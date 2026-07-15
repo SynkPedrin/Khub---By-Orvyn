@@ -165,6 +165,12 @@ Em F0 (Bloco 4) esses arquivos serão movidos/copiados para `packages/ui/assets/
   - TypeScript **5.5.4** (strict) · Postgres alvo **pg16 + pgvector** (imagem `pgvector/pgvector:pg16` no compose)
 - **Consequências:** `prisma generate` OK gerando o modelo com `Unsupported("vector(1024)")` (R0.3). Migrações do RAG continuam em SQL puro (`db/`), não no Prisma Migrate. `packages/ui` fica como dívida pequena (web tem seus componentes locais). Turbo `tasks` (schema v2). **Verificado:** `pnpm build` → 2/2 apps; API sobe e responde `/v1/health` (db:false sem Postgres) e 404 em `application/problem+json`.
 
+### ADR-0007 — Conectores de anúncios plugáveis + cripto de credenciais (Sprint A)
+- **Status:** Aceito e implementado (Meta; TikTok/Google no Sprint B).
+- **Contexto:** conectar contas de anúncios é **multi-tenant via OAuth** (token do cliente), com múltiplos providers que compartilham o mesmo ciclo (auth → sync → insights → health).
+- **Decisão:** contrato único `AdsConnector` (`buildAuthUrl/exchangeCode/listAdAccounts/syncCampaigns/syncCreatives/syncInsights/healthCheck`); providers isolados (`MetaAdsConnector` sobre um `GraphClient` injetável — mockável em teste). Registro `ADS_CONNECTORS` (record provider→connector). Sync assíncrono via **BullMQ** (fila `ads-sync`), idempotente, com `ad_sync_runs`. `CryptoService` **AES-256-GCM** (`INTEGRATIONS_ENCRYPTION_KEY`, 32 bytes) cifra as credenciais por tenant em repouso. OAuth **stateless** com `state` assinado por **HMAC-SHA256** (`JWT_SECRET`) carregando o tenant (callback é público; o browser volta via `WEB_URL/api/integrations/meta/callback` → Nest). Degradação limpa: sem `META_APP_ID`/cripto → `auth-url` 400 explicativo; sem conexão → tela "Conecte sua conta".
+- **Consequências:** `db/005_integrations_schema.sql` (7 tabelas, RLS + isolamento), env opcionais (só `JWT_SECRET` fatal), 32 testes verdes (incl. cripto + mapping do conector). Insights hoje são **nível campanha** (criativo "melhor performando" aproxima por ROAS da campanha ligada; insight nível-ad refina no Sprint B). Webhook Meta faz verify + ack; ingestão lead→contato depende do mapeamento page↔tenant (Sprint D).
+
 ### ADR-0006 — Auth pré-tenant: identidade global + memberships (FASE 1)
 - **Status:** Aceito e implementado (verificado end-to-end).
 - **Contexto:** login acontece **antes** de saber o tenant; RLS exige tenant no contexto. Um usuário pode pertencer a vários tenants.

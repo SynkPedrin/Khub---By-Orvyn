@@ -6,10 +6,11 @@ import { RagModule } from './rag/rag.module';
 import { CrmModule } from './crm/crm.module';
 import { AuthModule } from './auth/auth.module';
 import { TenantsModule } from './tenants/tenants.module';
+import { IntegrationsModule } from './integrations/integrations.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 
 @Module({
-  imports: [PrismaModule, AuthModule, TenantsModule, RagModule, CrmModule],
+  imports: [PrismaModule, AuthModule, TenantsModule, RagModule, CrmModule, IntegrationsModule],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: JwtAuthGuard }],
 })

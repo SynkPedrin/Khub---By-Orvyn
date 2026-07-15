@@ -128,7 +128,20 @@ Base já entregue: `.env.example` (contrato completo) e RegrasNegocio §6.1/§6.
 
 ---
 
-## SPRINT A — Integrations foundation + Meta Ads  *(proposto — aguardando aprovação)*
+## SPRINT A — ✅ ENTREGUE (Integrations foundation + Meta Ads)
+- [x] `db/005_integrations_schema.sql`: 7 tabelas (`integrations`, `ad_accounts`, `ad_campaigns`, `ad_sets`, `ad_creatives`, `ad_insights` particionada, `ad_sync_runs`) — RLS + isolamento (`002` verde).
+- [x] `CryptoService` AES-256-GCM (`INTEGRATIONS_ENCRYPTION_KEY`); env opcionais (só `JWT_SECRET` fatal).
+- [x] Módulo `integrations`: contrato `AdsConnector` + `MetaAdsConnector` (OAuth/sync/insights/health) sobre `GraphClient` mockável; `ADS_CONNECTORS`.
+- [x] **BullMQ** fila `ads-sync` (job pós-conexão + on-demand) idempotente; `ads-sync.processor`; `ad_sync_runs`.
+- [x] Webhook `GET/POST /v1/webhooks/meta` (verify + ack idempotente).
+- [x] Rotas: `GET /v1/integrations`, `GET /v1/integrations/:provider/auth-url`, `POST /v1/integrations/:provider/callback` (público), `POST /v1/integrations/:id/sync`, `GET /v1/ads/{overview,campaigns,creatives}`. Proxy Next `/api/v1/*` + callback `/api/integrations/meta/callback`.
+- [x] Front `/marketing/ads`: KPIs (spend/leads/CPL/ROAS), campanhas ordenáveis, galeria de criativos com "★ Melhor performando", health das conexões, empty state com CTA.
+- [x] **32 testes verdes** (cripto + mapping do conector); read-pipeline provado com dados reais no banco (spend R$532, ROAS 21.05).
+- **Falta só a conexão real:** preencher `META_APP_ID/SECRET` (+ App Review) → o fluxo OAuth liga sem mudar código. ADR-0007.
+
+## Próximo — SPRINT B (TikTok + Google Ads, mesmo contrato `AdsConnector`)
+
+## SPRINT A — plano original (referência)
 
 **Objetivo único:** um tenant conecta uma conta **Meta Ads** por OAuth, os insights populam o banco por BullMQ, e `/marketing/ads` mostra campanhas ordenadas por performance + galeria de criativos com "melhor performando" — tudo isolado por tenant.
 

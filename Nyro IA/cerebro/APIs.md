@@ -67,6 +67,18 @@ Rotas necessárias ao critério de aceite de F0 (conta criada + isolada). Payloa
 
 Front (Next, cookies httpOnly): `POST /api/auth/{signup,login,refresh,logout}`, `GET /api/auth/me`, proxy `/api/crm/*` (Bearer). Ver [[Arquitetura]] ADR-0006.
 
+### ✅ Implementado (Sprint A — Integrações/Ads; exige JWT, tenant do token)
+| Método | Rota | Nota |
+|---|---|---|
+| GET | `/v1/integrations` | conexões do tenant + health |
+| GET | `/v1/integrations/:provider/auth-url` | inicia OAuth (400 se `META_APP_ID`/cripto ausentes) |
+| POST | `/v1/integrations/:provider/callback` | **público**; state HMAC carrega o tenant; cifra credencial + enfileira sync |
+| POST | `/v1/integrations/:id/sync` | enfileira sync (BullMQ) |
+| GET | `/v1/ads/overview` · `/campaigns` · `/creatives` | agregados por tenant; melhor criativo |
+| GET/POST | `/v1/webhooks/meta` | **público**; verify + ack idempotente |
+
+Front (Next): proxy autenticado `/api/v1/*` (Bearer) + landing OAuth `/api/integrations/meta/callback`. Ver [[Arquitetura]] ADR-0007.
+
 ### Fases seguintes (referência — não implementar em F0)
 - `POST /v1/tenants/:id/provision` — aplica blueprint (F2).
 - CRM: `GET /v1/pipelines`, `POST /v1/deals`, `PATCH /v1/deals/:id/stage` (F1).

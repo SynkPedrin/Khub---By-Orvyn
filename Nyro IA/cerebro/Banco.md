@@ -60,6 +60,9 @@ audit_logs(id, tenant_id, actor, acao, payload, ts)
 - `audit_logs` — **imutável** (RLS + `REVOKE UPDATE/DELETE` + trigger `audit_logs_immutable`) + `webhook_events` (RLS, dedupe `(provider,event_id)`).
 - `tenants` +`nicho`,`subespecialidade`; `users` +`identity_id`,`permissoes`. Grants: `orvyn_app` INSERT em `tenants` (signup). Justificativa infra-sem-RLS: ADR-0006. Teste `002` estendido (audit_logs/webhook_events isolados). ✅
 
+## 2.2 Integrações de anúncios (Sprint A — `db/005_integrations_schema.sql`)
+7 tabelas, todas `tenant_id` + RLS + isolamento (`002`): `integrations` (credencial OAuth **cifrada** AES-256-GCM em `credentials_encrypted`), `ad_accounts`, `ad_campaigns`, `ad_sets`, `ad_creatives`, `ad_insights` (**particionada por `date`** RANGE + partição default; unique `(tenant_id,provider,level,external_ref_id,date)`), `ad_sync_runs`. Grants `orvyn_app`/`orvyn_service`. Ver ADR-0007. ✅
+
 ## 3. Escopo de F0 — schema inicial
 
 F0 entrega **apenas** (ver [[Sprint]] / [[Tasks]] F0-08):
