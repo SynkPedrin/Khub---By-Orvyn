@@ -109,7 +109,7 @@ export function CommandBar() {
         </div>
         <div className="flex items-center justify-between border-t border-line px-4 py-2 text-[11px] text-muted">
           <span>↑↓ navegar · ↵ abrir · esc fechar</span>
-          <span>Orvyn</span>
+          <span>ORVYN OS</span>
         </div>
       </div>
     </div>

@@ -6,7 +6,7 @@ export function Logo({ compact = false }: { compact?: boolean }) {
     <Link href="/" className="flex items-center gap-2.5 group">
       <Image
         src="/logo.png"
-        alt="Orvyn"
+        alt="ORVYN OS"
         width={36}
         height={36}
         priority
@@ -14,7 +14,7 @@ export function Logo({ compact = false }: { compact?: boolean }) {
       />
       {!compact && (
         <span className="text-lg font-extrabold tracking-tight" style={{ color: 'var(--text)' }}>
-          ORVYN
+          ORVYN <span className="text-brand">OS</span>
         </span>
       )}
     </Link>

@@ -20,6 +20,29 @@ Status: `aberto` · `em correção` · `corrigido` · `não reproduz`.
 - Correção + teste de regressão: validar UUID (zod/regex) na borda; teste unitário com `tenantId` malicioso deve lançar antes de tocar o banco.
 - **Padrão correto já implementado** em `apps/api/src/prisma/prisma.service.ts` (`withTenant`): valida UUID por regex e usa `set_config('app.current_tenant_id', $1, true)` **parametrizado**. Ao integrar o `retrieval.service.ts` fornecido em R1.4, substituir o `SET LOCAL ... '${tenantId}'` por este helper.
 
+### BUG-003 — Inbox: botão de enviar sob o FAB da Nyro (z-index) e Enter não envia
+- Severidade: S2 (usabilidade)
+- Status: aberto — corrigir na FASE 3 (Inbox real)
+- Origem: QA do usuário. O `NyroDock` (FAB, `fixed bottom-5 right-5 z-40`) cobre o botão de enviar do `/inbox`. Além disso o envio não está implementado (Enter/click não disparam) — é fachada até `POST /v1/messages`.
+- Correção: (a) quick-fix de layout — subir o input de envio / reposicionar o FAB ou reduzir z-index quando no inbox; (b) implementar envio real (FASE 3). Sugestão da Nyro é estática (mesmo texto p/ toda conversa) — ligar na IA (FASE 5).
+
+### BUG-004 — Busca global (Cmd+K) não pesquisa contatos/negócios; "Nada encontrado" para termos reais
+- Severidade: S2
+- Status: aberto — FASE 2 (endpoint de busca) 
+- Origem: QA. O `CommandBar` só busca navegação + conhecimento (via `/api/cerebro`); não consulta CRM. Digitar "Marina" (contato real) → "Nada encontrado".
+- Correção: endpoint `GET /v1/crm/search?q=` (contatos/negócios/conversas) + ligar no CommandBar. O mesmo campo de digitação instável está relacionado ao BUG-005.
+
+### BUG-005 — Dev server derruba com `Cannot find module './352.js'`
+- Severidade: S2 (ambiente/DX, não produção)
+- Status: mitigado / processo
+- Origem: QA (e reproduzido nesta sessão). **Causa raiz:** rodar `next build` (produção) enquanto o `next dev` está ativo — ambos usam o mesmo `.next/`, corrompendo os chunks do dev. Não é a digitação em si.
+- Correção/mitigação: não rodar `build` com o `dev` ligado; ao acontecer, `rm -rf apps/web/.next` e reiniciar o dev. Para produção usar `next start` (não afetado). Regra p/ CI/scripts: nunca buildar contra o dir de dev.
+
+### BUG-006 — Vários controles são fachada (sem ação)
+- Severidade: S3 (esperado — fora de fase)
+- Status: conhecido, documentado em [[Estado-do-Sistema]]
+- Origem: QA. Sem ação: "Novo negócio" (sem modal), clique no card do deal, clique na linha de contato (perfil 360), "Usar"/telefone/"..." no inbox, sino de notificações, "Meu perfil"/"Configurações", "Ativar"/"Priorizar leads" (Insights). São escopo de **FASE 2** (CRM completo/perfil 360/criar-editar negócio), **F3/F5** (Nyro/notificações). Não são regressões — são telas ainda não construídas.
+
 ### BUG-002 — `nyro_guardrail_hits` sem RLS no schema fornecido
 - Severidade: S2
 - Status: mitigado nesta sessão

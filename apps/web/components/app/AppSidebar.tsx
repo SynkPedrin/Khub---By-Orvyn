@@ -24,8 +24,8 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full w-64 flex-col border-r border-line bg-surface">
       <Link href="/" onClick={onNavigate} className="flex items-center gap-2.5 px-5 py-4">
-        <Image src="/logo.png" alt="Orvyn" width={34} height={34} className="rounded-lg" priority />
-        <span className="text-lg font-extrabold tracking-tight text-fg">ORVYN</span>
+        <Image src="/logo.png" alt="ORVYN OS" width={34} height={34} className="rounded-lg" priority />
+        <span className="text-lg font-extrabold tracking-tight text-fg">ORVYN <span className="text-brand">OS</span></span>
       </Link>
 
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-2 scrollbar-thin">
