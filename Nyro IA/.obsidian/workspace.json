@@ -6,6 +6,7 @@
       {
         "id": "1f04aa7958f20c03",
         "type": "tabs",
+        "dimension": 27.175843694493786,
         "children": [
           {
             "id": "3ce6cd22ebcb733a",
@@ -29,6 +30,7 @@
       {
         "id": "9c12ad733f0d8c07",
         "type": "tabs",
+        "dimension": 72.82415630550622,
         "children": [
           {
             "id": "432fa4061dd27f76",
@@ -202,10 +204,11 @@
       "bases:Criar nova base": false
     }
   },
-  "active": "3ce6cd22ebcb733a",
+  "active": "432fa4061dd27f76",
   "lastOpenFiles": [
-    "Sem título.base",
+    "cerebro/RAG/conhecimento/global/copy-e-growth.md",
     "Sem título.canvas",
+    "Sem título.base",
     "Bem-vindo.md"
   ]
 }

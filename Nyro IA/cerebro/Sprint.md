@@ -108,6 +108,12 @@ Módulo `apps/api/src/rag/` com **24 unit tests verdes** (jest + ts-jest), sem d
 - [x] **git init** + baseline; **verificado end-to-end** (2 tenants isolados por JWT, rotação/revogação, 401 sem token, signup→CRM→logout no front).
 - Config pendente p/ OAuth real: `GOOGLE_CLIENT_ID/SECRET`, `GITHUB_ID/SECRET`, `AUTH_SECRET`.
 
+## Entregue nesta sessão (9) — Inteligência de marketing da Nyro (RAG global)
+- [x] Corpus "MARKETING NYRO" (12 frameworks C-Level: 6 marketing + 6 operação) integrado ao cérebro em `RAG/conhecimento/global/{marketing,operacao}/` (dup descartada, pasta solta removida).
+- [x] Seeder `apps/api/scripts/seed-global-rag.mjs` (frontmatter→metadados, chunk por seção, escopo=global via `orvyn_service`). **Ingerido: 12 docs / 73 chunks**; buscável por BM25 (STP p/ "posicionar", GTM p/ "lançar serviço"). Embeddings entram com `VOYAGE_API_KEY`.
+- [x] UI: `/marketing` vira a **Central de Marketing da Nyro** (lista os frameworks, abre no leitor de conhecimento). Verificado.
+- [x] Índice `RAG/conhecimento/global/_INDICE.md` (recuperação por dominio + plano + gate de intenção).
+
 ## Próxima sprint (proposta) — FASE 2: CRM completo + Audit
 1. `db/005_crm_full.sql` (`companies`, `tasks`, `notes`, `custom_fields`, `tags`) + RLS + isolamento.
 2. **Integração R1** (RAG): `VOYAGE_API_KEY` → `node apps/api/scripts/seed-rag.mjs` popula o RAG e liga a busca à Nyro.
