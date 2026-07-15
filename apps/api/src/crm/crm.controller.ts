@@ -1,8 +1,7 @@
-import { BadRequestException, Body, Controller, Get, Headers, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min } from 'class-validator';
 import { CrmService } from './crm.service';
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { TenantId } from '../auth/decorators';
 
 class CreateContactDto {
   @IsString() @MaxLength(160) nome!: string;
@@ -23,52 +22,43 @@ class MoveDealDto {
   @IsUUID() stageId!: string;
 }
 
-/**
- * CRM Core. `x-tenant-id` é a ponte de DEV (o front proxya com o tenant da
- * sessão). Em produção vem do JWT do módulo `auth` (F0-11). Todo acesso passa
- * por CrmService -> withTenant -> RLS.
- */
+/** CRM Core. O tenant vem SEMPRE do JWT (@TenantId) — nunca de header do browser. */
 @Controller('crm')
 export class CrmController {
   constructor(private readonly crm: CrmService) {}
 
-  private tenant(id: string | undefined): string {
-    if (!id || !UUID_RE.test(id)) throw new BadRequestException('x-tenant-id (UUID) obrigatório');
-    return id;
-  }
-
   @Get('overview')
-  overview(@Headers('x-tenant-id') t?: string) {
-    return this.crm.overview(this.tenant(t));
+  overview(@TenantId() tenantId: string) {
+    return this.crm.overview(tenantId);
   }
 
   @Get('contacts')
-  contacts(@Headers('x-tenant-id') t?: string, @Query('q') q?: string) {
-    return this.crm.listContacts(this.tenant(t), q);
+  contacts(@TenantId() tenantId: string, @Query('q') q?: string) {
+    return this.crm.listContacts(tenantId, q);
   }
 
   @Post('contacts')
-  createContact(@Headers('x-tenant-id') t: string | undefined, @Body() dto: CreateContactDto) {
-    return this.crm.createContact(this.tenant(t), dto);
+  createContact(@TenantId() tenantId: string, @Body() dto: CreateContactDto) {
+    return this.crm.createContact(tenantId, dto);
   }
 
   @Get('pipeline')
-  pipeline(@Headers('x-tenant-id') t?: string) {
-    return this.crm.pipeline(this.tenant(t));
+  pipeline(@TenantId() tenantId: string) {
+    return this.crm.pipeline(tenantId);
   }
 
   @Post('deals')
-  createDeal(@Headers('x-tenant-id') t: string | undefined, @Body() dto: CreateDealDto) {
-    return this.crm.createDeal(this.tenant(t), dto);
+  createDeal(@TenantId() tenantId: string, @Body() dto: CreateDealDto) {
+    return this.crm.createDeal(tenantId, dto);
   }
 
   @Patch('deals/:id/stage')
-  moveDeal(@Headers('x-tenant-id') t: string | undefined, @Param('id') id: string, @Body() dto: MoveDealDto) {
-    return this.crm.moveDeal(this.tenant(t), id, dto.stageId);
+  moveDeal(@TenantId() tenantId: string, @Param('id') id: string, @Body() dto: MoveDealDto) {
+    return this.crm.moveDeal(tenantId, id, dto.stageId);
   }
 
   @Get('conversations')
-  conversations(@Headers('x-tenant-id') t?: string) {
-    return this.crm.listConversations(this.tenant(t));
+  conversations(@TenantId() tenantId: string) {
+    return this.crm.listConversations(tenantId);
   }
 }

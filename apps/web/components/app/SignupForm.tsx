@@ -10,18 +10,34 @@ import { useAuth } from '@/lib/auth';
 const NICHOS = ['Clínica médica / estética', 'Advocacia', 'Contabilidade', 'Agência de marketing', 'Outro'];
 
 export function SignupForm() {
-  const { signInWith } = useAuth();
+  const { refreshMe } = useAuth();
   const router = useRouter();
-  const [nome, setNome] = useState('');
-  const [email, setEmail] = useState('');
-  const [empresa, setEmpresa] = useState('');
-  const [nicho, setNicho] = useState(NICHOS[0]);
-  const [senha, setSenha] = useState('');
+  const [f, setF] = useState({ nome: '', email: '', empresa: '', nicho: NICHOS[0], senha: '' });
+  const [erro, setErro] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    signInWith('email', { name: nome || 'Você', email: email || 'demo@orvyn.app', empresa, nicho });
-    router.push('/');
+    setErro('');
+    setLoading(true);
+    try {
+      const r = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: f.email, password: f.senha, nome: f.nome, empresa: f.empresa, nicho: f.nicho }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setErro(r.status === 409 ? 'Esse e-mail já tem conta.' : d.message?.toString() || 'Não foi possível criar a conta.');
+        return;
+      }
+      await refreshMe();
+      router.replace('/');
+    } catch {
+      setErro('Falha de conexão com o servidor.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -32,37 +48,28 @@ export function SignupForm() {
       <div className="mt-6">
         <SocialAuth label="Cadastrar" />
       </div>
-
       <div className="my-5 flex items-center gap-3 text-xs text-muted">
         <span className="h-px flex-1 bg-line" /> ou com e-mail <span className="h-px flex-1 bg-line" />
       </div>
 
       <form onSubmit={submit} className="space-y-3.5">
-        <Field label="Nome">
-          <Input placeholder="Seu nome" value={nome} onChange={(e) => setNome(e.target.value)} autoComplete="name" />
-        </Field>
-        <Field label="E-mail">
-          <Input type="email" placeholder="voce@empresa.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
-        </Field>
+        <Field label="Nome"><Input value={f.nome} onChange={(e) => setF({ ...f, nome: e.target.value })} placeholder="Seu nome" autoComplete="name" required /></Field>
+        <Field label="E-mail"><Input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} placeholder="voce@empresa.com" autoComplete="email" required /></Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Empresa">
-            <Input placeholder="Sua empresa" value={empresa} onChange={(e) => setEmpresa(e.target.value)} />
-          </Field>
+          <Field label="Empresa"><Input value={f.empresa} onChange={(e) => setF({ ...f, empresa: e.target.value })} placeholder="Sua empresa" /></Field>
           <Field label="Nicho">
-            <select className="input" value={nicho} onChange={(e) => setNicho(e.target.value)}>
+            <select className="input" value={f.nicho} onChange={(e) => setF({ ...f, nicho: e.target.value })}>
               {NICHOS.map((n) => <option key={n}>{n}</option>)}
             </select>
           </Field>
         </div>
-        <Field label="Senha">
-          <Input type="password" placeholder="Crie uma senha" value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="new-password" />
-        </Field>
-        <Button type="submit" className="w-full">Criar conta grátis</Button>
+        <Field label="Senha"><Input type="password" value={f.senha} onChange={(e) => setF({ ...f, senha: e.target.value })} placeholder="Mínimo 8 caracteres" autoComplete="new-password" minLength={8} required /></Field>
+        {erro && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-400">{erro}</p>}
+        <Button type="submit" className="w-full" disabled={loading}>{loading ? 'Criando…' : 'Criar conta grátis'}</Button>
       </form>
 
       <p className="mt-5 text-center text-sm text-muted">
-        Já tem conta?{' '}
-        <Link href="/login" className="font-semibold text-brand hover:underline">Entrar</Link>
+        Já tem conta? <Link href="/login" className="font-semibold text-brand hover:underline">Entrar</Link>
       </p>
       <p className="mt-3 text-center text-[11px] text-muted">Ao criar conta você concorda com os Termos e a Política de Privacidade (LGPD).</p>
     </div>

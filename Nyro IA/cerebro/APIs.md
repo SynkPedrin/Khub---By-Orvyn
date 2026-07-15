@@ -53,6 +53,20 @@ Rotas necessárias ao critério de aceite de F0 (conta criada + isolada). Payloa
 
 > ⚠️ LACUNA: O PRD lista `POST /v1/auth/signup` mas **não define os payloads** (campos, validações) de nenhuma rota, nem os enums de `role`, `status`, `plano`. A definir com Zod no Bloco 3 e documentar aqui a cada rota implementada. `login`, `refresh`, `google`, `me`, `invites` **não estão no PRD** — são derivados necessários de auth ([[PRD]] §11.1 cita "Login, OAuth Google, sessões JWT + refresh, convites de equipe"); registrados aqui como decorrência direta, não invenção de escopo.
 
+### ✅ Implementado (FASE 1 — verificado)
+| Método | Rota | Auth | Payload |
+|---|---|---|---|
+| POST | `/v1/auth/signup` | pública | `{email, password(>=8), nome, empresa?, nicho?}` → `{access, refresh, user}` |
+| POST | `/v1/auth/login` | pública | `{email, password}` → `{access, refresh, user}` |
+| POST | `/v1/auth/refresh` | refresh | `{refresh}` → novos `{access, refresh}` (rotativo) |
+| POST | `/v1/auth/logout` | pública | `{refresh}` → revoga |
+| GET | `/v1/auth/me` | JWT | `{email, nome, role, tenant, memberships}` |
+| POST | `/v1/auth/oauth/callback` | pública | 501 até configurar OAuth |
+| GET | `/v1/tenants/me` | JWT | tenant do JWT |
+| CRM `/v1/crm/*` | — | **JWT** | tenant vem do token (não mais `x-tenant-id`) |
+
+Front (Next, cookies httpOnly): `POST /api/auth/{signup,login,refresh,logout}`, `GET /api/auth/me`, proxy `/api/crm/*` (Bearer). Ver [[Arquitetura]] ADR-0006.
+
 ### Fases seguintes (referência — não implementar em F0)
 - `POST /v1/tenants/:id/provision` — aplica blueprint (F2).
 - CRM: `GET /v1/pipelines`, `POST /v1/deals`, `PATCH /v1/deals/:id/stage` (F1).

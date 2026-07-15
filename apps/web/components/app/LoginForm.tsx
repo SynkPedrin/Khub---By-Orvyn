@@ -8,17 +8,31 @@ import { SocialAuth } from './SocialAuth';
 import { useAuth } from '@/lib/auth';
 
 export function LoginForm() {
-  const { signInWith } = useAuth();
+  const { refreshMe } = useAuth();
   const router = useRouter();
   const params = useSearchParams();
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
+  const [erro, setErro] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const name = email.split('@')[0]?.replace(/[._-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) || 'Você';
-    signInWith('email', { email: email || 'demo@orvyn.app', name });
-    router.push(params.get('next') || '/');
+    setErro('');
+    setLoading(true);
+    try {
+      const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, password: senha }) });
+      if (!r.ok) {
+        setErro(r.status === 401 ? 'E-mail ou senha inválidos.' : 'Não foi possível entrar. Tente novamente.');
+        return;
+      }
+      await refreshMe();
+      router.replace(params.get('next') || '/');
+    } catch {
+      setErro('Falha de conexão com o servidor.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -36,25 +50,22 @@ export function LoginForm() {
 
       <form onSubmit={submit} className="space-y-4">
         <Field label="E-mail">
-          <Input type="email" placeholder="voce@empresa.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+          <Input type="email" placeholder="voce@empresa.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
         </Field>
         <Field label="Senha">
-          <Input type="password" placeholder="••••••••" value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="current-password" />
+          <Input type="password" placeholder="••••••••" value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="current-password" required />
         </Field>
+        {erro && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-400">{erro}</p>}
         <div className="flex items-center justify-between text-sm">
-          <label className="flex items-center gap-2 text-muted">
-            <input type="checkbox" className="accent-brand" /> Lembrar de mim
-          </label>
+          <label className="flex items-center gap-2 text-muted"><input type="checkbox" className="accent-brand" /> Lembrar de mim</label>
           <a href="#" className="font-medium text-brand hover:underline">Esqueci a senha</a>
         </div>
-        <Button type="submit" className="w-full">Entrar</Button>
+        <Button type="submit" className="w-full" disabled={loading}>{loading ? 'Entrando…' : 'Entrar'}</Button>
       </form>
 
       <p className="mt-6 text-center text-sm text-muted">
-        Ainda não tem conta?{' '}
-        <Link href="/signup" className="font-semibold text-brand hover:underline">Criar conta</Link>
+        Ainda não tem conta? <Link href="/signup" className="font-semibold text-brand hover:underline">Criar conta</Link>
       </p>
-      <p className="mt-4 text-center text-[11px] text-muted">Protótipo — sessão demo. Auth real (OAuth Google/GitHub) pluga no NextAuth.</p>
     </div>
   );
 }

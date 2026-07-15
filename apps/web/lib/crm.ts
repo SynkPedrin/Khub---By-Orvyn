@@ -5,7 +5,14 @@ export function brl(v: number): string {
 }
 
 async function req<T>(path: string, opts?: RequestInit): Promise<T> {
-  const r = await fetch(`/api/crm/${path}`, { headers: { 'content-type': 'application/json' }, ...opts });
+  const call = () => fetch(`/api/crm/${path}`, { headers: { 'content-type': 'application/json' }, ...opts });
+  let r = await call();
+  if (r.status === 401) {
+    // access expirou → tenta refresh silencioso e repete 1x
+    const rf = await fetch('/api/auth/refresh', { method: 'POST' });
+    if (rf.ok) r = await call();
+    else if (typeof window !== 'undefined') window.location.href = '/login';
+  }
   if (!r.ok) throw new Error(`CRM ${r.status}`);
   return r.json();
 }

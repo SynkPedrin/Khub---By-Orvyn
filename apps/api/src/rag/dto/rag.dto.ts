@@ -3,13 +3,6 @@ import { ArrayNotEmpty, IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID, MaxL
 const ESCOPOS = ['global', 'nicho', 'sub', 'tenant'] as const;
 
 export class RegisterDocumentDto {
-  @IsIn(ESCOPOS as unknown as string[])
-  escopo!: (typeof ESCOPOS)[number];
-
-  @IsOptional()
-  @IsUUID()
-  tenantId?: string;
-
   @IsOptional()
   @IsString()
   nicho?: string;

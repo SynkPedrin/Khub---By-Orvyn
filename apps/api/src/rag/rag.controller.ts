@@ -1,16 +1,12 @@
-import { BadRequestException, Body, Controller, Headers, HttpCode, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, Post } from '@nestjs/common';
 import type { RagEscopo } from '@orvyn/types';
 import { PrismaService } from '../prisma/prisma.service';
 import { IngestionService } from './ingestion/ingestion.service';
-import { RetrievalService, type RagContext } from './retrieval.service';
+import { RetrievalService } from './retrieval.service';
 import { FeedbackDto, RegisterDocumentDto, SearchDebugDto } from './dto/rag.dto';
+import { TenantId } from '../auth/decorators';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/**
- * Rotas do RAG. `x-tenant-id` é uma ponte de DEV até o módulo `auth` existir
- * (F0-11); em produção o tenant vem do JWT, nunca de header/cliente.
- */
+/** Rotas do RAG. Tenant vem do JWT (@TenantId), nunca de header do browser. */
 @Controller('rag')
 export class RagController {
   constructor(
@@ -21,10 +17,11 @@ export class RagController {
 
   @Post('documents')
   @HttpCode(202)
-  async register(@Body() dto: RegisterDocumentDto) {
+  async register(@TenantId() tenantId: string, @Body() dto: RegisterDocumentDto) {
+    // Ingestão de base do tenant. Bases global/nicho são publicadas por script (orvyn_service).
     return this.ingestion.register({
-      tenantId: dto.tenantId ?? null,
-      escopo: dto.escopo,
+      tenantId,
+      escopo: 'tenant',
       nicho: dto.nicho ?? null,
       subespecialidade: dto.subespecialidade ?? null,
       titulo: dto.titulo,
@@ -35,16 +32,15 @@ export class RagController {
   }
 
   @Post('search')
-  async search(@Headers('x-tenant-id') tenantId: string | undefined, @Body() dto: SearchDebugDto) {
-    const ctx = this.requireTenant(tenantId, dto.nicho, dto.subespecialidade);
+  async search(@TenantId() tenantId: string, @Body() dto: SearchDebugDto) {
+    const ctx = { tenantId, nicho: dto.nicho, subespecialidade: dto.subespecialidade ?? null };
     const hits = await this.retrieval.search(ctx, dto.query, dto.escopos as RagEscopo[] | undefined);
     return { hits, context: this.retrieval.buildContext(hits) };
   }
 
   @Post('feedback')
   @HttpCode(201)
-  async feedback(@Headers('x-tenant-id') tenantId: string | undefined, @Body() dto: FeedbackDto) {
-    if (!tenantId || !UUID_RE.test(tenantId)) throw new BadRequestException('x-tenant-id (UUID) obrigatório');
+  async feedback(@TenantId() tenantId: string, @Body() dto: FeedbackDto) {
     await this.prisma.withTenant(tenantId, (tx) =>
       tx.$executeRaw`
         INSERT INTO rag_feedback (tenant_id, query_id, resposta, chunk_ids, voto, comentario)
@@ -52,12 +48,5 @@ export class RagController {
                 ${dto.chunkIds}::uuid[], ${dto.voto}, ${dto.comentario ?? null})`,
     );
     return { ok: true };
-  }
-
-  private requireTenant(tenantId: string | undefined, nicho: string, sub?: string): RagContext {
-    if (!tenantId || !UUID_RE.test(tenantId)) {
-      throw new BadRequestException('x-tenant-id (UUID) obrigatório');
-    }
-    return { tenantId, nicho, subespecialidade: sub ?? null };
   }
 }

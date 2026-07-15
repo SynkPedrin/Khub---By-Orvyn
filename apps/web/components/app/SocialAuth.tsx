@@ -1,28 +1,29 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
 import { Icon } from '../icons';
-import { useAuth, type Provider } from '@/lib/auth';
 
 export function SocialAuth({ label }: { label: string }) {
-  const { signInWith } = useAuth();
-  const router = useRouter();
-  const params = useSearchParams();
+  const [msg, setMsg] = useState('');
 
-  const handle = (p: Provider) => {
-    // DEMO: cria sessão local. Auth real (NextAuth) pluga aqui com Google/GitHub OAuth.
-    signInWith(p);
-    router.push(params.get('next') || '/');
+  const handle = async (provider: 'google' | 'github') => {
+    // OAuth plugável: sem credenciais, o endpoint responde 501 explicando.
+    const r = await fetch(`/api/auth/oauth/${provider}`);
+    const d = await r.json().catch(() => ({}));
+    setMsg(d.detail || `Login com ${provider} indisponível.`);
   };
 
   return (
-    <div className="grid grid-cols-2 gap-3">
-      <button onClick={() => handle('google')} className="btn btn-ghost" aria-label={`${label} com Google`}>
-        <Icon name="google" size={18} /> Google
-      </button>
-      <button onClick={() => handle('github')} className="btn btn-ghost" aria-label={`${label} com GitHub`}>
-        <Icon name="github" size={18} /> GitHub
-      </button>
+    <div>
+      <div className="grid grid-cols-2 gap-3">
+        <button type="button" onClick={() => handle('google')} className="btn btn-ghost" aria-label={`${label} com Google`}>
+          <Icon name="google" size={18} /> Google
+        </button>
+        <button type="button" onClick={() => handle('github')} className="btn btn-ghost" aria-label={`${label} com GitHub`}>
+          <Icon name="github" size={18} /> GitHub
+        </button>
+      </div>
+      {msg && <p className="mt-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">{msg}</p>}
     </div>
   );
 }

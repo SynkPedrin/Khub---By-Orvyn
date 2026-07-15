@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// Guard de rotas (sessão demo via cookie). Auth real (NextAuth/Auth.js) pluga aqui.
+// Guard de rotas por sessão real (cookie httpOnly de refresh). O access é
+// curto e renovado silenciosamente pelo cliente; a presença do refresh é a
+// fonte de verdade de "logado". Logout limpa os cookies no servidor.
 const PUBLIC = ['/login', '/signup'];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const authed = req.cookies.has('orvyn_session');
+  const authed = req.cookies.has('orvyn_refresh');
   const isPublic = PUBLIC.some((p) => pathname === p || pathname.startsWith(p + '/'));
 
   if (!authed && !isPublic) {

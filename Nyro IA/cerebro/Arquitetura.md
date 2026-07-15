@@ -165,6 +165,13 @@ Em F0 (Bloco 4) esses arquivos serão movidos/copiados para `packages/ui/assets/
   - TypeScript **5.5.4** (strict) · Postgres alvo **pg16 + pgvector** (imagem `pgvector/pgvector:pg16` no compose)
 - **Consequências:** `prisma generate` OK gerando o modelo com `Unsupported("vector(1024)")` (R0.3). Migrações do RAG continuam em SQL puro (`db/`), não no Prisma Migrate. `packages/ui` fica como dívida pequena (web tem seus componentes locais). Turbo `tasks` (schema v2). **Verificado:** `pnpm build` → 2/2 apps; API sobe e responde `/v1/health` (db:false sem Postgres) e 404 em `application/problem+json`.
 
+### ADR-0006 — Auth pré-tenant: identidade global + memberships (FASE 1)
+- **Status:** Aceito e implementado (verificado end-to-end).
+- **Contexto:** login acontece **antes** de saber o tenant; RLS exige tenant no contexto. Um usuário pode pertencer a vários tenants.
+- **Decisão:** separar **identidade** de **tenant**. `identities` (global, credenciais, **sem RLS**), `memberships` (identidade↔tenant N:N), `refresh_tokens`/`invites` (infra, sem RLS). Tabelas de **negócio/tenant** (incl. `audit_logs`, `webhook_events`) permanecem com RLS + caso no teste de isolamento. Justificativa do invariante 1: infra de auth não carrega dado de negócio; consultas sempre filtram por email/identity/token.
+- **Fluxo:** senha com **argon2id**; **JWT de acesso 15min** `{sub, tenant_id, role, email}` + **refresh rotativo** (hash em `refresh_tokens`, revogável). Guard global `JwtAuthGuard` injeta `tenant_id` do JWT no `withTenant()`. O front mantém a sessão em **cookies httpOnly** geridos por rotas `/api/auth/*` do Next (proxy → Nest); `x-tenant-id` sai do caminho de request (só server-to-server via Bearer). **OAuth Google/GitHub plugável** (NextAuth) — sem credenciais, falha explícita (`501`), nunca mock silencioso.
+- **Consequências:** `db/004_auth_tenants.sql`; módulos `auth`/`tenants`; `tenants` ganha INSERT para `orvyn_app` (signup) — marcado para endurecer com RLS depois. Verificado: 2 tenants isolados por JWT, rotação/revogação de refresh, 401 sem token.
+
 ### ADR-0005 — `apps/web`: cérebro Obsidian como backend do MVP
 - **Status:** Aceito (esta sessão) — direcionado pelo product owner ("crie o front end em next, e o back end com o cérebro do obsidian atuando como back do sistema").
 - **Contexto:** Pedido explícito de um front Next.js cujo backend é o próprio cérebro Obsidian. O produto "de verdade" (F-phases) usa NestJS + Postgres + RLS (stack congelada) — isto não substitui aquilo.

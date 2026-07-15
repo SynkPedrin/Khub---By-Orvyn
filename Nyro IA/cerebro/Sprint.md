@@ -100,8 +100,16 @@ Módulo `apps/api/src/rag/` com **24 unit tests verdes** (jest + ts-jest), sem d
 - [x] **Front ligado ao banco**: proxy `/api/crm/*`, `lib/crm.ts`; Dashboard, Pipeline (drag **persiste**), Contatos (criar **persiste**), Inbox — **dados reais**, zero array demo. Verificado end-to-end.
 - Rodando: web **http://localhost:3210** · API **:3333** · Postgres **:5432**.
 
-## Próxima sprint (proposta)
-1. **Auth real (F0-11)**: NextAuth/Auth.js (Google+GitHub) + mapear sessão→tenant (hoje tenant fixo de dev).
+## Entregue nesta sessão (8) — FASE 1: Auth real + Tenants ✅
+- [x] `db/004_auth_tenants.sql`: `identities` (global), `memberships`, `refresh_tokens`, `invites`, `audit_logs` **imutável** (trigger + REVOKE), `webhook_events`; RLS nas de tenant + casos novos no `002` (isolamento passa).
+- [x] NestJS `auth` + `tenants`: signup/login/refresh/logout/me; **argon2id**; **JWT 15min** + **refresh rotativo revogável**; guard global `JwtAuthGuard`; provisionamento (tenant+owner+funil default). OAuth `/v1/auth/oauth/callback` plugável (501 explícito).
+- [x] CRM/RAG passam a tirar o **tenant do JWT** (`@TenantId`); `x-tenant-id` sai do request path.
+- [x] Front real: rotas `/api/auth/*` (cookies httpOnly), `middleware` por sessão, refresh silencioso, login/signup/logout reais, proxy `/api/crm` manda Bearer.
+- [x] **git init** + baseline; **verificado end-to-end** (2 tenants isolados por JWT, rotação/revogação, 401 sem token, signup→CRM→logout no front).
+- Config pendente p/ OAuth real: `GOOGLE_CLIENT_ID/SECRET`, `GITHUB_ID/SECRET`, `AUTH_SECRET`.
+
+## Próxima sprint (proposta) — FASE 2: CRM completo + Audit
+1. `db/005_crm_full.sql` (`companies`, `tasks`, `notes`, `custom_fields`, `tags`) + RLS + isolamento.
 2. **Integração R1** (RAG): `VOYAGE_API_KEY` → `node apps/api/scripts/seed-rag.mjs` popula o RAG e liga a busca à Nyro.
 3. Evoluir F1: perfil 360 do contato, edição de deal, envio real no inbox (Evolution API).
 2. **R2**: `ContextualizerService` (Haiku + prompt caching), `RerankerService` (cross-encoder calibrado → liga o corte `RAG_MIN_SCORE`), cache Redis, `GuardrailsService` (CFM/OAB). Consultar skill `claude-api` para o model id do Haiku ao implementar R2.1.

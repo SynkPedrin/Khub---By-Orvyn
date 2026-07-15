@@ -54,8 +54,7 @@ Critério de sucesso da fase (PRD §16): **conta criada e isolada por RLS; deplo
   - Aceite: dashboard, not-found e telas "em construção" (agenda/marketing/financeiro) renderizam CTA da Nyro. ✓ em `apps/web`.
 - [x] **F0-CRM** — Front CRM completo (UI/UX): login/signup (Google+GitHub), shell (sidebar/topbar/command bar/Nyro dock), Dashboard, Pipeline Kanban (drag-and-drop), Contatos, Inbox omnichannel, Conhecimento. Paleta roxo + off-white, dark mode, mobile-first.
   - Aceite: `pnpm build` 14 rotas verdes; middleware protege rotas; verificado em runtime (localhost:3210). Dados **demo**; auth **demo** (client-side).
-- [ ] **F0-11 (auth real)** — Substituir a sessão demo por **NextAuth/Auth.js** (Google + GitHub OAuth server-side) + integração com o `auth` do NestJS.
-  - Aceite: login OAuth real conclui; sessão httpOnly; `x-tenant-id`/JWT do back. **Precisa:** GOOGLE_CLIENT_ID/SECRET, GITHUB_ID/SECRET.
+- [x] **F0-11 (auth real) — FASE 1** — módulos `auth` + `tenants`, JWT (15min) + refresh rotativo, argon2id, guard global, sessão em cookies httpOnly, tenant do JWT. `db/004_auth_tenants.sql` (identities/memberships/refresh_tokens/invites/audit_logs imutável/webhook_events) + isolamento estendido. **Verificado end-to-end** (2 tenants isolados, rotação/revogação, 401 sem token). OAuth Google/GitHub **plugável** (falta `GOOGLE/GITHUB_*` + `AUTH_SECRET` para ligar). Ver ADR-0006.
 - [ ] **F0-18** — Relatório de prontidão de F0 + proposta de `Sprint.md` da semana seguinte.
   - Aceite: relatório do que está pronto/pendente/config manual; próxima sprint proposta.
 

@@ -61,7 +61,7 @@ export function AppTopbar({ onMenu }: { onMenu: () => void }) {
               <p className="truncate text-sm font-semibold text-fg">{user?.name}</p>
               <p className="truncate text-xs text-muted">{user?.email}</p>
               <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-semibold text-brand">
-                via {user?.provider ?? 'demo'}
+                {user?.empresa ?? user?.role ?? 'conta'}
               </span>
             </div>
             <div className="p-1.5">
@@ -72,9 +72,9 @@ export function AppTopbar({ onMenu }: { onMenu: () => void }) {
                 <Icon name="settings" size={17} className="text-muted" /> Configurações
               </button>
               <button
-                onClick={() => {
-                  signOut();
-                  router.push('/login');
+                onClick={async () => {
+                  await signOut();
+                  router.replace('/login');
                 }}
                 className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-red-600 hover:bg-red-500/10 dark:text-red-400"
               >

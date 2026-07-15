@@ -50,6 +50,10 @@ SELECT id, tenant_id, escopo, nicho, subespecialidade, 0,
 FROM rag_documents
 WHERE titulo IN ('DOC_A','DOC_B','DOC_GLOBAL');
 
+-- seed de tabelas de auth/tenant (audit_logs, webhook_events) — criadas no 004
+INSERT INTO audit_logs (tenant_id, actor_type, acao) VALUES (:'tenant_a', 'humano', 'acao A'), (:'tenant_b', 'humano', 'acao B');
+INSERT INTO webhook_events (tenant_id, provider, event_id) VALUES (:'tenant_a', 'stripe', 'evt_A'), (:'tenant_b', 'stripe', 'evt_B');
+
 -- ---------- ACT + ASSERT (como aplicação, tenant = A) ----------
 SET LOCAL ROLE orvyn_app;
 SET LOCAL app.current_tenant_id = :'tenant_a';
@@ -120,6 +124,17 @@ BEGIN
     WHEN insufficient_privilege OR check_violation THEN
       RAISE NOTICE 'OK write-guard: insercao cross-tenant bloqueada pela RLS';
   END;
+END $$;
+
+-- 6. Isolamento das tabelas de auth/tenant (audit_logs, webhook_events)
+DO $$
+DECLARE v_audit int; v_wh int;
+BEGIN
+  SELECT count(*) INTO v_audit FROM audit_logs WHERE acao = 'acao B';
+  IF v_audit <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[audit_logs]: tenant A leu % log(s) de B', v_audit; END IF;
+  SELECT count(*) INTO v_wh FROM webhook_events WHERE event_id = 'evt_B';
+  IF v_wh <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[webhook_events]: tenant A leu % evento(s) de B', v_wh; END IF;
+  RAISE NOTICE 'OK isolamento auth: audit_logs e webhook_events isolados';
 END $$;
 
 RESET ROLE;

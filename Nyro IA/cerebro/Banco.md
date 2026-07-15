@@ -54,6 +54,12 @@ audit_logs(id, tenant_id, actor, acao, payload, ts)
 
 ---
 
+## 2.1 Auth + Tenants (FASE 1 — `db/004_auth_tenants.sql`)
+- `identities` (global, credenciais, **sem RLS**): email único (`lower`), `password_hash` (argon2id), `oauth_provider/subject`, `email_verified_at`, `twofa_secret?`.
+- `memberships` (identidade↔tenant N:N, sem RLS), `refresh_tokens` (rotativos/revogáveis, sem RLS), `invites` (por token, sem RLS).
+- `audit_logs` — **imutável** (RLS + `REVOKE UPDATE/DELETE` + trigger `audit_logs_immutable`) + `webhook_events` (RLS, dedupe `(provider,event_id)`).
+- `tenants` +`nicho`,`subespecialidade`; `users` +`identity_id`,`permissoes`. Grants: `orvyn_app` INSERT em `tenants` (signup). Justificativa infra-sem-RLS: ADR-0006. Teste `002` estendido (audit_logs/webhook_events isolados). ✅
+
 ## 3. Escopo de F0 — schema inicial
 
 F0 entrega **apenas** (ver [[Sprint]] / [[Tasks]] F0-08):
