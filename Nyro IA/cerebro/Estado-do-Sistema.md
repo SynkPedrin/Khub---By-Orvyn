@@ -1,246 +1,165 @@
-# Estado do Sistema — Orvyn (handoff para "montar o que falta")
+# Estado do Sistema — ORVYN OS (handoff atualizado)
 
-> Fotografia técnica **do que existe hoje**, o que funciona de verdade, o que é placeholder, e **todas as APIs** (existentes + as que faltam). Legenda de status:
-> ✅ **funciona** (real, verificado) · 🟡 **parcial / demo / placeholder** · ⛔ **não existe ainda**.
-> Atualizado nesta sessão. Fonte da verdade: este cérebro. Ver [[PRD]] · [[Arquitetura]] · [[Banco]] · [[APIs]] · [[Tasks]].
+> Fotografia técnica **do que existe hoje**: o que funciona de verdade (verificado), o que é parcial/fachada, e o que falta. Foco em **Auth · CRM · IA/Nyro (RAG)**. Legenda:
+> ✅ **funciona** (real, verificado) · 🟡 **parcial / fachada / não ligado** · ⛔ **não existe ainda**.
+> Marca: **ORVYN OS** (identificadores internos seguem `orvyn`). Ver [[PRD]] · [[Arquitetura]] · [[Banco]] · [[APIs]] · [[Tasks]] · [[Bugs]].
 
 ---
 
-## 0. Como rodar (ambiente local)
+## 0. Resumo executivo — o que roda hoje
 
-Node vem do nvm; Docker do Docker Desktop. Nesta máquina os binários **não estão no PATH padrão**:
+**Stack no ar:** Postgres 16 + pgvector + Redis (Docker) · API NestJS `:3333` · Web Next `:3210`.
+
+**✅ Funciona de verdade (verificado end-to-end):**
+- **Auth real multi-tenant** — signup/login/refresh/logout, JWT + refresh rotativo, sessão em cookies httpOnly, **isolamento por tenant provado** (tenant A não vê dados de B).
+- **CRM Core sobre Postgres com RLS** — Dashboard (KPIs/funil reais), Pipeline Kanban (**drag persiste no banco**), Contatos (listar/buscar/**criar persiste**), Inbox (lê conversas/mensagens reais), overview/atividades.
+- **RAG (motor de conhecimento)** — schema + RLS + teste de isolamento (R0.2 fechado); **inteligência de marketing/operação da Nyro ingerida** (12 docs / 73 chunks, escopo global) e **buscável por BM25**.
+- **Base de conhecimento** navegável (`/conhecimento`) e **Central de Marketing** (`/marketing`).
+
+**🟡 Existe mas não opera:** o **chat da Nyro** (sem LLM ligado), envio no inbox, busca global do CRM, OAuth Google/GitHub (plugável), notificações/perfil/config, criar-editar negócio pela UI, perfil 360 do contato.
+
+**⛔ Não existe:** `automations`, `integrations` (Meta/Google/WhatsApp/Stripe), `billing`, `analytics`, templates verticais/provisionamento por blueprint.
+
+---
+
+## 1. Como rodar
 
 ```bash
 export PATH="$HOME/.nvm/versions/node/v20.20.2/bin:/Applications/Docker.app/Contents/Resources/bin:$PATH"
-
-# 1) Infra (Postgres+pgvector + Redis)
 cd "/Users/pedro/Downloads/Nyro IA"
-docker compose up -d
 
-# 2) Migrations (ordem importa) — só na 1ª vez / quando mudar schema
-for f in 000_foundation 001_rag_schema 001a_rls_harden 003_crm_schema; do
-  docker exec -i orvyn-postgres psql -U postgres -d orvyn -v ON_ERROR_STOP=1 < db/$f.sql
-done
-# teste de isolamento (não deixa resíduo):
-docker exec -i orvyn-postgres psql -U postgres -d orvyn -v ON_ERROR_STOP=1 < db/002_isolation_test.sql
+docker compose up -d                       # Postgres+pgvector + Redis
+# migrations (1ª vez / quando mudar schema), NA ORDEM:
+for f in 000_foundation 001_rag_schema 001a_rls_harden 003_crm_schema 004_auth_tenants; do
+  docker exec -i orvyn-postgres psql -U postgres -d orvyn -v ON_ERROR_STOP=1 < db/$f.sql; done
+docker exec -i orvyn-postgres psql -U postgres -d orvyn -v ON_ERROR_STOP=1 < db/002_isolation_test.sql  # teste (rollback)
 
-# 3) API (NestJS) — conecta como orvyn_app (RLS)
-pnpm --filter @orvyn/api run build
-DATABASE_URL="postgresql://orvyn_app:orvyn@localhost:5432/orvyn?schema=public" PORT=3333 node apps/api/dist/main.js
-
-# 4) Front (Next) — em outro terminal
-pnpm --filter @orvyn/web run dev   # http://localhost:3210
+pnpm --filter @orvyn/api run build && (cd apps/api && node dist/main.js)   # API :3333 (usa apps/api/.env)
+pnpm --filter @orvyn/web run dev            # Web :3210
 ```
+⚠️ **Nunca rode `next build` com o `next dev` ligado** (corrompe `.next/` → BUG-005). Para produção: `next start`.
 
-Portas: **web 3210 · API 3333 · Postgres 5432 · Redis 6379**. Senha das roles (`orvyn_app`/`orvyn_service`): `orvyn` (definida via `ALTER ROLE`; trocar em produção).
-
-Fluxo de dados atual:
-```
-Browser → Next (3210) → /api/crm/* (proxy injeta x-tenant-id) → NestJS (3333) → Prisma → Postgres (RLS por tenant)
-                       → /api/cerebro/* (lê o vault Obsidian direto do filesystem)
-```
+**Acesso admin (dados reais no CRM):** `admin@orvyn.app` / `OrvynAdmin2026` (role owner do tenant "Sua Empresa"). Ou crie sua conta em `/signup`.
 
 ---
 
-## 1. Monorepo — estrutura
+## 2. Auth & Multi-tenant ✅ (FASE 1)
 
-```
-apps/web    Next.js 14 (App Router) — front + proxy + leitor do cérebro
-apps/api    NestJS 10 + Prisma — API REST /v1 (crm, rag, health)
-packages/   config (tsconfig base), types (contratos compartilhados)
-db/         migrations SQL (schema + RLS + testes)
-Nyro IA/cerebro/  vault Obsidian (documentação = fonte da verdade + base RAG)
-docker-compose.yml, turbo.json, pnpm-workspace.yaml
-```
-Stack fixada (ADR-0002): Node 20.20.2, pnpm 9.12.3, Turborepo 2.10.5, Next 14.2.35, React 18.3.1, Tailwind 3.4, NestJS 10.4.22, Prisma 5.22, TypeScript 5.5.
+Arquitetura (ADR-0006): **identidade global × tenant**.
+- `identities` (login global, argon2id) · `memberships` (identidade↔tenant N:N) · `refresh_tokens` (rotativos/revogáveis) · `users` (perfil por tenant).
+- **JWT de acesso 15 min** `{sub, tenant_id, role}` + **refresh rotativo**. Guard global; **tenant vem do JWT** (nunca de header do browser). Front mantém sessão em **cookies httpOnly** via `/api/auth/*`.
+- **Verificado:** 401 sem token · A vê só o seu (isolamento) · rotação de refresh · logout revoga.
+- 🟡 falta: OAuth Google/GitHub (plugável, `501` até configurar), convites de equipe, 2FA, endurecer RLS em `tenants`.
 
 ---
 
-## 2. FRONT-END (apps/web) — o que está feito
+## 3. CRM Core ✅/🟡 (F1 em andamento)
 
-### 2.1 Telas (rotas)
-| Rota | Arquivo | Status | Observação |
-|---|---|---|---|
-| `/login` | `app/(auth)/login` | 🟡 | UI completa; Google/GitHub e e-mail entram via **sessão demo** (cookie client-side), **não é OAuth real** |
-| `/signup` | `app/(auth)/signup` | 🟡 | Idem; coleta nome/empresa/nicho mas **não provisiona tenant** |
-| `/` (Dashboard) | `app/(app)/page.tsx` | ✅ | KPIs, funil, atividades, contatos recentes — **dados reais do banco** |
-| `/pipeline` | `app/(app)/pipeline` | ✅ | Kanban; **drag-and-drop persiste** (`PATCH /v1/crm/deals/:id/stage`) |
-| `/contatos` | `app/(app)/contatos` | 🟡 | Listar + buscar + **criar (persiste)**. Falta editar/excluir/perfil 360 |
-| `/inbox` | `app/(app)/inbox` | 🟡 | Lê conversas/mensagens reais. **Enviar mensagem NÃO funciona** (input sem ação) |
-| `/conhecimento` + `/conhecimento/[...slug]` | `app/(app)/conhecimento` | ✅ | Navega a base de conhecimento (markdown do vault) |
-| `/agenda` `/marketing` `/financeiro` `/nyro` | `app/(app)/*` | 🟡 | Telas "em construção" (ComingSoon) — **não funcionais** |
-
-### 2.2 Componentes / infra de UI
-| Item | Status | Observação |
+| Área | Status | Hoje |
 |---|---|---|
-| Design system (tokens roxo `#7B2FBE` + off-white, dark mode) | ✅ | `globals.css` + `tailwind.config.ts` |
-| UI kit (`components/ui.tsx`): Button, Card, Badge, Avatar, Input, Field | ✅ | |
-| Ícones SVG próprios (`components/icons.tsx`) | ✅ | sem dependência externa |
-| Charts SVG (`components/charts.tsx`): Sparkline, BarChart, Funnel | ✅ | |
-| App shell: `AppSidebar`, `AppTopbar` | ✅ | |
-| Command bar `Cmd/Ctrl+K` (`CommandBar`) | ✅ | navega + busca conhecimento (real, via `/api/cerebro`) |
-| Toggle de tema (claro/escuro) | ✅ | |
-| Sino de notificações | 🟡 | ícone estático, **sem notificações reais** |
-| Menu do usuário | 🟡 | "Meu perfil"/"Configurações" **não fazem nada**; "Sair" funciona |
-| Dock da Nyro (botão ✦) | 🟡 | abre painel com sugestões fixas; **input não envia nada** (sem IA) |
-| Auth client (`lib/auth.tsx`) + `middleware.ts` | 🟡 | guard de rota por cookie funciona; **sessão é demo** |
-| `lib/crm.ts` (fetchers do CRM) | ✅ | |
-| `lib/cerebro.ts` (leitor do vault) | ✅ | |
-| Proxy `/api/crm/[...path]` (injeta tenant) | ✅ | tenant **fixo de dev** (`ORVYN_TENANT_ID`) |
-
-### 2.3 O que o front **não** tem (front)
-⛔ Edição/exclusão de contato · perfil 360 · criar/editar negócio pela UI (só move) · empresas · tarefas/notas · envio de mensagem no inbox · agenda/calendário · campanhas · financeiro/Stripe · chat real da Nyro · tempo real (WebSocket) · onboarding com entrevista da Nyro · configurações/equipe/permissões.
+| Dashboard | ✅ | KPIs (contatos, negócios, valor do funil, ganho), funil por etapa, atividades, contatos recentes — **do banco** |
+| Pipeline (Kanban) | ✅ | etapas + negócios reais; **drag persiste** (`PATCH /v1/crm/deals/:id/stage`) |
+| Contatos | 🟡 | listar/buscar/**criar** (persiste). ⛔ editar/excluir, **perfil 360**, empresas, campos custom, dedupe |
+| Negócios | 🟡 | criar/mover via API; ⛔ **modal "Novo negócio"** e **card→detalhe** na UI (BUG-006) |
+| Inbox | 🟡 | lê conversas/mensagens reais; ⛔ **enviar** (BUG-003), atribuição, sugestão dinâmica |
+| Audit | 🟡 | tabela `audit_logs` imutável existe + alguns inserts (provision); ⛔ `AuditInterceptor` em toda mutação |
+| Busca global (Cmd+K) | 🟡 | só navega + conhecimento; ⛔ **não pesquisa contatos/negócios** (BUG-004) |
 
 ---
 
-## 3. BACK-END (apps/api) — o que está feito
+## 4. IA / Nyro — o que existe (foco)
 
-### 3.1 Módulos NestJS
-| Módulo | Status | O que faz hoje |
+A **Nyro** foi projetada para 4 papéis (PRD §5): **Arquiteta · Operadora (SDR) · Estrategista de Growth · Consultora do Nicho**. Estado hoje:
+
+### 4.1 Motor de conhecimento (RAG) — parcialmente ligado
+| Componente | Status | Nota |
 |---|---|---|
-| `health` | ✅ | `GET /v1/health` (checa conexão do banco) |
-| `prisma` | ✅ | `PrismaService` + `withTenant()` (seta `app.current_tenant_id` parametrizado → RLS) |
-| `common` | ✅ | filtro de erro **RFC 7807** (`application/problem+json`) + correlation-id |
-| `config` | ✅ | validação de env com zod |
-| `crm` | ✅ | overview, contatos (list/create), pipeline, deals (create/move), conversas — tudo via RLS |
-| `rag` | 🟡 | lógica completa + **24 unit tests verdes**, mas **precisa de chaves** (Voyage/Anthropic) e ingestão real para funcionar de ponta a ponta |
-| `auth` | ⛔ | **não existe** — sem login real/JWT/refresh/OAuth |
-| `tenants` | ⛔ | **não existe** — sem provisionamento; tenant é fixo de dev |
-| `inbox` (envio/canais) | ⛔ | só leitura via `crm`; sem envio nem webhooks |
-| `automations` | ⛔ | motor de workflows (F4) |
-| `integrations` | ⛔ | Meta/Google/LinkedIn/Stripe/WhatsApp |
-| `billing` | ⛔ | Stripe + créditos de IA |
-| `analytics` | ⛔ | KPIs materializados |
-| `audit` | 🟡 | há tabela `activities` (feed), mas **não** o `audit_logs` imutável formal |
+| Schema + RLS + isolamento (R0) | ✅ | `rag_documents/chunks/queries/feedback` + `nyro_guardrail_hits`; pgvector(1024) + HNSW + tsvector pt. **R0.2 fechado** (zero vazamento) |
+| `ChunkingService` (R1.1) | ✅ | não corta tabela/código; testado |
+| `EmbeddingsService` + provider Voyage (R1.2) | 🟡 | lógica testada; **exige `VOYAGE_API_KEY`** para gerar vetores |
+| `RetrievalService` híbrido (R1.4) | ✅ | RRF + boost + `withTenant`; testado |
+| `IngestionService`/processor (R1.3) | 🟡 | idempotente; fila **in-process** (BullMQ = escala, não ligado) |
+| Reranker (R2.2) | 🟡 | só `IdentityReranker` (baseline) — cross-encoder ⛔ |
+| Contextualizer (R2.1) | ⛔ | Haiku + prompt caching — não existe |
+| Guardrails CFM/OAB (R2.4) | ⛔ | validador pós-resposta — não existe |
+| Tool `search_knowledge` (R1.5) | ✅ | tenant só da sessão; testado |
+| **Unit tests do RAG** | ✅ | **24 verdes** (jest) |
 
-### 3.2 Módulo RAG — detalhe (`apps/api/src/rag/`)
-- ✅ `ChunkingService` (não corta tabela/código, breadcrumb, p95 tokens) — testado.
-- ✅ `EmbeddingsService` (batch 96 + retry) sobre **provider abstrato**; `VoyageEmbeddingProvider` real **exige `VOYAGE_API_KEY`**.
-- ✅ `RetrievalService` (busca híbrida `rag_search_hybrid` + RRF + boost + cache + `withTenant`) — testado.
-- ✅ `IngestionService`/`IngestionProcessor` idempotentes; fila **in-process** (🟡 BullMQ é o path de escala, não ligado).
-- 🟡 `RerankerService`: só `IdentityReranker` (baseline) — **cross-encoder real (R2.2) não existe**.
-- ⛔ `ContextualizerService` (Haiku + prompt caching, R2.1) — **não existe**.
-- ⛔ `GuardrailsService` (CFM/OAB, R2.4) — **não existe**.
-- ✅ Tool `search_knowledge` (tenant só da sessão) — testado.
-- **Corpus** pronto em `Nyro IA/cerebro/RAG/conhecimento/` + seed `apps/api/scripts/seed-rag.mjs` (🟡 ainda não ingerido — precisa da chave).
+**Inteligência de marketing/operação da Nyro (camada global):** ✅ **ingerida e buscável**.
+- 12 frameworks C-Level (6 marketing: STP, Funil de Demanda, Go-to-Market, Arquitetura de Marca, Atribuição, Pirâmide de Conteúdo; 6 operação: OKR, Dashboards, Design Org., Mapeamento de Processos, Matriz de Alocação, Prontidão para Escalar) → **73 chunks, escopo global**, com `metadados` (dominio/framework/plano/intenções).
+- Seed: `apps/api/scripts/seed-global-rag.mjs` (como `orvyn_service`, fora do request path). **Buscável por BM25 agora** (ex.: "posicionar"→STP, "lançar serviço"→GTM); **busca semântica** entra com a chave Voyage (backfill de embeddings).
+- Superfície no produto: **`/marketing`** (Central de Marketing) lista os frameworks; `/conhecimento` abre cada um. Ver [[RAG/conhecimento/global/_INDICE|_INDICE]].
+
+### 4.2 Nyro como agente/operadora — ⛔ ainda não opera
+- ⛔ `POST /v1/nyro/chat` (SSE), orquestrador multi-agente, memória em 3 níveis, tools de escrita (`create_pipeline`, `send_message`…), human-in-the-loop (`nyro_pending_actions` + approve).
+- 🟡 UI da Nyro é **fachada**: página `/nyro` diz "Chega na F3"; dock flutuante tem sugestões estáticas (não conversa); "Insights da Nyro" no dashboard são textos fixos; sugestão no inbox é estática.
+- ⛔ `ai_usage_events` (créditos/custo de IA).
+- **Resumo:** a Nyro **já tem conhecimento** (RAG global + corpus de nicho anterior), mas **ainda não conversa nem age** — isso é a **FASE 5 (Nyro chat + tools)**, que precisa de `ANTHROPIC_API_KEY` (chat/contextualizer/guardrails) e `VOYAGE_API_KEY` (embeddings).
 
 ---
 
-## 4. BANCO DE DADOS — o que existe
+## 5. Back-end (apps/api) — módulos
 
-Migrations em `db/` (aplicar na ordem): `000_foundation` → `001_rag_schema` → `001a_rls_harden` → `003_crm_schema`. Teste: `002_isolation_test` (✅ **passou** — zero vazamento cross-tenant).
-
-| Tabela | Origem | RLS | Observação |
-|---|---|---|---|
-| `tenants` | 000 (mínima) | — | 🟡 falta estender (users completos, plano, template) |
-| roles `orvyn_app` (NOBYPASSRLS) / `orvyn_service` (BYPASSRLS) | 000 | — | ✅ |
-| `rag_documents`, `rag_chunks`, `rag_queries`, `rag_feedback`, `nyro_guardrail_hits` | 001/001a | ✅ | pgvector(1024) + HNSW + tsvector pt |
-| `users` | 003 | ✅ | básico (sem senha/2FA/permissões) |
-| `pipelines`, `stages` | 003 | ✅ | 1 pipeline seed |
-| `contacts` | 003 | ✅ | falta `companies`, campos custom usados |
-| `deals` | 003 | ✅ | |
-| `conversations`, `messages` | 003 | ✅ | leitura ok; sem envio |
-| `activities` | 003 | ✅ | feed do dashboard |
-| `audit_logs` (imutável) | — | ⛔ | ainda não criado |
-| `companies`, `tasks`, `notes`, `workflows`, `integrations`, `invoices`, `ai_usage_events` | — | ⛔ | não criados |
-
----
-
-## 5. APIs — TODAS as rotas
-
-### 5.1 Existentes (funcionam) ✅
-**NestJS (`http://localhost:3333`, prefixo `/v1`)** — CRM exige header `x-tenant-id`:
-| Método | Rota | Descrição |
+| Módulo | Status | O que faz |
 |---|---|---|
-| GET | `/v1/health` | status + conexão do banco |
-| GET | `/v1/crm/overview` | KPIs + funil + atividades + contatos recentes |
-| GET | `/v1/crm/contacts?q=` | lista/busca contatos |
-| POST | `/v1/crm/contacts` | cria contato |
-| GET | `/v1/crm/pipeline` | etapas + negócios agrupados |
-| POST | `/v1/crm/deals` | cria negócio |
-| PATCH | `/v1/crm/deals/:id/stage` | move negócio de etapa |
-| GET | `/v1/crm/conversations` | conversas + mensagens |
-| POST | `/v1/rag/documents` | 🟡 ingere documento (precisa DB; embeddings exigem chave) |
-| POST | `/v1/rag/search` | 🟡 busca no RAG (precisa chave Voyage) |
-| POST | `/v1/rag/feedback` | 🟡 feedback de resposta |
+| `health` | ✅ | `/v1/health` (checa banco) |
+| `auth` | ✅ | signup/login/refresh/logout/me + oauth/callback (501) |
+| `tenants` | ✅ | provisionamento (tenant+owner+funil) + `/v1/tenants/me` |
+| `crm` | ✅ | overview, contatos, pipeline, deals, conversas — via RLS |
+| `rag` | 🟡 | ingestão/busca/feedback; precisa chaves p/ operar de ponta a ponta |
+| `prisma`/`common`/`config` | ✅ | `withTenant`, filtro RFC 7807 + correlation-id, env zod (fatal se faltar `JWT_SECRET`) |
+| `nyro`(chat) · `inbox`(envio) · `automations` · `integrations` · `billing` · `analytics` | ⛔ | não existem |
 
-**Next (`http://localhost:3210`)**:
-| Método | Rota | Descrição |
+---
+
+## 6. Banco — 20 tabelas
+
+- **Tenant/negócio (RLS):** `tenants`* , `users`, `contacts`, `deals`, `pipelines`, `stages`, `conversations`, `messages`, `activities`, `audit_logs` (imutável), `webhook_events`, `rag_documents/chunks/queries/feedback`, `nyro_guardrail_hits`. (*`tenants` sem RLS ainda — endurecer)
+- **Infra de auth (sem RLS, ADR-0006):** `identities`, `memberships`, `refresh_tokens`, `invites`.
+- Migrations: `000_foundation · 001_rag_schema · 001a_rls_harden · 003_crm_schema · 004_auth_tenants` (+ `002_isolation_test`).
+- ⛔ faltam: `companies`, `tasks`, `notes`, `custom_fields`, `tags`, `workflows/runs/steps`, `integrations`, `invoices/subscriptions`, `ai_usage_events`, `nyro_pending_actions`.
+
+---
+
+## 7. APIs
+
+### Existentes ✅ (NestJS `/v1`; CRM/RAG exigem **JWT**, tenant do token)
+`GET /health` · `POST /auth/{signup,login,refresh,logout}` · `GET /auth/me` · `POST /auth/oauth/callback` (501) · `GET /tenants/me` · `GET /crm/overview` · `GET|POST /crm/contacts` · `GET /crm/pipeline` · `POST /crm/deals` · `PATCH /crm/deals/:id/stage` · `GET /crm/conversations` · `POST /rag/{documents,search,feedback}`.
+**Next (front):** `/api/auth/{login,signup,refresh,logout,me}` (cookies httpOnly) · `/api/crm/[...]` (proxy Bearer) · `/api/cerebro[/...]`.
+
+### Faltantes ⛔ (para completar)
+- **CRM:** `GET /crm/contacts/:id` (360) · `PATCH|DELETE /crm/contacts/:id` · `companies` CRUD · `PATCH|DELETE /crm/deals/:id` · `GET /crm/search?q=` (BUG-004) · `tasks`/`notes` · paginação cursor.
+- **Inbox/WhatsApp:** `POST /messages` · `POST /webhooks/whatsapp` (Evolution, idempotente) · WebSocket.
+- **Nyro:** `POST /nyro/chat` (SSE) · `POST /nyro/actions/:id/approve|reject`.
+- **Integrações/Billing:** Meta/Google/Stripe + `POST /webhooks/stripe` · `GET /analytics/kpis`.
+- **Auth:** OAuth real (Google/GitHub) · convites.
+
+---
+
+## 8. Não funciona / é fachada (bugs registrados)
+- **BUG-003** — Inbox: botão enviar **sob o FAB da Nyro** (z-index) + envio não implementado; sugestão estática.
+- **BUG-004** — Cmd+K não pesquisa contatos/negócios ("Marina" → nada).
+- **BUG-005** — crash `./352.js`: causado por `next build` com `dev` ligado (não é a digitação). Mitigado.
+- **BUG-006** — controles sem ação: "Novo negócio", card do deal, linha de contato, "Usar"/telefone/"..." no inbox, sino, perfil/config, Insights "Ativar/Priorizar". São FASE 2/3/5, não regressões.
+
+---
+
+## 9. Config manual (chaves) — o que destrava o quê
+| Variável | Onde | Destrava |
 |---|---|---|
-| GET | `/api/health` | health do front + cérebro |
-| GET | `/api/cerebro` · `/api/cerebro/[...slug]` | índice/documento do vault |
-| GET/POST/PATCH/DELETE | `/api/crm/[...path]` | **proxy** para o NestJS com `x-tenant-id` |
-
-### 5.2 APIs que **faltam** (necessárias para completar) ⛔
-> Contratos-alvo em [[APIs]]. Prioridade sugerida entre colchetes.
-
-**Auth & Tenant [P0]**
-- `POST /v1/auth/signup` · `POST /v1/auth/login` · `POST /v1/auth/refresh`
-- `GET /v1/auth/google` · `GET /v1/auth/github` (OAuth real + callback)
-- `GET /v1/auth/me` · `POST /v1/tenants` (provisiona conta) · convites de equipe
-- Resolver **tenant a partir do JWT** (hoje é header/tenant fixo)
-
-**CRM (completar) [P1]**
-- `GET /v1/crm/contacts/:id` (perfil 360) · `PATCH`/`DELETE /v1/crm/contacts/:id`
-- `GET/POST/PATCH/DELETE /v1/crm/companies`
-- `PATCH`/`DELETE /v1/crm/deals/:id` · `GET /v1/crm/pipelines` (múltiplos) · CRUD de `stages`
-- `POST /v1/crm/tasks` · `POST /v1/crm/notes`
-
-**Inbox & WhatsApp [P1]**
-- `POST /v1/messages` (enviar) · `POST /v1/webhooks/whatsapp` (Evolution API, idempotente)
-- atribuição de conversa · WebSocket para tempo real
-
-**Nyro IA [P2]**
-- `POST /v1/nyro/chat` (SSE/stream) · `POST /v1/nyro/actions/:id/approve` (human-in-the-loop)
-- RAG: ligar `VOYAGE_API_KEY` + Anthropic (contextualizer/guardrails)
-
-**Integrações & Billing [P2]**
-- Meta (Lead Ads + Conversions) · Google (Calendar/Ads) · Stripe (checkout + `POST /v1/webhooks/stripe`)
-- `GET /v1/analytics/kpis`
-
-**Automações [P3]**
-- CRUD de `workflows` · engine BullMQ · `GET /v1/workflows/:id/runs`
+| `VOYAGE_API_KEY` | `apps/api/.env` | embeddings → **busca semântica** do RAG + backfill dos 73 chunks |
+| `ANTHROPIC_API_KEY` | `apps/api/.env` | **chat da Nyro** + contextualizer + guardrails (FASE 5) |
+| `GOOGLE_CLIENT_ID/SECRET`, `GITHUB_ID/SECRET`, `AUTH_SECRET` | api/web | **OAuth real** Google/GitHub |
+| Evolution/Meta/Google/Stripe | integrações | Inbox real, Ads, cobrança (F5) |
+| Trocar `JWT_SECRET` + senhas das roles | prod | segurança fora de dev |
 
 ---
 
-## 6. Funcionalidades que EXISTEM mas NÃO funcionam corretamente (🟡)
+## 10. Ordem sugerida do que falta
+1. **FASE 2 — CRM completo + Audit:** `companies/tasks/notes/custom_fields`, editar/excluir, **modal criar/editar negócio**, **perfil 360**, paginação, `AuditInterceptor`, **busca CRM** (mata BUG-004/006).
+2. **FASE 3 — Inbox real + WhatsApp:** envio (`POST /messages`) + Evolution + WebSocket + fix z-index (BUG-003).
+3. **FASE 4 — Ligar o RAG (R1→R2):** `VOYAGE_API_KEY` → backfill de embeddings; BullMQ; reranker cross-encoder; contextualizer; guardrails CFM/OAB.
+4. **FASE 5 — Nyro chat + tools:** `POST /nyro/chat` (SSE) usando o RAG (incl. inteligência de marketing) + tools de escrita + human-in-the-loop + `ai_usage_events`. **Aqui a Nyro passa a conversar e agir.**
+5. **FASE 6/7/8 — Integrações+Billing · Automações · CI/CD + hardening.**
 
-1. **Login/Cadastro Google & GitHub** — botões e telas prontos, mas fazem **login demo** (cookie local). Não há OAuth real, JWT, nem provisionamento de tenant. → precisa módulo `auth` (NextAuth/Auth.js + NestJS) e credenciais.
-2. **Multi-tenant no front** — o proxy usa um **tenant fixo de dev**. Todo usuário demo cai no mesmo tenant. → mapear sessão→tenant após auth real.
-3. **Inbox — enviar mensagem** — a caixa de texto e o botão de enviar **não disparam nada**; sugestão da Nyro ("Usar") é estática. → `POST /v1/messages` + Evolution API.
-4. **Dock da Nyro / chat** — abre, mas o campo de mensagem **não conversa** (sem LLM). Sugestões são fixas. → `POST /v1/nyro/chat`.
-5. **Insights da Nyro (dashboard)** — textos **fixos**, não gerados por IA.
-6. **RAG (busca de conhecimento pela IA)** — implementado e testado em unit, mas **não responde de verdade** sem `VOYAGE_API_KEY` (embeddings) e ingestão do corpus. Reranker é baseline (sem cross-encoder); sem contextualização; sem guardrails CFM/OAB.
-7. **Agenda / Marketing / Financeiro** — telas **placeholder** ("em construção").
-8. **Sino de notificações / Perfil / Configurações** — **sem ação**.
-9. **Criar negócio pela UI** — o botão "Novo negócio" no Pipeline **não abre formulário** (só o de contato existe). Mover negócio funciona.
-10. **Busca de contatos** — funciona no servidor, mas **sem paginação** (carrega tudo).
-11. **RAG ingestion** — usa fila **in-process** (sem durabilidade/retry/DLQ do BullMQ) e **role de escrita**: publicar base global/nicho deve rodar como `orvyn_service` (hoje a API conecta como `orvyn_app`).
-12. **CI/CD** — os testes existem mas **não há pipeline** que rode lint/typecheck/testes/isolamento a cada PR.
-
----
-
-## 7. Config manual necessária (chaves / env)
-| Onde | Variável | Para quê |
-|---|---|---|
-| `apps/api/.env` | `DATABASE_URL` | conexão (orvyn_app) — já configurada em dev |
-| `apps/api/.env` | `VOYAGE_API_KEY` | embeddings do RAG (obrigatório p/ RAG real) |
-| `apps/api/.env` | `ANTHROPIC_API_KEY` | Nyro (chat) + contextualizer/guardrails (R2) |
-| `apps/api/.env` | `COHERE_API_KEY` | rerank fallback (opcional) |
-| auth | `GOOGLE_CLIENT_ID/SECRET`, `GITHUB_ID/SECRET` | OAuth real |
-| integrações | tokens Meta/Google/WhatsApp(Evolution)/Stripe | F5 |
-| `apps/web/.env.local` | `ORVYN_API_URL`, `ORVYN_TENANT_ID` | proxy do front (dev) |
-
----
-
-## 8. Ordem sugerida para "montar o que falta"
-1. **Auth real (F0-11)** — NextAuth (Google/GitHub) + módulo `auth`/`tenants` no NestJS → resolve tenant do JWT (mata os itens 1, 2 da seção 6).
-2. **Completar CRM (F1)** — perfil 360, editar/excluir, criar negócio na UI, empresas, tarefas/notas, `audit_logs`.
-3. **Inbox real (F1/F5)** — envio + Evolution API + WebSocket.
-4. **Ligar o RAG (R1→R2)** — `VOYAGE_API_KEY`, ingerir corpus (`seed-rag.mjs`), reranker cross-encoder, contextualizer, guardrails CFM/OAB.
-5. **Nyro chat (F3)** — `POST /v1/nyro/chat` (SSE) + tools tipadas + human-in-the-loop.
-6. **Integrações + Billing (F5)** — Meta/Google/Stripe/WhatsApp + créditos de IA (`ai_usage_events`).
-7. **Automações (F4)** — engine BullMQ + workflow builder.
-8. **CI/CD** — pipeline com lint/typecheck/testes + **teste de isolamento bloqueante**.
-
-> Regra que não muda ao construir: **toda** tabela nova com `tenant_id` + policy RLS + teste de isolamento; **Nyro só age por tools tipadas com audit log**; guardrails de nicho em duas camadas; nada de segredo no código. Ver [[RegrasNegocio]].
+> Invariantes ao construir: toda tabela de negócio com `tenant_id` + RLS + teste de isolamento; **Nyro só age por tools tipadas com audit log**; guardrails de nicho em 2 camadas; segredo nunca no código. Ver [[RegrasNegocio]].
