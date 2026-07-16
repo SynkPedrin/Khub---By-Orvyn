@@ -5,7 +5,7 @@ export function Logo({ compact = false }: { compact?: boolean }) {
   return (
     <Link href="/" className="flex items-center gap-2.5 group">
       <Image
-        src="/logo.png"
+        src="/logo-orvynos.png"
         alt="ORVYN OS"
         width={36}
         height={36}

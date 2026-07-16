@@ -7,7 +7,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
       {/* Painel de marca */}
       <div className="brand-mesh relative hidden flex-col justify-between overflow-hidden p-12 text-white lg:flex">
         <div className="flex items-center gap-3">
-          <Image src="/logo.png" alt="ORVYN OS" width={44} height={44} className="rounded-xl" priority />
+          <Image src="/logo-orvynos.png" alt="ORVYN OS" width={44} height={44} className="rounded-xl" priority />
           <span className="text-2xl font-extrabold tracking-tight">ORVYN <span className="text-white/70">OS</span></span>
         </div>
 
@@ -38,7 +38,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
       <div className="flex items-center justify-center bg-bg px-5 py-10">
         <div className="w-full max-w-sm animate-fade-in">
           <div className="mb-8 flex items-center gap-2.5 lg:hidden">
-            <Image src="/logo.png" alt="ORVYN OS" width={36} height={36} className="rounded-lg" />
+            <Image src="/logo-orvynos.png" alt="ORVYN OS" width={36} height={36} className="rounded-lg" />
             <span className="text-xl font-extrabold tracking-tight text-fg">ORVYN <span className="text-brand">OS</span></span>
           </div>
           {children}
