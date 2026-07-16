@@ -32,9 +32,9 @@ export function TopRight() {
   return (
     <div ref={ref} className="fixed right-3 top-3 z-50 flex items-center gap-1.5">
       <div className="glass flex items-center gap-1 rounded-full px-1.5 py-1.5">
-        <button onClick={toggleTheme} aria-label="Tema claro/escuro" className="flex h-10 w-10 items-center justify-center rounded-full text-muted transition-colors hover:bg-white/40 hover:text-fg dark:hover:bg-white/10">
-          {dark ? <Icon name="sparkles" size={18} /> : <Icon name="sparkles" size={18} />}
-          <span className="sr-only">{dark ? 'Claro' : 'Escuro'}</span>
+        <button onClick={toggleTheme} aria-label={dark ? 'Mudar para tema claro' : 'Mudar para tema escuro'} title={dark ? 'Tema escuro' : 'Tema claro'} className="flex h-10 w-10 items-center justify-center rounded-full text-muted transition-colors hover:bg-white/40 hover:text-fg dark:hover:bg-white/10">
+          <Icon name={dark ? 'moon' : 'sun'} size={18} />
+          <span className="sr-only">{dark ? 'Escuro' : 'Claro'}</span>
         </button>
         <button aria-label="Notificações" className="relative flex h-10 w-10 items-center justify-center rounded-full text-muted transition-colors hover:bg-white/40 hover:text-fg dark:hover:bg-white/10">
           <Icon name="bell" size={18} />
@@ -65,7 +65,7 @@ export function TopRight() {
           </div>
           <Link href="/configuracoes?tab=perfil" onClick={() => setMenu(false)} className="mt-1 flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-fg hover:bg-white/40 dark:hover:bg-white/10"><Icon name="user" size={17} className="text-muted" /> Meu perfil</Link>
           <Link href="/configuracoes" onClick={() => setMenu(false)} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-fg hover:bg-white/40 dark:hover:bg-white/10"><Icon name="settings" size={17} className="text-muted" /> Configurações da conta</Link>
-          <button onClick={toggleTheme} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-fg hover:bg-white/40 dark:hover:bg-white/10"><Icon name="sparkles" size={17} className="text-muted" /> Tema: {dark ? 'escuro' : 'claro'}</button>
+          <button onClick={toggleTheme} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-fg hover:bg-white/40 dark:hover:bg-white/10"><Icon name={dark ? 'moon' : 'sun'} size={17} className="text-muted" /> Tema: {dark ? 'escuro' : 'claro'}</button>
           <button onClick={async () => { await signOut(); router.replace('/login'); }} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-red-600 hover:bg-red-500/10 dark:text-red-400"><Icon name="logout" size={17} /> Sair</button>
         </div>
       )}

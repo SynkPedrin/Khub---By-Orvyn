@@ -5,7 +5,7 @@ type IconName =
   | 'finance' | 'knowledge' | 'settings' | 'sparkles' | 'search' | 'bell'
   | 'logout' | 'plus' | 'check' | 'chevronDown' | 'chevronRight' | 'dots'
   | 'arrowUp' | 'arrowDown' | 'mail' | 'lock' | 'user' | 'google' | 'github'
-  | 'menu' | 'close' | 'phone' | 'trend' | 'filter';
+  | 'menu' | 'close' | 'phone' | 'trend' | 'filter' | 'sun' | 'moon';
 
 const P = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
 
@@ -18,7 +18,9 @@ const PATHS: Record<IconName, React.ReactNode> = {
   marketing: <><path d="M4 9v4a1 1 0 0 0 1 1h3l6 4V4L8 8H5a1 1 0 0 0-1 1Z" {...P} /><path d="M18 8a4 4 0 0 1 0 6" {...P} /></>,
   finance: <><rect x="3" y="6" width="18" height="12" rx="2" {...P} /><circle cx="12" cy="12" r="2.4" {...P} /><path d="M6.5 9v6M17.5 9v6" {...P} /></>,
   knowledge: <><path d="M5 4h9a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z" {...P} /><path d="M17 7h2v13H8" {...P} /><path d="M8 8h6M8 11h6" {...P} /></>,
-  settings: <><circle cx="12" cy="12" r="3" {...P} /><path d="M12 2.5v2M12 19.5v2M4.5 4.5l1.5 1.5M18 18l1.5 1.5M2.5 12h2M19.5 12h2M4.5 19.5 6 18M18 6l1.5-1.5" {...P} /></>,
+  settings: <><circle cx="12" cy="12" r="3" {...P} /><path d="M19.4 13a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.09A1.7 1.7 0 0 0 19.4 15Z" {...P} /></>,
+  sun: <><circle cx="12" cy="12" r="4" {...P} /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" {...P} /></>,
+  moon: <path d="M20.5 14.3A8.2 8.2 0 1 1 9.7 3.5a6.4 6.4 0 0 0 10.8 10.8Z" {...P} />,
   sparkles: <><path d="M12 3l1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7z" {...P} /><path d="M18 14l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" {...P} /></>,
   search: <><circle cx="11" cy="11" r="6.5" {...P} /><path d="m20 20-3.5-3.5" {...P} /></>,
   bell: <><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z" {...P} /><path d="M10 19a2 2 0 0 0 4 0" {...P} /></>,
