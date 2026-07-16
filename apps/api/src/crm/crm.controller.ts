@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min } from 'class-validator';
 import { CrmService } from './crm.service';
+import { MessagesService } from './messaging/messages.service';
 import { TenantId } from '../auth/decorators';
 
 class CreateContactDto {
@@ -21,11 +22,14 @@ class CreateDealDto {
 class MoveDealDto {
   @IsUUID() stageId!: string;
 }
+class SendMessageDto {
+  @IsString() @MaxLength(4000) texto!: string;
+}
 
 /** CRM Core. O tenant vem SEMPRE do JWT (@TenantId) — nunca de header do browser. */
 @Controller('crm')
 export class CrmController {
-  constructor(private readonly crm: CrmService) {}
+  constructor(private readonly crm: CrmService, private readonly messages: MessagesService) {}
 
   @Get('overview')
   overview(@TenantId() tenantId: string) {
@@ -60,5 +64,10 @@ export class CrmController {
   @Get('conversations')
   conversations(@TenantId() tenantId: string) {
     return this.crm.listConversations(tenantId);
+  }
+
+  @Post('conversations/:id/messages')
+  sendMessage(@TenantId() tenantId: string, @Param('id') id: string, @Body() dto: SendMessageDto) {
+    return this.messages.send(tenantId, id, dto.texto);
   }
 }

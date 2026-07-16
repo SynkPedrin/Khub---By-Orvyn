@@ -41,6 +41,14 @@ const schema = z.object({
   STRIPE_PUBLISHABLE_KEY: z.string().optional(),
   EVOLUTION_API_URL: z.string().optional(),
   EVOLUTION_API_KEY: z.string().optional(),
+
+  // WhatsApp via STEVO (API não oficial) — envio tipo SMS, chat estilo WhatsApp
+  STEVO_API_URL: z.string().optional(),
+  STEVO_API_KEY: z.string().optional(),
+  STEVO_INSTANCE: z.string().optional(),
+  STEVO_SEND_PATH: z.string().default('/message/sendText'),
+  STEVO_WEBHOOK_TOKEN: z.string().optional(),
+  STEVO_FALLBACK_TENANT_ID: z.string().optional(), // dev: roteia entrada quando não há integração mapeada
 });
 
 export type Env = z.infer<typeof schema>;

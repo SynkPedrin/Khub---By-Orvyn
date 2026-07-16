@@ -144,7 +144,7 @@ export class CrmService {
       });
       return rows.map((c) => ({
         id: c.id, nome: c.nome, canal: c.canal, ultimaPrevia: c.ultimaPrevia, naoLidas: c.naoLidas, ultimaHora: c.ultimaHora,
-        mensagens: c.messages.map((m) => ({ de: m.autorTipo, texto: m.corpo, hora: m.hora })),
+        mensagens: c.messages.map((m) => ({ id: m.id, de: m.autorTipo, texto: m.corpo, hora: m.hora })),
       }));
     });
   }

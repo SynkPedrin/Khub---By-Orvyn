@@ -31,7 +31,7 @@ export interface Contato {
 }
 export interface Conversa {
   id: string; nome: string; canal: string; ultimaPrevia: string | null; naoLidas: number; ultimaHora: string | null;
-  mensagens: { de: string; texto: string; hora: string | null }[];
+  mensagens: { id: string; de: string; texto: string; hora: string | null }[];
 }
 
 export const crm = {
@@ -42,4 +42,6 @@ export const crm = {
   moveDeal: (id: string, stageId: string) => req<{ ok: boolean }>(`deals/${id}/stage`, { method: 'PATCH', body: JSON.stringify({ stageId }) }),
   createDeal: (data: Record<string, unknown>) => req<{ id: string }>('deals', { method: 'POST', body: JSON.stringify(data) }),
   conversations: () => req<Conversa[]>('conversations'),
+  sendMessage: (conversationId: string, texto: string) =>
+    req<{ id: string; hora: string; status: string; erro: string | null }>(`conversations/${conversationId}/messages`, { method: 'POST', body: JSON.stringify({ texto }) }),
 };
