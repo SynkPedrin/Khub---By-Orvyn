@@ -65,7 +65,9 @@ export class RetrievalService {
     // Uma transação com o tenant setado (RLS). tenantId validado como UUID em withTenant.
     const candidates = await this.prisma.withTenant(ctx.tenantId, (tx) =>
       tx.$queryRawUnsafe<Candidate[]>(
-        `SELECT * FROM rag_search_hybrid($1::vector, $2, $3, $4, $5::text[], $6, $7, $8)`,
+        // casts explícitos: o driver envia números como bigint e NULL como unknown,
+        // e a resolução de função no Postgres não faz o downcast sozinha.
+        `SELECT * FROM rag_search_hybrid($1::vector, $2::text, $3::text, $4::text, $5::text[], $6::int, $7::int, $8::int)`,
         vecLiteral,
         query,
         ctx.nicho,

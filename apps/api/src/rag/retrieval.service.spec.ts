@@ -67,6 +67,26 @@ describe('RetrievalService (R1.4 / R1.5 isolamento)', () => {
     expect(svc.buildContext([])).toContain('vazia="true"');
   });
 
+  it('BUG-007: SQL leva casts explícitos (driver manda bigint/unknown)', async () => {
+    const sqls: string[] = [];
+    const prisma = {
+      withTenant: jest.fn(async (_t: string, work: (tx: unknown) => Promise<unknown>) =>
+        work({
+          $queryRawUnsafe: jest.fn(async (sql: string) => { sqls.push(sql); return CANDIDATES; }),
+          $executeRaw: jest.fn().mockResolvedValue(1),
+        }),
+      ),
+    } as unknown as PrismaService;
+    const svc = new RetrievalService(prisma, fakeEmbeddings(), new InMemoryRagCache(), new IdentityReranker());
+    await svc.search(CTX_A, 'qualquer');
+    const sql = sqls.find((s) => s.includes('rag_search_hybrid'));
+    expect(sql).toBeDefined();
+    // sem estes casts o Postgres não resolve a função (42883)
+    expect(sql).toContain('$1::vector');
+    expect(sql).toContain('$4::text');
+    expect(sql).toContain('$6::int');
+  });
+
   it('sem candidatos retorna vazio', async () => {
     const svc = new RetrievalService(fakePrisma([], []), fakeEmbeddings(), new InMemoryRagCache(), new IdentityReranker());
     expect(await svc.search(CTX_A, 'nada')).toEqual([]);

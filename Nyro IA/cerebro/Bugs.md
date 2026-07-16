@@ -20,6 +20,22 @@ Status: `aberto` · `em correção` · `corrigido` · `não reproduz`.
 - Correção + teste de regressão: validar UUID (zod/regex) na borda; teste unitário com `tenantId` malicioso deve lançar antes de tocar o banco.
 - **Padrão correto já implementado** em `apps/api/src/prisma/prisma.service.ts` (`withTenant`): valida UUID por regex e usa `set_config('app.current_tenant_id', $1, true)` **parametrizado**. Ao integrar o `retrieval.service.ts` fornecido em R1.4, substituir o `SET LOCAL ... '${tenantId}'` por este helper.
 
+### BUG-007 — `rag_search_hybrid` nunca resolvia via API (42883: function does not exist)
+- Severidade: **S1** (a busca do RAG estava quebrada em produção-real, embora "verde" nos testes)
+- Status: **corrigido** (Sprint G)
+- Reprodução: `POST /v1/rag/search` → 500 `Raw query failed. Code: 42883 — function rag_search_hybrid(vector, text, text, unknown, text[], bigint, bigint, bigint) does not exist`.
+- **Causa raiz:** o driver do Prisma envia números JS como **bigint (int8)** e `null` como **unknown**; a função é `(vector, text, text, text, text[], int, int, int)`. O Postgres **não faz downcast** na resolução de função → nenhuma assinatura casa.
+- **Por que passou despercebido:** os unit tests mockam o Prisma (nunca tocam o Postgres) e o SQL foi validado direto no `psql` (onde os literais já vêm com o tipo certo). O bug só aparece na junção dos dois.
+- Correção: casts explícitos no `$queryRawUnsafe` (`$1::vector, $4::text, $6::int…`) em `retrieval.service.ts`.
+- Regressão: teste `BUG-007: SQL leva casts explícitos` em `retrieval.service.spec.ts`.
+- **Lição:** unit test com Prisma mockado não prova integração — vale um teste de integração real do retrieval (pendente).
+
+### BUG-008 — Voyage: chave sem método de pagamento → 3 RPM / 10K TPM
+- Severidade: S2 (operacional)
+- Status: aberto — **ação do operador**
+- Sintoma: buscas seguidas retornam `Voyage 429: "You have not yet added your payment method… reduced rate limits of 3 RPM and 10K TPM"`.
+- Impacto: backfill (1 request) passou; a busca ao vivo estoura se houver >3 queries novas/min. O cache (TTL 1h) e o fallback BM25 amortecem, mas produção exige billing na Voyage.
+
 ### BUG-003 — Inbox: botão de enviar sob o FAB da Nyro (z-index) e Enter não envia
 - Severidade: S2 (usabilidade)
 - Status: aberto — corrigir na FASE 3 (Inbox real)
