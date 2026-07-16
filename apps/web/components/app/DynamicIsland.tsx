@@ -9,7 +9,7 @@ import { useAuth } from '@/lib/auth';
 
 function IslandBtn({ label, onClick, children }: { label: string; onClick?: () => void; children: React.ReactNode }) {
   return (
-    <button onClick={onClick} aria-label={label} className="flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-white/40 hover:text-fg dark:hover:bg-white/10">
+    <button onClick={onClick} aria-label={label} className="flex h-10 w-10 items-center justify-center rounded-full text-muted transition-colors hover:bg-white/40 hover:text-fg dark:hover:bg-white/10">
       {children}
     </button>
   );
@@ -42,17 +42,17 @@ export function DynamicIsland({ onMobileMenu }: { onMobileMenu: () => void }) {
         <button
           onClick={() => router.push('/')}
           aria-label="Início"
-          className="glass depth-hover flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl"
+          className="glass depth-hover flex h-[3.4rem] w-[3.4rem] shrink-0 items-center justify-center overflow-hidden rounded-[1.15rem]"
         >
-          <Image src="/logo-orvynos.png" alt="ORVYN OS" width={48} height={48} className="h-full w-full object-contain p-1.5" priority />
+          <Image src="/logo-orvynos.png" alt="ORVYN OS" width={56} height={56} className="h-full w-full object-contain p-1.5" priority />
         </button>
 
         {/* Ilha dinâmica — expande para a direita no hover (sempre visível no mobile) */}
         <div
           className={cx(
-            'glass flex items-center gap-0.5 rounded-full py-1.5 transition-all duration-300 ease-out',
-            open ? 'max-w-[560px] px-2 opacity-100' : 'max-w-0 px-0 opacity-0',
-            'max-lg:!max-w-[560px] max-lg:!px-2 max-lg:!opacity-100',
+            'glass flex items-center gap-0.5 rounded-[1.6rem] py-2 transition-all duration-300 ease-out',
+            open ? 'max-w-[640px] px-2.5 opacity-100' : 'max-w-0 px-0 opacity-0',
+            'max-lg:!max-w-[640px] max-lg:!px-2.5 max-lg:!opacity-100',
           )}
           style={{ overflow: menu ? 'visible' : 'hidden' }}
         >
@@ -73,7 +73,7 @@ export function DynamicIsland({ onMobileMenu }: { onMobileMenu: () => void }) {
 
           <div className="relative">
             <button onClick={() => setMenu((m) => !m)} className="ml-0.5 flex items-center gap-1.5 rounded-full py-0.5 pl-0.5 pr-2 hover:bg-white/40 dark:hover:bg-white/10">
-              <Avatar name={user?.name ?? 'Você'} size={30} />
+              <Avatar name={user?.name ?? 'Você'} size={32} />
               <span className="hidden text-sm font-semibold text-fg sm:block">{user?.name?.split(' ')[0] ?? 'Você'}</span>
             </button>
             {menu && (
