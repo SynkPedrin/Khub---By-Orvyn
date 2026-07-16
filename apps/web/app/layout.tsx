@@ -9,7 +9,7 @@ const sans = Nunito({ subsets: ['latin'], variable: '--font-sans', display: 'swa
 export const metadata: Metadata = {
   title: 'ORVYN OS — CRM configurado por IA',
   description: 'O CRM que já nasce pronto para o seu negócio. Powered by Nyro IA.',
-  icons: { icon: '/logo-orvynos.png' },
+  icons: { icon: '/logo.png' },
 };
 
 export const viewport: Viewport = {

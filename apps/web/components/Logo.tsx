@@ -5,10 +5,11 @@ export function Logo({ compact = false }: { compact?: boolean }) {
   return (
     <Link href="/" className="flex items-center gap-2.5 group">
       <Image
-        src="/logo-orvynos.png"
+        src="/logo.png"
         alt="ORVYN OS"
-        width={36}
-        height={36}
+        width={72}
+        height={72}
+        unoptimized
         priority
         className="rounded-lg transition-transform group-hover:scale-105"
       />

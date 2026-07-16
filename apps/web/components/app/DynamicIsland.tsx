@@ -42,15 +42,15 @@ export function DynamicIsland({ onMobileMenu }: { onMobileMenu: () => void }) {
         <button
           onClick={() => router.push('/')}
           aria-label="Início"
-          className="glass depth-hover flex h-[3.4rem] w-[3.4rem] shrink-0 items-center justify-center overflow-hidden rounded-[1.15rem]"
+          className="glass depth-hover flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[1.7rem]"
         >
-          <Image src="/logo-orvynos.png" alt="ORVYN OS" width={56} height={56} className="h-full w-full object-contain p-1.5" priority />
+          <Image src="/logo.png" alt="ORVYN OS" width={96} height={96} unoptimized className="h-full w-full object-contain p-2" priority />
         </button>
 
         {/* Ilha dinâmica — expande para a direita no hover (sempre visível no mobile) */}
         <div
           className={cx(
-            'glass flex items-center gap-0.5 rounded-[1.6rem] py-2 transition-all duration-300 ease-out',
+            'glass flex items-center gap-0.5 rounded-[1.8rem] py-3 transition-all duration-300 ease-out',
             open ? 'max-w-[640px] px-2.5 opacity-100' : 'max-w-0 px-0 opacity-0',
             'max-lg:!max-w-[640px] max-lg:!px-2.5 max-lg:!opacity-100',
           )}

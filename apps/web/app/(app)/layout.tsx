@@ -13,7 +13,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       {/* faixa reservada para a ilha dinâmica (fixed) */}
-      <div className="h-[4.75rem] shrink-0" />
+      <div className="h-[7.5rem] shrink-0" />
 
       <div className="flex min-h-0 flex-1">
         {/* Sidebar de vidro flutuante (desktop) */}
