@@ -79,6 +79,19 @@ Front (Next, cookies httpOnly): `POST /api/auth/{signup,login,refresh,logout}`, 
 
 Front (Next): proxy autenticado `/api/v1/*` (Bearer) + landing OAuth `/api/integrations/meta/callback`. Ver [[Arquitetura]] ADR-0007.
 
+### ✅ Implementado (Configurações — perfil/empresa/equipe/auditoria; JWT)
+| Método | Rota | Nota |
+|---|---|---|
+| GET/PATCH | `/v1/settings/profile` | nome, idioma, **prefs** (personalização cor/fundo/tema) |
+| GET/PATCH | `/v1/settings/business` | empresa: nome, endereço, telefone, website, idioma, nicho |
+| GET | `/v1/settings/members` | membros (memberships+identities) + convites pendentes |
+| POST | `/v1/settings/invites` | cria convite + **link de aceite** (`/signup?invite=<token>`); e-mail requer OAuth2/SMTP |
+| DELETE | `/v1/settings/invites/:id` | revoga convite |
+| PATCH | `/v1/settings/members/:identityId/role` | muda papel (owner/admin/member/viewer) |
+| GET | `/v1/settings/audit` | **audit_logs** imutável — histórico de todas as ações |
+
+Toda mutação de settings grava em `audit_logs` (`actor_id` = identidade). Front: `/configuracoes` (abas Perfil, Personalização, Empresa, Equipe, Integrações, Auditoria) + canto superior direito (usuário/config/tema).
+
 ### Fases seguintes (referência — não implementar em F0)
 - `POST /v1/tenants/:id/provision` — aplica blueprint (F2).
 - CRM: `GET /v1/pipelines`, `POST /v1/deals`, `PATCH /v1/deals/:id/stage` (F1).

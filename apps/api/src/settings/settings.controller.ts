@@ -1,0 +1,70 @@
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { IsEmail, IsIn, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import { SettingsService } from './settings.service';
+import { CurrentUser, TenantId, type AuthUser } from '../auth/decorators';
+
+class UpdateProfileDto {
+  @IsOptional() @IsString() @MaxLength(160) nome?: string;
+  @IsOptional() @IsString() @MaxLength(12) idioma?: string;
+  @IsOptional() @IsObject() prefs?: Record<string, unknown>;
+}
+class UpdateBusinessDto {
+  @IsOptional() @IsString() @MaxLength(160) nome?: string;
+  @IsOptional() @IsString() @MaxLength(240) endereco?: string;
+  @IsOptional() @IsString() @MaxLength(40) telefone?: string;
+  @IsOptional() @IsString() @MaxLength(160) website?: string;
+  @IsOptional() @IsString() @MaxLength(12) idioma?: string;
+  @IsOptional() @IsString() @MaxLength(40) nicho?: string;
+}
+class InviteDto {
+  @IsEmail() email!: string;
+  @IsOptional() @IsIn(['owner', 'admin', 'member', 'viewer']) role?: string;
+}
+class RoleDto {
+  @IsIn(['owner', 'admin', 'member', 'viewer']) role!: string;
+}
+
+@Controller('settings')
+export class SettingsController {
+  constructor(private readonly settings: SettingsService) {}
+
+  @Get('profile')
+  profile(@TenantId() t: string, @CurrentUser() u: AuthUser) {
+    return this.settings.profile(t, u.identityId);
+  }
+  @Patch('profile')
+  updateProfile(@TenantId() t: string, @CurrentUser() u: AuthUser, @Body() dto: UpdateProfileDto) {
+    return this.settings.updateProfile(t, u.identityId, dto);
+  }
+
+  @Get('business')
+  business(@TenantId() t: string) {
+    return this.settings.business(t);
+  }
+  @Patch('business')
+  updateBusiness(@TenantId() t: string, @CurrentUser() u: AuthUser, @Body() dto: UpdateBusinessDto) {
+    return this.settings.updateBusiness(t, u.identityId, dto);
+  }
+
+  @Get('members')
+  members(@TenantId() t: string) {
+    return this.settings.members(t);
+  }
+  @Post('invites')
+  invite(@TenantId() t: string, @CurrentUser() u: AuthUser, @Body() dto: InviteDto) {
+    return this.settings.createInvite(t, u.identityId, dto.email, dto.role ?? 'member');
+  }
+  @Delete('invites/:id')
+  revoke(@TenantId() t: string, @CurrentUser() u: AuthUser, @Param('id') id: string) {
+    return this.settings.revokeInvite(t, u.identityId, id);
+  }
+  @Patch('members/:identityId/role')
+  role(@TenantId() t: string, @CurrentUser() u: AuthUser, @Param('identityId') target: string, @Body() dto: RoleDto) {
+    return this.settings.changeRole(t, u.identityId, target, dto.role);
+  }
+
+  @Get('audit')
+  audit(@TenantId() t: string, @Query('limit') limit?: string) {
+    return this.settings.auditLogs(t, Number(limit) || 100);
+  }
+}

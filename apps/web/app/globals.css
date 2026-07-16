@@ -8,8 +8,8 @@
   --brand-bright: #9b4de0;
   --lilac: #c9a0f0;
 
-  /* off-white / cream light theme */
-  --bg: #f6f4ef;
+  /* off-white / cream light theme (personalizável via --bg-light) */
+  --bg: var(--bg-light, #f6f4ef);
   --surface: #ffffff;
   --surface-2: #fbfaf7;
   --surface-3: #f0ede6;
@@ -21,7 +21,7 @@
 
 :root[data-theme='dark'],
 .dark {
-  --bg: #110d19;
+  --bg: var(--bg-dark, #110d19);
   --surface: #191322;
   --surface-2: #20182e;
   --surface-3: #271d38;
@@ -33,7 +33,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #110d19;
+    --bg: var(--bg-dark, #110d19);
     --surface: #191322;
     --surface-2: #20182e;
     --surface-3: #271d38;

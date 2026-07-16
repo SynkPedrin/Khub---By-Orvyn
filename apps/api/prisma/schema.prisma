@@ -39,6 +39,10 @@ model Tenant {
   templateVersion  Int?          @map("template_version")
   nicho            String?
   subespecialidade String?
+  endereco         String?
+  telefone         String?
+  website          String?
+  idioma           String        @default("pt-BR")
   plano            String        @default("starter")
   status           String        @default("active")
   createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -147,6 +151,8 @@ model User {
   nome       String
   role       String   @default("owner")
   permissoes Json     @default("{}")
+  idioma     String   @default("pt-BR")
+  prefs      Json     @default("{}")
   provider   String?
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 

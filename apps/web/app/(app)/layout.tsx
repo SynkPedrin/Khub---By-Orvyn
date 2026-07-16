@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { AppSidebar } from '@/components/app/AppSidebar';
 import { DynamicIsland } from '@/components/app/DynamicIsland';
+import { TopRight } from '@/components/app/TopRight';
+import { Personalization } from '@/components/app/Personalization';
 import { NyroDock } from '@/components/app/NyroDock';
 import { CommandBar } from '@/components/app/CommandBar';
 import { Icon } from '@/components/icons';
@@ -25,8 +27,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <main className="min-w-0 flex-1 overflow-y-auto scrollbar-thin pr-1">{children}</main>
       </div>
 
-      {/* Ilha dinâmica (logo canto superior esquerdo + navbar no hover) */}
+      {/* Ilha dinâmica (logo canto superior esquerdo + busca) */}
       <DynamicIsland onMobileMenu={() => setDrawer(true)} />
+      {/* Canto superior direito: usuário, configurações, tema */}
+      <TopRight />
+      <Personalization />
 
       {/* Drawer mobile */}
       {drawer && (
