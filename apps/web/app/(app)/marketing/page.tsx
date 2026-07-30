@@ -1,90 +1,273 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { Card } from '@/components/ui';
-import { Icon } from '@/components/icons';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Card, cx } from '@/components/ui';
+import { Icon, type IconName } from '@/components/icons';
+import { marketplace, type TemplateResumo, type TemplateDetalhe } from '@/lib/marketplace';
 
 interface Doc { slug: string; title: string; excerpt: string; words: number }
 
-const MK = 'RAG/conhecimento/global/marketing/';
-const OP = 'RAG/conhecimento/global/operacao/';
+// Base de conhecimento que alimenta a Nyro (não os docs internos de engenharia).
+const KB = 'RAG/conhecimento/';
+/** Categoria amigável a partir do caminho; null = não faz parte da base pública. */
+function categoriaDoc(slug: string): string | null {
+  if (!slug.startsWith(KB)) return null;
+  const rest = slug.slice(KB.length);
+  if ((rest.split('/').pop() ?? '').startsWith('_')) return null; // pula _INDICE
+  if (rest.startsWith('global/marketing/')) return 'Marketing';
+  if (rest.startsWith('global/operacao/')) return 'Operação';
+  if (rest.startsWith('global/')) return 'Vendas & Growth';
+  if (rest.startsWith('juridico/')) return 'Jurídico';
+  if (rest.startsWith('contabil/')) return 'Contábil';
+  if (rest.startsWith('medico/')) return 'Saúde';
+  return 'Outros';
+}
+const ORDEM_CAT = ['Marketing', 'Vendas & Growth', 'Operação', 'Jurídico', 'Contábil', 'Saúde', 'Outros'];
+
 const href = (slug: string) => '/conhecimento/' + slug.split('/').map(encodeURIComponent).join('/');
+/** Mensagem pronta para a Nyro aplicar o material no negócio do cliente. */
+const nyroHref = (title: string) =>
+  '/nyro?q=' + encodeURIComponent(`Li o material "${title}" na Biblioteca. Como aplico isso na minha empresa, na prática? Traga um passo a passo pro meu nicho.`);
 
-export default function MarketingPage() {
+const REQ_ROTULO: Record<string, string> = { stevo: 'WhatsApp', email: 'E-mail (SMTP)', anthropic: 'IA (Claude)', meta: 'Meta Ads' };
+
+/** Divisor de seção — a "régua" que separa Automação de Base de marketing. */
+function Divisor({ icon, titulo, sub, contagem }: { icon: IconName; titulo: string; sub: string; contagem?: number | string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-white shadow-brand" style={{ background: 'linear-gradient(135deg, var(--brand-bright), var(--brand-deep))' }}>
+        <Icon name={icon} size={20} />
+      </span>
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <h2 className="text-xl font-extrabold tracking-tight text-fg">{titulo}</h2>
+          {contagem !== undefined && <span className="rounded-full bg-surface3 px-2 py-0.5 text-[11px] font-semibold text-muted">{contagem}</span>}
+        </div>
+        <p className="text-xs text-muted">{sub}</p>
+      </div>
+      <span className="ml-2 hidden h-px flex-1 bg-line sm:block" />
+    </div>
+  );
+}
+
+export default function BibliotecaPage() {
+  const router = useRouter();
   const [docs, setDocs] = useState<Doc[] | null>(null);
+  const [templates, setTemplates] = useState<TemplateResumo[] | null>(null);
+  const [instalando, setInstalando] = useState<string | null>(null);
+  const [erroTpl, setErroTpl] = useState(false);
+  const [erroDocs, setErroDocs] = useState(false);
+  const [mostrarVideo, setMostrarVideo] = useState(false);
+  // Modal de binding: quando o template tem variáveis, coleta os valores antes de instalar.
+  const [bind, setBind] = useState<{ tpl: TemplateDetalhe; valores: Record<string, string> } | null>(null);
 
+  const carregar = () => {
+    setErroTpl(false); setErroDocs(false);
+    fetch('/api/cerebro').then((r) => r.ok ? r.json() : Promise.reject()).then((d) => setDocs(d.docs ?? [])).catch(() => { setDocs([]); setErroDocs(true); });
+    marketplace.listar().then(setTemplates).catch(() => { setTemplates([]); setErroTpl(true); });
+  };
+
+  useEffect(() => { carregar(); }, []);
+
+  // Vídeo do hero só entra quando a página já está ociosa (não bloqueia o carregamento
+  // dos templates/base nem o primeiro paint). Respeita "reduzir movimento".
   useEffect(() => {
-    fetch('/api/cerebro').then((r) => r.json()).then((d) => setDocs(d.docs ?? [])).catch(() => setDocs([]));
+    if (typeof window === 'undefined') return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const idle = (window as unknown as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
+    const t = idle ? idle(() => setMostrarVideo(true)) : window.setTimeout(() => setMostrarVideo(true), 1200);
+    return () => { if (!idle) window.clearTimeout(t as number); };
   }, []);
 
-  const marketing = docs?.filter((d) => d.slug.startsWith(MK)) ?? [];
-  const operacao = docs?.filter((d) => d.slug.startsWith(OP)) ?? [];
+  // Clique em Instalar: se o template tem variáveis, abre o modal de binding;
+  // senão instala direto.
+  const abrirInstalar = async (t: TemplateResumo) => {
+    setInstalando(t.id);
+    try {
+      const det = await marketplace.obter(t.id);
+      if (det.variables?.length) {
+        const valores = Object.fromEntries(det.variables.map((v) => [v.chave, v.default ?? '']));
+        setBind({ tpl: det, valores });
+        setInstalando(null);
+      } else {
+        const r = await marketplace.instalar(t.id);
+        router.push(`/automacoes/${r.workflowId}`);
+      }
+    } catch { setInstalando(null); }
+  };
+
+  const confirmarInstalar = async () => {
+    if (!bind) return;
+    setInstalando(bind.tpl.id);
+    try {
+      const r = await marketplace.instalar(bind.tpl.id, bind.valores);
+      setBind(null);
+      router.push(`/automacoes/${r.workflowId}`);
+    } catch { setInstalando(null); }
+  };
+
+  // Toda a base de conhecimento, agrupada por categoria (a "Base de marketing").
+  const porCategoria = useMemo(() => {
+    const m = new Map<string, Doc[]>();
+    for (const d of docs ?? []) {
+      const cat = categoriaDoc(d.slug);
+      if (!cat) continue;
+      const arr = m.get(cat) ?? [];
+      arr.push(d);
+      m.set(cat, arr);
+    }
+    return [...m.entries()].sort((a, b) => {
+      const ia = ORDEM_CAT.indexOf(a[0]); const ib = ORDEM_CAT.indexOf(b[0]);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+  }, [docs]);
+  const totalDocs = useMemo(() => porCategoria.reduce((n, [, l]) => n + l.length, 0), [porCategoria]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-4 py-6 sm:px-6">
-      {/* Hero */}
-      <section className="overflow-hidden rounded-3xl border border-line p-8" style={{ background: 'linear-gradient(135deg, color-mix(in srgb, var(--brand) 16%, var(--surface)), var(--surface) 60%)' }}>
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-brand">
-          <Icon name="sparkles" size={15} /> Inteligência da Nyro
+      {/* Hero — base em gradiente (instantânea) + vídeo do cristal carregado só
+          quando a página fica ociosa: não bloqueia templates/base nem o 1º paint.
+          Look escuro fixo nos 2 temas; scrim mantém o texto legível. */}
+      <section className="relative overflow-hidden rounded-3xl border border-white/10 p-8" style={{ background: 'radial-gradient(120% 120% at 80% 0%, #3a1d6e, #14091f 70%)' }}>
+        {mostrarVideo && (
+          <video
+            autoPlay muted loop playsInline preload="none"
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+          >
+            <source src="/crystal-video.mp4" type="video/mp4" />
+          </video>
+        )}
+        {/* Scrim: escurece à esquerda (onde vive o texto) e revela o cristal à direita */}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/80 via-black/55 to-black/20" />
+        <div className="pointer-events-none absolute inset-0 bg-black/25" />
+
+        <div className="relative flex items-center gap-2 text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--brand-bright)' }}>
+          <Icon name="knowledge" size={15} /> Biblioteca
         </div>
-        <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-fg">Central de Marketing</h1>
-        <p className="mt-2 max-w-2xl text-sm text-muted sm:text-base">
-          Como <strong>Estrategista de Growth</strong>, a Nyro raciocina sobre estes frameworks para posicionar sua marca,
-          gerar demanda, lançar ofertas e medir o que funciona — sempre ancorada no seu funil e nos seus dados.
+        <h1 className="relative mt-2 text-3xl font-extrabold tracking-tight text-white drop-shadow">Biblioteca</h1>
+        <p className="relative mt-2 max-w-2xl text-sm text-white/85 sm:text-base">
+          Tudo que a Nyro usa para pensar e agir, em dois lugares: <strong className="text-white">automações prontas</strong> para instalar em um
+          clique e a <strong className="text-white">base de marketing</strong> — os frameworks que ela consulta ao raciocinar sobre a sua estratégia.
+          Em cada material, um clique pergunta à Nyro <em>como usar aquilo na sua empresa</em>.
         </p>
-        <div className="mt-5 flex flex-wrap gap-2">
-          <Link href="/marketing/ads" className="btn btn-primary"><Icon name="marketing" size={16} /> Anúncios (Meta/Google/TikTok)</Link>
-          <Link href="/nyro" className="btn btn-ghost"><Icon name="sparkles" size={16} /> Perguntar à Nyro</Link>
-          <Link href="/conhecimento" className="btn btn-ghost">Base de conhecimento</Link>
+        <div className="relative mt-5 flex flex-wrap gap-2">
+          <Link href="/marketing/ads" className="btn btn-primary"><Icon name="marketing" size={16} /> Gerenciador de Anúncios</Link>
+          <Link href="/nyro" className="btn inline-flex items-center gap-1.5 border border-white/25 bg-white/10 text-white backdrop-blur hover:bg-white/20"><Icon name="sparkles" size={16} /> Perguntar à Nyro</Link>
+          <Link href="/automacoes" className="btn inline-flex items-center gap-1.5 border border-white/25 bg-white/10 text-white backdrop-blur hover:bg-white/20"><Icon name="sparkles" size={16} /> Minhas automações</Link>
         </div>
       </section>
 
-      {/* Frameworks de marketing */}
-      <section>
-        <div className="mb-3 flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand/12 text-brand"><Icon name="marketing" size={18} /></span>
-          <h2 className="text-lg font-bold text-fg">Frameworks de marketing</h2>
-          <span className="rounded-full bg-surface3 px-2 py-0.5 text-[11px] font-semibold text-muted">{marketing.length}</span>
-        </div>
-        {!docs && <p className="text-sm text-muted">Carregando a inteligência da Nyro…</p>}
+      {/* ===================== DIVISÃO 1 · AUTOMAÇÃO ===================== */}
+      <section className="space-y-4">
+        <Divisor icon="sparkles" titulo="Automação" sub="Fluxos prontos para instalar em um clique — a Nyro configura o resto." contagem={templates?.length ?? '…'} />
+        {!templates && !erroTpl && <p className="text-sm text-muted">Carregando os templates…</p>}
+        {erroTpl && (
+          <p className="rounded-xl bg-amber-500/10 px-4 py-2.5 text-sm text-amber-700 dark:text-amber-400">
+            Não consegui carregar os templates. <button onClick={carregar} className="font-semibold underline">Tentar de novo</button>
+          </p>
+        )}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {marketing.map((d) => (
-            <Link key={d.slug} href={href(d.slug)}>
-              <Card className="flex h-full flex-col p-4 transition-transform hover:-translate-y-0.5">
-                <p className="font-bold text-fg">{d.title}</p>
-                <p className="mt-1.5 line-clamp-3 flex-1 text-sm text-muted">{d.excerpt}</p>
-                <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-brand">Abrir framework <Icon name="chevronRight" size={13} /></span>
-              </Card>
-            </Link>
+          {templates?.map((t) => (
+            <Card key={t.id} className="flex h-full flex-col p-4">
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-bold text-fg">{t.name}</p>
+                {t.featured && <span className="rounded-full bg-brand/12 px-2 py-0.5 text-[10px] font-bold text-brand">★ destaque</span>}
+              </div>
+              <p className="mt-1.5 line-clamp-3 flex-1 text-sm text-muted">{t.description}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10.5px]">
+                <span className="rounded-full bg-surface3 px-2 py-0.5 font-semibold text-muted">{t.category}</span>
+                {t.requirements.map((r) => (
+                  <span key={r} className="rounded-full bg-amber-500/10 px-2 py-0.5 font-semibold text-amber-700 dark:text-amber-400">requer {REQ_ROTULO[r] ?? r}</span>
+                ))}
+              </div>
+              <button onClick={() => abrirInstalar(t)} disabled={instalando === t.id} className="btn btn-soft mt-3 w-full text-sm">
+                {instalando === t.id ? 'Instalando…' : <><Icon name="plus" size={15} /> Instalar</>}
+              </button>
+            </Card>
           ))}
+          {templates && templates.length === 0 && <p className="text-sm text-muted">Nenhum template ainda.</p>}
         </div>
       </section>
 
-      {/* Operação (mesma inteligência C-level) */}
-      <section>
-        <div className="mb-3 flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand/12 text-brand"><Icon name="dashboard" size={18} /></span>
-          <h2 className="text-lg font-bold text-fg">Operação &amp; growth</h2>
-          <span className="rounded-full bg-surface3 px-2 py-0.5 text-[11px] font-semibold text-muted">{operacao.length}</span>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {operacao.map((d) => (
-            <Link key={d.slug} href={href(d.slug)}>
-              <Card className="flex h-full flex-col p-4 transition-transform hover:-translate-y-0.5">
-                <p className="font-bold text-fg">{d.title}</p>
-                <p className="mt-1.5 line-clamp-3 flex-1 text-sm text-muted">{d.excerpt}</p>
-                <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-brand">Abrir framework <Icon name="chevronRight" size={13} /></span>
-              </Card>
-            </Link>
-          ))}
-        </div>
+      {/* ===================== DIVISÃO 2 · BASE DE MARKETING ===================== */}
+      <section className="space-y-6">
+        <Divisor icon="marketing" titulo="Base de marketing" sub="A inteligência da Nyro — frameworks, playbooks e operação que ela recupera ao pensar." contagem={totalDocs || '…'} />
+        {!docs && !erroDocs && <p className="text-sm text-muted">Carregando a inteligência da Nyro…</p>}
+        {erroDocs && (
+          <p className="rounded-xl bg-amber-500/10 px-4 py-2.5 text-sm text-amber-700 dark:text-amber-400">
+            Não consegui carregar a base. <button onClick={carregar} className="font-semibold underline">Tentar de novo</button>
+          </p>
+        )}
+        {docs && !erroDocs && totalDocs === 0 && <p className="text-sm text-muted">Base de conhecimento vazia.</p>}
+
+        {porCategoria.map(([cat, list]) => (
+          <div key={cat} className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-[0.18em] text-muted">{cat}</h3>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {list.map((d) => (
+                <Card key={d.slug} className="flex h-full flex-col p-4">
+                  <p className="font-bold text-fg">{d.title}</p>
+                  <p className="mt-1.5 line-clamp-3 flex-1 text-sm text-muted">{d.excerpt}</p>
+                  <p className="mt-2 text-[11px] text-muted">{d.words.toLocaleString('pt-BR')} palavras</p>
+                  <div className="mt-3 flex flex-col gap-2">
+                    <Link href={nyroHref(d.title)} className="btn btn-primary w-full text-[13px]">
+                      <Icon name="sparkles" size={15} /> Como usar isso na minha empresa?
+                    </Link>
+                    <Link href={href(d.slug)} className={cx('inline-flex items-center justify-center gap-1 text-xs font-semibold text-brand hover:underline')}>
+                      Abrir material <Icon name="chevronRight" size={13} />
+                    </Link>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+        ))}
       </section>
 
-      <p className="pb-2 text-center text-[11px] text-muted">
-        Estes {marketing.length + operacao.length} frameworks estão ingeridos no RAG (escopo global) — a Nyro os recupera ao raciocinar sobre estratégia.
-        Campanhas conectadas (Meta/Google) chegam na F5.
-      </p>
+      {/* Modal de binding — liga as variáveis do template aos dados do tenant */}
+      {bind && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setBind(null)} />
+          <div className="glass crystal-edge relative w-full max-w-md rounded-3xl p-6">
+            <h2 className="text-lg font-bold text-fg">Personalizar “{bind.tpl.name}”</h2>
+            <p className="mt-1 text-xs text-muted">Ajuste os campos abaixo — eles entram no fluxo antes de instalar.</p>
+            <div className="mt-4 space-y-3">
+              {bind.tpl.variables.map((v) => (
+                <div key={v.chave}>
+                  <label className="mb-1 block text-xs font-semibold text-muted">{v.label}{v.obrigatorio && ' *'}</label>
+                  {v.tipo === 'texto' && (bind.valores[v.chave]?.length ?? 0) > 40 ? (
+                    <textarea
+                      value={bind.valores[v.chave] ?? ''}
+                      onChange={(e) => setBind({ ...bind, valores: { ...bind.valores, [v.chave]: e.target.value } })}
+                      rows={3}
+                      className="input min-h-[4.5rem] resize-y"
+                    />
+                  ) : (
+                    <input
+                      value={bind.valores[v.chave] ?? ''}
+                      onChange={(e) => setBind({ ...bind, valores: { ...bind.valores, [v.chave]: e.target.value } })}
+                      inputMode={v.tipo === 'numero' ? 'numeric' : undefined}
+                      className="input"
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => setBind(null)} className="btn btn-ghost text-sm">Cancelar</button>
+              <button
+                onClick={confirmarInstalar}
+                disabled={instalando === bind.tpl.id || bind.tpl.variables.some((v) => v.obrigatorio && !bind.valores[v.chave]?.trim())}
+                className="btn btn-primary text-sm"
+              >
+                {instalando === bind.tpl.id ? 'Instalando…' : <><Icon name="plus" size={15} /> Instalar</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

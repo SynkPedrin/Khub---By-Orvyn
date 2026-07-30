@@ -32,6 +32,11 @@ export class EmbeddingsService {
     return this.provider.dims;
   }
 
+  /** Há credencial para gerar embeddings? Se não, o chamador degrada para lexical. */
+  get available(): boolean {
+    return this.provider.configured?.() ?? true;
+  }
+
   async embed(texts: string[], inputType: EmbeddingInputType): Promise<number[][]> {
     const out: number[][] = [];
     for (let i = 0; i < texts.length; i += this.opts.batchSize) {

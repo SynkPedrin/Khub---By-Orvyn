@@ -9,6 +9,7 @@ import {
   type InsightDTO,
   type StoredCredentials,
 } from '../ads-connector';
+import { ConfigService } from '../../config/config.service';
 import { META_GRAPH, type GraphClient } from './meta-graph.client';
 
 const SCOPES = ['ads_read', 'ads_management', 'business_management', 'leads_retrieval', 'pages_show_list'];
@@ -17,18 +18,25 @@ const SCOPES = ['ads_read', 'ads_management', 'business_management', 'leads_retr
 export class MetaAdsConnector implements AdsConnector {
   readonly provider = 'meta' as const;
 
-  constructor(@Inject(META_GRAPH) private readonly graph: GraphClient) {}
+  constructor(
+    @Inject(META_GRAPH) private readonly graph: GraphClient,
+    private readonly config: ConfigService,
+  ) {}
 
+  configured(): boolean {
+    return this.config.isConfigured('meta');
+  }
   private version(): string {
-    return process.env.META_GRAPH_VERSION ?? 'v21.0';
+    return this.config.get('META_GRAPH_VERSION') ?? 'v21.0';
   }
   redirectUri(): string {
-    return `${process.env.WEB_URL ?? 'http://localhost:3210'}/api/integrations/meta/callback`;
+    return `${this.config.get('WEB_URL') ?? 'http://localhost:3210'}/api/integrations/meta/callback`;
   }
 
   buildAuthUrl(_tenantId: string, state: string): string {
+    this.config.require('meta');
     const p = new URLSearchParams({
-      client_id: process.env.META_APP_ID ?? '',
+      client_id: this.config.get('META_APP_ID')!,
       redirect_uri: this.redirectUri(),
       state,
       response_type: 'code',
@@ -38,9 +46,10 @@ export class MetaAdsConnector implements AdsConnector {
   }
 
   async exchangeCode(code: string): Promise<StoredCredentials> {
+    this.config.require('meta');
     const j = await this.graph.get('oauth/access_token', {
-      client_id: process.env.META_APP_ID,
-      client_secret: process.env.META_APP_SECRET,
+      client_id: this.config.get('META_APP_ID'),
+      client_secret: this.config.get('META_APP_SECRET'),
       redirect_uri: this.redirectUri(),
       code,
     });
@@ -49,6 +58,12 @@ export class MetaAdsConnector implements AdsConnector {
       expiresAt: j.expires_in ? new Date(Date.now() + j.expires_in * 1000).toISOString() : undefined,
       scopes: SCOPES,
     };
+  }
+
+  /** Páginas do usuário — usadas para rotear o webhook de Lead Ads (D1). */
+  async listPages(cred: StoredCredentials): Promise<{ pageId: string; nome: string }[]> {
+    const j = await this.graph.get('me/accounts', { fields: 'id,name', limit: 200 }, cred.accessToken);
+    return (j.data ?? []).map((p: any) => ({ pageId: String(p.id), nome: p.name ?? '' }));
   }
 
   async listAdAccounts(cred: StoredCredentials): Promise<AdAccountDTO[]> {

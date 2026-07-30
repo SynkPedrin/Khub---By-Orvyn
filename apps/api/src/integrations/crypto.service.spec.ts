@@ -1,8 +1,9 @@
 import { randomBytes } from 'node:crypto';
 import { CryptoService } from './crypto.service';
+import { ConfigService } from '../config/config.service';
 
 describe('CryptoService (AES-256-GCM)', () => {
-  const svc = new CryptoService();
+  const svc = new CryptoService(new ConfigService());
   beforeAll(() => {
     process.env.INTEGRATIONS_ENCRYPTION_KEY = randomBytes(32).toString('base64');
   });

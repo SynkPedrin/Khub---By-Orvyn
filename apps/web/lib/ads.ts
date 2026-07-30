@@ -1,5 +1,7 @@
 'use client';
 
+import { ApiError } from './api-error';
+
 async function req<T>(path: string, opts?: RequestInit): Promise<T> {
   const call = () => fetch(`/api/v1/${path}`, { headers: { 'content-type': 'application/json' }, ...opts });
   let r = await call();
@@ -8,7 +10,7 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
     if (rf.ok) r = await call();
     else if (typeof window !== 'undefined') window.location.href = '/login';
   }
-  if (!r.ok) throw new Error(`ADS ${r.status}`);
+  if (!r.ok) throw new ApiError(r.status, await r.json().catch(() => ({})));
   return r.json();
 }
 

@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Avatar, Badge } from '@/components/ui';
 import { Icon } from '@/components/icons';
+import { ConfigRequired } from '@/components/app/ConfigRequired';
 import { crm, type Conversa } from '@/lib/crm';
+import { ApiError } from '@/lib/api-error';
+import { useRealtime } from '@/lib/realtime';
 
 type Status = 'sending' | 'sent' | 'delivered' | 'failed';
 interface Msg { id: string; de: string; texto: string; hora: string | null; status?: Status }
@@ -33,6 +36,7 @@ export default function InboxPage() {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [note, setNote] = useState('');
+  const [gated, setGated] = useState<{ provider: string; missing: string[] } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const selRef = useRef<string | null>(null);
   const threadRef = useRef<Msg[]>([]);
@@ -48,42 +52,61 @@ export default function InboxPage() {
     scrollDown();
   };
 
-  // carga inicial
+  // carga inicial — `?c=` (deep link da busca ⌘K) abre a conversa pedida
   useEffect(() => {
-    crm.conversations().then((cs) => { setConvs(cs); if (cs[0]) openConversa(cs[0]); }).catch(() => setConvs([]));
+    const alvo = new URLSearchParams(window.location.search).get('c');
+    crm.conversations()
+      .then((cs) => {
+        setConvs(cs);
+        const c = (alvo && cs.find((x) => x.id === alvo)) || cs[0];
+        if (c) openConversa(c);
+      })
+      .catch(() => setConvs([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // polling: novas mensagens (entrega ao vivo do STEVO) + reconciliação
-  useEffect(() => {
-    const t = setInterval(async () => {
-      let cs: Conversa[];
-      try { cs = await crm.conversations(); } catch { return; }
-      setConvs(cs);
-      const id = selRef.current;
-      const conv = cs.find((c) => c.id === id);
-      if (!conv) return;
-      const cur = threadRef.current;
-      const ids = new Set(cur.map((m) => m.id));
-      const novas: Msg[] = [];
-      for (const m of conv.mensagens) {
-        if (ids.has(m.id)) continue;
-        // reconcilia a mensagem otimista (mesma texto, ainda "sending")
-        const pend = cur.find((x) => x.status === 'sending' && x.de === 'humano' && x.texto === m.texto);
-        if (pend) { pend.id = m.id; pend.status = 'delivered'; ids.add(m.id); continue; }
-        novas.push({ ...m });
-      }
-      if (!novas.length) { setThread([...cur]); return; }
-      const temInbound = novas.some((m) => m.de === 'contato');
-      if (temInbound) {
-        setTyping(true);
-        setTimeout(() => { setThread((p) => [...p, ...novas]); setTyping(false); scrollDown(); }, 900);
-      } else {
-        setThread((p) => [...p, ...novas]); scrollDown();
-      }
-    }, 3000);
-    return () => clearInterval(t);
+  // Sincroniza a partir do servidor. Usado pelo socket (evento chegou) e pelo
+  // polling de fallback — a reconciliação é a mesma nos dois caminhos.
+  const sincronizar = useCallback(async () => {
+    let cs: Conversa[];
+    try { cs = await crm.conversations(); } catch { return; }
+    setConvs(cs);
+    const id = selRef.current;
+    const conv = cs.find((c) => c.id === id);
+    if (!conv) return;
+    const cur = threadRef.current;
+    const ids = new Set(cur.map((m) => m.id));
+    const novas: Msg[] = [];
+    for (const m of conv.mensagens) {
+      if (ids.has(m.id)) continue;
+      // reconcilia a mensagem otimista (mesmo texto, ainda "sending")
+      const pend = cur.find((x) => x.status === 'sending' && x.de === 'humano' && x.texto === m.texto);
+      if (pend) { pend.id = m.id; pend.status = 'delivered'; ids.add(m.id); continue; }
+      novas.push({ ...m });
+    }
+    if (!novas.length) { setThread([...cur]); return; }
+    const temInbound = novas.some((m) => m.de === 'contato');
+    if (temInbound) {
+      setTyping(true);
+      setTimeout(() => { setThread((p) => [...p, ...novas]); setTyping(false); scrollDown(); }, 900);
+    } else {
+      setThread((p) => [...p, ...novas]); scrollDown();
+    }
   }, [scrollDown]);
+
+  // D2: o servidor avisa; nada de perguntar de 3 em 3 segundos.
+  const { conectado } = useRealtime({
+    'message.created': () => { void sincronizar(); },
+    'conversation.updated': () => { void sincronizar(); },
+  });
+
+  // Plano B: socket caiu (rede ruim, proxy que corta ws) → volta a perguntar.
+  // Sem isso, a tela congelaria em silêncio, que é pior que polling.
+  useEffect(() => {
+    if (conectado) return;
+    const t = setInterval(() => { void sincronizar(); }, 5000);
+    return () => clearInterval(t);
+  }, [conectado, sincronizar]);
 
   const conversa = convs?.find((c) => c.id === sel);
 
@@ -101,12 +124,16 @@ export default function InboxPage() {
       const r = await crm.sendMessage(conversa.id, t);
       const status: Status = r.status === 'sent' ? 'delivered' : r.status === 'failed' ? 'failed' : 'sent';
       setThread((p) => p.map((m) => (m.id === tmpId ? { ...m, id: r.id ?? m.id, status } : m)));
-      if (r.status === 'stevo_off') setNote('Mensagem salva. Envio no WhatsApp requer configurar o STEVO (STEVO_API_URL + instância).');
+      setGated(null);
+      // A mensagem é gravada de qualquer jeito; só a ENTREGA depende da credencial.
+      if (r.status === 'config_required') setGated({ provider: 'stevo', missing: r.missing ?? [] });
       else if (r.status === 'sem_telefone') setNote('Contato sem telefone (defina STEVO_TEST_NUMBER p/ testar no seu WhatsApp).');
       else if (r.status === 'failed') setNote(`Falha no envio via STEVO: ${r.erro ?? ''}`);
-    } catch {
+    } catch (e) {
       setThread((p) => p.map((m) => (m.id === tmpId ? { ...m, status: 'failed' } : m)));
-      setNote('Não consegui enviar. Tente novamente.');
+      const cr = e instanceof ApiError ? e.configRequired : null;
+      if (cr) setGated(cr);
+      else setNote('Não consegui enviar. Tente novamente.');
     } finally {
       setSending(false);
     }
@@ -117,7 +144,13 @@ export default function InboxPage() {
       {/* Lista */}
       <div className="flex w-full max-w-xs shrink-0 flex-col border-r border-line bg-surface md:w-80">
         <div className="border-b border-line px-4 py-4">
-          <h1 className="text-lg font-extrabold tracking-tight text-fg">Inbox</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-extrabold tracking-tight text-fg">Inbox</h1>
+            <span
+              title={conectado ? 'Ao vivo: mensagens chegam na hora' : 'Sem conexão ao vivo — atualizando a cada 5s'}
+              className={`h-2 w-2 shrink-0 rounded-full ${conectado ? 'bg-emerald-500' : 'bg-amber-500'}`}
+            />
+          </div>
           <p className="text-xs text-muted">WhatsApp (STEVO) · Instagram · E-mail</p>
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-thin">
@@ -186,6 +219,7 @@ export default function InboxPage() {
 
             {/* Composer */}
             <div className="border-t border-line bg-surface px-5 py-3 pr-20">
+              {gated && <div className="mb-2"><ConfigRequired provider={gated.provider} missing={gated.missing} compact /></div>}
               {note && <p className="mb-2 rounded-lg bg-amber-500/10 px-3 py-1.5 text-xs text-amber-700 dark:text-amber-400">{note}</p>}
               <form onSubmit={enviar} className="flex items-center gap-2 rounded-2xl border border-line bg-surface2 px-3 py-2">
                 <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Escreva uma mensagem…  (Enter envia)" className="min-w-0 flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-muted" />

@@ -1,5 +1,8 @@
-import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { AuditInterceptor } from './common/audit.interceptor';
+import { RateLimitGuard } from './common/rate-limit.guard';
+import { CorrelationMiddleware } from './common/correlation.middleware';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthController } from './health/health.controller';
 import { RagModule } from './rag/rag.module';
@@ -8,11 +11,32 @@ import { AuthModule } from './auth/auth.module';
 import { TenantsModule } from './tenants/tenants.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { SettingsModule } from './settings/settings.module';
+import { FinanceiroModule } from './financeiro/financeiro.module';
+import { AgendaModule } from './agenda/agenda.module';
+import { AnalyticsModule } from './analytics/analytics.module';
+import { RealtimeModule } from './realtime/realtime.module';
+import { EventsModule } from './events/events.module';
+import { AutomationsModule } from './automations/automations.module';
+import { MarketplaceModule } from './marketplace/marketplace.module';
+import { BlueprintModule } from './blueprints/blueprint.module';
+import { NyroModule } from './nyro/nyro.module';
+import { ConfigModule } from './config/config.module';
+import { CommonModule } from './common/common.module';
+import { AiModule } from './ai/ai.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 
 @Module({
-  imports: [PrismaModule, AuthModule, TenantsModule, RagModule, CrmModule, IntegrationsModule, SettingsModule],
+  imports: [ConfigModule, CommonModule, AiModule, PrismaModule, AuthModule, TenantsModule, RealtimeModule, EventsModule, RagModule, CrmModule, AutomationsModule, MarketplaceModule, BlueprintModule, NyroModule, IntegrationsModule, SettingsModule, FinanceiroModule, AgendaModule, AnalyticsModule],
   controllers: [HealthController],
-  providers: [{ provide: APP_GUARD, useClass: JwtAuthGuard }],
+  providers: [
+    // Ordem importa: autentica (seta req.user) → rate limit por tenant → auditoria.
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RateLimitGuard },
+    { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
+  ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(CorrelationMiddleware).forRoutes('*');
+  }
+}

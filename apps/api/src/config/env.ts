@@ -49,6 +49,31 @@ const schema = z.object({
   STEVO_SEND_PATH: z.string().default('/message/sendText'),
   STEVO_WEBHOOK_TOKEN: z.string().optional(),
   STEVO_FALLBACK_TENANT_ID: z.string().optional(), // dev: roteia entrada quando não há integração mapeada
+  STEVO_TEST_NUMBER: z.string().optional(), // dev: manda toda saída para este número
+
+  // E-mail transacional (convites). Sem SMTP_URL o convite volta com link manual.
+  SMTP_URL: z.string().optional(),
+  SMTP_FROM: z.string().optional(),
+
+  // Login social (sem estas, a rota responde 501 explicando o que falta)
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GITHUB_ID: z.string().optional(),
+  GITHUB_SECRET: z.string().optional(),
+  AUTH_SECRET: z.string().optional(),
+
+  // Produção — CORS: origens permitidas (CSV). Vazio = libera tudo em dev,
+  // bloqueia tudo menos WEB_URL em produção.
+  CORS_ORIGINS: z.string().optional(),
+
+  // Rate limit por tenant/IP (janela fixa em Redis; fail-open se Redis cair).
+  RATE_LIMIT_WINDOW_SEC: z.coerce.number().int().positive().default(60),
+  RATE_LIMIT_TENANT_MAX: z.coerce.number().int().positive().default(600), // req/janela por tenant
+  RATE_LIMIT_IP_MAX: z.coerce.number().int().positive().default(120),     // req/janela por IP (rotas públicas)
+
+  // Observabilidade — só falta plugar o DSN para o Sentry entrar (pacote à parte).
+  SENTRY_DSN: z.string().optional(),
+  LOG_FORMAT: z.enum(['json', 'pretty']).optional(), // default: json em prod, pretty em dev
 });
 
 export type Env = z.infer<typeof schema>;

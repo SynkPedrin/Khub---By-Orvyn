@@ -1,0 +1,70 @@
+import { HttpException, Injectable, Logger } from '@nestjs/common';
+
+/** Provedores externos que exigem credencial. Fonte da verdade: docs/ENV.md */
+export type Provider =
+  | 'stevo' | 'meta' | 'google_ads' | 'tiktok' | 'stripe'
+  | 'voyage' | 'anthropic' | 'email' | 'oauth_google' | 'oauth_github'
+  | 'google_calendar' | 'integrations_crypto';
+
+/** Variáveis obrigatórias por provedor (Seção 2 do Brief-Finalizacao). */
+const REQUIRED: Record<Provider, string[]> = {
+  stevo: ['STEVO_API_URL', 'STEVO_API_KEY', 'STEVO_INSTANCE'],
+  meta: ['META_APP_ID', 'META_APP_SECRET'],
+  google_ads: ['GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET'],
+  tiktok: ['TIKTOK_APP_ID', 'TIKTOK_APP_SECRET'],
+  stripe: ['STRIPE_SECRET_KEY'],
+  voyage: ['VOYAGE_API_KEY'],
+  anthropic: ['ANTHROPIC_API_KEY'],
+  email: ['SMTP_URL'],
+  oauth_google: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
+  oauth_github: ['GITHUB_ID', 'GITHUB_SECRET'],
+  google_calendar: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
+  integrations_crypto: ['INTEGRATIONS_ENCRYPTION_KEY'],
+};
+
+/**
+ * 501 padronizado: `{ status: 'config_required', provider, missing: [...] }`.
+ * Usado quando a operação depende SÓ da chamada externa. Quando a parte local
+ * já teve efeito (ex.: mensagem persistida), devolva 200 + `delivery` gated —
+ * ver ADR-0008.
+ */
+export class ConfigRequiredException extends HttpException {
+  constructor(provider: Provider, missing: string[]) {
+    super({ status: 'config_required', provider, missing, title: `Configuração pendente: ${provider}` }, 501);
+  }
+}
+
+@Injectable()
+export class ConfigService {
+  private readonly log = new Logger('Config');
+
+  get(key: string): string | undefined {
+    const v = process.env[key];
+    return v && v.trim() !== '' ? v : undefined;
+  }
+
+  /** Variáveis que faltam para o provedor operar em modo real. */
+  missingVars(p: Provider): string[] {
+    return (REQUIRED[p] ?? []).filter((k) => !this.get(k));
+  }
+
+  isConfigured(p: Provider): boolean {
+    return this.missingVars(p).length === 0;
+  }
+
+  /** Lança 501 config_required se o provedor não estiver configurado. */
+  require(p: Provider): void {
+    const missing = this.missingVars(p);
+    if (missing.length) throw new ConfigRequiredException(p, missing);
+  }
+
+  /** Loga uma vez o motivo da degradação (fallback), sem derrubar a feature. */
+  warnDegraded(p: Provider, fallback: string): void {
+    this.log.warn(`${p} não configurado (falta: ${this.missingVars(p).join(', ')}) — usando fallback: ${fallback}`);
+  }
+
+  /** Snapshot para docs/health: quem está ATIVO e quem está GATED. */
+  snapshot(): { provider: Provider; configured: boolean; missing: string[] }[] {
+    return (Object.keys(REQUIRED) as Provider[]).map((p) => ({ provider: p, configured: this.isConfigured(p), missing: this.missingVars(p) }));
+  }
+}

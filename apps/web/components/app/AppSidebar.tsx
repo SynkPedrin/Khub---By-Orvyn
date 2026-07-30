@@ -9,19 +9,26 @@ const NAV: { href: string; label: string; icon: IconName }[] = [
   { href: '/', label: 'Dashboard', icon: 'dashboard' },
   { href: '/pipeline', label: 'Pipeline', icon: 'pipeline' },
   { href: '/contatos', label: 'Contatos', icon: 'contacts' },
+  { href: '/empresas', label: 'Empresas', icon: 'finance' },
+  { href: '/tarefas', label: 'Tarefas', icon: 'check' },
   { href: '/inbox', label: 'Inbox', icon: 'inbox' },
+  { href: '/automacoes', label: 'Automações', icon: 'sparkles' },
   { href: '/agenda', label: 'Agenda', icon: 'calendar' },
-  { href: '/marketing', label: 'Marketing', icon: 'marketing' },
+  { href: '/marketing/ads', label: 'Anúncios', icon: 'marketing' },
+  { href: '/marketing', label: 'Biblioteca', icon: 'knowledge' },
   { href: '/financeiro', label: 'Financeiro', icon: 'finance' },
-  { href: '/conhecimento', label: 'Conhecimento', icon: 'knowledge' },
+  { href: '/analytics', label: 'Análises', icon: 'trend' },
 ];
 
 export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
-  const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href));
+  // "mais específico vence": /marketing/ads (Anúncios) não acende /marketing (Biblioteca).
+  const casa = (href: string) => (href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/'));
+  const ativoHref = NAV.reduce((best, n) => (casa(n.href) && n.href.length > best.length ? n.href : best), '');
+  const isActive = (href: string) => href === ativoHref;
 
   return (
-    <div className="glass flex h-full w-60 flex-col rounded-[1.75rem] p-3">
+    <div className="glass crystal-edge flex h-full w-60 flex-col rounded-[1.75rem] p-3">
       <nav className="flex-1 space-y-1 overflow-y-auto scrollbar-thin">
         {NAV.map((n) => {
           const active = isActive(n.href);

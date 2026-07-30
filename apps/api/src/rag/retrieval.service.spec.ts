@@ -1,4 +1,5 @@
 import { RetrievalService, type RagContext } from './retrieval.service';
+import { ConfigService } from '../config/config.service';
 import { EmbeddingsService } from './embeddings/embeddings.service';
 import { InMemoryRagCache } from './cache/rag-cache';
 import { IdentityReranker } from './reranker/reranker';
@@ -15,8 +16,8 @@ const CANDIDATES = [
   { chunk_id: 'c-tenant', document_id: 'd2', escopo: 'tenant', titulo: 'DocA', breadcrumb: 'A > x', conteudo: 'protocolo do tenant A', score: 0.05 },
 ];
 
-function fakeEmbeddings(): EmbeddingsService {
-  return { embedOne: jest.fn().mockResolvedValue([0.1, 0.2, 0.3, 0.4]), dims: 4 } as unknown as EmbeddingsService;
+function fakeEmbeddings(available = true): EmbeddingsService {
+  return { embedOne: jest.fn().mockResolvedValue([0.1, 0.2, 0.3, 0.4]), dims: 4, available } as unknown as EmbeddingsService;
 }
 
 function fakePrisma(rows: unknown[], seenTenants: string[]) {
@@ -35,7 +36,7 @@ function fakePrisma(rows: unknown[], seenTenants: string[]) {
 describe('RetrievalService (R1.4 / R1.5 isolamento)', () => {
   it('usa o tenant da SESSÃO na transação (não do LLM)', async () => {
     const seen: string[] = [];
-    const svc = new RetrievalService(fakePrisma(CANDIDATES, seen), fakeEmbeddings(), new InMemoryRagCache(), new IdentityReranker());
+    const svc = new RetrievalService(fakePrisma(CANDIDATES, seen), fakeEmbeddings(), new ConfigService(), new InMemoryRagCache(), new IdentityReranker());
     const hits = await svc.search(CTX_A, 'protocolo');
     expect(hits.map((h) => h.chunkId)).toEqual(['c-tenant', 'c-global']); // ordenado por score desc
     // toda transação abriu com o tenant da sessão
@@ -43,7 +44,7 @@ describe('RetrievalService (R1.4 / R1.5 isolamento)', () => {
   });
 
   it('não aplica corte MIN_SCORE no baseline (reranker não calibrado)', async () => {
-    const svc = new RetrievalService(fakePrisma(CANDIDATES, []), fakeEmbeddings(), new InMemoryRagCache(), new IdentityReranker());
+    const svc = new RetrievalService(fakePrisma(CANDIDATES, []), fakeEmbeddings(), new ConfigService(), new InMemoryRagCache(), new IdentityReranker());
     const hits = await svc.search(CTX_A, 'protocolo');
     // scores ~0.02/0.05 estão abaixo de 0.35, mas não são cortados (RRF != cross-encoder)
     expect(hits).toHaveLength(2);
@@ -51,14 +52,14 @@ describe('RetrievalService (R1.4 / R1.5 isolamento)', () => {
 
   it('cacheia: 2ª busca idêntica não reembeda', async () => {
     const emb = fakeEmbeddings();
-    const svc = new RetrievalService(fakePrisma(CANDIDATES, []), emb, new InMemoryRagCache(), new IdentityReranker());
+    const svc = new RetrievalService(fakePrisma(CANDIDATES, []), emb, new ConfigService(), new InMemoryRagCache(), new IdentityReranker());
     await svc.search(CTX_A, 'protocolo');
     await svc.search(CTX_A, 'protocolo');
     expect((emb.embedOne as jest.Mock).mock.calls.length).toBe(1);
   });
 
   it('buildContext envolve o chunk com aviso anti prompt-injection', async () => {
-    const svc = new RetrievalService(fakePrisma(CANDIDATES, []), fakeEmbeddings(), new InMemoryRagCache(), new IdentityReranker());
+    const svc = new RetrievalService(fakePrisma(CANDIDATES, []), fakeEmbeddings(), new ConfigService(), new InMemoryRagCache(), new IdentityReranker());
     const hits = await svc.search(CTX_A, 'protocolo');
     const ctx = svc.buildContext(hits);
     expect(ctx).toContain('não instrução');
@@ -77,7 +78,7 @@ describe('RetrievalService (R1.4 / R1.5 isolamento)', () => {
         }),
       ),
     } as unknown as PrismaService;
-    const svc = new RetrievalService(prisma, fakeEmbeddings(), new InMemoryRagCache(), new IdentityReranker());
+    const svc = new RetrievalService(prisma, fakeEmbeddings(), new ConfigService(), new InMemoryRagCache(), new IdentityReranker());
     await svc.search(CTX_A, 'qualquer');
     const sql = sqls.find((s) => s.includes('rag_search_hybrid'));
     expect(sql).toBeDefined();
@@ -87,8 +88,40 @@ describe('RetrievalService (R1.4 / R1.5 isolamento)', () => {
     expect(sql).toContain('$6::int');
   });
 
+  it('sem VOYAGE_API_KEY degrada para busca lexical (não quebra, não embeda)', async () => {
+    const sqls: string[] = [];
+    const prisma = {
+      withTenant: jest.fn(async (_t: string, work: (tx: unknown) => Promise<unknown>) =>
+        work({
+          $queryRawUnsafe: jest.fn(async (sql: string) => { sqls.push(sql); return CANDIDATES; }),
+          $executeRaw: jest.fn().mockResolvedValue(1),
+        }),
+      ),
+    } as unknown as PrismaService;
+    const emb = fakeEmbeddings(false);
+    const svc = new RetrievalService(prisma, emb, new ConfigService(), new InMemoryRagCache(), new IdentityReranker());
+    const hits = await svc.search(CTX_A, 'protocolo');
+
+    expect(hits).toHaveLength(2); // fallback funcional: continua respondendo
+    expect((emb.embedOne as jest.Mock).mock.calls.length).toBe(0); // sem chave, sem chamada externa
+    const sql = sqls.find((s) => s.includes('rag_search_lexical'));
+    expect(sql).toBeDefined();
+    expect(sqls.some((s) => s.includes('rag_search_hybrid'))).toBe(false);
+  });
+
+  it('cache não vaza entre modo lexical e híbrido', async () => {
+    const cache = new InMemoryRagCache();
+    const lex = new RetrievalService(fakePrisma(CANDIDATES, []), fakeEmbeddings(false), new ConfigService(), cache, new IdentityReranker());
+    await lex.search(CTX_A, 'protocolo');
+    const emb = fakeEmbeddings(true);
+    const hyb = new RetrievalService(fakePrisma(CANDIDATES, []), emb, new ConfigService(), cache, new IdentityReranker());
+    await hyb.search(CTX_A, 'protocolo');
+    // ao configurar a chave, a busca refaz com vetor em vez de servir o resultado degradado
+    expect((emb.embedOne as jest.Mock).mock.calls.length).toBe(1);
+  });
+
   it('sem candidatos retorna vazio', async () => {
-    const svc = new RetrievalService(fakePrisma([], []), fakeEmbeddings(), new InMemoryRagCache(), new IdentityReranker());
+    const svc = new RetrievalService(fakePrisma([], []), fakeEmbeddings(), new ConfigService(), new InMemoryRagCache(), new IdentityReranker());
     expect(await svc.search(CTX_A, 'nada')).toEqual([]);
   });
 });

@@ -1,22 +1,28 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '../../config/config.service';
 
 export interface MessagingProvider {
   configured(): boolean;
+  missing(): string[];
   sendText(number: string, text: string): Promise<{ providerId?: string }>;
 }
 
 /**
- * STEVO — API de WhatsApp NÃO OFICIAL. Enviamos como "SMS" (texto simples) e o
- * inbox exibe como conversa de WhatsApp. Endpoint/payload configuráveis por env
- * (STEVO_API_URL, STEVO_API_KEY, STEVO_SEND_PATH, STEVO_INSTANCE) — ajustar
- * conforme a doc da instância. Sem chaves → send indisponível (degrada limpo).
+ * STEVO — WhatsApp NÃO OFICIAL (base Evolution): enviamos texto simples ("SMS")
+ * e o inbox exibe como conversa de WhatsApp. Gating pelo ConfigService
+ * (STEVO_API_URL + STEVO_API_KEY + STEVO_INSTANCE) — Brief §2.
  */
 @Injectable()
 export class StevoProvider implements MessagingProvider {
   private readonly log = new Logger('Stevo');
 
+  constructor(private readonly config: ConfigService) {}
+
   configured(): boolean {
-    return !!(process.env.STEVO_API_URL && process.env.STEVO_API_KEY);
+    return this.config.isConfigured('stevo');
+  }
+  missing(): string[] {
+    return this.config.missingVars('stevo');
   }
 
   private onlyDigits(n: string): string {
@@ -24,22 +30,21 @@ export class StevoProvider implements MessagingProvider {
   }
 
   async sendText(number: string, text: string): Promise<{ providerId?: string }> {
-    if (!this.configured()) {
-      throw new ServiceUnavailableException('STEVO não configurado (defina STEVO_API_URL e STEVO_API_KEY).');
-    }
-    const base = process.env.STEVO_API_URL!.replace(/\/+$/, '');
-    let path = process.env.STEVO_SEND_PATH ?? '/message/sendText';
+    this.config.require('stevo'); // 501 config_required se faltar
+
+    const base = this.config.get('STEVO_API_URL')!.replace(/\/+$/, '');
+    let path = this.config.get('STEVO_SEND_PATH') ?? '/message/sendText';
     if (!path.startsWith('/')) path = `/${path}`;
-    const instance = process.env.STEVO_INSTANCE;
-    // Evolution/STEVO: instância vai no PATH (/message/sendText/<instance>)
+    const instance = this.config.get('STEVO_INSTANCE');
+    // Evolution/STEVO: instância no PATH (/message/sendText/<instance>)
     if (instance && !path.includes(instance)) path = `${path}/${instance}`;
-    const url = `${base}${path}`;
+    const apiKey = this.config.get('STEVO_API_KEY')!;
     // cobre variações de payload (Evolution v2 usa `text`; v1 usa `textMessage.text`)
     const body = { number: this.onlyDigits(number), text, textMessage: { text } };
 
-    const res = await fetch(url, {
+    const res = await fetch(`${base}${path}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', apikey: process.env.STEVO_API_KEY!, authorization: `Bearer ${process.env.STEVO_API_KEY!}` },
+      headers: { 'content-type': 'application/json', apikey: apiKey, authorization: `Bearer ${apiKey}` },
       body: JSON.stringify(body),
     });
     const j = await res.json().catch(() => ({}));

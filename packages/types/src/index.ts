@@ -38,3 +38,46 @@ export interface ProblemDetails {
   instance?: string;
   correlationId?: string;
 }
+
+// ======================= Tempo real (Sprint D2 — ADR-0011) =======================
+
+/**
+ * Contrato dos eventos do socket. Front e back importam DAQUI: evento novo sem
+ * tipo aqui não compila. Todo evento é entregue apenas na sala do tenant —
+ * o `tenantId` NUNCA vem do cliente, sempre do ticket assinado.
+ */
+export interface RealtimeEvents {
+  'message.created': {
+    conversationId: string;
+    id: string;
+    de: string; // contato | humano | nyro
+    texto: string;
+    hora: string | null;
+  };
+  'conversation.updated': {
+    id: string;
+    ultimaPrevia: string | null;
+    ultimaHora: string | null;
+    naoLidas: number;
+  };
+  'deal.moved': { id: string; stageId: string; stageAnterior: string | null };
+  'deal.created': { id: string; stageId: string };
+  'deal.updated': { id: string };
+  'deal.deleted': { id: string };
+  /** Status do negócio mudou (ganho/perdido/aberto) — gatilho de pós-venda/reativação. */
+  'deal.status_changed': { id: string; status: string; contactId: string | null };
+  'contact.created': { id: string; nome: string; origem: string };
+  'contact.tagged': { id: string; tag: string };
+  /** Execução de automação ao vivo (Sprint E): alimenta a timeline da run. */
+  'automation.run': { runId: string; workflowId: string; nodeId: string; status: string };
+}
+
+export type RealtimeEvent = keyof RealtimeEvents;
+export type RealtimePayload<E extends RealtimeEvent> = RealtimeEvents[E];
+
+/** Envelope entregue ao cliente: `emitidoEm` permite descartar evento atrasado. */
+export interface RealtimeEnvelope<E extends RealtimeEvent = RealtimeEvent> {
+  evento: E;
+  dados: RealtimeEvents[E];
+  emitidoEm: string; // ISO
+}

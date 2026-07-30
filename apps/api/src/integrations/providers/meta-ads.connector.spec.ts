@@ -1,4 +1,5 @@
 import { MetaAdsConnector } from './meta-ads.connector';
+import { ConfigService } from '../../config/config.service';
 import type { GraphClient } from './meta-graph.client';
 
 function fakeGraph(responses: Record<string, any>): GraphClient {
@@ -16,11 +17,12 @@ const cred = { accessToken: 'tok' };
 describe('MetaAdsConnector', () => {
   beforeAll(() => {
     process.env.META_APP_ID = 'app123';
+    process.env.META_APP_SECRET = 'sec456';
     process.env.WEB_URL = 'http://localhost:3210';
   });
 
   it('buildAuthUrl inclui client_id, redirect, scope e state', () => {
-    const c = new MetaAdsConnector(fakeGraph({}));
+    const c = new MetaAdsConnector(fakeGraph({}), new ConfigService());
     const url = c.buildAuthUrl('t1', 'STATE');
     expect(url).toContain('client_id=app123');
     expect(url).toContain('state=STATE');
@@ -29,20 +31,20 @@ describe('MetaAdsConnector', () => {
   });
 
   it('mapeia ad accounts', async () => {
-    const c = new MetaAdsConnector(fakeGraph({ 'me/adaccounts': { data: [{ account_id: '111', name: 'Conta', currency: 'BRL', timezone_name: 'America/Sao_Paulo', account_status: 1 }] } }));
+    const c = new MetaAdsConnector(fakeGraph({ 'me/adaccounts': { data: [{ account_id: '111', name: 'Conta', currency: 'BRL', timezone_name: 'America/Sao_Paulo', account_status: 1 }] } }), new ConfigService());
     const accts = await c.listAdAccounts(cred);
     expect(accts).toEqual([{ externalId: 'act_111', name: 'Conta', currency: 'BRL', timezone: 'America/Sao_Paulo', status: '1' }]);
   });
 
   it('mapeia campanhas (orçamento em centavos → reais)', async () => {
-    const c = new MetaAdsConnector(fakeGraph({ '/campaigns': { data: [{ id: 'c1', name: 'Camp', objective: 'LEAD_GENERATION', status: 'ACTIVE', daily_budget: '5000' }] } }));
+    const c = new MetaAdsConnector(fakeGraph({ '/campaigns': { data: [{ id: 'c1', name: 'Camp', objective: 'LEAD_GENERATION', status: 'ACTIVE', daily_budget: '5000' }] } }), new ConfigService());
     const [camp] = await c.syncCampaigns(cred, 'act_111');
     expect(camp.externalId).toBe('c1');
     expect(camp.dailyBudget).toBe(50); // 5000 centavos
   });
 
   it('mapeia insights: actions → leads/conversions, deriva ROAS/CPL', () => {
-    const c = new MetaAdsConnector(fakeGraph({}));
+    const c = new MetaAdsConnector(fakeGraph({}), new ConfigService());
     const ins = c.mapInsight({
       campaign_id: 'c1', date_start: '2026-07-10', spend: '100', impressions: '2000', clicks: '80', ctr: '4', reach: '1500',
       actions: [{ action_type: 'lead', value: '10' }, { action_type: 'offsite_conversion.fb_pixel_purchase', value: '4' }],

@@ -278,10 +278,15 @@ model Contact {
   valorEstimado   Decimal        @default(0) @map("valor_estimado") @db.Decimal(12, 2)
   camposCustom    Json           @default("{}") @map("campos_custom")
   ultimoContatoAt DateTime?      @map("ultimo_contato_at") @db.Timestamptz(6)
+  companyId       String?        @map("company_id") @db.Uuid
   createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime       @default(now()) @map("updated_at") @db.Timestamptz(6)
+  company         Company?       @relation(fields: [companyId], references: [id], onDelete: SetNull)
   deals           Deal[]
   conversations   Conversation[]
+  tasks           Task[]
+  notes           Note[]
+  activities      Activity[]
 
   @@map("contacts")
 }
@@ -301,6 +306,9 @@ model Deal {
   contact    Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
   pipeline   Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
   stage      Stage    @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  tasks      Task[]
+  notes      Note[]
+  activities Activity[]
 
   @@map("deals")
 }
@@ -342,9 +350,397 @@ model Activity {
   actor     String
   acao      String
   tone      String   @default("neutral")
+  contactId String?  @map("contact_id") @db.Uuid
+  dealId    String?  @map("deal_id") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  deal      Deal?    @relation(fields: [dealId], references: [id], onDelete: Cascade)
 
   @@map("activities")
+}
+
+// ======================= CRM F2 (Sprint D1) =======================
+
+model Company {
+  id           String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  nome         String
+  dominio      String?
+  telefone     String?
+  endereco     String?
+  segmento     String?
+  tamanho      String?
+  site         String?
+  camposCustom Json      @default("{}") @map("campos_custom")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  contacts     Contact[]
+  tasks        Task[]
+  notes        Note[]
+
+  @@map("companies")
+}
+
+model Task {
+  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  titulo      String
+  descricao   String?
+  status      String    @default("aberta")
+  prioridade  String    @default("media")
+  dueAt       DateTime? @map("due_at") @db.Timestamptz(6)
+  contactId   String?   @map("contact_id") @db.Uuid
+  dealId      String?   @map("deal_id") @db.Uuid
+  companyId   String?   @map("company_id") @db.Uuid
+  assigneeId  String?   @map("assignee_id") @db.Uuid
+  createdBy   String?   @map("created_by") @db.Uuid
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  contact     Contact?  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  deal        Deal?     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  company     Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("tasks")
+}
+
+model Note {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  corpo      String
+  contactId  String?  @map("contact_id") @db.Uuid
+  dealId     String?  @map("deal_id") @db.Uuid
+  companyId  String?  @map("company_id") @db.Uuid
+  authorId   String?  @map("author_id") @db.Uuid
+  authorNome String?  @map("author_nome")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  contact    Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  deal       Deal?    @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  company    Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("notes")
+}
+
+// ======================= Automações (Sprint E · migration 010) =======================
+
+model Workflow {
+  id            String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId      String            @map("tenant_id") @db.Uuid
+  nome          String
+  descricao     String?
+  tags          String[]          @default([])
+  status        String            @default("rascunho")
+  versaoAtivaId String?           @map("versao_ativa_id") @db.Uuid
+  criadoPor     String?           @map("criado_por") @db.Uuid
+  /// Configurações que evitam queimar a lista do cliente (migration 011)
+  reentrada     String            @default("uma_vez")
+  pararNoReply  Boolean           @default(false) @map("parar_no_reply")
+  janelaAtiva   Boolean           @default(false) @map("janela_ativa")
+  janelaDias    Int[]             @default([1, 2, 3, 4, 5]) @map("janela_dias")
+  janelaInicio  Int               @default(9) @map("janela_inicio") @db.SmallInt
+  janelaFim     Int               @default(18) @map("janela_fim") @db.SmallInt
+  timezone      String            @default("America/Sao_Paulo")
+  webhookKey    String?           @unique @map("webhook_key")
+  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime          @default(now()) @map("updated_at") @db.Timestamptz(6)
+  versaoAtiva   WorkflowVersion?  @relation("versaoAtiva", fields: [versaoAtivaId], references: [id], onDelete: SetNull)
+  versoes       WorkflowVersion[] @relation("versoesDoWorkflow")
+  runs          WorkflowRun[]
+
+  @@map("workflows")
+}
+
+/// Imutável depois de publicada: é o que dá rollback e mantém a espera de dias
+/// terminando com a mesma lógica com que começou.
+model WorkflowVersion {
+  id           String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId     String        @map("tenant_id") @db.Uuid
+  workflowId   String        @map("workflow_id") @db.Uuid
+  versao       Int
+  grafo        Json          @default("{\"nos\":[],\"arestas\":[]}")
+  publicadoEm  DateTime?     @map("publicado_em") @db.Timestamptz(6)
+  publicadoPor String?       @map("publicado_por") @db.Uuid
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  workflow     Workflow      @relation("versoesDoWorkflow", fields: [workflowId], references: [id], onDelete: Cascade)
+  ativaEm      Workflow[]    @relation("versaoAtiva")
+  runs         WorkflowRun[]
+
+  @@unique([workflowId, versao])
+  @@map("workflow_versions")
+}
+
+model WorkflowRun {
+  id         String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId   String            @map("tenant_id") @db.Uuid
+  workflowId String            @map("workflow_id") @db.Uuid
+  versionId  String            @map("version_id") @db.Uuid
+  gatilho    String
+  status     String            @default("rodando")
+  noAtual    String?           @map("no_atual")
+  estado     Json              @default("{}")
+  contexto   Json              @default("{}")
+  contactId  String?           @map("contact_id") @db.Uuid
+  dealId     String?           @map("deal_id") @db.Uuid
+  dedupeKey  String?           @map("dedupe_key")
+  erro       String?
+  passos     Int               @default(0)
+  teste      Boolean           @default(false)
+  startedAt  DateTime          @default(now()) @map("started_at") @db.Timestamptz(6)
+  finishedAt DateTime?         @map("finished_at") @db.Timestamptz(6)
+  workflow   Workflow          @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  version    WorkflowVersion   @relation(fields: [versionId], references: [id])
+  steps      WorkflowRunStep[]
+
+  @@map("workflow_runs")
+}
+
+/// Timeline nó-a-nó da execução (PRD §7.2).
+model WorkflowRunStep {
+  id        String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId  String      @map("tenant_id") @db.Uuid
+  runId     String      @map("run_id") @db.Uuid
+  noId      String      @map("no_id")
+  tipo      String
+  status    String
+  tentativa Int         @default(1)
+  entrada   Json        @default("{}")
+  saida     Json        @default("{}")
+  erro      String?
+  duracaoMs Int?        @map("duracao_ms")
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  run       WorkflowRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@map("workflow_run_steps")
+}
+
+/// Dead-letter: nó que esgotou o retry. Reprocessável sem perder o já feito.
+model WorkflowDlq {
+  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  runId       String    @map("run_id") @db.Uuid
+  noId        String    @map("no_id")
+  tipo        String
+  payload     Json      @default("{}")
+  erro        String
+  tentativas  Int       @default(0)
+  resolvidoEm DateTime? @map("resolvido_em") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("workflow_dlq")
+}
+
+/// Drip mode (migration 015): contador por (tenant, nó, janela). O executor usa
+/// UPSERT atômico via $queryRaw; este model documenta o schema e a RLS.
+model WorkflowDripCounter {
+  tenantId    String   @map("tenant_id") @db.Uuid
+  nodeId      String   @map("node_id")
+  windowStart DateTime @map("window_start") @db.Timestamptz(6)
+  count       Int      @default(0)
+
+  @@id([tenantId, nodeId, windowStart])
+  @@map("workflow_drip_counters")
+}
+
+/// Marketplace de templates de automação (migration 016). Global (tenantId null,
+/// só orvyn_service publica) + do tenant. `workflow` é o grafo do editor.
+model AutomationTemplate {
+  id           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId     String?  @map("tenant_id") @db.Uuid
+  slug         String
+  name         String
+  description  String   @default("")
+  category     String
+  subcategory  String?
+  icon         String?
+  segment      String?
+  difficulty   String   @default("facil")
+  estimatedMin Int?     @map("estimated_min")
+  tags         String[] @default([])
+  author       String   @default("Orvyn")
+  version      Int      @default(1)
+  isOfficial   Boolean  @default(false) @map("is_official")
+  isPremium    Boolean  @default(false) @map("is_premium")
+  isPublished  Boolean  @default(true) @map("is_published")
+  featured     Boolean  @default(false)
+  installs     Int      @default(0)
+  rating       Decimal? @db.Decimal(3, 2)
+  requirements String[] @default([])
+  workflow     Json
+  variables    Json     @default("[]")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("automation_templates")
+}
+
+// ======================= Configurações avançadas (migrations 018/019) =======================
+
+/// Catálogo canônico de tags do CRM (nome + cor). Contatos referenciam por nome.
+model CrmTag {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  name      String
+  color     String   @default("#7B2EFF")
+  descricao String   @default("")
+  usos      Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("crm_tags")
+}
+
+/// Private Integration: chave de API do tenant. Guardamos só o hash (sha256).
+model ApiKey {
+  id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  name       String
+  keyPrefix  String    @map("key_prefix")
+  keyHash    String    @unique @map("key_hash")
+  scopes     String[]  @default(["*"])
+  createdBy  String?   @map("created_by") @db.Uuid
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(6)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("api_keys")
+}
+
+/// Cobrança do Financeiro (valores em CENTAVOS). Link Stripe é gated. migration 020.
+model FinanceiroCobranca {
+  id                  String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId            String    @map("tenant_id") @db.Uuid
+  contactId           String?   @map("contact_id") @db.Uuid
+  dealId              String?   @map("deal_id") @db.Uuid
+  descricao           String
+  valorCentavos       Int       @map("valor_centavos")
+  moeda               String    @default("BRL")
+  status              String    @default("rascunho") // rascunho|enviada|paga|vencida|cancelada
+  vencimento          DateTime? @db.Date
+  pagoEm              DateTime? @map("pago_em") @db.Timestamptz(6)
+  stripePaymentIntent String?   @map("stripe_payment_intent")
+  stripeCheckoutUrl   String?   @map("stripe_checkout_url")
+  createdBy           String?   @map("created_by") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("financeiro_cobrancas")
+}
+
+/// Compromisso da Agenda. Sync com Google Calendar é gated. migration 021.
+model AgendaCompromisso {
+  id            String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  contactId     String?   @map("contact_id") @db.Uuid
+  titulo        String
+  inicio        DateTime  @db.Timestamptz(6)
+  fim           DateTime  @db.Timestamptz(6)
+  status        String    @default("agendado") // agendado|confirmado|concluido|cancelado|nao_compareceu
+  local         String?
+  notas         String?
+  googleEventId String?   @map("google_event_id")
+  createdBy     String?   @map("created_by") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("agenda_compromissos")
+}
+
+// ======================= Nyro IA (Sprint F · migration 013) =======================
+
+model NyroConversation {
+  id         String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId   String         @map("tenant_id") @db.Uuid
+  identityId String?        @map("identity_id") @db.Uuid
+  titulo     String?
+  contexto   Json           @default("{}")
+  createdAt  DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime       @default(now()) @map("updated_at") @db.Timestamptz(6)
+  mensagens  NyroMessage[]
+  acoes      NyroAction[]
+
+  @@map("nyro_conversations")
+}
+
+model NyroMessage {
+  id             String           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId       String           @map("tenant_id") @db.Uuid
+  conversationId String           @map("conversation_id") @db.Uuid
+  papel          String
+  conteudo       String           @default("")
+  agente         String?
+  tools          Json             @default("[]")
+  fontes         Json             @default("[]")
+  guardrail      String?
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  conversation   NyroConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@map("nyro_messages")
+}
+
+/// Human-in-the-loop: ação sensível espera aprovação (PRD §5.1).
+model NyroAction {
+  id             String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId       String            @map("tenant_id") @db.Uuid
+  conversationId String?           @map("conversation_id") @db.Uuid
+  tool           String
+  argumentos     Json              @default("{}")
+  resumo         String
+  status         String            @default("pendente")
+  resultado      Json?
+  erro           String?
+  decididoPor    String?           @map("decidido_por") @db.Uuid
+  decididoEm     DateTime?         @map("decidido_em") @db.Timestamptz(6)
+  expiraEm       DateTime          @map("expira_em") @db.Timestamptz(6)
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  conversation   NyroConversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@map("nyro_actions")
+}
+
+/// Memória nível 2: fatos do negócio que a Nyro reusa.
+model NyroMemory {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  chave     String
+  valor     String
+  origem    String   @default("nyro")
+  confianca Float    @default(1.0) @db.Real
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([tenantId, chave])
+  @@map("nyro_memory")
+}
+
+/// Custo de IA por tenant (crédito por plano, no Sprint C).
+model AiUsageEvent {
+  id             String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  conversationId String?  @map("conversation_id") @db.Uuid
+  agente         String
+  modelo         String
+  tokensEntrada  Int      @default(0) @map("tokens_entrada")
+  tokensSaida    Int      @default(0) @map("tokens_saida")
+  tokensCache    Int      @default(0) @map("tokens_cache")
+  custoUsd       Decimal  @default(0) @map("custo_usd") @db.Decimal(10, 6)
+  latenciaMs     Int?     @map("latencia_ms")
+  erro           String?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("ai_usage_events")
+}
+
+/// Roteamento do webhook de Lead Ads: page_id -> tenant (ver migration 009).
+model MetaPage {
+  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  integrationId String   @map("integration_id") @db.Uuid
+  pageId        String   @unique @map("page_id")
+  pageNome      String?  @map("page_nome")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("meta_pages")
 }
 
 // ======================= Integrações de anúncios (Sprint A) =======================

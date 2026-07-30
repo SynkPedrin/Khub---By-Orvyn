@@ -5,6 +5,121 @@
 
 ---
 
+## Trilha P — "Só faltar as APIs" (produto pronto, sem credencial) — em execução
+
+Pedido: fazer tudo que NÃO depende de API, testado, até só faltar plugar chave. Ordem por valor.
+
+- [x] **P1 — Nyro configuradora** (o diferencial nº 1). 3 tools de configuração: `criar_funil` (pipeline+etapas), `criar_etapa`, `instalar_automacao` (busca no marketplace e instala/publica). `CrmService.createPipeline/createStage` novos; tool-executor injeta `MarketplaceService` (NyroModule → MarketplaceModule, sem ciclo); conversor Zod→JSONSchema ganhou `ZodArray`; Arquiteta recebeu as tools + prompt "você MONTA o CRM". **Novo spec `tool-executor`** (6 testes — paga D-05). Suíte **221 verdes**. Agora a Nyro consegue montar funil e trazer automações — só falta crédito Anthropic para *rodar*.
+- [~] **P2 — Blueprints por nicho** ✅ (ADR-0022): `playbooks.ts` (odonto/advocacia/contábil, com guardrails CFM/OAB/CFC), `BlueprintService.aplicar` (funil+automações, nativo, idempotente), `GET/POST /v1/blueprints`, tool `aplicar_blueprint`. **227 testes.** · Falta a **tela de onboarding** (a Nyro conduzindo a tela vazia → descobre nicho → aplica) — próximo.
+- [x] **Binding de variáveis no install + Onboarding** (ADR-0028): install substitui `{{var.X}}` pelos valores (modal de binding na Biblioteca; defaults do template) — testado com grafo publicado. Página `/onboarding` (blueprints por nicho, sem API) + CTA no empty-state. **BUG-003 corrigido/verificado.** **229 testes.**
+- [x] **Analytics + custo de IA por tenant** (ADR-0027): `AnalyticsModule` (`/v1/analytics/ai-usage` + `/automacoes`, RLS) · UI `/analytics` ("Análises"). **Circuit breaker** estendido a Voyage + Meta Graph. DLQ ads-sync/ingestion: já é dead-letter em nível de registro (status `failed`+`erro`) — sem tabela redundante. **229 testes.**
+- [x] **P3 — Agenda** (ADR-0026): schema `db/021` + RLS + isolamento · módulo `/v1/agenda/*` (compromissos CRUD, status, **horários livres**, sincronizar) · UI `/agenda` com sugestão de horários e prevenção de choque (409). **Google Calendar gated** (`config.require('google_calendar')`). **229 testes.**
+- [~] **P4 — Produção** (ADR-0024): ✅ rate limit por tenant/IP (Redis, fail-open, 429 comprovado) · ✅ circuit breaker (Anthropic) · ✅ security headers + CORS allowlist · ✅ health com Redis · ✅ observabilidade (correlation-id ALS + logs JSON + ErrorReporter Sentry-ready) · ✅ **deploy kit** (Dockerfile api/web, CI com gate de isolamento RLS, `schema_migrations` rastreado). **229 testes.** · Falta: **custo de IA por tenant** (medição em `ai_usage_events`), circuit breaker no Voyage/Meta, DLQ em ads-sync/ingestion.
+- [~] **P5 — UIs** ✅ parcial: **`/nyro` virou chat full-page estilo Claude** (hook `useNyroChat` + `NyroMensagens` compartilhados com o dock — sem duplicar; mata o "Chega na F3"). Sidebar: **Marketing→Biblioteca** + **Anúncios** (isActive "mais específico vence"). **Biblioteca** = frameworks + **automações prontas do marketplace** (instalar 1-clique via `lib/marketplace`). Automações com **intro/tutorial** (3 passos). **Gerenciador de anúncios simulado** (`AdsSimulador`: campanha→conjunto→anúncio, métricas por orçamento, pausar/ativar, localStorage) na página de Anúncios. Typecheck Web OK. · Falta: **binding de variáveis** na instalação (templates com stageId).
+- [~] **P6 — Financeiro** (ADR-0025): ✅ schema `db/020` + RLS + isolamento · módulo `/v1/financeiro/*` (cobranças CRUD, resumo, status) · UI `/financeiro` (KPIs, criar, marcar paga) · **link de pagamento Stripe via REST direto** (sem SDK — 501 config_required sem `STRIPE_SECRET_KEY`, funciona com a chave). **229 testes.** · Falta: **Ads write** real (gated Meta) para aposentar o simulador localStorage.
+- [ ] **P7 — Dívida de teste**: tasks/notes (D-02), settings (D-06).
+
+## Trilha W — Paridade de motor com o GHL (identidade Orvyn) — ADR-0015
+
+Pedido: "workflow igual ao do GHL, mas com a identidade da Orvyn". Escopo = igualar **motor + UX**, nunca clonar menu de módulo inexistente (ver ADR-0015). Uma sprint por sessão.
+
+- [x] **W1** — Nó `acao.enviar_email` (canal oficial SMTP via `MailerService`; assunto+corpo com `{{contato.nome}}`). *Aceite:* ✅ envia pro e-mail do contato interpolado; sem `SMTP_URL` → passo `config_required` (não quebra); falha real de SMTP → exceção (retry/DLQ); contato sem e-mail → erro explícito. **198 testes verdes** (+4), typecheck API+Web verde. Catálogo 21 → 22.
+- [x] **W2** — `controle.split` (A/B **determinístico** FNV-1a) + `controle.drip` (lote por janela; UPSERT atômico em `workflow_drip_counters`/`db/015`, RLS, reagenda na próxima janela). Editor de variantes (peso+%) e de lote. **4 testes** (determinismo, distribuição 3:1, drip libera/segura). ✅ ADR-0019.
+- [x] **W-var** — `acao.definir_variavel` (variáveis do fluxo no `Contexto`; `{{variaveis.x}}` via `valorDoCampo`). Editor nome+valor, **2 testes**. Base de personalização dos templates.
+- [x] **W3b** — `acao.formatar_texto` (telefone/moeda/caixa/dígitos → variável; reusa `soDigitos`). Catálogo → **28 nós**. **1 teste** (telefone BR + moeda R$). Suíte **211 verdes**. Personalização das mensagens.
+- [x] **W3a** — `gatilho.negocio_status` (ganho/perdido). CRM publica `deal.status_changed` no barramento (`RealtimeEvents`), `triggers.service` roteia + filtra por status, contexto monta o negócio. Novo **spec de `triggers.service`** (4 testes de `filtroBate` — paga parte da D-04). Catálogo → **27 nós**. Suíte **210 verdes**. Destrava templates de pós-venda/reativação.
+- [x] **W-ai** — `AiModule` compartilhado (`AnthropicProvider` movido p/ `ai/`, `@Global`, sem duplicar) + nó `acao.ia` (classificar/pontuar/resumir/responder/extrair; gated; resultado → variável). **2 testes** (grava variável; gating). Catálogo → **26 nós**. Suíte **206 verdes**. ✅ ADR-0019. Ativa a categoria IA do futuro marketplace.
+- [ ] **W3** — Gatilhos sem módulo novo: `Scheduler` (dispara por tempo, sem contato), `Form Submitted`, `Custom Date/Birthday Reminder`, `Opportunity Status` (ganho/perdido). *Aceite:* cada gatilho abre run no evento certo; isolamento no `db/002`.
+- [!] **W4** — `acao.dnd` (liga/desliga) + `acao.atribuir_usuario`. **Bloqueada:** exige coluna nova em `Contact` (`dnd boolean`, `owner_id uuid`) — decisão estrutural, PARA e pede aprovação antes de codar. *Aceite:* DND some da fila de envio; atribuição grava dono e aparece no 360.
+- [ ] **W5** — Settings restantes (Sender Details, Mark as Read) + **verificação de assinatura no `gatilho.webhook` de entrada** (HMAC/segredo por fluxo). *Aceite:* webhook com assinatura inválida → 401 sem abrir run; settings persistem e afetam o envio.
+
+---
+
+## Sprint F — Nyro IA  *(concluída 2026-07-17 — ver [[Sprint]])*
+
+- [x] **F-1** — Schema `db/013`: nyro_conversations, nyro_messages, nyro_actions, nyro_memory, ai_usage_events (+ nyro_guardrail_hits do R0). RLS em todas; `db/002` bloco 14. ✅
+- [x] **F-2** — 14 tools tipadas (Zod + sensibilidade), fechando a LACUNA do PRD §5.1. Zod→JSON Schema próprio. ✅ ADR-0014.
+- [x] **F-3** — Orquestrador: roteador Haiku + 4 sub-agentes (Sonnet), cada um com suas tools. Teto de 5 voltas. ✅
+- [x] **F-4** — Executor de tools via serviços do CRM/automações (nunca banco direto), auditado `actor:'nyro'`. ✅
+- [x] **F-5** — Human-in-the-loop: ação sensível vira `nyro_actions` pendente; só o humano aprova. ✅
+- [x] **F-6** — Guardrails 2 camadas (prompt CFM/OAB + validador pós-resposta), 13 testes. ✅
+- [x] **F-7** — Front: chat real com passos ao vivo + aprovação; gated com "Configurar Claude". ✅
+
+**Saldo:** 154 testes verdes (era 130) · migration `db/013` · [[Bugs|BUG-013]] · **gating verificado, respostas dependem da `ANTHROPIC_API_KEY`.**
+
+---
+
+## Sprint E.2 — Workflow builder completo (UX)  *(concluída 2026-07-17 — ver [[Sprint]])*
+
+Pedido do usuário com a referência do GHL (categorias, waits, chaining, webhooks, settings), filtrado pelo que **existe** no Orvyn.
+
+- [x] **E2-1** — Catálogo 15 → **21 nós** agrupados por categoria (Contato/Negócios/Comunicação/Dados/Fluxo/Ferramentas internas). *Aceite:* `GET /catalogo` devolve 21 com `grupo`. ✅ ADR-0013.
+- [x] **E2-2** — `controle.esperar_resposta` com ramos fixos Respondeu/Não respondeu; quem responde **não** recebe follow-up. *Aceite:* 5 testes do nó + resposta acorda o run na hora. ✅
+- [x] **E2-3** — `gatilho.webhook` + `POST /v1/hooks/:chave` (público, chave revogável, 202 sempre) e `resolve_workflow_by_webhook_key` (`db/011`). ✅
+- [x] **E2-4** — Configurações do fluxo: reentrada, parar no reply, janela de envio + timezone (`db/011`). *Aceite:* 9 testes (3h da manhã adia; sábado espera até segunda; tag roda a qualquer hora; `uma_vez` bloqueia). ✅
+- [x] **E2-5** — Encadeamento (`acao.chamar_workflow`), `controle.encerrar`, `acao.criar_nota`, `gatilho.negocio_criado`. ✅
+- [x] **E2-6** — UX: painel "Adicionar" com busca focada + sinônimos, nó nasce configurado e já conectado, canvas vazio ensina o começo, zoom/fit/minimap. ✅
+
+**Saldo:** 123 testes verdes (era 109) · migration `db/011` · **fora de escopo consciente:** Appointments, Payments, Courses, Affiliate, IVR, Communities, Certificates, Ecommerce, Google Ads, Eliza, Custom Objects — não existem no produto (ver ADR-0013).
+
+---
+
+## Sprint E — Motor de Automações (F4)  *(concluída 2026-07-17 — ver [[Sprint]])*
+
+- [x] **E-1** — Congelar os 15 nós + Zod por tipo (`catalogo.ts`), fechando a LACUNA do [[PRD]] §7.1. *Aceite:* `GET /v1/automations/catalogo` devolve 15; publicar nó fora do catálogo é recusado. ✅ ADR-0012.
+- [x] **E-2** — Schema `db/010`: workflows, versions (imutável), runs (estado + dedupe), run_steps, dlq — RLS em todas. *Aceite:* `db/002` prova que A não vê grafo/estado/log/DLQ de B. ✅
+- [x] **E-3** — Engine: 1 job = 1 nó, espera por delay, retry exponencial, DLQ + reprocessar, `aoFalhar:'seguir'`, loop barrado em 200 passos. *Aceite:* espera sobrevive a restart; retry esgotado cai no DLQ com o run marcado. ✅
+- [x] **E-4** — Barramento `events` (fan-out socket + fila) para quebrar o ciclo crm↔automations. *Aceite:* CRM não importa automations e o gatilho dispara. ✅
+- [x] **E-5** — Ações pelos serviços do CRM (auditadas, sob RLS): SMS, tags, contato, oportunidade, etapa, tarefa, webhook (com bloqueio de SSRF). *Aceite:* fluxo cria oportunidade real e manda mensagem real. ✅
+- [x] **E-6** — Canvas React Flow: drag-and-drop, saída por ramo no If/Else, painel por nó, autosave no rascunho, validação apontando o nó problemático, publicar/pausar/rollback. ✅
+- [x] **E-7** — Execuções: timeline nó-a-nó ao vivo, cancelar, DLQ, teste com contato real (avisando que executa de verdade). ✅
+
+**Saldo:** 109 testes verdes (era 75) · migration `db/010` · [[Bugs|BUG-010]] e [[Bugs|BUG-011]] achados e corrigidos · `db/002` estendido.
+
+**Fora de escopo (consciente):** nós de IA (Sprint F, atrás de `ANTHROPIC_API_KEY`) · split A/B, horário comercial e nó de Stripe (pós-MVP) · automações prontas dos 3 templates verticais (F2/blueprints).
+
+---
+
+## Sprint D2 — Tempo real  *(concluída 2026-07-16 — ver [[Sprint]])*
+
+- [x] **D2-1** — Definir a LACUNA de [[APIs]] §6: Socket.IO, namespace `/rt`, envelope tipado em `@orvyn/types`. ✅ ADR-0011.
+- [x] **D2-2** — Auth do socket: `POST /v1/auth/ws-ticket` (`typ:'ws'`, 60s) + rota Next; guard REST recusa ticket. *Aceite:* ticket inválido/expirado/forjado recusado; access token não abre socket. ✅
+- [x] **D2-3** — Gateway com sala por tenant. *Aceite:* evento de A chega em A e **não** chega em B (provado com socket real). ✅
+- [x] **D2-4** — Emissores: inbox (`message.created`, `conversation.updated`, `contact.created`) e funil (`deal.*`), sempre pós-commit. *Aceite:* mover card pela API → evento no socket; operação que falha não publica. ✅
+- [x] **D2-5** — Front ao vivo: `useRealtime()`, inbox e pipeline, indicador de conexão e **fallback para polling** ao cair. *Aceite:* socket derrubado → tela continua atualizando (5s), sem congelar. ✅
+- [x] **D2-6** — Reconexão com ticket novo a cada tentativa + `RedisIoAdapter` para múltiplas instâncias. ✅
+
+**Saldo:** 75 testes verdes (era 61) · `@orvyn/web` passou a depender de `@orvyn/types` · canal `automation.run` pronto para o Sprint E.
+
+---
+
+## Sprint D1 — Fechar o CRM (F2)  *(concluída 2026-07-16 — ver [[Sprint]])*
+
+- [x] **D1-1** — Schema F2: `companies`, `tasks`, `notes`, `meta_pages` + `contacts.company_id` (`db/009_crm_f2.sql`), RLS + FORCE em todas. *Aceite:* `db/002` prova que A não vê empresa/tarefa/nota/página de B e não escreve no tenant de B. ✅
+- [x] **D1-2** — Perfil 360 (`GET /v1/crm/contacts/:id` + `/contatos/[id]`): contato, empresa, negócios, conversas, tarefas, notas e timeline numa transação. *Aceite:* abrir um contato mostra tudo dele sem N+1. ✅
+- [x] **D1-3** — Editar/excluir contato e negócio (API + UI), incluindo `DealDrawer` com `?deal=` e o "Novo negócio" funcionando. *Aceite:* criar → editar → excluir pela UI, com 404 depois. ✅
+- [x] **D1-4** — Empresas, tarefas e notas: CRUD + telas `/empresas`, `/empresas/[id]`, `/tarefas`. *Aceite:* empresa duplicada → 409; tarefa atrasada aparece no filtro; nota só o autor edita. ✅
+- [x] **D1-5** — Paginação por cursor em contatos (`?cursor=&limit=`). *Aceite:* 9 contatos em 3 páginas, zero duplicados, cursor inválido → 400. Fecha [[Bugs|BUG-009]]. ✅
+- [x] **D1-6** — Meta lead → contato: `page_id ↔ tenant` (`meta_pages` + `resolve_tenant_by_meta_page`), dedupe em `webhook_events`, Graph com credencial do tenant, `LeadsService.upsertFromLead` (não duplica contato), assinatura HMAC do corpo cru. *Aceite:* webhook roteia para o tenant certo; sem credencial, registra e **não inventa** contato. ✅
+
+**Saldo:** 61 testes verdes (era 40) · migration `db/009` · `db/002` estendido (4 tabelas novas + roteamento Meta).
+
+---
+
+## Sprint 0 — Desbloqueio e gating por credencial  *(concluída 2026-07-16 — ver [[Sprint]])*
+Contrato: [[Brief-Finalizacao]] §2. Critério da sprint: **só falta plugar credencial, nunca escrever código.**
+
+- [x] **S0-1** — `ConfigService` global (único leitor de env) + `ConfigRequiredException` 501 + fallback lexical do RAG (`db/007`). *Aceite:* canário com `.env` sem terceiros sobe com 0 erros; externas → 501 `{code:config_required, provider, missing[]}`; RAG → BM25 com `warn`. ✅ ADR-0008.
+- [x] **S0-2** — `POST /v1/auth/invites/accept` + `/signup?invite=`. *Aceite:* aceite entra no **tenant do convite** com a role certa; token de uso único (2ª vez → 400); auditado. ✅ ADR-0009.
+- [x] **S0-3** — Entrega WhatsApp gated (mensagem **persiste** + `config_required`) + UI "Configurar {provider}" (`ApiError`/`ConfigRequired`) + roteamento real instância→tenant do webhook (`db/008`, `SECURITY DEFINER`). *Aceite:* sem credencial → salva e mostra as vars que faltam. ✅
+- [x] **S0-4** — `GET /v1/crm/search?q=` + ⌘K sobre dados reais (fecha [[Bugs|BUG-004]]). *Aceite:* "mar" acha contato/negócio/conversa reais; RLS isola. ✅
+- [x] **S0-5** — `AuditInterceptor` global (toda mutação autenticada) + `@SkipAudit()` para quem já audita; `GET/POST /v1/settings/notifications` derivadas do estado real + sino real. *Aceite:* `contacts.create` aparece em Auditoria; sino lista não lidas e zera o badge. ✅
+- [x] **S0-doc** — `docs/ENV.md` (fonte única: provedor · vars · onde obter · o que acontece sem) + `apps/api/.env.example` completo. ✅
+
+**Saldo:** 40 testes verdes (era 33) · migrations `db/007`, `db/008` · `db/002` estendido com o roteamento do STEVO.
+
+---
+
 ## F0 — Fundação
 Critério de sucesso da fase (PRD §16): **conta criada e isolada por RLS; deploy automatizado; design system publicado; vault Obsidian completo. Teste automatizado prova que tenant A não lê dado do tenant B.**
 

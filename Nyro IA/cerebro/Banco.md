@@ -63,6 +63,35 @@ audit_logs(id, tenant_id, actor, acao, payload, ts)
 ## 2.2 Integrações de anúncios (Sprint A — `db/005_integrations_schema.sql`)
 7 tabelas, todas `tenant_id` + RLS + isolamento (`002`): `integrations` (credencial OAuth **cifrada** AES-256-GCM em `credentials_encrypted`), `ad_accounts`, `ad_campaigns`, `ad_sets`, `ad_creatives`, `ad_insights` (**particionada por `date`** RANGE + partição default; unique `(tenant_id,provider,level,external_ref_id,date)`), `ad_sync_runs`. Grants `orvyn_app`/`orvyn_service`. Ver ADR-0007. ✅
 
+## 2.3 Roteamento de webhook sem tenant (`db/008`, `db/009`)
+Webhook público chega **sem tenant** e a app roda como `orvyn_app` (NOBYPASSRLS): um SELECT direto devolveria 0 linhas. Duas funções **SECURITY DEFINER** (owner `orvyn_service`) expõem **somente o `tenant_id` de roteamento** — nenhum dado de negócio atravessa, e logo depois a app entra em `withTenant()` e tudo volta para a RLS:
+- `resolve_tenant_by_stevo_instance(text)` — via `integrations(provider='stevo', external_business_id=instância, status='connected')`, com unique index parcial garantindo instância→1 tenant.
+- `resolve_tenant_by_meta_page(text)` — via `meta_pages(page_id UNIQUE)`, populada no OAuth (`listPages`).
+Ambas cobertas pelo teste `002` (roteia certo **e** a linha do outro tenant continua invisível). Ver ADR-0008 e ADR-0010.
+
+## 2.4 CRM F2 (Sprint D1 — `db/009_crm_f2.sql`)
+Todas com `tenant_id NOT NULL` + RLS + FORCE + policy `tenant_rw` + grants `orvyn_app`/`orvyn_service`; isolamento no `002`. ✅
+- `companies(id, tenant_id, nome, dominio, telefone, endereco, segmento, tamanho, site, campos_custom)` — unique `(tenant_id, lower(nome))`: não duplica conta dentro do tenant.
+- `tasks(..., status aberta|concluida, prioridade baixa|media|alta, due_at, contact_id, deal_id, company_id, assignee_id, completed_at)` — CHECK em status/prioridade; índice parcial `(tenant_id, due_at) WHERE status='aberta'` (a fila do dia).
+- `notes(..., corpo, contact_id, deal_id, company_id, author_id, author_nome)` — `author_nome` é **snapshot**: a nota continua legível se o autor sair do tenant.
+- `meta_pages(page_id UNIQUE, tenant_id, integration_id)` — roteamento de Lead Ads (§2.3).
+- `contacts` +`company_id` (SET NULL: excluir empresa não apaga pessoa) · `activities` +`contact_id`/`deal_id` (timeline do 360).
+- **Paginação:** índice `(tenant_id, created_at DESC, id DESC)`. O cursor é resolvido pelo **Prisma no banco** — comparar timestamp serializado em JS perde os microssegundos do `timestamptz(6)` e derruba lotes inteiros ([[Bugs|BUG-009]]).
+
+## 2.5 Configurações avançadas — Tags + Private Integrations ([[Arquitetura|ADR-0023]] · `db/018`, `db/019`)
+Ambas com `tenant_id NOT NULL` + RLS + FORCE + policy `tenant_rw` + grants `orvyn_app`/`orvyn_service`; isolamento em `scripts/test-isolation-api-keys.mjs`. ✅
+- `crm_tags(id, tenant_id, name, color, descricao, usos, created_at)` — catálogo canônico de tags (nome+cor); unique `(tenant_id, lower(name))`. Contatos referenciam por **nome** (`contacts.tags TEXT[]`), acoplamento frouxo.
+- `api_keys(id, tenant_id, name, key_prefix, key_hash UNIQUE, scopes, created_by, last_used_at, revoked_at, created_at)` — chaves de API do tenant. Guardamos só `key_hash = sha256(chave)`; a chave em claro só existe na resposta da criação.
+- **Auth cross-tenant controlada:** função `auth_lookup_api_key(hash)` `SECURITY DEFINER` (dona `orvyn_service`, BYPASSRLS) devolve **só** `(tenant_id, id)` da chave ativa e carimba `last_used_at`. É o único caminho que lê `api_keys` sem contexto de tenant — o CRUD passa pela `tenant_rw`. Revoke = `revoked_at` (soft).
+
+## 2.6 Financeiro — cobranças ([[Arquitetura|ADR-0025]] · `db/020`)
+`tenant_id NOT NULL` + RLS + FORCE + policy `tenant_rw` + grants; isolamento no `scripts/test-isolation-api-keys.mjs`. ✅
+- `financeiro_cobrancas(id, tenant_id, contact_id→SET NULL, deal_id→SET NULL, descricao, valor_centavos CHECK>=0, moeda, status CHECK(rascunho|enviada|paga|vencida|cancelada), vencimento, pago_em, stripe_payment_intent, stripe_checkout_url, created_by, created_at, updated_at)`. Valores sempre em **centavos** (inteiro). Índices: `(tenant_id, created_at DESC)`, `(tenant_id, contact_id)`, parcial de vencidas. "vencida" é derivada em app (não persistida).
+
+## 2.7 Agenda — compromissos ([[Arquitetura|ADR-0026]] · `db/021`)
+`tenant_id NOT NULL` + RLS + FORCE + policy `tenant_rw` + grants; isolamento no `scripts/test-isolation-api-keys.mjs`. ✅
+- `agenda_compromissos(id, tenant_id, contact_id→SET NULL, titulo, inicio, fim, status CHECK(agendado|confirmado|concluido|cancelado|nao_compareceu), local, notas, google_event_id, created_by, created_at, updated_at, CHECK(fim>inicio))`. Índices `(tenant_id, inicio)` e `(tenant_id, contact_id)`. Choque de horário barrado em app (409); horários livres calculados sem API externa.
+
 ## 3. Escopo de F0 — schema inicial
 
 F0 entrega **apenas** (ver [[Sprint]] / [[Tasks]] F0-08):

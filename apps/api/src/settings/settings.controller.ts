@@ -1,7 +1,8 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsEmail, IsIn, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 import { SettingsService } from './settings.service';
 import { CurrentUser, TenantId, type AuthUser } from '../auth/decorators';
+import { SkipAudit } from '../common/audit.interceptor';
 
 class UpdateProfileDto {
   @IsOptional() @IsString() @MaxLength(160) nome?: string;
@@ -24,6 +25,9 @@ class RoleDto {
   @IsIn(['owner', 'admin', 'member', 'viewer']) role!: string;
 }
 
+/** Cada método do SettingsService já grava seu próprio audit log (mais rico
+ *  que o genérico do interceptor) — por isso a classe inteira o dispensa. */
+@SkipAudit()
 @Controller('settings')
 export class SettingsController {
   constructor(private readonly settings: SettingsService) {}
@@ -66,5 +70,16 @@ export class SettingsController {
   @Get('audit')
   audit(@TenantId() t: string, @Query('limit') limit?: string) {
     return this.settings.auditLogs(t, Number(limit) || 100);
+  }
+
+  /** Sino: derivado do estado real (não lidas + integrações quebradas). */
+  @Get('notifications')
+  notifications(@TenantId() t: string, @CurrentUser() u: AuthUser) {
+    return this.settings.notifications(t, u.identityId);
+  }
+  @Post('notifications/read')
+  @HttpCode(200)
+  readNotifications(@TenantId() t: string, @CurrentUser() u: AuthUser) {
+    return this.settings.markNotificationsRead(t, u.identityId);
   }
 }

@@ -3,45 +3,58 @@
 @tailwind utilities;
 
 :root {
-  --brand: #7b2fbe;
-  --brand-deep: #5b1e9e;
-  --brand-bright: #9b4de0;
-  --lilac: #c9a0f0;
+  /* ORVYN OS — Design System v3 (rebrand). Light premium, roxo #7B2EFF, grid 8pt,
+     raio 24. Tudo no app deriva daqui: mudar um token re-veste o sistema inteiro. */
+  /* Brand book 001 — Amethyst #7B2EFF · Purple Glow #A855F7 · Highlight #C084FC */
+  --brand: #7b2eff;          /* primária — ação, foco, estado ativo (Amethyst) */
+  --brand-deep: #6a1fe6;     /* hover / pressed */
+  --brand-bright: #a855f7;   /* auxiliar / gradiente (Purple Glow) */
+  --lilac: #c084fc;          /* highlight */
 
-  /* off-white / cream light theme (personalizável via --bg-light) */
-  --bg: var(--bg-light, #f6f4ef);
+  --bg: var(--bg-light, #f8f6f2);   /* off-white quente (não cinza, não lavanda) */
   --surface: #ffffff;
-  --surface-2: #fbfaf7;
-  --surface-3: #f0ede6;
-  --border: #e7e2d8;
-  --text: #211b2b;
-  --muted: #6d6678;
-  --ring: rgba(123, 47, 190, 0.35);
+  --surface-2: #faf9f6;
+  --surface-3: #f2f0ea;
+  --border: rgba(17, 17, 17, 0.06); /* hairline discreta */
+  --text: #111111;
+  --muted: #6b7280;
+  --ring: rgba(123, 46, 255, 0.32);
+  --glow: rgba(123, 46, 255, 0.18);
+
+  /* Tokens de material e movimento (Apple-like: silêncio, precisão, respiração) */
+  --radius: 24px;
+  --radius-sm: 16px;
+  --radius-xs: 12px;
+  --blur: 30px;
+  --dur: 180ms;
+  --acr-op: 62%;   /* leitoso do acrílico: ↓ = mais transparente, ↑ = mais sólido */
+
+  --cristal-brilho: rgba(255, 255, 255, 0.7);
+  --cristal-refracao: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.92) 0%,
+    color-mix(in srgb, var(--brand-bright) 38%, transparent) 30%,
+    rgba(255, 255, 255, 0.82) 55%,
+    color-mix(in srgb, var(--lilac) 52%, transparent) 78%,
+    rgba(255, 255, 255, 0.88) 100%
+  );
+  --cristal-sombra: 0 20px 50px -30px var(--glow);
 }
 
+/* Dark deixa de ser automático: é opt-in pelo seletor. A marca é light. */
 :root[data-theme='dark'],
 .dark {
-  --bg: var(--bg-dark, #110d19);
-  --surface: #191322;
-  --surface-2: #20182e;
-  --surface-3: #271d38;
-  --border: #322746;
-  --text: #ece7f4;
-  --muted: #a99fbd;
-  --ring: rgba(155, 77, 224, 0.45);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --bg: var(--bg-dark, #110d19);
-    --surface: #191322;
-    --surface-2: #20182e;
-    --surface-3: #271d38;
-    --border: #322746;
-    --text: #ece7f4;
-    --muted: #a99fbd;
-    --ring: rgba(155, 77, 224, 0.45);
-  }
+  --bg: var(--bg-dark, #0d0b12);
+  --surface: #17141f;
+  --surface-2: #1d1926;
+  --surface-3: #241f30;
+  --border: rgba(255, 255, 255, 0.08);
+  --text: #f4f2fa;
+  --muted: #9a94a8;
+  --ring: rgba(166, 107, 255, 0.45);
+  --glow: rgba(166, 107, 255, 0.22);
+  --cristal-brilho: rgba(255, 255, 255, 0.12);
+  --cristal-sombra: 0 26px 64px -30px rgba(0, 0, 0, 0.85);
 }
 
 * {
@@ -56,123 +69,315 @@ body {
   font-weight: 430; /* base; elementos maiores ficam mais grossos, menores mais finos */
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  /* fundo com profundidade (luz roxa suave + vinheta) */
-  background-color: var(--bg);
-  background-image:
-    radial-gradient(1200px 700px at 12% -8%, color-mix(in srgb, var(--brand) 12%, transparent), transparent 60%),
-    radial-gradient(1000px 800px at 110% 10%, color-mix(in srgb, var(--brand-bright) 9%, transparent), transparent 55%);
-  background-attachment: fixed;
 }
 
-/* escala tipográfica: maior = mais grosso, menor = mais fino */
-h1 { font-weight: 800; letter-spacing: -0.02em; }
-h2 { font-weight: 750; letter-spacing: -0.015em; }
-h3 { font-weight: 700; }
-.text-muted { font-weight: 380; }
-kbd, .cap, small { font-weight: 340; }
+/* Brand book 001 — TIPOGRAFIA: Título = SF Pro Display · Corpo = Inter · Legenda.
+   Nos Macs -apple-system resolve para SF Pro Display; fora dele cai no Inter. */
+:root {
+  --font-display: -apple-system, 'SF Pro Display', BlinkMacSystemFont, var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+h1, h2, h3, .font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.015em;
+}
+/* O `html` só carrega a cor-base (fallback). O visual é do `.studio-bg` — uma
+   camada `fixed -z-10`. O `body` fica transparente para o estúdio aparecer sob
+   o conteúdo. Sem feixe diagonal nem gradientes concorrentes: o estúdio é calmo. */
+html {
+  background-color: var(--bg);
+}
+body {
+  background: transparent;
+}
+
+/* ---------------------------------------------------------------------
+   LUZ AMBIENTE (fundo)
+   Off-white quente com um glow roxo difuso vindo das quinas — como uma sala
+   de estúdio iluminada pela flor cristalizada. Sem movimento, sem ruído: o
+   "premium" vem da luz. `fixed` para não escorrer no scroll.
+   --------------------------------------------------------------------- */
+.studio-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -10;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 50% at 85% 0%, color-mix(in srgb, var(--brand-bright) 10%, transparent), transparent 68%),
+    radial-gradient(55% 48% at 8% 100%, color-mix(in srgb, var(--lilac) 12%, transparent), transparent 70%),
+    radial-gradient(120% 80% at 50% -20%, #ffffff, transparent 60%),
+    linear-gradient(180deg, #f4f1ec 0%, #f8f6f2 55%, #f2efe9 100%);
+}
+:root[data-theme='dark'] .studio-bg,
+.dark .studio-bg {
+  background:
+    radial-gradient(60% 50% at 85% 0%, color-mix(in srgb, var(--brand-bright) 18%, transparent), transparent 68%),
+    radial-gradient(55% 48% at 8% 100%, color-mix(in srgb, var(--brand-deep) 26%, transparent), transparent 70%),
+    radial-gradient(120% 80% at 50% -20%, rgba(255, 255, 255, 0.05), transparent 60%),
+    linear-gradient(180deg, #0b0910 0%, #0d0b12 55%, #08060c 100%);
+}
+
+/* Plano de fundo próprio do cliente: a imagem cobre a tela; um scrim leve na cor
+   do tema mantém o texto legível e amarra a imagem à paleta. Vence o estúdio. */
+:root[data-bg-image] .studio-bg {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--bg) 62%, transparent), color-mix(in srgb, var(--bg) 74%, transparent)),
+    var(--bg-image);
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
+}
+:root[data-theme='dark'][data-bg-image] .studio-bg,
+.dark[data-bg-image] .studio-bg {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--bg) 68%, transparent), color-mix(in srgb, var(--bg) 82%, transparent)),
+    var(--bg-image);
+}
+
+/* Mini-estúdio para a prévia em Configurações (espelha o `.studio-bg`). */
+.studio-preview {
+  background:
+    radial-gradient(70% 60% at 92% 0%, color-mix(in srgb, var(--brand-bright) 12%, transparent), transparent 70%),
+    radial-gradient(120% 90% at 50% 128%, #ffffff 0%, transparent 55%),
+    linear-gradient(180deg, #f4f1ec 0%, #f8f6f2 60%, #f2efe9 100%);
+}
+:root[data-theme='dark'] .studio-preview,
+.dark .studio-preview {
+  background:
+    radial-gradient(70% 60% at 92% 0%, color-mix(in srgb, var(--brand-bright) 18%, transparent), transparent 70%),
+    radial-gradient(120% 90% at 50% 128%, rgba(255, 255, 255, 0.05) 0%, transparent 55%),
+    linear-gradient(180deg, #0c0a12 0%, #0d0b12 60%, #08060c 100%);
+}
+
+/* Tipografia: hierarquia por escala, peso contido (Apple/Linear — nunca pesado). */
+h1 { font-weight: 680; letter-spacing: -0.021em; }
+h2 { font-weight: 650; letter-spacing: -0.017em; }
+h3 { font-weight: 620; letter-spacing: -0.012em; }
+.text-muted { font-weight: 420; }
+kbd, .cap, small { font-weight: 420; }
 
 ::selection {
-  background: color-mix(in srgb, var(--brand) 28%, transparent);
+  background: color-mix(in srgb, var(--brand) 24%, transparent);
 }
 
 :focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px var(--ring);
-  border-radius: 0.6rem;
+  border-radius: 0.7rem;
 }
 
 /* Reusable primitives ------------------------------------------------ */
 .btn {
+  position: relative;
+  overflow: hidden;                 /* recorta o brilho que varre */
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
   font-weight: 600;
   font-size: 0.9rem;
-  border-radius: 0.8rem;
-  padding: 0.6rem 1rem;
-  transition: all 0.16s ease;
+  border-radius: var(--radius-sm);
+  padding: 0.68rem 1.15rem;
+  /* movimento fluido: elástico no transform, suave no resto */
+  transition: background var(--dur) ease, box-shadow var(--dur) ease,
+    transform 0.24s cubic-bezier(0.34, 1.4, 0.5, 1), border-color var(--dur) ease;
   cursor: pointer;
   white-space: nowrap;
-  border: 1px solid transparent;
+  border: 1px solid var(--border);  /* borda em TODO botão */
   user-select: none;
 }
-.btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
+/* Liquid chrome: uma lâmina de luz cruza o botão no hover. */
+.btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.28) 48%, transparent 66%);
+  transform: translateX(-130%);
+  transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+  pointer-events: none;
 }
+.btn:hover:not(:disabled)::after { transform: translateX(130%); }
+.btn:active:not(:disabled) { transform: scale(0.975); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Primário = metal líquido roxo: corpo em gradiente, gloss no topo, aresta clara. */
 .btn-primary {
-  background: var(--brand);
   color: #fff;
-  box-shadow: 0 8px 20px -10px rgba(123, 47, 190, 0.7);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0) 44%),
+    linear-gradient(180deg, var(--brand-bright), var(--brand) 46%, var(--brand-deep));
+  border-color: color-mix(in srgb, var(--brand-bright) 60%, rgba(255, 255, 255, 0.5));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.12),
+    0 10px 26px -12px var(--glow),
+    0 1px 2px rgba(17, 17, 17, 0.08);
 }
 .btn-primary:hover:not(:disabled) {
-  background: var(--brand-deep);
+  transform: translateY(-1.5px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.12),
+    0 16px 36px -12px var(--glow),
+    0 1px 2px rgba(17, 17, 17, 0.1);
 }
+/* Vidro fosco premium com aresta de luz. */
 .btn-ghost {
-  background: transparent;
+  background: color-mix(in srgb, var(--surface) 58%, transparent);
   color: var(--text);
   border-color: var(--border);
+  backdrop-filter: blur(var(--blur)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(140%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 .btn-ghost:hover:not(:disabled) {
-  background: var(--surface-3);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  border-color: color-mix(in srgb, var(--brand) 26%, var(--border));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 8px 22px -14px var(--glow);
+  transform: translateY(-1px);
 }
 .btn-soft {
-  background: color-mix(in srgb, var(--brand) 12%, transparent);
+  background: color-mix(in srgb, var(--brand) 10%, transparent);
   color: var(--brand);
+  border-color: color-mix(in srgb, var(--brand) 20%, transparent);
 }
 .btn-soft:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--brand) 20%, transparent);
+  background: color-mix(in srgb, var(--brand) 16%, transparent);
+  border-color: color-mix(in srgb, var(--brand) 34%, transparent);
+  box-shadow: 0 8px 22px -14px var(--glow);
+  transform: translateY(-1px);
+}
+
+/* ---- Material & movimento: frost · liquid chrome · fluido ---- */
+
+/* Frost glass forte — painéis, modais, sobreposições. */
+.frost {
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  backdrop-filter: blur(var(--blur)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), var(--cristal-sombra);
+}
+:root[data-theme='dark'] .frost,
+.dark .frost {
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), var(--cristal-sombra);
+}
+
+/* Liquid chrome — superfície metálica com um brilho girando devagar. */
+.liquid-chrome {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), transparent 42%),
+    linear-gradient(135deg, color-mix(in srgb, var(--brand-bright) 26%, var(--surface)), var(--surface) 58%, color-mix(in srgb, var(--brand) 20%, var(--surface)));
+}
+.liquid-chrome::before {
+  content: '';
+  position: absolute;
+  inset: -60%;
+  background: conic-gradient(from 0deg, transparent 0deg, rgba(255, 255, 255, 0.16) 38deg, transparent 90deg);
+  animation: chrome-spin 9s linear infinite;
+  pointer-events: none;
+}
+@keyframes chrome-spin { to { transform: rotate(1turn); } }
+
+/* Elevação fluida no hover (para divs/cards interativos). */
+.fluid { transition: transform 0.24s cubic-bezier(0.34, 1.4, 0.5, 1), box-shadow 0.24s ease; }
+.fluid:hover { transform: translateY(-2px); }
+
+/* Menos movimento quando o sistema pede. */
+@media (prefers-reduced-motion: reduce) {
+  .btn::after,
+  .liquid-chrome::before { animation: none !important; transition: none !important; transform: none !important; }
+  .btn:hover:not(:disabled),
+  .btn-primary:hover:not(:disabled),
+  .btn-ghost:hover:not(:disabled),
+  .btn-soft:hover:not(:disabled),
+  .card:hover,
+  .fluid:hover,
+  .depth-hover:hover { transform: none !important; }
 }
 
 .input {
   width: 100%;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 0.8rem;
-  padding: 0.65rem 0.85rem;
-  font-size: 0.92rem;
+  border-radius: var(--radius-sm);
+  padding: 0.8rem 1rem;
+  font-size: 0.95rem;
   color: var(--text);
-  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+  transition: border-color var(--dur) ease, box-shadow var(--dur) ease, background var(--dur) ease;
 }
 .input::placeholder {
   color: var(--muted);
 }
 .input:focus {
-  border-color: var(--brand);
-  box-shadow: 0 0 0 3px var(--ring);
+  border-color: color-mix(in srgb, var(--brand) 55%, var(--border));
+  box-shadow: 0 0 0 4px var(--glow);
+  background: var(--surface);
   outline: none;
 }
 
+/* Card ACRÍLICO: vidro fosco translúcido que "gela" a luz ambiente do estúdio.
+   Rim light na borda + brilho interno no topo (a assinatura do acrílico), raio 24.
+   `--acr-op` controla o leitoso: menor = mais transparente. */
 .card {
   position: relative;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, transparent), color-mix(in srgb, var(--surface) 94%, var(--bg)));
-  border: 1px solid var(--border);
-  border-radius: 1.25rem;
+  background: color-mix(in srgb, var(--surface) var(--acr-op, 62%), transparent);
+  backdrop-filter: blur(var(--blur)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: var(--radius);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    0 1px 2px rgba(40, 15, 63, 0.06),
-    0 12px 28px -18px rgba(123, 47, 190, 0.35);
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 1px 2px rgba(17, 17, 17, 0.03),
+    0 16px 44px -30px var(--glow);
+  transition: box-shadow var(--dur) ease, transform var(--dur) ease;
+}
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 1px 2px rgba(17, 17, 17, 0.04),
+    0 24px 54px -28px var(--glow);
 }
 :root[data-theme='dark'] .card,
 .dark .card {
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  border-color: rgba(255, 255, 255, 0.09);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 1px 2px rgba(0, 0, 0, 0.4),
-    0 16px 36px -20px rgba(0, 0, 0, 0.7);
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    0 22px 52px -30px rgba(0, 0, 0, 0.6);
+}
+/* Navegador sem backdrop-filter: superfície quase sólida (nada quebra). */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .card { background: color-mix(in srgb, var(--surface) 92%, var(--bg)); }
 }
 
 /* Vidro (frosted glass) — sidebar / ilha dinâmica */
+/* `@layer components`: sem isto, `position: relative` daqui GANHA de `fixed`/
+   `absolute` do Tailwind (mesma especificidade, e este arquivo vem depois das
+   utilities). Foi exatamente o que quebrou o chat da Nyro e o menu do topo
+   quando o cristal chegou. Dentro da layer, utility sempre vence — que é o que
+   quem escreve `glass fixed` espera. */
+@layer components {
+  .glass {
+    position: relative;
+  }
+  .crystal-edge {
+    position: relative;
+  }
+}
+
 .glass {
-  background: color-mix(in srgb, var(--surface) 68%, transparent);
-  backdrop-filter: blur(22px) saturate(175%);
-  -webkit-backdrop-filter: blur(22px) saturate(175%);
-  border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  backdrop-filter: blur(var(--blur)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(140%);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.45),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-    0 22px 55px -26px rgba(40, 15, 63, 0.5);
+    inset 0 1px 0 var(--cristal-brilho),
+    var(--cristal-sombra);
 }
 :root[data-theme='dark'] .glass,
 .dark .glass {
@@ -183,14 +388,80 @@ kbd, .cap, small { font-weight: 340; }
     0 26px 64px -28px rgba(0, 0, 0, 0.9);
 }
 
-/* Profundidade 3D no hover (leve tilt + elevação) */
+/* ---------------------------------------------------------------------
+   IDENTIDADE CRISTAL
+   O vidro (.glass) é o material base; o cristal acrescenta o que faz um
+   quartzo parecer quartzo: aresta que refrata luz e brilho especular.
+   --------------------------------------------------------------------- */
+
+/* Aresta refratada: 1px de gradiente prismático na borda, feito com máscara
+   (o `border-image` não acompanha border-radius). O `position: relative` está
+   em @layer components, lá em cima, para não vencer utility de posição. */
+.crystal-edge::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--cristal-refracao);
+  /* só a moldura fica visível: o miolo é recortado */
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0.22;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+.crystal-edge:hover::before {
+  opacity: 0.42;
+}
+
+/* Logo: sem cartão, sem moldura — só o cristal, com a luz que ele emite.
+   O halo é `drop-shadow` (segue o recorte do PNG, ao contrário de box-shadow,
+   que desenharia o quadrado que o usuário pediu para tirar). */
+.crystal-logo {
+  transition: transform 0.28s cubic-bezier(0.2, 0.7, 0.2, 1), filter 0.28s ease;
+  filter: drop-shadow(0 4px 12px color-mix(in srgb, var(--brand-deep) 26%, transparent));
+}
+.crystal-logo:hover {
+  transform: translateY(-1px) scale(1.03);
+  filter: drop-shadow(0 6px 16px color-mix(in srgb, var(--brand-deep) 36%, transparent));
+}
+.crystal-logo:active {
+  transform: translateY(0) scale(0.99);
+}
+
+/* Ilha: vidro que nasce ATRÁS da logo. Arredondada só à direita — canto do lado
+   esquerdo seria uma borda no meio do cristal.
+   A máscara apaga os 2.75rem da esquerda (justo o pedaço encoberto pela logo):
+   a flor tem cantos transparentes entre as pétalas, e sem isso a aresta da ilha
+   apareceria nesses vãos, denunciando o truque. */
+.crystal-island {
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-left: none;
+  box-shadow:
+    inset 0 1px 0 var(--cristal-brilho),
+    var(--cristal-sombra);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 2.75rem);
+  mask-image: linear-gradient(90deg, transparent 0, #000 2.75rem);
+}
+:root[data-theme='dark'] .crystal-island,
+.dark .crystal-island {
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  border-color: color-mix(in srgb, #ffffff 12%, transparent);
+}
+
+/* Elevação sutil no hover (sem tilt: o rotateX dava aquele ar "gimmick"). */
 .depth-hover {
   transition: transform 0.22s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.22s ease;
-  transform-style: preserve-3d;
 }
 .depth-hover:hover {
-  transform: translateY(-3px) perspective(700px) rotateX(2deg);
-  box-shadow: 0 26px 50px -22px rgba(123, 47, 190, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 18px 36px -24px rgba(20, 14, 32, 0.28);
 }
 
 .scrollbar-thin::-webkit-scrollbar {

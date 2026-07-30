@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, ReactNode } from 'react';
 
 export function cx(...c: (string | false | null | undefined)[]): string {
   return c.filter(Boolean).join(' ');
@@ -18,8 +18,8 @@ export function Button({
   );
 }
 
-export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cx('card', className)}>{children}</div>;
+export function Card({ className, children, ...rest }: { className?: string; children: ReactNode } & HTMLAttributes<HTMLDivElement>) {
+  return <div className={cx('card', className)} {...rest}>{children}</div>;
 }
 
 export function Badge({ children, tone = 'brand', className }: { children: ReactNode; tone?: 'brand' | 'green' | 'amber' | 'neutral'; className?: string }) {
@@ -42,7 +42,7 @@ export function Badge({ children, tone = 'brand', className }: { children: React
   );
 }
 
-const AV_COLORS = ['#7B2FBE', '#9B4DE0', '#5B1E9E', '#C0392B', '#2E86C1', '#1E8449', '#B7791F', '#8E44AD'];
+const AV_COLORS = ['#7B2EFF', '#A66BFF', '#6A1FE6', '#C0392B', '#2E86C1', '#1E8449', '#B7791F', '#8E44AD'];
 export function Avatar({ name, size = 36, src }: { name: string; size?: number; src?: string }) {
   const initials = name.split(' ').filter(Boolean).slice(0, 2).map((n) => n[0]?.toUpperCase()).join('');
   const color = AV_COLORS[[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % AV_COLORS.length];

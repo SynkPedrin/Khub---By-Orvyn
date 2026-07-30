@@ -4,7 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Badge, Button, Card } from '@/components/ui';
 import { Icon } from '@/components/icons';
+import { ConfigRequired } from '@/components/app/ConfigRequired';
+import { AdsSimulador } from '@/components/app/AdsSimulador';
 import { brl } from '@/lib/crm';
+import { ApiError } from '@/lib/api-error';
 import { ads, type AdsOverview, type Campaign, type Creative } from '@/lib/ads';
 
 const HEALTH: Record<string, 'green' | 'amber' | 'neutral'> = { ok: 'green', degraded: 'amber', down: 'amber', unknown: 'neutral' };
@@ -16,6 +19,7 @@ export default function AdsPage() {
   const [creatives, setCreatives] = useState<Creative[]>([]);
   const [sort, setSort] = useState<SortKey>('spend');
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [gated, setGated] = useState<{ provider: string; missing: string[] } | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = () => {
@@ -37,8 +41,10 @@ export default function AdsPage() {
     try {
       const { url } = await ads.authUrl('meta');
       window.location.href = url;
-    } catch {
-      setMsg({ kind: 'err', text: 'META_APP_ID / cripto não configurados no servidor. Configure para conectar.' });
+    } catch (e) {
+      const cr = e instanceof ApiError ? e.configRequired : null;
+      if (cr) { setGated(cr); setMsg(null); }
+      else setMsg({ kind: 'err', text: 'Não consegui iniciar a conexão com a Meta. Tente novamente.' });
     }
   };
 
@@ -51,7 +57,7 @@ export default function AdsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <Link href="/marketing" className="mb-1 inline-flex items-center gap-1 text-xs text-muted hover:text-brand">
-            <Icon name="chevronRight" size={13} className="rotate-180" /> Central de Marketing
+            <Icon name="chevronRight" size={13} className="rotate-180" /> Biblioteca
           </Link>
           <h1 className="text-xl font-extrabold tracking-tight text-fg">Anúncios · cross-plataforma</h1>
           <p className="text-sm text-muted">Meta hoje · TikTok e Google chegam no Sprint B.</p>
@@ -64,11 +70,16 @@ export default function AdsPage() {
         </div>
       </div>
 
+      {gated && <ConfigRequired provider={gated.provider} missing={gated.missing} />}
+
       {msg && (
         <div className={`rounded-xl px-4 py-2.5 text-sm ${msg.kind === 'ok' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'}`}>
           {msg.text}
         </div>
       )}
+
+      {/* Gerenciador funcional (simulação até a Meta conectar) */}
+      <AdsSimulador />
 
       {!loading && !connected && !ov?.totals.spend ? (
         <Card className="border-dashed p-10 text-center">

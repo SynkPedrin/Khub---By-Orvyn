@@ -132,7 +132,7 @@ A Nyro IA é o diferencial competitivo do Orvyn. Ela atua em **quatro papéis si
 - Dentro do workflow builder: 'descreva a automação' e a Nyro monta o fluxo.
 - Dentro dos dashboards: insights automáticos semanais e alertas de anomalia.
 
-> ⚠️ LACUNA: O PRD não define o conjunto fechado de tools da Nyro nem seus schemas Zod. Deriva-se para F3 — Nyro IA v1. Ver [[RegrasNegocio]] §Nyro.
+> ✅ **LACUNA FECHADA (Sprint F — ADR-0014):** o conjunto fechado de tools está em `apps/api/src/nyro/tools.ts`, com schema Zod por tool e um nível de sensibilidade (`leitura`/`escrita`/`sensivel`). São **14 tools**: 5 de leitura (RAG, funil, contatos, perfil, automações), 6 de escrita interna (criar/atualizar contato, tarefa, nota, oportunidade, memória) e 3 **sensíveis** que exigem aprovação humana (enviar mensagem, mover etapa, ligar/desligar automação). Tool fora do catálogo não existe — o executor recusa. Os 4 sub-agentes (`agentes.ts`) enxergam só as tools do papel deles.
 
 ---
 
@@ -170,7 +170,12 @@ Workspace visual de automação no estilo **n8n + GoHighLevel**: canvas drag-and
 | **IA (Nyro)** | Qualificar lead, gerar resposta, classificar intenção, resumir conversa, decidir próximo passo, gerar copy personalizada |
 | **Controle** | Esperar (tempo/evento), objetivo atingido (goal), encerrar, loop limitado |
 
-> ⚠️ LACUNA: O PRD lista categorias de nós mas não fecha os **15 nós essenciais** de F4. A melhoria proposta #4 pede congelar em 15 nós; o conjunto exato deve ser definido em F4 e registrado como ADR.
+> ✅ **LACUNA FECHADA (Sprint E — ADR-0012, emendado pelo ADR-0013):** os nós estão congelados em `apps/api/src/automations/catalogo.ts` (fonte única: API e canvas leem dali). Hoje são **21**:
+> **Gatilhos (6):** contato criado · tag adicionada · oportunidade criada · mudou de etapa · mensagem recebida · **webhook recebido**.
+> **Controle (5):** esperar · **esperar resposta** (ramos Respondeu/Não respondeu) · condição If/Else (AND/OR/NONE) · ir para · **encerrar**.
+> **Ações (10):** enviar SMS · adicionar tag · remover tag · atualizar contato · criar oportunidade · mover etapa · criar tarefa · **adicionar nota** · **acionar outro fluxo** · enviar webhook.
+> **Configurações do fluxo** (fora do canvas): reentrada, parar no reply, janela de envio + timezone.
+> **Fora do catálogo por não existirem no produto:** Appointments (`/agenda` é stub), Payments (Sprint C), Google Ads (Sprint B), Courses/Affiliate/IVR/Communities/Certificates/Ecommerce/Custom Objects. Nó de IA entra no Sprint F, atrás de `ANTHROPIC_API_KEY`. **Nó novo exige atualizar o catálogo E este PRD no mesmo PR.**
 
 ### 7.2 Engine de execução
 - **Execução orientada a eventos:** gatilhos publicam eventos em fila (**Redis + BullMQ**); workers processam cada passo de forma **idempotente**.

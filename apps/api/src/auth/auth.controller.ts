@@ -1,6 +1,8 @@
-import { Body, Controller, Get, Headers, HttpCode, NotImplementedException, Post } from '@nestjs/common';
-import { IsEmail, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { BadRequestException, Body, Controller, Get, Headers, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { IsEmail, IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { AuthService } from './auth.service';
+import { OAuthService } from './oauth.service';
+import { ehProvider, type OAuthProvider } from './oauth.providers';
 import { CurrentUser, Public, type AuthUser } from './decorators';
 
 class SignupDto {
@@ -17,10 +19,22 @@ class LoginDto {
 class RefreshDto {
   @IsString() refresh!: string;
 }
+class AcceptInviteDto {
+  @IsString() @MinLength(10) token!: string;
+  @IsOptional() @IsString() @MaxLength(160) nome?: string;
+  @IsOptional() @IsString() @MinLength(8) @MaxLength(200) password?: string;
+}
+class OAuthCallbackDto {
+  @IsIn(['google', 'github']) provider!: OAuthProvider;
+  @IsString() @MinLength(1) @MaxLength(2000) code!: string;
+}
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly oauth: OAuthService,
+  ) {}
 
   @Public()
   @Post('signup')
@@ -50,15 +64,44 @@ export class AuthController {
     return { ok: true };
   }
 
+  /** Aceite de convite — público (o token do link é a credencial). */
+  @Public()
+  @Post('invites/accept')
+  @HttpCode(200)
+  acceptInvite(@Body() dto: AcceptInviteDto, @Headers('user-agent') ua?: string) {
+    return this.auth.acceptInvite(dto.token, dto.nome, dto.password, ua);
+  }
+
   @Get('me')
   me(@CurrentUser() user: AuthUser) {
     return this.auth.me(user.identityId, user.tenantId);
   }
 
+  /**
+   * Ticket de WebSocket (D2/ADR-0011): o access token fica em cookie httpOnly,
+   * então o JS não pode usá-lo no handshake. Troca-se por um ticket de 60s que
+   * só serve para abrir socket.
+   */
+  @Post('ws-ticket')
+  @HttpCode(200)
+  wsTicket(@CurrentUser() user: AuthUser) {
+    return { ticket: this.auth.wsTicket(user), expiraEmSegundos: 60 };
+  }
+
+  /** URL de consentimento do provedor. Gated: 501 config_required sem as chaves. */
+  @Public()
+  @Get('oauth/:provider/url')
+  oauthUrl(@Param('provider') provider: string, @Query('state') state?: string) {
+    if (!ehProvider(provider)) throw new BadRequestException('provedor inválido');
+    if (!state || state.length < 8) throw new BadRequestException('state ausente');
+    return { url: this.oauth.authUrl(provider, state) };
+  }
+
+  /** Callback: troca o code por sessão (cria a conta no 1º acesso). */
   @Public()
   @Post('oauth/callback')
-  oauthCallback() {
-    // OAuth plugável: sem credenciais, falha EXPLÍCITA (nunca mock silencioso).
-    throw new NotImplementedException('OAuth não configurado. Defina GOOGLE_CLIENT_ID/SECRET, GITHUB_ID/SECRET e AUTH_SECRET para habilitar Google/GitHub.');
+  @HttpCode(200)
+  oauthCallback(@Body() dto: OAuthCallbackDto, @Headers('user-agent') ua?: string) {
+    return this.oauth.callback(dto.provider, dto.code, ua);
   }
 }

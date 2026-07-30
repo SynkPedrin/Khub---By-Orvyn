@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { ConfigService } from '../config/config.service';
 
 /**
  * Cifra credenciais OAuth por tenant em repouso (AES-256-GCM).
@@ -7,12 +8,14 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
  */
 @Injectable()
 export class CryptoService {
+  constructor(private readonly config: ConfigService) {}
+
   configured(): boolean {
-    return !!process.env.INTEGRATIONS_ENCRYPTION_KEY;
+    return this.config.isConfigured('integrations_crypto');
   }
 
   private key(): Buffer {
-    const k = process.env.INTEGRATIONS_ENCRYPTION_KEY;
+    const k = this.config.get('INTEGRATIONS_ENCRYPTION_KEY');
     if (!k) throw new Error('INTEGRATIONS_ENCRYPTION_KEY ausente: necessária para conectar integrações.');
     const buf = Buffer.from(k, 'base64');
     if (buf.length !== 32) throw new Error('INTEGRATIONS_ENCRYPTION_KEY deve ter 32 bytes (base64).');

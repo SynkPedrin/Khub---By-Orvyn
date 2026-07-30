@@ -1,10 +1,11 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from './crypto.service';
-import { ADS_CONNECTORS, type AdsConnector } from './ads-connector';
+import { ConfigService } from '../config/config.service';
+import { ADS_CONNECTORS, type AdsConnector, type StoredCredentials } from './ads-connector';
 
 interface StatePayload {
   tenantId: string;
@@ -15,9 +16,12 @@ interface StatePayload {
 
 @Injectable()
 export class IntegrationsService {
+  private readonly log = new Logger('Integrations');
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
+    private readonly config: ConfigService,
     @Inject(ADS_CONNECTORS) private readonly connectors: Record<string, AdsConnector>,
     @InjectQueue('ads-sync') private readonly queue: Queue,
   ) {}
@@ -47,12 +51,11 @@ export class IntegrationsService {
   }
 
   getAuthUrl(tenantId: string, provider: string): { url: string } {
-    if (provider === 'meta' && !process.env.META_APP_ID) {
-      throw new BadRequestException('META_APP_ID não configurado no servidor.');
-    }
-    if (!this.crypto.configured()) {
-      throw new BadRequestException('INTEGRATIONS_ENCRYPTION_KEY não configurada — não é possível guardar credenciais com segurança.');
-    }
+    // Gating (Brief §2): 501 config_required com as variáveis que faltam.
+    if (provider === 'meta') this.config.require('meta');
+    if (provider === 'google') this.config.require('google_ads');
+    if (provider === 'tiktok') this.config.require('tiktok');
+    this.config.require('integrations_crypto');
     const state = this.signState({ tenantId, provider, nonce: randomBytes(8).toString('hex'), ts: Date.now() });
     return { url: this.connector(provider).buildAuthUrl(tenantId, state) };
   }
@@ -89,8 +92,33 @@ export class IntegrationsService {
       return id;
     });
 
+    await this.registrarPaginas(p.tenantId, integrationId, connector, cred);
     await this.enqueueSync(p.tenantId, integrationId);
     return { tenantId: p.tenantId };
+  }
+
+  /**
+   * Guarda as páginas do cliente (D1): é o que permite o webhook de Lead Ads,
+   * que chega sem tenant, descobrir o dono via `resolve_tenant_by_meta_page`.
+   * Falha aqui não derruba a conexão — a integração já está válida.
+   */
+  private async registrarPaginas(tenantId: string, integrationId: string, connector: AdsConnector, cred: StoredCredentials): Promise<void> {
+    if (!connector.listPages) return;
+    try {
+      const pages = await connector.listPages(cred);
+      if (!pages.length) return;
+      await this.prisma.withTenant(tenantId, async (tx) => {
+        for (const p of pages) {
+          // page_id é único global: se a página trocar de conta, o dono mais recente vence
+          await tx.$executeRaw`
+            INSERT INTO meta_pages (tenant_id, integration_id, page_id, page_nome)
+            VALUES (${tenantId}::uuid, ${integrationId}::uuid, ${p.pageId}, ${p.nome})
+            ON CONFLICT (page_id) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, integration_id = EXCLUDED.integration_id, page_nome = EXCLUDED.page_nome`;
+        }
+      });
+    } catch (e) {
+      this.log.warn(`não consegui registrar as páginas do tenant ${tenantId}: ${(e as Error).message}`);
+    }
   }
 
   async list(tenantId: string) {

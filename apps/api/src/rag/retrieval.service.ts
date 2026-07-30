@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import type { RagEscopo, RagHit } from '@orvyn/types';
 import { PrismaService } from '../prisma/prisma.service';
+import { ConfigService } from '../config/config.service';
 import { EmbeddingsService } from './embeddings/embeddings.service';
 import { RAG_CACHE, type RagCache } from './cache/rag-cache';
 import { RERANKER, type Reranker } from './reranker/reranker';
@@ -30,19 +31,27 @@ interface Candidate {
 @Injectable()
 export class RetrievalService {
   private readonly log = new Logger(RetrievalService.name);
-  private readonly kEach = Number(process.env.RAG_TOPK_VECTOR ?? 50);
-  private readonly preRerank = Number(process.env.RAG_PRE_RERANK ?? 30);
-  private readonly topN = Number(process.env.RAG_TOPN_RERANK ?? 8);
-  private readonly rrfK = Number(process.env.RAG_RRF_K ?? 60);
-  private readonly minScore = Number(process.env.RAG_MIN_SCORE ?? 0.35);
-  private readonly cacheTtl = Number(process.env.RAG_CACHE_TTL ?? 3600);
+  private readonly kEach: number;
+  private readonly preRerank: number;
+  private readonly topN: number;
+  private readonly rrfK: number;
+  private readonly minScore: number;
+  private readonly cacheTtl: number;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly embeddings: EmbeddingsService,
+    private readonly config: ConfigService,
     @Inject(RAG_CACHE) private readonly cache: RagCache,
     @Inject(RERANKER) private readonly reranker: Reranker,
-  ) {}
+  ) {
+    this.kEach = Number(config.get('RAG_TOPK_VECTOR') ?? 50);
+    this.preRerank = Number(config.get('RAG_PRE_RERANK') ?? 30);
+    this.topN = Number(config.get('RAG_TOPN_RERANK') ?? 8);
+    this.rrfK = Number(config.get('RAG_RRF_K') ?? 60);
+    this.minScore = Number(config.get('RAG_MIN_SCORE') ?? 0.35);
+    this.cacheTtl = Number(config.get('RAG_CACHE_TTL') ?? 3600);
+  }
 
   async search(
     ctx: RagContext,
@@ -51,7 +60,11 @@ export class RetrievalService {
     k = this.topN,
   ): Promise<RagHit[]> {
     const t0 = Date.now();
-    const cacheKey = this.cacheKey(ctx, query, escopos);
+    // Sem credencial de embedding não há vetor da query: degrada para lexical puro
+    // (Brief §2 — fallback funcional). O modo entra na chave do cache para o
+    // resultado degradado não sobreviver à configuração da chave.
+    const lexicalOnly = !this.embeddings.available;
+    const cacheKey = this.cacheKey(ctx, query, escopos, lexicalOnly);
     const cached = await this.cache.get(cacheKey);
     if (cached) {
       const hits = JSON.parse(cached) as RagHit[];
@@ -59,25 +72,12 @@ export class RetrievalService {
       return hits;
     }
 
-    const qvec = await this.embeddings.embedOne(query, 'query');
-    const vecLiteral = EmbeddingsService.toSqlVector(qvec);
-
     // Uma transação com o tenant setado (RLS). tenantId validado como UUID em withTenant.
-    const candidates = await this.prisma.withTenant(ctx.tenantId, (tx) =>
-      tx.$queryRawUnsafe<Candidate[]>(
-        // casts explícitos: o driver envia números como bigint e NULL como unknown,
-        // e a resolução de função no Postgres não faz o downcast sozinha.
-        `SELECT * FROM rag_search_hybrid($1::vector, $2::text, $3::text, $4::text, $5::text[], $6::int, $7::int, $8::int)`,
-        vecLiteral,
-        query,
-        ctx.nicho,
-        ctx.subespecialidade,
-        escopos,
-        this.kEach,
-        this.preRerank,
-        this.rrfK,
-      ),
-    );
+    // Casts explícitos: o driver envia números como bigint e NULL como unknown,
+    // e a resolução de função no Postgres não faz o downcast sozinha (BUG-007).
+    const candidates = lexicalOnly
+      ? await this.searchLexical(ctx, query, escopos)
+      : await this.searchHybrid(ctx, query, escopos);
 
     if (!candidates.length) {
       await this.logQuery(ctx, query, escopos, [], Date.now() - t0, false);
@@ -114,6 +114,40 @@ export class RetrievalService {
     return hits;
   }
 
+  /** Caminho normal: vetor + BM25 fundidos por RRF, com boost de escopo. */
+  private searchHybrid(ctx: RagContext, query: string, escopos: RagEscopo[]): Promise<Candidate[]> {
+    return this.embeddings.embedOne(query, 'query').then((qvec) =>
+      this.prisma.withTenant(ctx.tenantId, (tx) =>
+        tx.$queryRawUnsafe<Candidate[]>(
+          `SELECT * FROM rag_search_hybrid($1::vector, $2::text, $3::text, $4::text, $5::text[], $6::int, $7::int, $8::int)`,
+          EmbeddingsService.toSqlVector(qvec),
+          query,
+          ctx.nicho,
+          ctx.subespecialidade,
+          escopos,
+          this.kEach,
+          this.preRerank,
+          this.rrfK,
+        ),
+      ),
+    );
+  }
+
+  /** Fallback sem VOYAGE_API_KEY: BM25 puro, mesmo filtro de escopo/RLS no WHERE. */
+  private searchLexical(ctx: RagContext, query: string, escopos: RagEscopo[]): Promise<Candidate[]> {
+    this.config.warnDegraded('voyage', 'busca lexical (BM25) sem embedding da query');
+    return this.prisma.withTenant(ctx.tenantId, (tx) =>
+      tx.$queryRawUnsafe<Candidate[]>(
+        `SELECT * FROM rag_search_lexical($1::text, $2::text, $3::text, $4::text[], $5::int)`,
+        query,
+        ctx.nicho,
+        ctx.subespecialidade,
+        escopos,
+        this.preRerank,
+      ),
+    );
+  }
+
   /** Monta o bloco do prompt. Chunk é DADO, não instrução (anti prompt-injection). */
   buildContext(hits: RagHit[]): string {
     if (!hits.length) return '<base_de_conhecimento vazia="true" />';
@@ -137,12 +171,12 @@ export class RetrievalService {
     return (s ?? '').replace(/"/g, "'");
   }
 
-  private cacheKey(ctx: RagContext, query: string, escopos: RagEscopo[]): string {
+  private cacheKey(ctx: RagContext, query: string, escopos: RagEscopo[], lexicalOnly: boolean): string {
     const norm = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
     const h = createHash('sha1')
       .update([ctx.tenantId, ctx.nicho, ctx.subespecialidade, escopos.join(','), norm].join('|'))
       .digest('hex');
-    return `rag:q:${h}`;
+    return `rag:q:${lexicalOnly ? 'lex' : 'hyb'}:${h}`;
   }
 
   private async logQuery(

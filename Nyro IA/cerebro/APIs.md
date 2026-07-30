@@ -92,6 +92,56 @@ Front (Next): proxy autenticado `/api/v1/*` (Bearer) + landing OAuth `/api/integ
 
 Toda mutação de settings grava em `audit_logs` (`actor_id` = identidade). Front: `/configuracoes` (abas Perfil, Personalização, Empresa, Equipe, Integrações, Auditoria) + canto superior direito (usuário/config/tema).
 
+### ✅ Implementado (Sprint 0 — gating, convite, busca, notificações; JWT salvo onde indicado)
+| Método | Rota | Nota |
+|---|---|---|
+| POST | `/v1/auth/invites/accept` | **público** (o token é a credencial): entra no tenant do convite com a role dele; uso único; auditado. ADR-0009 |
+| GET | `/v1/crm/search?q=` | busca global do ⌘K: contatos + negócios + conversas, sob RLS (fecha BUG-004) |
+| GET/POST | `/v1/settings/notifications` · `.../read` | derivadas do estado real (não lidas + integrações quebradas); "visto" em `users.prefs.notifsSeenAt` |
+
+**Gating por credencial (ADR-0008):** rota que só existe para chamar terceiro responde **501** `{ code:"config_required", provider, missing:[…] }`. Quando a parte local já teve efeito, responde **200 + estado gated** (ex.: `POST /v1/crm/conversations/:id/messages` → `{status:'config_required', missing:[…]}` com a mensagem **já gravada**). Onde há caminho degradado honesto, cai nele (RAG sem Voyage → BM25). Fonte das variáveis: `docs/ENV.md`.
+
+### ✅ Implementado (Sprint D1 — CRM F2; JWT, tenant do token)
+| Método | Rota | Nota |
+|---|---|---|
+| GET | `/v1/crm/contacts?q=&cursor=&limit=` | **paginação por cursor** opaco (`{items, nextCursor}`); limit ≤ 100; cursor inválido/expirado → 400 |
+| GET | `/v1/crm/contacts/:id` | **perfil 360**: contato + empresa + negócios + conversas + tarefas + notas + timeline (uma transação) |
+| PATCH/DELETE | `/v1/crm/contacts/:id` | excluir leva tarefas/notas junto; negócios e conversas ficam (SET NULL) |
+| GET/PATCH/DELETE | `/v1/crm/deals/:id` | negócio 360 (+ tarefas/notas); `PATCH` move etapa, valor, status, contato |
+| GET/POST | `/v1/crm/companies` · `GET/PATCH/DELETE /:id` | nome duplicado no tenant → **409**; excluir empresa **não** apaga contatos |
+| GET/POST | `/v1/crm/tasks?filtro=abertas\|hoje\|atrasadas\|concluidas\|todas` | + `PATCH /:id`, `POST /:id/toggle`, `DELETE /:id` |
+| POST | `/v1/crm/notes` | + `PATCH/DELETE /:id` — **só o autor** edita/exclui (403) |
+| POST | `/v1/webhooks/meta` | **público**: leadgen → contato. Assinatura HMAC do corpo cru; `page_id→tenant`; dedupe `webhook_events`; sem credencial **registra e não inventa contato**. ADR-0010 |
+
+### ✅ Implementado (Sprint E — Automações; JWT, tenant do token)
+| Método | Rota | Nota |
+|---|---|---|
+| GET | `/v1/automations/catalogo` | os **15 nós** (ADR-0012). Fonte única: `catalogo.ts` |
+| GET/POST | `/v1/automations/workflows` | lista (com execuções/falhas) · cria (já nasce com rascunho vazio) |
+| GET/PATCH/DELETE | `/v1/automations/workflows/:id` | detalhe (rascunho + versões) · renomear · excluir |
+| PATCH | `/v1/automations/workflows/:id/grafo` | **autosave do canvas** — sempre no rascunho, nunca na versão publicada |
+| POST | `/v1/automations/workflows/:id/validar` | valida sem publicar; devolve `problemas[]` com o `noId` |
+| POST | `/v1/automations/workflows/:id/publicar` | valida → congela a versão → ativa. Inválido → **400** com `problemas[]` |
+| POST | `/v1/automations/workflows/:id/rollback` | volta a ativa para uma versão publicada anterior |
+| PATCH | `/v1/automations/workflows/:id/status` | ativo/pausado (ativar sem publicar → 400) |
+| POST | `/v1/automations/workflows/:id/testar` | executa AGORA com contato real — **as ações acontecem de verdade** |
+| GET | `/v1/automations/workflows/:id/runs` · `/runs/:id` | execuções · timeline nó-a-nó (entrada/saída/erro/tentativa/duração) |
+| POST | `/v1/automations/runs/:id/cancelar` | para uma execução em andamento/espera |
+| GET/POST | `/v1/automations/dlq` · `/dlq/:id/reprocessar` | dead-letter e reprocessamento do ponto onde parou |
+
+**Erros com contexto:** o filtro RFC 7807 preserva **campos de extensão** — `problemas[]` (validação de workflow), `missing[]`/`provider` (gating) e `errors[]` (class-validator) chegam à UI. Sem isso o usuário via só "Bad Request".
+
+### ✅ Implementado (Sprint F — Nyro IA; JWT · gated em ANTHROPIC_API_KEY)
+| Método | Rota | Nota |
+|---|---|---|
+| GET | `/v1/nyro/status` | `{configurada, missing, capacidades}` — a UI decide entre chat e "Conectar Claude" |
+| POST | `/v1/nyro/chat` | `{texto, conversationId?}` → resposta + passos + fontes + aprovações. **501 config_required** sem a chave |
+| GET | `/v1/nyro/conversas` · `/conversas/:id` | histórico do usuário; mensagens + ações pendentes |
+| POST | `/v1/nyro/acoes/:id` | `{aprovar}` — human-in-the-loop: a ação sensível só acontece aqui |
+| GET | `/v1/nyro/acoes` · `/uso` | pendentes de aprovação · consumo/custo de IA por agente |
+
+Tools (ADR-0014): 5 leitura · 6 escrita interna · 3 sensíveis (pedem aprovação). Nenhuma escreve no banco — todas passam pelos serviços do CRM/automações, auditadas `actor:'nyro'`.
+
 ### Fases seguintes (referência — não implementar em F0)
 - `POST /v1/tenants/:id/provision` — aplica blueprint (F2).
 - CRM: `GET /v1/pipelines`, `POST /v1/deals`, `PATCH /v1/deals/:id/stage` (F1).
@@ -134,7 +184,15 @@ Todo erro segue `application/problem+json`:
 
 ---
 
-## 6. Tempo real (WebSocket)
-Canais previstos ([[PRD]] §10.3): inbox, Kanban, execução de automação ao vivo.
+## 6. Tempo real (WebSocket) — ✅ definido e implementado (Sprint D2 · ADR-0011)
+Canais ([[PRD]] §10.3): inbox, Kanban, execução de automação ao vivo.
 
-> ⚠️ LACUNA: protocolo (Socket.IO vs WS nativo do Nest), formato de mensagens e autenticação do socket não definidos. Fora do escopo de F0; definir em F1.
+- **Protocolo:** **Socket.IO** (`@nestjs/platform-socket.io`), namespace **`/rt`** (fora do prefixo `/v1`). Reconexão, heartbeat e salas vêm da lib — no `ws` nativo seriam três coisas escritas à mão.
+- **Autenticação (ticket):** o access token vive em cookie **httpOnly**, inalcançável pelo JS. O front chama `POST /api/auth/ws-ticket` (Next) → `POST /v1/auth/ws-ticket` (JWT) → recebe um **ticket de 60s** (`typ:'ws'`) e o usa no handshake (`auth.ticket`, com `?ticket=` como fallback). O `JwtAuthGuard` **recusa** `typ:'ws'` na API REST: ticket vazado não vira acesso.
+- **Reconexão:** `auth` é uma **função** — o Socket.IO a chama a cada tentativa e busca ticket **novo**. Com ticket estático, a reconexão voltaria com credencial expirada e seria recusada para sempre.
+- **Isolamento:** na conexão o socket entra **só** em `tenant:<tenantId>`, e o tenant vem **do ticket assinado** — não existe evento para o cliente pedir sala. Todo `emit` é `server.to(sala)`; **nunca** broadcast.
+- **Formato:** envelope `{ evento, dados, emitidoEm }`. Contrato tipado em `@orvyn/types` (`RealtimeEvents`) — front e back importam do mesmo lugar; evento sem tipo lá não compila.
+- **Eventos:** `message.created` · `conversation.updated` · `deal.created|moved|updated|deleted` · `contact.created` · `automation.run` (canal pronto; emissores no Sprint E).
+- **Ordem:** publicação sempre **após o commit** — quem recebe o evento e consulta a API tem que encontrar o dado.
+- **Escala:** `RedisIoAdapter` (`@socket.io/redis-adapter`) — com 2+ instâncias, o socket está numa e o `emit` na outra; sem barramento o evento se perde. Sem Redis, degrada para memória com aviso.
+- **Front:** `useRealtime()` (`lib/realtime.ts`) devolve `conectado`; inbox e pipeline mostram um ponto verde/âmbar e **caem para polling (5s)** se o socket cair — a tela nunca congela em silêncio.

@@ -11,12 +11,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@orvyn/types": "workspace:^",
     "jose": "^5.9.6",
     "next": "14.2.35",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-markdown": "9.0.1",
-    "remark-gfm": "4.0.0"
+    "reactflow": "^11.11.4",
+    "remark-gfm": "4.0.0",
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@types/node": "20.14.15",

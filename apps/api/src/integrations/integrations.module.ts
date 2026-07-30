@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
+import { CrmModule } from '../crm/crm.module';
+import { MetaLeadsService } from './meta-leads.service';
 import { CryptoService } from './crypto.service';
 import { MetaGraphClient, META_GRAPH } from './providers/meta-graph.client';
 import { MetaAdsConnector } from './providers/meta-ads.connector';
@@ -20,9 +22,14 @@ function redisConn() {
   imports: [
     BullModule.forRoot({ connection: redisConn() }),
     BullModule.registerQueue({ name: 'ads-sync' }),
+    // integrations -> crm (superfície pública: LeadsService). O CRM não conhece
+    // integrations, então não há ciclo: quem tem a credencial busca o lead e
+    // entrega para quem sabe criar contato.
+    CrmModule,
   ],
   controllers: [IntegrationsController, AdsController, MetaWebhookController],
   providers: [
+    MetaLeadsService,
     CryptoService,
     { provide: META_GRAPH, useClass: MetaGraphClient },
     MetaAdsConnector,

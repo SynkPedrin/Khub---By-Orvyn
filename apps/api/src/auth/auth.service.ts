@@ -1,4 +1,5 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { hash, verify } from '@node-rs/argon2';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantsService } from '../tenants/tenants.service';
@@ -38,6 +39,49 @@ export class AuthService {
     return this.issue(identity.id, identity.email, input.nome, tenant.id, 'owner', userAgent);
   }
 
+  /**
+   * Aceite de convite (S0-2 / ADR-0009). Token de USO ÚNICO: valida hash+expiração,
+   * cria a identidade (se nova) ou apenas adiciona membership (identidade existente
+   * entrando num 2º tenant), cria o perfil no tenant do convite com a role dele,
+   * marca `accepted_at` e emite sessão. Auditado.
+   */
+  async acceptInvite(token: string, nome?: string, password?: string, userAgent?: string): Promise<Tokens> {
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    const invite = await this.prisma.invite.findUnique({ where: { tokenHash } });
+    if (!invite || invite.acceptedAt || invite.expiresAt.getTime() < Date.now()) {
+      throw new BadRequestException('convite inválido, expirado ou já utilizado');
+    }
+
+    let identity = await this.prisma.identity.findFirst({ where: { email: { equals: invite.email, mode: 'insensitive' } } });
+    if (!identity) {
+      if (!password || password.length < 8) throw new BadRequestException('senha obrigatória (mínimo 8 caracteres) para criar a conta');
+      identity = await this.prisma.identity.create({ data: { email: invite.email, passwordHash: await hash(password), emailVerifiedAt: new Date() } });
+    }
+    const identityId = identity.id;
+
+    // membership no tenant do convite (idempotente)
+    await this.prisma.membership.upsert({
+      where: { identityId_tenantId: { identityId, tenantId: invite.tenantId } },
+      create: { identityId, tenantId: invite.tenantId, role: invite.role, isDefault: false },
+      update: { role: invite.role },
+    });
+
+    const displayName = nome?.trim() || invite.email.split('@')[0];
+    await this.prisma.withTenant(invite.tenantId, async (tx) => {
+      const existing = await tx.user.findFirst({ where: { identityId }, select: { id: true } });
+      if (!existing) {
+        await tx.user.create({ data: { tenantId: invite.tenantId, identityId, email: invite.email, nome: displayName, role: invite.role } });
+      }
+      await tx.$executeRaw`INSERT INTO audit_logs (tenant_id, actor_type, actor_id, acao, entidade, entidade_id)
+        VALUES (${invite.tenantId}::uuid, 'humano', ${identityId}, 'invite.accept', 'invite', ${invite.id})`;
+    });
+
+    // uso único
+    await this.prisma.invite.update({ where: { id: invite.id }, data: { acceptedAt: new Date() } });
+
+    return this.issue(identityId, invite.email, displayName, invite.tenantId, invite.role, userAgent);
+  }
+
   async login(email: string, password: string, userAgent?: string): Promise<Tokens> {
     const identity = await this.prisma.identity.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
     if (!identity?.passwordHash || !(await verify(identity.passwordHash, password))) {
@@ -66,6 +110,11 @@ export class AuthService {
     if (rawRefresh) await this.tokens.revoke(rawRefresh);
   }
 
+  /** Ticket curto para o handshake do socket (ADR-0011). */
+  wsTicket(user: { identityId: string; tenantId: string; role: string; email: string }): string {
+    return this.tokens.signWsTicket({ sub: user.identityId, tenant_id: user.tenantId, role: user.role, email: user.email });
+  }
+
   async me(identityId: string, tenantId: string) {
     const [identity, tenant, memberships] = await Promise.all([
       this.prisma.identity.findUnique({ where: { id: identityId }, select: { email: true, emailVerifiedAt: true } }),
@@ -74,6 +123,29 @@ export class AuthService {
     ]);
     const profile = await this.prisma.withTenant(tenantId, (tx) => tx.user.findFirst({ where: { identityId }, select: { nome: true, role: true } }));
     return { identityId, email: identity?.email, nome: profile?.nome, role: profile?.role, tenant, memberships };
+  }
+
+  /**
+   * Login/cadastro via OAuth (Google/GitHub). A identidade nasce **sem senha**
+   * (`passwordHash: null`) e com o e-mail já verificado pelo provedor. Se o
+   * e-mail já existe, apenas emite a sessão no tenant padrão (mesmo comportamento
+   * do login). Nunca há senha envolvida — o provedor é a credencial.
+   */
+  async loginWithOAuth(email: string, nome: string, userAgent?: string): Promise<Tokens> {
+    const existente = await this.prisma.identity.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
+    if (existente) {
+      const memberships = await this.tenants.membershipsOf(existente.id);
+      const active = memberships.find((m) => m.isDefault) ?? memberships[0];
+      if (!active) throw new UnauthorizedException('usuário sem tenant');
+      const profile = await this.prisma.withTenant(active.tenantId, (tx) =>
+        tx.user.findFirst({ where: { identityId: existente.id }, select: { nome: true } }),
+      );
+      return this.issue(existente.id, existente.email, profile?.nome ?? nome, active.tenantId, active.role, userAgent);
+    }
+    // primeiro acesso: cria identidade sem senha + provisiona um tenant (funil default)
+    const identity = await this.prisma.identity.create({ data: { email, passwordHash: null, emailVerifiedAt: new Date() } });
+    const tenant = await this.tenants.provision({ identityId: identity.id, email, nome });
+    return this.issue(identity.id, email, nome, tenant.id, 'owner', userAgent);
   }
 
   private async issue(identityId: string, email: string, nome: string, tenantId: string, role: string, userAgent?: string): Promise<Tokens> {

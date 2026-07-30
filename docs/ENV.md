@@ -1,0 +1,120 @@
+# ENV — fonte única das credenciais do ORVYN OS
+
+> Contrato (Brief §2 · **Gating por Credencial**): **todo módulo está implementado**. O que falta para uma
+> feature externa funcionar é **a chave**, nunca código. Sem a chave, a API responde
+> `501 { code: "config_required", provider, missing: [...] }` (ou degrada com fallback) e a UI mostra
+> **"Configurar {provider}"** com exatamente as variáveis desta tabela.
+>
+> **Canário:** subir a API com todas as variáveis de terceiros vazias **não pode quebrar nada**
+> (`apps/api/src/config/config.service.spec.ts`).
+
+Quem manda: `apps/api/src/config/config.service.ts` (`REQUIRED` por provedor). Este documento e aquele
+mapa devem sempre concordar — se divergirem, **o código está errado**.
+
+---
+
+## 1. Obrigatórias (a API não sobe sem elas)
+
+| Variável | Onde obter / gerar | Observação |
+|---|---|---|
+| `JWT_SECRET` | `openssl rand -base64 48` | ≥16 chars. Assina access token **e** o `state` do OAuth. |
+| `DATABASE_URL` | Postgres local/gerenciado | Role da app = `orvyn_app` (**NOBYPASSRLS**). Nunca aponte a app para `orvyn_service`. |
+
+Sem `DATABASE_URL` válida a API **sobe assim mesmo** e `/v1/health` reporta `db:false` (dev sem banco).
+
+## 2. Infra opcional (tem default)
+
+| Variável | Default | Para quê |
+|---|---|---|
+| `PORT` | `3333` | Porta da API. |
+| `REDIS_URL` | `redis://localhost:6379` | Filas BullMQ (`ads-sync`, ingestão). |
+| `WEB_URL` | `http://localhost:3210` | Base dos redirects OAuth e do link de convite. |
+| `JWT_ACCESS_TTL` | `15m` | TTL do access token. |
+| `REFRESH_TTL_DAYS` | `30` | TTL do refresh (rotativo, hasheado). |
+
+## 3. Provedores externos — o que cada um destrava
+
+Cada bloco lista o **conjunto mínimo**: com ele completo, o provedor sai de `config_required` e opera de verdade.
+
+### 3.1 `stevo` — WhatsApp (API não oficial)
+| Variável | Obrigatória | Onde obter |
+|---|---|---|
+| `STEVO_API_URL` | ✅ | URL base da sua instância STEVO (ex.: `https://api.stevo.chat`). |
+| `STEVO_API_KEY` | ✅ | Painel STEVO → API key. |
+| `STEVO_INSTANCE` | ✅ | Nome da instância conectada ao número. |
+| `STEVO_SEND_PATH` | — | Default `/message/sendText`. |
+| `STEVO_WEBHOOK_TOKEN` | — | Se definido, o webhook de entrada exige `?token=`. **Defina em produção.** |
+| `STEVO_FALLBACK_TENANT_ID` | — | Dev single-tenant: roteia a entrada quando a instância ainda não tem integração conectada. Em produção o roteamento é `instância → tenant` (migration 008). |
+| `STEVO_TEST_NUMBER` | — | Dev: manda toda saída para o seu número, ignorando o telefone do contato. |
+
+**Sem elas:** a mensagem **é gravada** e aparece no inbox; só a entrega fica pendente
+(`status: "config_required"` + `missing[]`, HTTP **200** — ADR-0008). Nada se perde.
+
+### 3.2 `meta` — Meta Ads + Lead Ads
+| Variável | Obrigatória | Onde obter |
+|---|---|---|
+| `META_APP_ID` | ✅ | developers.facebook.com → seu app → Configurações. |
+| `META_APP_SECRET` | ✅ | mesmo lugar. |
+| `META_GRAPH_VERSION` | — | Default `v21.0`. |
+| `META_WEBHOOK_VERIFY_TOKEN` | — | Token que você inventa e repete no painel da Meta (webhook de Lead Ads). |
+
+Redirect a cadastrar no app: `{WEB_URL}/api/integrations/meta/callback`.
+**Sem elas:** `GET /v1/integrations/meta/auth-url` → 501 `config_required`; a UI mostra "Configurar Meta Ads".
+
+### 3.3 `google_ads`
+`GOOGLE_ADS_DEVELOPER_TOKEN` ✅ · `GOOGLE_ADS_CLIENT_ID` ✅ · `GOOGLE_ADS_CLIENT_SECRET` ✅ ·
+`GOOGLE_ADS_LOGIN_CUSTOMER_ID` — · `GOOGLE_OAUTH_REDIRECT_URI` —
+Developer token: Google Ads API Center (conta MCC).
+
+### 3.4 `tiktok`
+`TIKTOK_APP_ID` ✅ · `TIKTOK_APP_SECRET` ✅ — TikTok for Business → Marketing API.
+
+### 3.5 `stripe` — billing
+`STRIPE_SECRET_KEY` ✅ · `STRIPE_WEBHOOK_SECRET` — · `STRIPE_PUBLISHABLE_KEY` —
+
+### 3.6 `voyage` — embeddings do RAG
+| Variável | Obrigatória | Onde obter |
+|---|---|---|
+| `VOYAGE_API_KEY` | ✅ | dash.voyageai.com (**exige meio de pagamento**: sem ele, 3 RPM / 10K TPM → 429). |
+| `VOYAGE_MODEL` | — | Default `voyage-3-large`. |
+| `VOYAGE_DIMS` | — | Default `1024`. **Mudar exige reindexar** (a coluna é `vector(1024)`). |
+
+**Sem ela (fallback funcional):** a busca do RAG degrada para **lexical/BM25** (`rag_search_lexical`,
+migration 007) — mesmo filtro de escopo e RLS, sem vetor. Continua respondendo; a qualidade cai.
+
+### 3.7 `anthropic` — Nyro (chat/agente)
+`ANTHROPIC_API_KEY` ✅ — console.anthropic.com. Sem ela, as rotas da Nyro respondem 501 `config_required`.
+
+### 3.8 `email` — convites e transacionais
+| Variável | Obrigatória | Onde obter |
+|---|---|---|
+| `SMTP_URL` | ✅ | `smtps://usuario:senha@smtp.host:465`. Gmail: use **App Password** (a API key `AIzaSy…` do painel **não envia e-mail**). |
+| `SMTP_FROM` | — | Default `Orvyn OS <no-reply@orvyn.app>`. |
+
+**Sem ela:** o convite **é criado e auditado**; o link de aceite volta na resposta para envio manual.
+
+### 3.9 `oauth_google` / `oauth_github` — login social
+`GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` · `GITHUB_ID` + `GITHUB_SECRET` (+ `AUTH_SECRET`).
+Sem elas, os botões existem mas a rota responde 501 explicando o que falta — **nunca** login fake.
+
+### 3.10 `integrations_crypto` — cifra das credenciais dos clientes
+| Variável | Obrigatória | Como gerar |
+|---|---|---|
+| `INTEGRATIONS_ENCRYPTION_KEY` | ✅ | `openssl rand -base64 32` (**exatamente 32 bytes**) |
+
+Cifra AES-256-GCM os tokens OAuth de cada tenant em repouso. Sem ela, **nenhuma** integração conecta (501).
+**Trocar a chave invalida tudo que já foi cifrado** — rotação exige re-conexão dos clientes.
+
+## 4. Ajustes do RAG (opcionais, com default)
+
+`RAG_TOPK_VECTOR`=50 · `RAG_PRE_RERANK`=30 · `RAG_TOPN_RERANK`=8 · `RAG_RRF_K`=60 ·
+`RAG_MIN_SCORE`=0.35 · `RAG_CACHE_TTL`=3600 · `RAG_EMBED_BATCH`=96
+
+> Mexeu em chunking/embedding/prompt? Rode `rag:eval` e reporte o delta (invariante 6 do CLAUDE.md).
+
+## 5. Regras que não se negociam
+
+1. **Segredo nunca vai pro código, pro log ou pro git.** `.env` está no `.gitignore`; commite só `.env.example`.
+2. A app conecta como `orvyn_app`. `orvyn_service` (BYPASSRLS) é só para migração/publicação de base.
+3. Variável **vazia conta como ausente** — `ConfigService.get()` trata `""` e `"   "` como não definida.
+4. Adicionou provedor novo? Atualize **`REQUIRED` no ConfigService _e_ este arquivo** no mesmo PR.

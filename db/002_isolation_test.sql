@@ -55,6 +55,49 @@ INSERT INTO audit_logs (tenant_id, actor_type, acao) VALUES (:'tenant_a', 'human
 INSERT INTO webhook_events (tenant_id, provider, event_id) VALUES (:'tenant_a', 'stripe', 'evt_A'), (:'tenant_b', 'stripe', 'evt_B');
 -- integrações de anúncios (criadas no 005)
 INSERT INTO integrations (tenant_id, provider, status) VALUES (:'tenant_a', 'meta', 'connected'), (:'tenant_b', 'meta', 'connected');
+-- instância STEVO do tenant B, para provar o roteamento do webhook (migration 008)
+INSERT INTO integrations (tenant_id, provider, status, external_business_id, credentials_encrypted)
+VALUES (:'tenant_b', 'stevo', 'connected', 'instancia_do_B', 'SEGREDO_DE_B');
+
+-- CRM F2 (migration 009): empresas, tarefas, notas e páginas do B
+INSERT INTO companies (id, tenant_id, nome, dominio)
+VALUES ('cccccccc-0000-4000-8000-00000000000b', :'tenant_b', 'Empresa Secreta do B', 'segredo-b.com');
+INSERT INTO tasks (tenant_id, titulo, company_id)
+VALUES (:'tenant_b', 'TAREFA_SECRETA_DO_B', 'cccccccc-0000-4000-8000-00000000000b');
+INSERT INTO notes (tenant_id, corpo, company_id)
+VALUES (:'tenant_b', 'NOTA_SECRETA_DO_B', 'cccccccc-0000-4000-8000-00000000000b');
+INSERT INTO meta_pages (tenant_id, integration_id, page_id, page_nome)
+SELECT :'tenant_b', id, 'PAGE_DO_B', 'Página do B' FROM integrations WHERE tenant_id = :'tenant_b' AND provider = 'meta' LIMIT 1;
+
+-- Automações (migration 010): workflow do B com versão, run, log e DLQ
+INSERT INTO workflows (id, tenant_id, nome, status)
+VALUES ('ffffffff-0000-4000-8000-00000000000b', :'tenant_b', 'WORKFLOW_SECRETO_DO_B', 'ativo');
+INSERT INTO workflow_versions (id, tenant_id, workflow_id, versao, grafo, publicado_em)
+VALUES ('ffffffff-1111-4000-8000-00000000000b', :'tenant_b', 'ffffffff-0000-4000-8000-00000000000b', 1,
+        '{"nos":[{"id":"g","tipo":"gatilho.contato_criado","posicao":{"x":0,"y":0},"config":{}}],"arestas":[]}'::jsonb, now());
+UPDATE workflows SET versao_ativa_id = 'ffffffff-1111-4000-8000-00000000000b' WHERE id = 'ffffffff-0000-4000-8000-00000000000b';
+INSERT INTO workflow_runs (id, tenant_id, workflow_id, version_id, gatilho, estado)
+VALUES ('ffffffff-2222-4000-8000-00000000000b', :'tenant_b', 'ffffffff-0000-4000-8000-00000000000b', 'ffffffff-1111-4000-8000-00000000000b',
+        'gatilho.contato_criado', '{"segredo":"ESTADO_SECRETO_DO_B"}'::jsonb);
+INSERT INTO workflow_run_steps (tenant_id, run_id, no_id, tipo, status, saida)
+VALUES (:'tenant_b', 'ffffffff-2222-4000-8000-00000000000b', 'n1', 'acao.enviar_sms', 'ok', '{"texto":"MENSAGEM_SECRETA_DO_B"}'::jsonb);
+INSERT INTO workflow_dlq (tenant_id, run_id, no_id, tipo, erro)
+VALUES (:'tenant_b', 'ffffffff-2222-4000-8000-00000000000b', 'n1', 'acao.enviar_sms', 'ERRO_SECRETO_DO_B');
+
+-- Nyro (migration 013): conversa, mensagem, ação pendente, memória e uso do B.
+-- O conteúdo da conversa da Nyro tem dado sensível do cliente — vazar aqui é
+-- tão grave quanto vazar o CRM.
+INSERT INTO nyro_conversations (id, tenant_id, titulo)
+VALUES ('aaaaaaaa-0000-4000-8000-00000000000b', :'tenant_b', 'CONVERSA_SECRETA_DO_B');
+INSERT INTO nyro_messages (tenant_id, conversation_id, papel, conteudo)
+VALUES (:'tenant_b', 'aaaaaaaa-0000-4000-8000-00000000000b', 'user', 'MENSAGEM_NYRO_SECRETA_DO_B');
+INSERT INTO nyro_actions (tenant_id, conversation_id, tool, resumo, expira_em)
+VALUES (:'tenant_b', 'aaaaaaaa-0000-4000-8000-00000000000b', 'enviar_mensagem', 'ACAO_SECRETA_DO_B', now() + interval '1 day');
+INSERT INTO nyro_memory (tenant_id, chave, valor)
+VALUES (:'tenant_b', 'segredo_b', 'MEMORIA_SECRETA_DO_B');
+INSERT INTO ai_usage_events (tenant_id, agente, modelo, custo_usd)
+VALUES (:'tenant_b', 'growth', 'claude-sonnet-5', 9.99);
+
 INSERT INTO ad_insights (tenant_id, level, provider, external_ref_id, date, spend)
 VALUES (:'tenant_a', 'account', 'meta', 'acc_A', current_date, 10), (:'tenant_b', 'account', 'meta', 'acc_B', current_date, 20);
 
@@ -150,6 +193,127 @@ BEGIN
   SELECT count(*) INTO v_ins FROM ad_insights WHERE external_ref_id = 'acc_B';
   IF v_ins <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[ad_insights]: tenant A leu % insight(s) de B', v_ins; END IF;
   RAISE NOTICE 'OK isolamento integrações: integrations e ad_insights isolados';
+END $$;
+
+-- 8. Roteamento do webhook do STEVO (migration 008): a função SECURITY DEFINER
+--    devolve APENAS o tenant_id de roteamento — a linha (e o segredo) continuam
+--    invisíveis para a app sem o tenant certo.
+DO $$
+DECLARE v_rot uuid; v_linhas int; v_segredo int;
+BEGIN
+  SELECT resolve_tenant_by_stevo_instance('instancia_do_B') INTO v_rot;
+  IF v_rot IS DISTINCT FROM '22222222-2222-2222-2222-222222222222'::uuid THEN
+    RAISE EXCEPTION 'ROTEAMENTO QUEBRADO: instancia_do_B resolveu para % (esperado tenant B)', v_rot;
+  END IF;
+  SELECT count(*) INTO v_linhas FROM integrations WHERE provider = 'stevo';
+  IF v_linhas <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[stevo]: tenant A leu % integração(ões) de B', v_linhas; END IF;
+  SELECT count(*) INTO v_segredo FROM integrations WHERE credentials_encrypted = 'SEGREDO_DE_B';
+  IF v_segredo <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[stevo]: credencial de B legível por A'; END IF;
+  RAISE NOTICE 'OK roteamento STEVO: só o tenant_id atravessa; a linha de B segue invisível';
+END $$;
+
+-- 9. CRM F2 (migration 009): empresas, tarefas, notas e páginas do B invisíveis para o A
+DO $$
+DECLARE v_emp int; v_tar int; v_not int; v_pag int;
+BEGIN
+  SELECT count(*) INTO v_emp FROM companies WHERE nome = 'Empresa Secreta do B';
+  IF v_emp <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[companies]: tenant A leu % empresa(s) de B', v_emp; END IF;
+  SELECT count(*) INTO v_tar FROM tasks WHERE titulo = 'TAREFA_SECRETA_DO_B';
+  IF v_tar <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[tasks]: tenant A leu % tarefa(s) de B', v_tar; END IF;
+  SELECT count(*) INTO v_not FROM notes WHERE corpo = 'NOTA_SECRETA_DO_B';
+  IF v_not <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[notes]: tenant A leu % nota(s) de B', v_not; END IF;
+  SELECT count(*) INTO v_pag FROM meta_pages WHERE page_id = 'PAGE_DO_B';
+  IF v_pag <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[meta_pages]: tenant A leu % página(s) de B', v_pag; END IF;
+  RAISE NOTICE 'OK isolamento CRM F2: companies, tasks, notes e meta_pages isolados';
+END $$;
+
+-- 10. Escrita cross-tenant nas tabelas novas também é barrada
+DO $$
+BEGIN
+  BEGIN
+    INSERT INTO companies (tenant_id, nome) VALUES ('22222222-2222-2222-2222-222222222222', 'EMPRESA_FORJADA_NO_B');
+    RAISE EXCEPTION 'VAZAMENTO[write companies]: tenant A inseriu empresa no tenant B';
+  EXCEPTION
+    WHEN insufficient_privilege OR check_violation THEN
+      RAISE NOTICE 'OK write-guard F2: insercao cross-tenant em companies bloqueada';
+  END;
+END $$;
+
+-- 11. Roteamento de Lead Ads (migration 009): só o tenant_id atravessa
+DO $$
+DECLARE v_rot uuid;
+BEGIN
+  SELECT resolve_tenant_by_meta_page('PAGE_DO_B') INTO v_rot;
+  IF v_rot IS DISTINCT FROM '22222222-2222-2222-2222-222222222222'::uuid THEN
+    RAISE EXCEPTION 'ROTEAMENTO QUEBRADO: PAGE_DO_B resolveu para % (esperado tenant B)', v_rot;
+  END IF;
+  RAISE NOTICE 'OK roteamento Meta: page->tenant resolve sem expor a linha';
+END $$;
+
+-- 12. Automações (migration 010): workflow, versão, run, log e DLQ do B invisíveis
+--     O grafo do B é propriedade intelectual do cliente; o estado do run tem dado
+--     de contato. Vazar aqui é tão grave quanto vazar o CRM.
+DO $$
+DECLARE v_wf int; v_ver int; v_run int; v_step int; v_dlq int;
+BEGIN
+  SELECT count(*) INTO v_wf FROM workflows WHERE nome = 'WORKFLOW_SECRETO_DO_B';
+  IF v_wf <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[workflows]: tenant A leu % workflow(s) de B', v_wf; END IF;
+  SELECT count(*) INTO v_ver FROM workflow_versions WHERE workflow_id = 'ffffffff-0000-4000-8000-00000000000b';
+  IF v_ver <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[workflow_versions]: tenant A leu o GRAFO de B'; END IF;
+  SELECT count(*) INTO v_run FROM workflow_runs WHERE estado::text LIKE '%ESTADO_SECRETO_DO_B%';
+  IF v_run <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[workflow_runs]: tenant A leu o estado de execução de B'; END IF;
+  SELECT count(*) INTO v_step FROM workflow_run_steps WHERE saida::text LIKE '%MENSAGEM_SECRETA_DO_B%';
+  IF v_step <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[workflow_run_steps]: tenant A leu o log nó-a-nó de B'; END IF;
+  SELECT count(*) INTO v_dlq FROM workflow_dlq WHERE erro = 'ERRO_SECRETO_DO_B';
+  IF v_dlq <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[workflow_dlq]: tenant A leu o DLQ de B'; END IF;
+  RAISE NOTICE 'OK isolamento automações: workflows, versões, runs, steps e DLQ isolados';
+END $$;
+
+-- 13. Escrita cross-tenant em workflows também é barrada
+DO $$
+BEGIN
+  BEGIN
+    INSERT INTO workflows (tenant_id, nome) VALUES ('22222222-2222-2222-2222-222222222222', 'WORKFLOW_FORJADO_NO_B');
+    RAISE EXCEPTION 'VAZAMENTO[write workflows]: tenant A criou workflow no tenant B';
+  EXCEPTION
+    WHEN insufficient_privilege OR check_violation THEN
+      RAISE NOTICE 'OK write-guard automações: insercao cross-tenant bloqueada';
+  END;
+END $$;
+
+-- 14. Nyro (migration 013): conversa, mensagem, ação, memória e custo do B invisíveis
+DO $$
+DECLARE v_conv int; v_msg int; v_act int; v_mem int; v_uso int;
+BEGIN
+  SELECT count(*) INTO v_conv FROM nyro_conversations WHERE titulo = 'CONVERSA_SECRETA_DO_B';
+  IF v_conv <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[nyro_conversations]: tenant A leu conversa da Nyro de B'; END IF;
+  SELECT count(*) INTO v_msg FROM nyro_messages WHERE conteudo = 'MENSAGEM_NYRO_SECRETA_DO_B';
+  IF v_msg <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[nyro_messages]: tenant A leu mensagem da Nyro de B'; END IF;
+  SELECT count(*) INTO v_act FROM nyro_actions WHERE resumo = 'ACAO_SECRETA_DO_B';
+  IF v_act <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[nyro_actions]: tenant A leu ação pendente de B'; END IF;
+  SELECT count(*) INTO v_mem FROM nyro_memory WHERE valor = 'MEMORIA_SECRETA_DO_B';
+  IF v_mem <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[nyro_memory]: tenant A leu a memória da conta de B'; END IF;
+  SELECT count(*) INTO v_uso FROM ai_usage_events WHERE custo_usd = 9.99;
+  IF v_uso <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[ai_usage_events]: tenant A leu o custo de IA de B'; END IF;
+  RAISE NOTICE 'OK isolamento Nyro: conversas, mensagens, ações, memória e custo isolados';
+END $$;
+
+-- 15. PARTIÇÕES (BUG-014): a RLS da tabela-pai NÃO protege a partição acessada
+--     direto. Sem policy na partição, `SELECT * FROM ad_insights_default` devolve
+--     linha de todo mundo — e a app deixa de ser 2ª camada para virar a única.
+DO $$
+DECLARE v_part int; v_sem_rls int;
+BEGIN
+  SELECT count(*) INTO v_part FROM ad_insights_default WHERE external_ref_id = 'acc_B';
+  IF v_part <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[partição]: tenant A leu % linha(s) de B lendo ad_insights_default direto', v_part; END IF;
+
+  -- guarda para partição FUTURA nascer sem policy (o `default` cobre o range novo)
+  SELECT count(*) INTO v_sem_rls
+  FROM pg_inherits i JOIN pg_class c ON c.oid = i.inhrelid JOIN pg_class pai ON pai.oid = i.inhparent
+  WHERE pai.relname = 'ad_insights' AND c.relkind IN ('r','p') AND NOT c.relrowsecurity;
+  IF v_sem_rls <> 0 THEN RAISE EXCEPTION 'RISCO: % partição(ões) de ad_insights sem RLS — rodar db/014', v_sem_rls; END IF;
+
+  RAISE NOTICE 'OK partições: RLS aplicada e sem vazamento pela partição';
 END $$;
 
 RESET ROLE;

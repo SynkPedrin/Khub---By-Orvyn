@@ -27,6 +27,8 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // exclui API, assets internos e QUALQUER arquivo de imagem (png/jpg/svg/…)
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpe?g|gif|svg|webp|ico|avif)$).*)'],
+  // exclui API, assets internos e arquivos estáticos (imagem, VÍDEO, fonte).
+  // Sem o vídeo aqui, o middleware de auth redireciona /fundo-animado.mp4 (307)
+  // e o plano de fundo nunca carrega — mesma armadilha que a logo já teve.
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpe?g|gif|svg|webp|ico|avif|mp4|webm|mov|woff2?|ttf)$).*)'],
 };

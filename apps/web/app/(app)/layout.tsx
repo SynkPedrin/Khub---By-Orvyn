@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { AppSidebar } from '@/components/app/AppSidebar';
 import { DynamicIsland } from '@/components/app/DynamicIsland';
 import { TopRight } from '@/components/app/TopRight';
-import { Personalization } from '@/components/app/Personalization';
+import { TopCenterLogo } from '@/components/app/TopCenterLogo';
+import { PersonalizationProvider } from '@/components/app/PersonalizationProvider';
 import { NyroDock } from '@/components/app/NyroDock';
 import { CommandBar } from '@/components/app/CommandBar';
 import { Icon } from '@/components/icons';
@@ -13,9 +14,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [drawer, setDrawer] = useState(false);
 
   return (
+    <PersonalizationProvider>
     <div className="flex h-screen flex-col overflow-hidden">
-      {/* faixa reservada para a ilha dinâmica (fixed) */}
-      <div className="h-[7.5rem] shrink-0" />
+      {/* faixa reservada para a ilha dinâmica + logo central (fixed) */}
+      <div className="h-[6.5rem] shrink-0 sm:h-[9rem]" />
 
       <div className="flex min-h-0 flex-1">
         {/* Sidebar de vidro flutuante (desktop) */}
@@ -29,9 +31,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Ilha dinâmica (logo canto superior esquerdo + busca) */}
       <DynamicIsland onMobileMenu={() => setDrawer(true)} />
+      {/* Marca ORVYN OS no topo-centro */}
+      <TopCenterLogo />
       {/* Canto superior direito: usuário, configurações, tema */}
       <TopRight />
-      <Personalization />
 
       {/* Drawer mobile */}
       {drawer && (
@@ -49,5 +52,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <NyroDock />
       <CommandBar />
     </div>
+    </PersonalizationProvider>
   );
 }

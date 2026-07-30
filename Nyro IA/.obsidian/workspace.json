@@ -4,36 +4,11 @@
     "type": "split",
     "children": [
       {
-        "id": "1f04aa7958f20c03",
+        "id": "9cce3a8c91fc0c74",
         "type": "tabs",
-        "dimension": 27.175843694493782,
         "children": [
           {
-            "id": "3ce6cd22ebcb733a",
-            "type": "leaf",
-            "state": {
-              "type": "canvas",
-              "state": {
-                "file": "Sem título.canvas",
-                "viewState": {
-                  "x": 0,
-                  "y": 0,
-                  "zoom": 0
-                }
-              },
-              "icon": "lucide-layout-dashboard",
-              "title": "Sem título"
-            }
-          }
-        ]
-      },
-      {
-        "id": "9c12ad733f0d8c07",
-        "type": "tabs",
-        "dimension": 72.82415630550621,
-        "children": [
-          {
-            "id": "432fa4061dd27f76",
+            "id": "cf46ebf11eafad5c",
             "type": "leaf",
             "state": {
               "type": "graph",
@@ -204,11 +179,20 @@
       "bases:Criar nova base": false
     }
   },
-  "active": "432fa4061dd27f76",
+  "active": "cf46ebf11eafad5c",
   "lastOpenFiles": [
-    "cerebro/PRD.md",
-    "cerebro/RAG/conhecimento/global/copy-e-growth.md",
     "Sem título.canvas",
+    "cerebro/RAG/conhecimento/contabil/obrigacoes-e-prazos.md",
+    "cerebro/RAG/conhecimento/contabil/contabil.md",
+    "cerebro/RegrasNegocio.md",
+    "cerebro/PRD.md",
+    "cerebro/Estado-do-Sistema.md",
+    "cerebro/Bugs.md",
+    "cerebro/Brief-Finalizacao.md",
+    "cerebro/Arquitetura.md",
+    "cerebro/APIs.md",
+    "cerebro/RAG/RAG.md",
+    "cerebro/RAG/conhecimento/global/copy-e-growth.md",
     "Sem título.base",
     "Bem-vindo.md"
   ]
