@@ -120,7 +120,7 @@ export class CrmService {
           conversao: deals.length ? Math.round((funil[funil.length - 1]?.total / deals.length) * 100) : 0,
         },
         funil,
-        atividades: atividades.map((a) => ({ actor: a.actor, acao: a.acao, tone: a.tone })),
+        atividades: atividades.map((a) => ({ actor: a.actor, acao: a.acao, tone: a.tone, createdAt: a.createdAt.toISOString() })),
         contatosRecentes: contatosRecentes.map((c) => ({ id: c.id, nome: c.nome, tag: c.tag, valor: num(c.valorEstimado) })),
       };
     });
@@ -138,7 +138,8 @@ export class CrmService {
    * `created_at` até o microssegundo).
    */
   async listContacts(tenantId: string, opts: { q?: string; cursor?: string; limit?: number } = {}): Promise<ContactPage> {
-    const take = Math.min(Math.max(opts.limit ?? 25, 1), 100);
+    if (opts.limit !== undefined && (!Number.isInteger(opts.limit) || opts.limit < 1)) throw new BadRequestException('limite inválido');
+    const take = Math.min(opts.limit ?? 25, 100);
     const cursorId = decodeCursor(opts.cursor);
     const q = opts.q?.trim();
     const where = q
@@ -277,6 +278,66 @@ export class CrmService {
     });
   }
 
+  /**
+   * Registra base legal/consentimento (RegrasNegocio §5 — LGPD). Ação própria,
+   * não escondida dentro de `updateContact`: é dado de compliance, merece
+   * auditoria explícita e um formato validado (ver ConsentimentoDto).
+   */
+  async registrarConsentimento(tenantId: string, id: string, input: { baseLegal: string; origem?: string }) {
+    return this.prisma.withTenant(tenantId, async (tx) => {
+      const c = await tx.contact.findUnique({ where: { id }, select: { id: true } });
+      if (!c) throw new NotFoundException('contato inexistente');
+      const consentimento = { baseLegal: input.baseLegal, origem: input.origem ?? null, consentidoEm: new Date().toISOString() };
+      await tx.contact.update({ where: { id }, data: { consentimento: consentimento as Prisma.InputJsonValue, updatedAt: new Date() } });
+      await tx.$executeRaw`INSERT INTO audit_logs (tenant_id, actor_type, actor_id, acao, entidade, entidade_id, payload)
+        VALUES (${tenantId}::uuid, 'humano', 'sistema', 'contato.consentimento_registrado', 'contact', ${id}::uuid, ${JSON.stringify(consentimento)}::jsonb)`;
+      return { ok: true, consentimento };
+    });
+  }
+
+  /**
+   * Exportação completa do contato (LGPD — direito de acesso/portabilidade,
+   * RegrasNegocio §5: "exportação... nativas"). Inclui o CONTEÚDO das
+   * mensagens (não só metadados, diferente do perfil 360 da UI) — é dado
+   * pessoal trocado com o titular, parte do que ele tem direito de receber.
+   */
+  async exportarDadosContato(tenantId: string, id: string) {
+    return this.prisma.withTenant(tenantId, async (tx) => {
+      const c = await tx.contact.findUnique({ where: { id }, include: { company: true } });
+      if (!c) throw new NotFoundException('contato inexistente');
+
+      const [deals, conversas, tarefas, notas, atividades] = await Promise.all([
+        tx.deal.findMany({ where: { contactId: id }, orderBy: { createdAt: 'asc' } }),
+        tx.conversation.findMany({ where: { contactId: id }, include: { messages: { orderBy: { createdAt: 'asc' } } } }),
+        tx.task.findMany({ where: { contactId: id }, orderBy: { createdAt: 'asc' } }),
+        tx.note.findMany({ where: { contactId: id }, orderBy: { createdAt: 'asc' } }),
+        tx.activity.findMany({ where: { contactId: id }, orderBy: { createdAt: 'asc' } }),
+      ]);
+
+      await tx.$executeRaw`INSERT INTO audit_logs (tenant_id, actor_type, actor_id, acao, entidade, entidade_id)
+        VALUES (${tenantId}::uuid, 'humano', 'sistema', 'contato.exportado', 'contact', ${id}::uuid)`;
+
+      return {
+        geradoEm: new Date().toISOString(),
+        titular: {
+          id: c.id, nome: c.nome, email: c.email, telefone: c.telefone, empresa: c.empresa,
+          cargo: c.cargo, localizacao: c.localizacao, site: c.site, linkedin: c.linkedin,
+          origem: c.origem, tags: c.tags, camposCustom: c.camposCustom,
+          consentimento: c.consentimento, criadoEm: c.createdAt,
+          empresaVinculada: c.company ? { nome: c.company.nome, dominio: c.company.dominio } : null,
+        },
+        negocios: deals.map((d) => ({ id: d.id, titulo: d.titulo, valor: num(d.valor), status: d.status, criadoEm: d.createdAt })),
+        conversas: conversas.map((cv) => ({
+          id: cv.id, canal: cv.canal,
+          mensagens: cv.messages.map((m) => ({ autor: m.autorTipo, corpo: m.corpo, enviadaEm: m.createdAt })),
+        })),
+        tarefas: tarefas.map((t) => ({ titulo: t.titulo, status: t.status, criadaEm: t.createdAt })),
+        notas: notas.map((n) => ({ corpo: n.corpo, criadaEm: n.createdAt })),
+        atividades: atividades.map((a) => ({ acao: a.acao, quando: a.createdAt })),
+      };
+    });
+  }
+
   async getDeal(tenantId: string, id: string) {
     return this.prisma.withTenant(tenantId, async (tx) => {
       const d = await tx.deal.findUnique({
@@ -393,6 +454,7 @@ export class CrmService {
     const r = await this.prisma.withTenant(tenantId, async (tx) => {
       const stage = await tx.stage.findUnique({ where: { id: input.stageId } });
       if (!stage) throw new NotFoundException('stage inexistente');
+      if (input.contactId && !await tx.contact.findFirst({ where: { id: input.contactId, tenantId }, select: { id: true } })) throw new NotFoundException('contato inexistente');
       const d = await tx.deal.create({
         data: {
           tenantId, titulo: input.titulo, contactId: input.contactId ?? null,
@@ -439,7 +501,7 @@ export class CrmService {
       const stage = await tx.stage.findUnique({ where: { id: stageId } });
       if (!stage) throw new NotFoundException('stage inexistente');
       const antes = await tx.deal.findUnique({ where: { id: dealId }, select: { stageId: true } });
-      const res = await tx.deal.updateMany({ where: { id: dealId }, data: { stageId, updatedAt: new Date() } });
+      const res = await tx.deal.updateMany({ where: { id: dealId }, data: { stageId, pipelineId: stage.pipelineId, updatedAt: new Date() } });
       if (res.count === 0) throw new NotFoundException('negócio inexistente');
       const d = await tx.deal.findUnique({ where: { id: dealId } });
       await tx.activity.create({ data: { tenantId, actor: 'Você', acao: `moveu "${d?.titulo}" para ${stage.nome}`, tone: 'neutral', dealId } });
@@ -515,7 +577,8 @@ export class CrmService {
       });
       return rows.map((c) => ({
         id: c.id, nome: c.nome, canal: c.canal, ultimaPrevia: c.ultimaPrevia, naoLidas: c.naoLidas, ultimaHora: c.ultimaHora,
-        mensagens: c.messages.map((m) => ({ id: m.id, de: m.autorTipo, texto: m.corpo, hora: m.hora })),
+        atendimento: c.atendimento, agentId: c.agentId, assigneeId: c.assigneeId, handoffMotivo: c.handoffMotivo,
+        mensagens: c.messages.map((m) => ({ id: m.id, de: m.autorTipo, texto: m.corpo, hora: m.hora, status: m.deliveryStatus, agentId: m.agentId })),
       }));
     });
   }

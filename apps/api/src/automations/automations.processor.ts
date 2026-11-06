@@ -23,7 +23,7 @@ export class PassosProcessor extends WorkerHost {
   async aoFalhar(job: Job<PassoJob>, erro: Error): Promise<void> {
     const tentativas = job.attemptsMade;
     const maximo = job.opts.attempts ?? 1;
-    if (tentativas < maximo) {
+    if (tentativas < maximo && erro.name !== 'UnrecoverableError') {
       this.log.warn(`passo ${job.data.noId} falhou (${tentativas}/${maximo}), vai tentar de novo: ${erro.message}`);
       return;
     }

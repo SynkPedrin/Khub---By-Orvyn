@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
-import { IsHexColor, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { ArrayNotEmpty, ArrayUnique, IsArray, IsIn, IsHexColor, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { CurrentUser, TenantId, type AuthUser } from '../auth/decorators';
 import { SkipAudit } from '../common/audit.interceptor';
 import { TagsService } from './tags.service';
@@ -17,6 +17,9 @@ class UpdateTagDto {
 }
 class CreateKeyDto {
   @IsString() @MinLength(1) @MaxLength(60) name!: string;
+  @IsOptional() @IsArray() @ArrayNotEmpty() @ArrayUnique()
+  @IsIn(['contacts.read','contacts.write','pipeline.read','pipeline.write','conversations.read','conversations.reply','automations.read','automations.write','integrations.manage'], { each: true })
+  scopes?: string[];
 }
 
 /** Configurações avançadas: tags do CRM e Private Integrations (API keys).
@@ -55,7 +58,7 @@ export class AdvancedSettingsController {
   }
   @Post('api-keys')
   createKey(@TenantId() t: string, @CurrentUser() u: AuthUser, @Body() dto: CreateKeyDto) {
-    return this.apiKeys.criar(t, u.identityId, dto.name);
+    return this.apiKeys.criar(t, u.identityId, dto.name, dto.scopes);
   }
   @Delete('api-keys/:id')
   @HttpCode(200)

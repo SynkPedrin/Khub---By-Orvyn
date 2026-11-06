@@ -13,14 +13,11 @@ import { AdsSyncProcessor } from './ads-sync.processor';
 import { AdsController, IntegrationsController } from './integrations.controller';
 import { MetaWebhookController } from './meta-webhook.controller';
 
-function redisConn() {
-  const u = new URL(process.env.REDIS_URL ?? 'redis://localhost:6379');
-  return { host: u.hostname, port: Number(u.port || 6379), maxRetriesPerRequest: null };
-}
+import { queueConnection, isWorker } from '../common/queue-connection';
 
 @Module({
   imports: [
-    BullModule.forRoot({ connection: redisConn() }),
+    BullModule.forRoot({ connection: queueConnection() }),
     BullModule.registerQueue({ name: 'ads-sync' }),
     // integrations -> crm (superfície pública: LeadsService). O CRM não conhece
     // integrations, então não há ciclo: quem tem a credencial busca o lead e
@@ -41,8 +38,8 @@ function redisConn() {
     IntegrationsService,
     AdsService,
     AdsSyncService,
-    AdsSyncProcessor,
+    ...(isWorker() ? [AdsSyncProcessor] : []),
   ],
-  exports: [AdsSyncService, CryptoService],
+  exports: [AdsSyncService, CryptoService, MetaLeadsService],
 })
 export class IntegrationsModule {}

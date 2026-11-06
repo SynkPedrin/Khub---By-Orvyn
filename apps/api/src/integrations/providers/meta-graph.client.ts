@@ -22,9 +22,8 @@ export class MetaGraphClient implements GraphClient {
   async get(path: string, params: Record<string, unknown>, accessToken?: string): Promise<any> {
     const url = new URL(`${this.base()}/${path}`);
     for (const [k, v] of Object.entries(params)) if (v != null) url.searchParams.set(k, String(v));
-    if (accessToken) url.searchParams.set('access_token', accessToken);
     const r = await this.circuito.run(async () => {
-      const resp = await fetch(url);
+      const resp = await fetch(url, { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}, signal: AbortSignal.timeout(15_000) });
       if (resp.status >= 500) throw new Error(`Meta Graph ${resp.status}`);
       return resp;
     });

@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from './crypto.service';
 import { ConfigService } from '../config/config.service';
 import { ADS_CONNECTORS, type AdsConnector, type StoredCredentials } from './ads-connector';
+import { MetaAdsConnector } from './providers/meta-ads.connector';
 
 interface StatePayload {
   tenantId: string;
@@ -24,6 +25,7 @@ export class IntegrationsService {
     private readonly config: ConfigService,
     @Inject(ADS_CONNECTORS) private readonly connectors: Record<string, AdsConnector>,
     @InjectQueue('ads-sync') private readonly queue: Queue,
+    private readonly metaConnector: MetaAdsConnector,
   ) {}
 
   private connector(provider: string): AdsConnector {
@@ -50,14 +52,38 @@ export class IntegrationsService {
     return p;
   }
 
-  getAuthUrl(tenantId: string, provider: string): { url: string } {
+  /**
+   * `capability` só tem efeito para `provider==='meta'` (`'ads'` | `'leads'`,
+   * default `'ads'`) — os demais conectores ignoram, sem quebrar contrato.
+   * Ver `MetaAdsConnector` para o porquê de não pedir os dois num diálogo só.
+   */
+  getAuthUrl(tenantId: string, provider: string, capability?: string): { url: string } {
     // Gating (Brief §2): 501 config_required com as variáveis que faltam.
     if (provider === 'meta') this.config.require('meta');
     if (provider === 'google') this.config.require('google_ads');
     if (provider === 'tiktok') this.config.require('tiktok');
     this.config.require('integrations_crypto');
     const state = this.signState({ tenantId, provider, nonce: randomBytes(8).toString('hex'), ts: Date.now() });
+
+    if (provider === 'meta' && (capability === 'ads' || capability === 'leads')) {
+      return { url: this.metaConnector.buildAuthUrl(tenantId, state, capability) };
+    }
     return { url: this.connector(provider).buildAuthUrl(tenantId, state) };
+  }
+
+  /**
+   * Diagnóstico legível do que a conta Meta concedeu de verdade — em vez de
+   * um "Invalid Scopes" cru, diz exatamente qual capability falta e por quê.
+   */
+  async diagnosticoMeta(tenantId: string) {
+    this.config.require('meta');
+    const integ = await this.prisma.withTenant(tenantId, (tx) => tx.integration.findFirst({ where: { tenantId, provider: 'meta' } }));
+    if (!integ?.credentialsEncrypted) {
+      return { conectado: false, tokenValido: false, concedidos: [], faltandoAds: [], faltandoLeads: [], paginas: [] };
+    }
+    const cred = this.crypto.decryptJson<StoredCredentials>(integ.credentialsEncrypted);
+    const r = await this.metaConnector.diagnosticar(cred);
+    return { conectado: true, ...r };
   }
 
   /** Chamado pela rota pública de callback (browser → front → API). */
@@ -108,12 +134,14 @@ export class IntegrationsService {
       const pages = await connector.listPages(cred);
       if (!pages.length) return;
       await this.prisma.withTenant(tenantId, async (tx) => {
+        await tx.integration.update({where:{id:integrationId,tenantId},data:{credentialsEncrypted:this.crypto.encryptJson({...cred,pages})}});
         for (const p of pages) {
-          // page_id é único global: se a página trocar de conta, o dono mais recente vence
+          // A reconexão só pode atualizar a página do mesmo tenant.
           await tx.$executeRaw`
             INSERT INTO meta_pages (tenant_id, integration_id, page_id, page_nome)
             VALUES (${tenantId}::uuid, ${integrationId}::uuid, ${p.pageId}, ${p.nome})
-            ON CONFLICT (page_id) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, integration_id = EXCLUDED.integration_id, page_nome = EXCLUDED.page_nome`;
+            ON CONFLICT (page_id) DO UPDATE SET integration_id = EXCLUDED.integration_id, page_nome = EXCLUDED.page_nome
+            WHERE meta_pages.tenant_id = EXCLUDED.tenant_id`;
         }
       });
     } catch (e) {
@@ -141,7 +169,7 @@ export class IntegrationsService {
     await this.queue.add(
       'sync',
       { tenantId, integrationId },
-      { jobId: `sync:${integrationId}:${Date.now()}`, removeOnComplete: 50, removeOnFail: 50, attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
+      { jobId: `sync-${integrationId}-${Date.now()}`, removeOnComplete: 50, removeOnFail: 50, attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
     );
   }
 }

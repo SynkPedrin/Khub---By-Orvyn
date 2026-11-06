@@ -43,6 +43,73 @@ describe('MetaAdsConnector', () => {
     expect(camp.dailyBudget).toBe(50); // 5000 centavos
   });
 
+  describe('capabilities separadas (Fase 2 do brief de recuperação)', () => {
+    it('capability "ads" (default) NÃO pede leads_retrieval — não pode travar Ads por causa de Lead Ads', () => {
+      const c = new MetaAdsConnector(fakeGraph({}), new ConfigService());
+      const url = c.buildAuthUrl('t1', 'STATE', 'ads');
+      expect(url).toContain('ads_read');
+      expect(url).toContain('ads_management');
+      expect(url).not.toContain('leads_retrieval');
+    });
+
+    it('capability "leads" pede leads_retrieval e NÃO pede ads_management', () => {
+      const c = new MetaAdsConnector(fakeGraph({}), new ConfigService());
+      const url = c.buildAuthUrl('t1', 'STATE', 'leads');
+      expect(url).toContain('leads_retrieval');
+      expect(url).not.toContain('ads_management');
+    });
+
+    it('exchangeCode devolve os scopes CONCEDIDOS (me/permissions), não os pedidos', async () => {
+      // A conta só concedeu ads_read — mesmo pedindo o pacote "ads" inteiro,
+      // o resto ficou de fora sem derrubar o diálogo (comportamento real da
+      // Meta: alguns scopes falham silenciosamente).
+      const c = new MetaAdsConnector(
+        fakeGraph({
+          'oauth/access_token': { access_token: 'tok123', expires_in: 3600 },
+          'me/permissions': { data: [{ permission: 'ads_read', status: 'granted' }, { permission: 'ads_management', status: 'declined' }] },
+        }),
+        new ConfigService(),
+      );
+      const cred2 = await c.exchangeCode('CODE');
+      expect(cred2.scopes).toEqual(['ads_read']);
+      expect(cred2.scopes).not.toContain('ads_management');
+    });
+
+    it('diagnosticar aponta exatamente o que falta para cada capability', async () => {
+      // Ordem importa: `fakeGraph` casa por substring na ordem de declaração,
+      // então as chaves mais específicas ("me/permissions", "me/accounts")
+      // precisam vir ANTES da genérica ("me"), senão "me/permissions" também
+      // bateria em "me" primeiro.
+      const c = new MetaAdsConnector(
+        fakeGraph({
+          'me/permissions': { data: [{ permission: 'ads_read', status: 'granted' }, { permission: 'pages_show_list', status: 'granted' }] },
+          'me/accounts': { data: [] },
+          me: { id: 'u1' },
+        }),
+        new ConfigService(),
+      );
+      const r = await c.diagnosticar(cred);
+      expect(r.tokenValido).toBe(true);
+      expect(r.concedidos).toEqual(['ads_read', 'pages_show_list']);
+      expect(r.faltandoAds).toEqual(['ads_management', 'business_management']);
+      expect(r.faltandoLeads).toEqual(['leads_retrieval', 'pages_read_engagement', 'pages_manage_ads']);
+    });
+
+    it('diagnosticar com token inválido não lança — devolve tokenValido:false', async () => {
+      const c = new MetaAdsConnector(
+        {
+          get: async () => {
+            throw new Error('Meta Graph 401: token expirado');
+          },
+        },
+        new ConfigService(),
+      );
+      const r = await c.diagnosticar({ accessToken: 'expirado', scopes: ['ads_read'] });
+      expect(r.tokenValido).toBe(false);
+      expect(r.detalhe).toContain('401');
+    });
+  });
+
   it('mapeia insights: actions → leads/conversions, deriva ROAS/CPL', () => {
     const c = new MetaAdsConnector(fakeGraph({}), new ConfigService());
     const ins = c.mapInsight({

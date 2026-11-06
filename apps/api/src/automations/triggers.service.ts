@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { RealtimeEvent } from '@orvyn/types';
 import { PrismaService } from '../prisma/prisma.service';
 import { RunsService } from './runs.service';
-import { grafoSchema, type Grafo, type No, type TipoNo } from './catalogo';
+import { grafoSchema, validarConfig, type Grafo, type No, type TipoNo } from './catalogo';
 import type { Contexto } from './executor.service';
 import type { GatilhoJob } from '../events/domain-events.service';
 
@@ -104,7 +104,7 @@ export class TriggersService {
    * A rota é pública; o tenant/workflow vêm do roteamento pela chave da URL
    * (migration 011), nunca do corpo — o corpo é de quem chama.
    */
-  async processarWebhook(tenantId: string, workflowId: string, payload: Record<string, unknown>): Promise<{ ok: boolean; motivo?: string; runId?: string }> {
+  async processarWebhook(tenantId: string, workflowId: string, payload: Record<string, unknown>, eventId?: string): Promise<{ ok: boolean; motivo?: string; runId?: string }> {
     const wf = await this.prisma.withTenant(tenantId, (tx) =>
       tx.workflow.findUnique({ where: { id: workflowId }, include: { versaoAtiva: { select: { id: true, grafo: true } } } }),
     );
@@ -114,8 +114,12 @@ export class TriggersService {
     const gatilho = grafo.nos.find((n) => n.tipo === 'gatilho.webhook');
     if (!gatilho) return { ok: false, motivo: 'workflow sem gatilho de webhook' };
 
-    const cfg = gatilho.config as { identificarPor: 'email' | 'telefone'; campo: string; seNaoAchar: 'criar' | 'ignorar' };
-    const valor = String(this.doCaminho(payload, cfg.campo ?? cfg.identificarPor) ?? '').trim();
+    // O grafo publicado guarda a config crua: aplica os defaults do catálogo (identificarPor/campo/seNaoAchar),
+    // senão um gatilho criado sem eles (API, blueprint, Nyro) estoura TypeError e o evento fica em retry sem aviso.
+    const conferida = validarConfig('gatilho.webhook', gatilho.config);
+    if (!conferida.ok) return { ok: false, motivo: `gatilho de webhook inválido: ${conferida.erro}` };
+    const cfg = conferida.dados as { identificarPor: 'email' | 'telefone'; campo: string; seNaoAchar: 'criar' | 'ignorar' };
+    const valor = String(this.doCaminho(payload, cfg.campo) ?? '').trim();
     if (!valor) return { ok: false, motivo: `payload sem o campo "${cfg.campo}"` };
 
     const contato = await this.acharOuCriarContato(tenantId, cfg, valor, payload);
@@ -125,7 +129,7 @@ export class TriggersService {
       tenantId, workflowId, versionId: wf.versaoAtiva.id, gatilho: 'gatilho.webhook',
       grafo, noInicial: gatilho.id,
       contexto: { contato, gatilho: payload },
-      dedupeKey: `webhook:${workflowId}:${valor}:${Date.now()}`,
+      dedupeKey: `webhook:${workflowId}:${eventId ?? valor}`,
     });
     return 'runId' in r ? { ok: true, runId: r.runId } : { ok: true, motivo: 'contato não reentra neste fluxo' };
   }

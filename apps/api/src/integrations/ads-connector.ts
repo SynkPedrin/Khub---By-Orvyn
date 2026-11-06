@@ -6,6 +6,8 @@ export interface StoredCredentials {
   expiresAt?: string; // ISO
   externalBusinessId?: string;
   scopes?: string[];
+  /** Stored only inside credentialsEncrypted, never returned by list(). */
+  pages?: { pageId: string; nome: string; accessToken?: string; tasks?: string[] }[];
 }
 
 export interface AdAccountDTO {
@@ -75,7 +77,7 @@ export interface AdsConnector {
   /** Há credencial de app para este provider? (gating — Brief §2) */
   configured?(): boolean;
   /** Páginas/perfis do usuário, para rotear webhook de lead (só quem tem). */
-  listPages?(cred: StoredCredentials): Promise<{ pageId: string; nome: string }[]>;
+  listPages?(cred: StoredCredentials): Promise<NonNullable<StoredCredentials['pages']>>;
   buildAuthUrl(tenantId: string, state: string): string;
   exchangeCode(code: string): Promise<StoredCredentials>;
   listAdAccounts(cred: StoredCredentials): Promise<AdAccountDTO[]>;

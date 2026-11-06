@@ -1,4 +1,6 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { parsePreferences } from './account-preferences';
+import { invitationEmail } from '../common/invite-email';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
@@ -6,7 +8,6 @@ import { MailerService } from '../common/mailer.service';
 import { Prisma } from '@prisma/client';
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
-const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 export interface NotificationItem {
   id: string;
@@ -56,13 +57,13 @@ export class SettingsService {
 
   async business(tenantId: string) {
     return this.prisma.withTenant(tenantId, (tx) =>
-      tx.tenant.findUnique({ where: { id: tenantId }, select: { nome: true, endereco: true, telefone: true, website: true, idioma: true, nicho: true, plano: true, status: true } }),
+      tx.tenant.findUnique({ where: { id: tenantId }, select: { nome: true, endereco: true, telefone: true, website: true, idioma: true, nicho: true, plano: true, status: true, settings: true } }),
     );
   }
 
-  async updateBusiness(tenantId: string, identityId: string, dto: { nome?: string; endereco?: string; telefone?: string; website?: string; idioma?: string; nicho?: string }) {
+  async updateBusiness(tenantId: string, identityId: string, dto: { nome?: string; endereco?: string; telefone?: string; website?: string; idioma?: string; nicho?: string; settings?: Record<string, unknown> }) {
     return this.prisma.withTenant(tenantId, async (tx) => {
-      await tx.tenant.update({ where: { id: tenantId }, data: { nome: dto.nome ?? undefined, endereco: dto.endereco ?? undefined, telefone: dto.telefone ?? undefined, website: dto.website ?? undefined, idioma: dto.idioma ?? undefined, nicho: dto.nicho ?? undefined, updatedAt: new Date() } });
+      await tx.tenant.update({ where: { id: tenantId }, data: { settings: dto.settings ? parsePreferences(dto.settings) : undefined, nome: dto.nome ?? undefined, endereco: dto.endereco ?? undefined, telefone: dto.telefone ?? undefined, website: dto.website ?? undefined, idioma: dto.idioma ?? undefined, nicho: dto.nicho ?? undefined, updatedAt: new Date() } });
       await audit(tx, tenantId, identityId, 'business.update', 'tenant', tenantId);
       return { ok: true };
     });
@@ -83,9 +84,16 @@ export class SettingsService {
   }
 
   async createInvite(tenantId: string, identityId: string, email: string, role: string) {
+    email = email.trim().toLowerCase();
+    if (!['owner','admin','manager','member','viewer'].includes(role)) throw new BadRequestException('papel inválido');
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new BadRequestException('e-mail inválido');
+    const actor = await this.prisma.membership.findUnique({ where: { identityId_tenantId: { identityId, tenantId } } });
+    if (!actor || !['owner', 'admin'].includes(actor.role) || (role === 'owner' && actor.role !== 'owner')) throw new ForbiddenException('permissão insuficiente');
     const raw = randomBytes(24).toString('base64url');
     const empresa = await this.prisma.withTenant(tenantId, async (tx) => {
+      await tx.$queryRaw`SELECT id FROM tenants WHERE id = ${tenantId}::uuid FOR UPDATE`;
+      if (await tx.user.findFirst({ where: { tenantId, email: { equals: email, mode: 'insensitive' } } })) throw new ConflictException('Este usuário já faz parte da operação.');
+      if (await tx.invite.findFirst({ where: { tenantId, email, acceptedAt: null, expiresAt: { gt: new Date() } } })) throw new ConflictException('Já existe um convite pendente. Revogue-o antes de enviar outro.');
       await tx.invite.create({ data: { tenantId, email, role: role || 'member', tokenHash: sha256(raw), expiresAt: new Date(Date.now() + 7 * 86400000) } });
       await audit(tx, tenantId, identityId, 'invite.create', 'invite', email);
       const t = await tx.tenant.findUnique({ where: { id: tenantId }, select: { nome: true } });
@@ -97,17 +105,13 @@ export class SettingsService {
     // envio manual em vez de falhar a operação (gating — Brief §2).
     const mail = await this.mailer.send({
       to: email,
-      subject: `Você foi convidado para ${empresa} no Orvyn OS`,
-      text: `Você foi convidado para ${empresa} no Orvyn OS.\n\nAceite em: ${acceptUrl}\n\nO link expira em 7 dias e só pode ser usado uma vez.`,
-      html: `<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:520px;margin:0 auto;padding:24px">
-        <h2 style="color:#6d28d9;margin:0 0 8px">Você foi convidado para ${escapeHtml(empresa)}</h2>
-        <p style="color:#475569;line-height:1.6">Sua conta no <strong>Orvyn OS</strong> está a um clique. O link expira em 7 dias e só pode ser usado uma vez.</p>
-        <p style="margin:24px 0"><a href="${acceptUrl}" style="background:#6d28d9;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:600">Aceitar convite</a></p>
-        <p style="color:#94a3b8;font-size:12px">Se o botão não funcionar, copie: ${acceptUrl}</p>
-      </div>`,
+      ...invitationEmail(empresa, acceptUrl, this.config.get('WEB_URL') ?? 'http://localhost:3210'),
+      idempotencyKey: `invite/${sha256(raw)}`,
     });
     return { ok: true, acceptUrl, emailSent: mail.sent, missing: mail.missing, erro: mail.erro };
   }
+
+  emailStatus() { return this.mailer.status(); }
 
   async revokeInvite(tenantId: string, identityId: string, id: string) {
     await this.prisma.withTenant(tenantId, async (tx) => {
@@ -118,9 +122,16 @@ export class SettingsService {
   }
 
   async changeRole(tenantId: string, identityId: string, targetIdentityId: string, role: string) {
-    if (!['owner', 'admin', 'member', 'viewer'].includes(role)) throw new BadRequestException('papel inválido');
+    if (!['owner', 'admin', 'manager', 'member', 'viewer'].includes(role)) throw new BadRequestException('papel inválido');
     await this.prisma.withTenant(tenantId, async (tx) => {
-      await tx.$executeRaw`UPDATE memberships SET role = ${role} WHERE tenant_id = ${tenantId}::uuid AND identity_id = ${targetIdentityId}::uuid`;
+      await tx.$queryRaw`SELECT id FROM tenants WHERE id = ${tenantId}::uuid FOR UPDATE`;
+      const actor = await tx.membership.findUnique({ where: { identityId_tenantId: { identityId, tenantId } } });
+      const target = await tx.membership.findUnique({ where: { identityId_tenantId: { identityId: targetIdentityId, tenantId } } });
+      if (!target) throw new NotFoundException('membro inexistente');
+      if (!actor || !['owner', 'admin'].includes(actor.role) || ((role === 'owner' || target.role === 'owner') && actor.role !== 'owner')) throw new ForbiddenException('permissão insuficiente');
+      if (target.role === 'owner' && role !== 'owner' && await tx.membership.count({ where: { tenantId, role: 'owner' } }) <= 1) throw new BadRequestException('a organização precisa manter um proprietário');
+      await tx.membership.update({ where: { identityId_tenantId: { identityId: targetIdentityId, tenantId } }, data: { role } });
+      await tx.user.updateMany({ where: { tenantId, identityId: targetIdentityId }, data: { role } });
       await audit(tx, tenantId, identityId, 'member.role', 'membership', targetIdentityId);
     });
     return { ok: true };

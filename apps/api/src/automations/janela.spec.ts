@@ -27,6 +27,7 @@ function ambiente(noAtual: string, workflow: Record<string, unknown>) {
   const run: Record<string, unknown> = {
     id: 'run1', workflowId: 'wf1', versionId: 'v1', status: 'rodando', noAtual,
     estado: { contato: { id: 'c1', nome: 'Ana', tags: [] } }, passos: 0,
+    startedAt: new Date('2026-01-01T12:00:00Z'), scheduledAt: new Date('2026-01-01T12:00:00Z'),
     version: { grafo: GRAFO }, workflow, contactId: 'c1',
   };
   const enfileirados: any[] = [];
@@ -39,6 +40,7 @@ function ambiente(noAtual: string, workflow: Record<string, unknown>) {
           findMany: jest.fn(async () => []),
           create: jest.fn(async () => ({ id: 'run-novo' })),
           update: jest.fn(async ({ data }: any) => { Object.assign(run, data); return run; }),
+          updateMany: jest.fn(async () => ({ count: 1 })),
         },
         workflow: { findUnique: jest.fn(async () => ({ reentrada: 'uma_vez' })) },
         workflowRunStep: { create: jest.fn(async () => ({})) },
@@ -112,7 +114,7 @@ describe('Reentrada (E.2) — não queimar a lista', () => {
     (a.prisma.withTenant as jest.Mock).mockImplementation(async (_t: string, work: (tx: unknown) => Promise<unknown>) =>
       work({
         workflow: { findUnique: jest.fn(async () => ({ reentrada: 'uma_vez' })) },
-        workflowRun: { findFirst: jest.fn(async () => ({ id: 'run-antigo' })), create: jest.fn() },
+        workflowRun: { findFirst: jest.fn(async () => ({ id: 'run-antigo' })), findUnique: jest.fn(async () => ({ noAtual: 'sms', scheduledAt: new Date() })), create: jest.fn() },
       }),
     );
     const r = await a.svc.iniciar({
@@ -128,7 +130,7 @@ describe('Reentrada (E.2) — não queimar a lista', () => {
     (a.prisma.withTenant as jest.Mock).mockImplementation(async (_t: string, work: (tx: unknown) => Promise<unknown>) =>
       work({
         workflow: { findUnique: jest.fn(async () => ({ reentrada: 'sempre' })) },
-        workflowRun: { findFirst, create: jest.fn(async () => ({ id: 'run-novo' })) },
+        workflowRun: { findFirst, findUnique: jest.fn(async () => ({ noAtual: 'sms', scheduledAt: new Date() })), create: jest.fn(async () => ({ id: 'run-novo' })) },
       }),
     );
     const r = await a.svc.iniciar({
@@ -145,7 +147,7 @@ describe('Reentrada (E.2) — não queimar a lista', () => {
     (a.prisma.withTenant as jest.Mock).mockImplementation(async (_t: string, work: (tx: unknown) => Promise<unknown>) =>
       work({
         workflow: { findUnique: jest.fn(async () => ({ reentrada: 'apos_terminar' })) },
-        workflowRun: { findFirst: jest.fn(async (args: any) => { capturado.push(args); return null; }), create: jest.fn(async () => ({ id: 'run-novo' })) },
+        workflowRun: { findFirst: jest.fn(async (args: any) => { capturado.push(args); return null; }), findUnique: jest.fn(async () => ({ noAtual: 'sms', scheduledAt: new Date() })), create: jest.fn(async () => ({ id: 'run-novo' })) },
       }),
     );
     await a.svc.iniciar({
@@ -161,7 +163,7 @@ describe('Reentrada (E.2) — não queimar a lista', () => {
     (a.prisma.withTenant as jest.Mock).mockImplementation(async (_t: string, work: (tx: unknown) => Promise<unknown>) =>
       work({
         workflow: { findUnique: jest.fn(async () => ({ reentrada: 'uma_vez' })) },
-        workflowRun: { findFirst, create: jest.fn(async () => ({ id: 'run-teste' })) },
+        workflowRun: { findFirst, findUnique: jest.fn(async () => ({ noAtual: 'sms', scheduledAt: new Date() })), create: jest.fn(async () => ({ id: 'run-teste' })) },
       }),
     );
     const r = await a.svc.iniciar({

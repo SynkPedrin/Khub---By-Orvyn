@@ -12,7 +12,21 @@ import {
 import { ConfigService } from '../../config/config.service';
 import { META_GRAPH, type GraphClient } from './meta-graph.client';
 
-const SCOPES = ['ads_read', 'ads_management', 'business_management', 'leads_retrieval', 'pages_show_list'];
+/**
+ * Capabilities da Meta — NUNCA um scope-blob monolítico (Brief de recuperação,
+ * Fase 2). `leads_retrieval` normalmente exige Advanced Access via App Review
+ * (ou, em dev, que o usuário logado seja Admin/Developer/Tester do App); pedir
+ * esse scope junto com `ads_read` faz o diálogo OAuth inteiro falhar com
+ * "Invalid Scopes" se a permissão não estiver liberada — derrubando também
+ * Ads, que funcionaria sozinho. Separado: `ads` conecta mesmo sem Lead Ads
+ * aprovado; `leads` é pedido à parte, só quando o operador quer esse canal.
+ */
+export type MetaCapability = 'ads' | 'leads';
+
+const CAPABILITY_SCOPES: Record<MetaCapability, string[]> = {
+  ads: ['ads_read', 'ads_management', 'business_management', 'pages_show_list'],
+  leads: ['leads_retrieval', 'pages_show_list', 'pages_read_engagement', 'pages_manage_ads'],
+};
 
 @Injectable()
 export class MetaAdsConnector implements AdsConnector {
@@ -33,14 +47,19 @@ export class MetaAdsConnector implements AdsConnector {
     return `${this.config.get('WEB_URL') ?? 'http://localhost:3210'}/api/integrations/meta/callback`;
   }
 
-  buildAuthUrl(_tenantId: string, state: string): string {
+  /**
+   * `capability` decide QUAL conjunto de scopes vai no diálogo. Default
+   * `'ads'` preserva o comportamento existente para quem já chama sem o
+   * parâmetro novo.
+   */
+  buildAuthUrl(_tenantId: string, state: string, capability: MetaCapability = 'ads'): string {
     this.config.require('meta');
     const p = new URLSearchParams({
       client_id: this.config.get('META_APP_ID')!,
       redirect_uri: this.redirectUri(),
       state,
       response_type: 'code',
-      scope: SCOPES.join(','),
+      scope: CAPABILITY_SCOPES[capability].join(','),
     });
     return `https://www.facebook.com/${this.version()}/dialog/oauth?${p.toString()}`;
   }
@@ -53,17 +72,73 @@ export class MetaAdsConnector implements AdsConnector {
       redirect_uri: this.redirectUri(),
       code,
     });
+    const accessToken = j.access_token;
     return {
-      accessToken: j.access_token,
+      accessToken,
       expiresAt: j.expires_in ? new Date(Date.now() + j.expires_in * 1000).toISOString() : undefined,
-      scopes: SCOPES,
+      // Scopes REALMENTE concedidos, não os pedidos — a Meta pode aprovar
+      // silenciosamente só parte do pedido sem derrubar o diálogo. Sem isto,
+      // `Integration.scopes` mentia sobre o que a conta de fato autorizou.
+      scopes: await this.grantedScopes(accessToken),
     };
   }
 
+  /** GET /me/permissions — o único jeito confiável de saber o que foi concedido. */
+  private async grantedScopes(accessToken: string): Promise<string[]> {
+    try {
+      const j = await this.graph.get('me/permissions', {}, accessToken);
+      return (j.data ?? [])
+        .filter((p: { status?: string }) => p.status === 'granted')
+        .map((p: { permission: string }) => p.permission);
+    } catch {
+      // Token acabou de sair da troca — se /me/permissions falhar aqui é
+      // problema de rede, não de permissão. Não inventa lista vazia como se
+      // fosse "nada concedido"; deixa a UI mostrar "não verificado ainda".
+      return [];
+    }
+  }
+
+  /**
+   * Diagnóstico legível — traduz o resultado cru da Meta em algo que o
+   * operador entende, sem expurgar o motivo técnico (fica em `detalhe`).
+   */
+  async diagnosticar(cred: StoredCredentials): Promise<{
+    tokenValido: boolean;
+    concedidos: string[];
+    faltandoAds: string[];
+    faltandoLeads: string[];
+    paginas: { pageId: string; nome: string }[];
+    detalhe?: string;
+  }> {
+    let tokenValido = true;
+    let detalhe: string | undefined;
+    try {
+      await this.graph.get('me', { fields: 'id' }, cred.accessToken);
+    } catch (e) {
+      tokenValido = false;
+      detalhe = (e as Error).message;
+    }
+
+    const concedidos = tokenValido ? await this.grantedScopes(cred.accessToken) : (cred.scopes ?? []);
+    const faltandoAds = CAPABILITY_SCOPES.ads.filter((s) => !concedidos.includes(s));
+    const faltandoLeads = CAPABILITY_SCOPES.leads.filter((s) => !concedidos.includes(s));
+
+    let paginas: { pageId: string; nome: string }[] = [];
+    if (tokenValido && concedidos.includes('pages_show_list')) {
+      try {
+        paginas = (await this.listPages(cred)).map((p) => ({ pageId: p.pageId, nome: p.nome }));
+      } catch {
+        // sem páginas legíveis — não é erro fatal do diagnóstico
+      }
+    }
+
+    return { tokenValido, concedidos, faltandoAds, faltandoLeads, paginas, detalhe };
+  }
+
   /** Páginas do usuário — usadas para rotear o webhook de Lead Ads (D1). */
-  async listPages(cred: StoredCredentials): Promise<{ pageId: string; nome: string }[]> {
-    const j = await this.graph.get('me/accounts', { fields: 'id,name', limit: 200 }, cred.accessToken);
-    return (j.data ?? []).map((p: any) => ({ pageId: String(p.id), nome: p.name ?? '' }));
+  async listPages(cred: StoredCredentials): Promise<NonNullable<StoredCredentials['pages']>> {
+    const j = await this.graph.get('me/accounts', { fields: 'id,name,access_token,tasks', limit: 200 }, cred.accessToken);
+    return (j.data ?? []).map((p: any) => ({ pageId: String(p.id), nome: p.name ?? '', accessToken: p.access_token, tasks: p.tasks ?? [] }));
   }
 
   async listAdAccounts(cred: StoredCredentials): Promise<AdAccountDTO[]> {

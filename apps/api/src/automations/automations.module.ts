@@ -1,3 +1,4 @@
+import { isWorker } from '../common/queue-connection';
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { CrmModule } from '../crm/crm.module';
@@ -24,7 +25,7 @@ import { GatilhosProcessor, PassosProcessor } from './automations.processor';
     BullModule.registerQueue({ name: FILA_GATILHOS }),
   ],
   controllers: [AutomationsController, HooksController],
-  providers: [WorkflowsService, RunsService, ExecutorService, TriggersService, PassosProcessor, GatilhosProcessor],
-  exports: [WorkflowsService],
+  providers: [WorkflowsService, RunsService, ExecutorService, TriggersService, ...(isWorker() ? [PassosProcessor, GatilhosProcessor] : [])],
+  exports: [WorkflowsService, RunsService, TriggersService],
 })
 export class AutomationsModule {}

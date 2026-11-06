@@ -4,7 +4,7 @@ import { ConfigRequiredException, ConfigService, type Provider } from './config.
  * Canário do Brief §2: com TODA credencial de terceiro ausente, nada explode —
  * o sistema sabe dizer o que falta, e só a chamada externa fica bloqueada.
  */
-const TERCEIROS: Provider[] = ['stevo', 'meta', 'google_ads', 'tiktok', 'stripe', 'voyage', 'anthropic', 'email', 'oauth_google', 'oauth_github', 'google_calendar', 'integrations_crypto'];
+const TERCEIROS: Provider[] = ['stevo', 'evolution', 'meta', 'google_ads', 'tiktok', 'stripe', 'voyage', 'anthropic', 'email', 'oauth_google', 'oauth_github', 'google_calendar', 'integrations_crypto'];
 
 describe('ConfigService (gating por credencial)', () => {
   const backup = { ...process.env };
@@ -14,7 +14,7 @@ describe('ConfigService (gating por credencial)', () => {
     svc = new ConfigService();
     for (const p of TERCEIROS) for (const k of svc.missingVars(p)) delete process.env[k];
     // limpa também as que estiverem presentes no ambiente do dev
-    for (const k of ['STEVO_API_URL', 'STEVO_API_KEY', 'STEVO_INSTANCE', 'META_APP_ID', 'META_APP_SECRET', 'VOYAGE_API_KEY', 'ANTHROPIC_API_KEY', 'SMTP_URL', 'STRIPE_SECRET_KEY', 'INTEGRATIONS_ENCRYPTION_KEY']) {
+    for (const k of ['STEVO_API_URL', 'STEVO_API_KEY', 'STEVO_INSTANCE', 'EVOLUTION_BASE_URL', 'EVOLUTION_API_KEY', 'META_APP_ID', 'META_APP_SECRET', 'VOYAGE_API_KEY', 'ANTHROPIC_API_KEY', 'SMTP_URL', 'STRIPE_SECRET_KEY', 'INTEGRATIONS_ENCRYPTION_KEY']) {
       delete process.env[k];
     }
   });

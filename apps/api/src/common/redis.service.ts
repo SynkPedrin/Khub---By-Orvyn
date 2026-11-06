@@ -29,9 +29,7 @@ export class RedisService implements OnModuleDestroy {
     const c = this.conn();
     if (!c) return null;
     try {
-      const n = await c.incr(key);
-      if (n === 1) await c.expire(key, ttlSec);
-      return n;
+      return Number(await c.eval("local n = redis.call('INCR', KEYS[1]); if n == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]); end; return n", 1, key, ttlSec));
     } catch {
       return null; // fail-open
     }

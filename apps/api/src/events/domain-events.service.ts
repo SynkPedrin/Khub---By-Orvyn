@@ -43,25 +43,7 @@ export class DomainEventsService {
    */
   publicar<E extends RealtimeEvent>(tenantId: string, evento: E, dados: RealtimeEvents[E], opts: { dedupeKey?: string; automacao?: boolean } = {}): void {
     this.realtime.publicar(tenantId, evento, dados);
-    if (opts.automacao === false) return;
-
-    const dedupeKey = opts.dedupeKey ?? `${evento}:${JSON.stringify(dados)}`;
-    void this.fila
-      .add(
-        'gatilho',
-        { tenantId, evento, dados: dados as Record<string, unknown>, dedupeKey },
-        {
-          // jobId igual = job ignorado pelo BullMQ: a 1ª barreira de idempotência
-          // (a 2ª é o unique index de dedupe_key em workflow_runs).
-          // O BullMQ recusa ':' no jobId — e a dedupeKey tem vários. Hash resolve
-          // e ainda mantém o id curto qualquer que seja o tamanho do payload.
-          jobId: `${tenantId}_${createHash('sha1').update(dedupeKey).digest('hex')}`,
-          removeOnComplete: 500,
-          removeOnFail: 200,
-          attempts: 3,
-          backoff: { type: 'exponential', delay: 2000 },
-        },
-      )
-      .catch((e: Error) => this.log.warn(`falha ao enfileirar gatilho ${evento}: ${e.message}`));
+    // Durable domain events are inserted by database triggers (migration 022).
+    // This method only refreshes connected clients after the commit.
   }
 }

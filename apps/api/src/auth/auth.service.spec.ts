@@ -28,6 +28,17 @@ function ambiente(opts: { convite?: Record<string, unknown> | null; identidade?:
     invite: {
       findUnique: jest.fn(async ({ where }: any) => (convite && where.tokenHash === sha256('TOKEN-VALIDO') ? convite : null)),
       update: jest.fn(async ({ data }: any) => { Object.assign(convite, data); return convite; }),
+      // `updateMany` com WHERE condicional é como o serviço reivindica o
+      // convite de forma atômica: só marca `acceptedAt` se ele ainda estiver
+      // livre e válido. `count: 0` é o sinal de "alguém chegou antes" — é
+      // por ele que o teste de uso único recusa a segunda tentativa.
+      updateMany: jest.fn(async ({ where, data }: any) => {
+        if (!convite || convite.id !== where.id) return { count: 0 };
+        if (where.acceptedAt === null && convite.acceptedAt) return { count: 0 };
+        if (where.expiresAt?.gt && convite.expiresAt <= where.expiresAt.gt) return { count: 0 };
+        Object.assign(convite, data);
+        return { count: 1 };
+      }),
     },
     identity: {
       findFirst: jest.fn(async ({ where }: any) => identidades.find((i) => i.email.toLowerCase() === where.email.equals.toLowerCase()) ?? null),
@@ -97,7 +108,7 @@ describe('AuthService.acceptInvite — a única porta de entrada num tenant alhe
 
   it('identidade que JÁ existe entra no 2º tenant sem criar conta nova', async () => {
     const a = ambiente({ identidade: { id: 'ident-antiga', email: 'novo@empresa.com', passwordHash: await hash('qualquer') } });
-    const r = await a.svc.acceptInvite('TOKEN-VALIDO', 'Ana');
+    const r = await a.svc.acceptInvite('TOKEN-VALIDO', 'Ana', 'qualquer');
 
     expect((a.prisma as any).identity.create).not.toHaveBeenCalled();
     expect(r.user.identityId).toBe('ident-antiga');
@@ -113,8 +124,8 @@ describe('AuthService.acceptInvite — a única porta de entrada num tenant alhe
   });
 
   it('e-mail do convite é case-insensitive (o convite dita o e-mail, não o clique)', async () => {
-    const a = ambiente({ identidade: { id: 'ident-antiga', email: 'NOVO@empresa.COM' } });
-    await a.svc.acceptInvite('TOKEN-VALIDO', 'Ana');
+    const a = ambiente({ identidade: { id: 'ident-antiga', email: 'NOVO@empresa.COM', passwordHash:await hash('SenhaForte123') } });
+    await a.svc.acceptInvite('TOKEN-VALIDO', 'Ana', 'SenhaForte123');
     expect((a.prisma as any).identity.create).not.toHaveBeenCalled();
   });
 
@@ -132,12 +143,12 @@ describe('AuthService.acceptInvite — a única porta de entrada num tenant alhe
   });
 
   it('reaceite por quem já é membro não duplica perfil (upsert idempotente)', async () => {
-    const a = ambiente({ identidade: { id: 'ident-antiga', email: 'novo@empresa.com' } });
-    await a.svc.acceptInvite('TOKEN-VALIDO', 'Ana');
+    const a = ambiente({ identidade: { id: 'ident-antiga', email: 'novo@empresa.com',passwordHash:await hash('SenhaForte123') } });
+    await a.svc.acceptInvite('TOKEN-VALIDO', 'Ana', 'SenhaForte123');
     const antes = a.users.length;
 
-    const b = ambiente({ identidade: { id: 'ident-antiga', email: 'novo@empresa.com' } });
-    await b.svc.acceptInvite('TOKEN-VALIDO', 'Ana');
+    const b = ambiente({ identidade: { id: 'ident-antiga', email: 'novo@empresa.com',passwordHash:await hash('SenhaForte123') } });
+    await b.svc.acceptInvite('TOKEN-VALIDO', 'Ana', 'SenhaForte123');
     expect(b.users.length).toBe(antes); // 1 perfil, não 2
   });
 
@@ -148,6 +159,15 @@ describe('AuthService.acceptInvite — a única porta de entrada num tenant alhe
     const tenantsTocados = (a.prisma.withTenant as jest.Mock).mock.calls.map((c) => c[0]);
     expect(tenantsTocados.every((t) => t === TENANT_CONVITE)).toBe(true);
     expect(tenantsTocados).not.toContain(OUTRO_TENANT);
+  });
+
+  it('conta existente exige senha correta antes de consumir o convite', async () => {
+    for (const senha of [undefined,'errada']) {
+      const a=ambiente({identidade:{id:'ident-antiga',email:'novo@empresa.com',passwordHash:await hash('SenhaForte123')}});
+      await expect(a.svc.acceptInvite('TOKEN-VALIDO','Ana',senha)).rejects.toThrow(UnauthorizedException);
+      expect(a.convite.acceptedAt).toBeNull();
+      expect(a.memberships).toHaveLength(0);
+    }
   });
 });
 

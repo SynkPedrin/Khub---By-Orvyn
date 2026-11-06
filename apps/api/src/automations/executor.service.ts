@@ -1,3 +1,4 @@
+import { UnrecoverableError } from 'bullmq';
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
@@ -8,10 +9,12 @@ import { NotesService } from '../crm/notes.service';
 import { MailerService } from '../common/mailer.service';
 import { AiService, type TarefaIA } from '../ai/ai.service';
 import { soDigitos } from '../crm/telefone';
-import type { Grafo, No, Ramo, Regra, TipoNo } from './catalogo';
+import { validarConfig, type Grafo, type No, type Ramo, type Regra, type TipoNo } from './catalogo';
 
 /** Contexto que viaja com a execução (é o `estado` persistido do run). */
 export interface Contexto {
+  executionKey?: string;
+  runStartedAt?: string;
   contato?: { id: string; nome: string; email: string | null; telefone: string | null; empresa: string | null; tag: string; tags: string[]; valor: number };
   negocio?: { id: string; titulo: string; valor: number; stageId: string; origem: string | null };
   mensagem?: { id: string; texto: string; de: string };
@@ -68,6 +71,12 @@ export class ExecutorService {
   ) {}
 
   async executar(tenantId: string, no: No, ctx: Contexto, grafo: Grafo): Promise<ResultadoNo> {
+    // Config fora do schema do catálogo (ex.: grafo gravado por fora da API, como o
+    // seed de demo com `condicoes` legado) não é falha transitória: retentar só
+    // repetia `TypeError: ramos is not iterable` 4x por evento. Vai direto à DLQ
+    // com a causa legível.
+    const valida = validarConfig(no.tipo as TipoNo, no.config);
+    if (!valida.ok) throw new UnrecoverableError(`config inválida no nó "${no.id}" (${no.tipo}): ${valida.erro}`);
     switch (no.tipo as TipoNo) {
       case 'controle.esperar':
         return this.esperar(no);
@@ -156,7 +165,7 @@ export class ExecutorService {
   }
 
   /**
-   * If/Else no formato das telas do GHL: cada ramo tem regras e uma junção
+   * If/Else com ramos: cada ramo tem regras e uma junção
    * AND/OR/NONE. Ganha o **primeiro** ramo que casar (ordem do array), e o ramo
    * `NONE` sem regras é o "quando nada bate" — o else explícito.
    */
@@ -286,7 +295,11 @@ export class ExecutorService {
 
     const corpo = this.interpolar(texto, ctx);
     const conversationId = await this.acharOuCriarConversa(tenantId, contato.id, contato.nome);
-    const r = await this.mensagens.send(tenantId, conversationId, corpo);
+    const r = await this.mensagens.send(tenantId, conversationId, corpo, ctx.executionKey, ctx.runStartedAt);
+
+    if (r.status === 'pending') throw new Error('messaging_provider_rate_limited');
+    if (r.status === 'cancelled') return { encerrar: true, saida: { status: r.status } };
+    if (r.status !== 'sent') throw new UnrecoverableError(`message_delivery_${r.status}`);
 
     // Gating (ADR-0008): sem credencial, a mensagem FICA GRAVADA e o passo é
     // registrado como pendente — não é erro do workflow, é credencial faltando.

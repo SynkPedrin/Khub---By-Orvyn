@@ -1,4 +1,4 @@
-import { CanActivate, ExecutionContext, HttpException, HttpStatus, Injectable, SetMetadata } from '@nestjs/common';
+import { CanActivate, ExecutionContext, HttpException, HttpStatus, Injectable, ServiceUnavailableException, SetMetadata } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import type { AuthUser } from '../auth/decorators';
@@ -36,7 +36,10 @@ export class RateLimitGuard implements CanActivate {
     const bucket = Math.floor(Date.now() / 1000 / this.windowSec);
     const key = `rl:${escopo}:${id}:${bucket}`;
     const n = await this.redis.incrWithTtl(key, this.windowSec);
-    if (n === null) return true; // Redis off → fail-open
+    if (n === null) {
+      if (process.env.NODE_ENV === 'production') throw new ServiceUnavailableException('proteção de tráfego indisponível');
+      return true;
+    }
 
     if (n > max) {
       const res = ctx.switchToHttp().getResponse<{ setHeader: (k: string, v: string | number) => void }>();

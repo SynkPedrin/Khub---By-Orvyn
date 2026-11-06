@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import type { ProblemDetails } from '@orvyn/types';
 import { correlationId as currentCorrelationId } from './request-context';
 import { ErrorReporter } from './error-reporter.service';
+import { urlSegura } from './url-segura';
 
 /** Erros padronizados RFC 7807 + correlation-id (APIs.md §4). */
 @Catch()
@@ -23,14 +24,15 @@ export class ProblemDetailsFilter implements ExceptionFilter {
 
     if (status >= 500) {
       // Estruturado + correlation-id, e pronto para o Sentry (SENTRY_DSN).
-      this.reporter.capture(exception, { method: req.method, url: req.url, status });
+      // URL redigida: rotas de webhook carregam o segredo no path/query (doc 18).
+      this.reporter.capture(exception, { method: req.method, url: urlSegura(req.url), status });
     }
 
     const body: ProblemDetails & Record<string, unknown> = {
       type: `https://orvyn.dev/errors/${status}`,
       title,
       status,
-      instance: req.url,
+      instance: urlSegura(req.url),
       correlationId,
     };
 

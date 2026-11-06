@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { createHash, randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { DomainEventsService } from '../events/domain-events.service';
@@ -22,6 +23,7 @@ export interface PassoJob {
   tenantId: string;
   runId: string;
   noId: string;
+  generation?: number;
 }
 
 /** Guarda contra `ir_para` em círculo: 200 nós é muito mais que qualquer fluxo real. */
@@ -33,7 +35,7 @@ const MAX_PASSOS = 200;
  * (id do nó), tudo que não for [a-zA-Z0-9_-] vira '_'.
  */
 export function idDeJob(...partes: string[]): string {
-  return partes.join('_').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 200);
+  return createHash('sha256').update(JSON.stringify(partes)).digest('hex');
 }
 
 /**
@@ -119,11 +121,30 @@ export class RunsService {
    * reexecuta o que já passou.
    */
   async processarPasso(job: PassoJob, tentativa: number): Promise<void> {
+    const owner = randomUUID();
+    const claimed = await this.prisma.withTenant(job.tenantId, tx => tx.workflowRun.updateMany({
+      where: { id: job.runId, tenantId: job.tenantId, noAtual: job.noId,
+        generation: job.generation, status: { in: ['rodando', 'esperando'] },
+        scheduledAt: { lte: new Date() },
+        OR: [{ leaseUntil: null }, { leaseUntil: { lt: new Date() } }],
+      }, data: { leaseOwner: owner, leaseUntil: new Date(Date.now() + 120_000), attempts: { increment: 1 } },
+    }));
+    if (!claimed.count) return;
+    try { await this.executarPasso(job, tentativa); }
+    finally {
+      await this.prisma.withTenant(job.tenantId, tx => tx.workflowRun.updateMany({
+        where: { id: job.runId, tenantId: job.tenantId, leaseOwner: owner }, data: { leaseOwner: null, leaseUntil: null },
+      }));
+    }
+  }
+
+  private async executarPasso(job: PassoJob, tentativa: number): Promise<void> {
     const { tenantId, runId, noId } = job;
     const run = await this.carregar(tenantId, runId);
     if (!run) return;
 
     if (run.status === 'concluido' || run.status === 'cancelado' || run.status === 'falhou') return;
+    if (run.workflow?.status === 'pausado' && !run.teste) return;
     if (run.noAtual !== noId) {
       this.log.debug(`passo ${noId} ignorado: run ${runId} já está em ${run.noAtual}`);
       return;
@@ -140,7 +161,7 @@ export class RunsService {
       return;
     }
 
-    const ctx = run.estado as Contexto;
+    const ctx: Contexto = { ...(run.estado as Contexto), executionKey: `${runId}:${run.generation}:${noId}`, runStartedAt: run.startedAt.toISOString() };
     const t0 = Date.now();
     try {
       // Janela de envio: nó que fala com o contato fora do horário é adiado, não
@@ -148,7 +169,7 @@ export class RunsService {
       const atraso = this.esperarJanela(no, run.workflow);
       if (atraso > 0) {
         this.log.debug(`nó ${noId} fora da janela de envio: adiado ${Math.round(atraso / 60000)}min`);
-        await this.avancar(tenantId, runId, noId, ctx, 'esperando');
+        await this.avancar(tenantId, runId, noId, ctx, 'esperando', atraso);
         await this.enfileirar(tenantId, runId, noId, atraso);
         return;
       }
@@ -172,7 +193,7 @@ export class RunsService {
       if (r.esperarMs && r.esperarMs > 0) {
         const alvo = r.mesmoNo ? noId : r.irPara ?? this.proximoDe(grafo, noId, r.ramo);
         if (!alvo) return this.concluir(tenantId, runId, novoCtx);
-        await this.avancar(tenantId, runId, alvo, novoCtx, 'esperando');
+        await this.avancar(tenantId, runId, alvo, novoCtx, 'esperando', r.esperarMs);
         await this.enfileirar(tenantId, runId, alvo, r.esperarMs);
         return;
       }
@@ -224,33 +245,23 @@ export class RunsService {
     this.eventos.publicar(tenantId, 'automation.run', { runId, workflowId: '', nodeId: '', status: 'concluido' }, { automacao: false });
   }
 
-  private async avancar(tenantId: string, runId: string, proximo: string, ctx: Contexto, status: string): Promise<void> {
+  private async avancar(tenantId: string, runId: string, proximo: string, ctx: Contexto, status: string, delay = 0): Promise<void> {
     await this.prisma.withTenant(tenantId, (tx) =>
       tx.workflowRun.update({
         where: { id: runId },
-        data: { noAtual: proximo, estado: ctx as unknown as Prisma.InputJsonValue, status, passos: { increment: 1 } },
+        data: { noAtual: proximo, estado: ctx as unknown as Prisma.InputJsonValue, status, passos: { increment: 1 }, generation: { increment: 1 }, scheduledAt: new Date(Date.now() + delay), attempts: 0 },
       }),
     );
   }
 
   private async enfileirar(tenantId: string, runId: string, noId: string, delay: number, sufixo = ''): Promise<void> {
-    await this.fila.add(
-      'passo',
-      { tenantId, runId, noId },
-      {
-        delay,
-        // jobId determinístico: reentrega do mesmo passo não duplica execução.
-        // `jobId` do BullMQ NÃO aceita ':' (e o id do nó vem do usuário) — daí o
-        // saneamento. Sem ele, o add() falha e o passo simplesmente nunca roda.
-        // O sufixo separa o job da resposta do job do timeout (mesmo nó, delays
-        // diferentes): sem ele o BullMQ deduplicaria e a resposta seria ignorada.
-        jobId: idDeJob(runId, noId, String(delay), sufixo),
-        attempts: 4,
-        backoff: { type: 'exponential', delay: 3000 },
-        removeOnComplete: 1000,
-        removeOnFail: false, // o job falho fica para inspeção; o DLQ guarda o registro
-      },
-    );
+    const run = await this.prisma.withTenant(tenantId, tx => tx.workflowRun.findUnique({ where: { id: runId, tenantId } }));
+    if (!run || !run.noAtual) return;
+    await this.fila.add('passo', { tenantId, runId, noId: run.noAtual, generation: run.generation }, {
+      delay: Math.max(0, run.scheduledAt.getTime() - Date.now()),
+      jobId: idDeJob(runId, String(run.generation)), attempts: 4,
+      backoff: { type: 'exponential', delay: 3000 }, removeOnComplete: 1000, removeOnFail: false,
+    });
   }
 
   private async logar(tenantId: string, runId: string, no: No, status: string, tentativa: number, saida: Record<string, unknown>, erro: string | null, ms: number): Promise<void> {
@@ -278,7 +289,7 @@ export class RunsService {
         where: { id: runId },
         include: {
           version: { select: { grafo: true } },
-          workflow: { select: { janelaAtiva: true, janelaDias: true, janelaInicio: true, janelaFim: true, timezone: true } },
+          workflow: { select: { status: true, janelaAtiva: true, janelaDias: true, janelaInicio: true, janelaFim: true, timezone: true } },
         },
       }),
     );
@@ -310,7 +321,7 @@ export class RunsService {
   async avisarResposta(tenantId: string, contactId: string): Promise<void> {
     const esperando = await this.prisma.withTenant(tenantId, (tx) =>
       tx.workflowRun.findMany({
-        where: { contactId, status: 'esperando' },
+        where: { contactId, status: { in: ['rodando', 'esperando'] } },
         select: { id: true, noAtual: true, estado: true, workflow: { select: { id: true, pararNoReply: true } } },
       }),
     );
@@ -324,7 +335,7 @@ export class RunsService {
         await this.prisma.withTenant(tenantId, (tx) =>
           tx.workflowRun.update({
             where: { id: run.id },
-            data: { estado: { ...ctx, respondeu: true } as unknown as Prisma.InputJsonValue, status: 'rodando' },
+            data: { estado: { ...ctx, respondeu: true } as unknown as Prisma.InputJsonValue, status: 'rodando', generation: { increment: 1 }, scheduledAt: new Date() },
           }),
         );
         await this.enfileirar(tenantId, run.id, run.noAtual!, 0, 'reply');
@@ -440,7 +451,7 @@ export class RunsService {
     const item = await this.prisma.withTenant(tenantId, (tx) => tx.workflowDlq.findUnique({ where: { id: dlqId } }));
     if (!item) throw new NotFoundException('item de DLQ inexistente');
     await this.prisma.withTenant(tenantId, async (tx) => {
-      await tx.workflowRun.update({ where: { id: item.runId }, data: { status: 'rodando', erro: null, finishedAt: null, noAtual: item.noId } });
+      await tx.workflowRun.update({ where: { id: item.runId }, data: { status: 'rodando', erro: null, finishedAt: null, noAtual: item.noId, generation: { increment: 1 }, scheduledAt: new Date(), attempts: 0 } });
       await tx.workflowDlq.update({ where: { id: dlqId }, data: { resolvidoEm: new Date() } });
     });
     await this.enfileirar(tenantId, item.runId, item.noId, 0);

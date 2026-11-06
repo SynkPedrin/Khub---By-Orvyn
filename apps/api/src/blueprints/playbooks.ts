@@ -7,7 +7,7 @@
  * carrega os **guardrails de compliance** do conselho (CFM/OAB/CFC) como
  * restrição — em nicho tier 3, o gerador NUNCA pode violar.
  *
- * Diferença vs. o modelo GHL (snapshot+delta): aqui o provisionamento é NATIVO
+ * Diferença vs. o modelo de snapshot+delta de CRMs de mercado: aqui o provisionamento é NATIVO
  * (cria pipeline/etapas/automações no próprio CRM), não injeção numa subconta.
  */
 

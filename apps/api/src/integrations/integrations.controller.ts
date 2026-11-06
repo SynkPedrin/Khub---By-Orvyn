@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { IsString } from 'class-validator';
 import { IntegrationsService } from './integrations.service';
 import { AdsService } from './ads.service';
@@ -19,8 +19,14 @@ export class IntegrationsController {
   }
 
   @Get(':provider/auth-url')
-  authUrl(@TenantId() tenantId: string, @Param('provider') provider: string) {
-    return this.integrations.getAuthUrl(tenantId, provider);
+  authUrl(@TenantId() tenantId: string, @Param('provider') provider: string, @Query('capability') capability?: string) {
+    return this.integrations.getAuthUrl(tenantId, provider, capability);
+  }
+
+  /** Diagnóstico legível da conexão Meta — nunca um erro cru da Graph API. */
+  @Get('meta/diagnostics')
+  metaDiagnostics(@TenantId() tenantId: string) {
+    return this.integrations.diagnosticoMeta(tenantId);
   }
 
   @Post(':id/sync')

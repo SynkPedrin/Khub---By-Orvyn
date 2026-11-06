@@ -37,9 +37,9 @@ export class MetaLeadsService {
   parse(body: unknown): LeadgenChange[] {
     const b = body as { entry?: { changes?: { field?: string; value?: Record<string, unknown> }[] }[] };
     const out: LeadgenChange[] = [];
-    for (const entry of b?.entry ?? []) {
-      for (const ch of entry.changes ?? []) {
-        if (ch.field !== 'leadgen' || !ch.value) continue;
+    for (const entry of Array.isArray(b?.entry) ? b.entry : []) {
+      for (const ch of Array.isArray(entry?.changes) ? entry.changes : []) {
+        if (ch?.field !== 'leadgen' || !ch.value) continue;
         const v = ch.value;
         const leadgenId = String(v.leadgen_id ?? '');
         const pageId = String(v.page_id ?? '');
@@ -74,7 +74,9 @@ export class MetaLeadsService {
       const cred = await this.credencialDoTenant(tenantId);
       if (!cred) return { ok: false, motivo: 'sem_credencial_conectada' };
 
-      const lead = await this.buscarLead(ev.leadgenId, cred.accessToken);
+      const pageToken = cred.pages?.find(p => p.pageId === ev.pageId)?.accessToken;
+      if (!pageToken) return { ok: false, motivo: 'page_token_missing' };
+      const lead = await this.buscarLead(ev.leadgenId, pageToken);
       await this.leads.upsertFromLead(tenantId, {
         ...lead,
         origem: 'Meta Lead Ads',
@@ -103,8 +105,8 @@ export class MetaLeadsService {
   /** true = evento novo; false = reentrega. */
   private async registrarEvento(tenantId: string, ev: LeadgenChange): Promise<boolean> {
     return this.prisma.withTenant(tenantId, async (tx) => {
-      const existe = await tx.webhookEvent.findFirst({ where: { provider: 'meta', eventId: ev.leadgenId }, select: { id: true } });
-      if (existe) return false;
+      const existe = await tx.webhookEvent.findFirst({ where: { provider: 'meta', eventId: ev.leadgenId }, select: { id: true, processedAt: true } });
+      if (existe) return !existe.processedAt;
       await tx.webhookEvent.create({
         data: { tenantId, provider: 'meta', eventId: ev.leadgenId, payload: { pageId: ev.pageId, formId: ev.formId ?? null } },
       });
@@ -128,7 +130,8 @@ export class MetaLeadsService {
 
   /** `field_data` da Meta vem como lista de {name, values[]} — normaliza. */
   private async buscarLead(leadgenId: string, accessToken: string) {
-    const j = await this.graph.get(leadgenId, { fields: 'id,created_time,field_data' }, accessToken);
+    const j = await this.graph.get(leadgenId, { fields: 'id,created_time,field_data,form_id,ad_id' }, accessToken);
+    if (!j || String(j.id) !== leadgenId || !Array.isArray(j.field_data)) throw new Error('invalid_lead_payload');
     const campos: Record<string, string> = {};
     for (const f of (j.field_data ?? []) as { name: string; values: string[] }[]) {
       campos[f.name] = (f.values ?? [])[0] ?? '';

@@ -6,23 +6,24 @@ import { SkipAudit } from '../common/audit.interceptor';
 
 class UpdateProfileDto {
   @IsOptional() @IsString() @MaxLength(160) nome?: string;
-  @IsOptional() @IsString() @MaxLength(12) idioma?: string;
+  @IsOptional() @IsIn(['pt-BR','en-US','es-ES']) idioma?: string;
   @IsOptional() @IsObject() prefs?: Record<string, unknown>;
 }
 class UpdateBusinessDto {
+  @IsOptional() @IsObject() settings?: Record<string, unknown>;
   @IsOptional() @IsString() @MaxLength(160) nome?: string;
   @IsOptional() @IsString() @MaxLength(240) endereco?: string;
   @IsOptional() @IsString() @MaxLength(40) telefone?: string;
   @IsOptional() @IsString() @MaxLength(160) website?: string;
-  @IsOptional() @IsString() @MaxLength(12) idioma?: string;
+  @IsOptional() @IsIn(['pt-BR','en-US','es-ES']) idioma?: string;
   @IsOptional() @IsString() @MaxLength(40) nicho?: string;
 }
 class InviteDto {
   @IsEmail() email!: string;
-  @IsOptional() @IsIn(['owner', 'admin', 'member', 'viewer']) role?: string;
+  @IsOptional() @IsIn(['owner', 'admin', 'manager', 'member', 'viewer']) role?: string;
 }
 class RoleDto {
-  @IsIn(['owner', 'admin', 'member', 'viewer']) role!: string;
+  @IsIn(['owner', 'admin', 'manager', 'member', 'viewer']) role!: string;
 }
 
 /** Cada método do SettingsService já grava seu próprio audit log (mais rico
@@ -49,6 +50,9 @@ export class SettingsController {
   updateBusiness(@TenantId() t: string, @CurrentUser() u: AuthUser, @Body() dto: UpdateBusinessDto) {
     return this.settings.updateBusiness(t, u.identityId, dto);
   }
+
+  @Get('email-status')
+  emailStatus() { return this.settings.emailStatus(); }
 
   @Get('members')
   members(@TenantId() t: string) {

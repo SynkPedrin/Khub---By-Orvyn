@@ -57,13 +57,18 @@ export class AuthService {
       if (!password || password.length < 8) throw new BadRequestException('senha obrigatória (mínimo 8 caracteres) para criar a conta');
       identity = await this.prisma.identity.create({ data: { email: invite.email, passwordHash: await hash(password), emailVerifiedAt: new Date() } });
     }
+    else if (!identity.passwordHash || !password || !await verify(identity.passwordHash,password)) {
+      throw new UnauthorizedException('confirme a senha da conta existente para aceitar o convite');
+    }
+    const claimed = await this.prisma.invite.updateMany({where:{id:invite.id,acceptedAt:null,expiresAt:{gt:new Date()}},data:{acceptedAt:new Date()}});
+    if(claimed.count!==1) throw new BadRequestException('convite já utilizado');
     const identityId = identity.id;
 
     // membership no tenant do convite (idempotente)
     await this.prisma.membership.upsert({
       where: { identityId_tenantId: { identityId, tenantId: invite.tenantId } },
       create: { identityId, tenantId: invite.tenantId, role: invite.role, isDefault: false },
-      update: { role: invite.role },
+      update: {},
     });
 
     const displayName = nome?.trim() || invite.email.split('@')[0];
@@ -101,9 +106,13 @@ export class AuthService {
     const rotated = await this.tokens.rotate(rawRefresh, userAgent);
     const identity = await this.prisma.identity.findUnique({ where: { id: rotated.identityId }, select: { email: true } });
     const memberships = await this.tenants.membershipsOf(rotated.identityId);
-    const active = memberships.find((m) => m.tenantId === rotated.tenantId) ?? memberships[0];
-    const access = this.tokens.signAccess({ sub: rotated.identityId, tenant_id: rotated.tenantId, role: active?.role ?? 'owner', email: identity?.email ?? '' });
-    return { access, refresh: rotated.raw, user: { identityId: rotated.identityId, email: identity?.email ?? '', nome: '', tenantId: rotated.tenantId, role: active?.role ?? 'owner' } };
+    const active = memberships.find((m) => m.tenantId === rotated.tenantId);
+    if (!identity || !active) {
+      await this.tokens.revoke(rotated.raw);
+      throw new UnauthorizedException('vínculo revogado');
+    }
+    const access = this.tokens.signAccess({ sub: rotated.identityId, tenant_id: rotated.tenantId, role: active.role, email: identity?.email ?? '' });
+    return { access, refresh: rotated.raw, user: { identityId: rotated.identityId, email: identity?.email ?? '', nome: '', tenantId: rotated.tenantId, role: active.role } };
   }
 
   async logout(rawRefresh: string): Promise<void> {

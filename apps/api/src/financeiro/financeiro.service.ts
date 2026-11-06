@@ -92,6 +92,22 @@ export class FinanceiroService {
     });
   }
 
+  /**
+   * Confirmação de pagamento vinda do webhook da Stripe — sem identidade
+   * humana por trás, então o audit log registra `actor_type:'sistema'`
+   * (mesmo padrão do provisionamento de tenant). Idempotente: se já estiver
+   * `paga`, não repete o audit log (o webhook pode reentregar o evento).
+   */
+  async marcarPagaPorWebhook(tenantId: string, cobrancaId: string): Promise<void> {
+    await this.prisma.withTenant(tenantId, async (tx) => {
+      const cob = await tx.financeiroCobranca.findFirst({ where: { id: cobrancaId } });
+      if (!cob || cob.status === 'paga') return;
+      await tx.financeiroCobranca.update({ where: { id: cobrancaId }, data: { status: 'paga', pagoEm: new Date(), updatedAt: new Date() } });
+      await tx.$executeRaw`INSERT INTO audit_logs (tenant_id, actor_type, actor_id, acao, entidade, entidade_id)
+        VALUES (${tenantId}::uuid, 'sistema', 'stripe_webhook', 'cobranca.paga', 'financeiro_cobranca', ${cobrancaId}::uuid)`;
+    });
+  }
+
   async remover(tenantId: string, identityId: string, id: string) {
     return this.prisma.withTenant(tenantId, async (tx) => {
       const existe = await tx.financeiroCobranca.findFirst({ where: { id }, select: { id: true } });
@@ -124,6 +140,13 @@ export class FinanceiroService {
       form.set('line_items[0][price_data][unit_amount]', String(cob.valorCentavos));
       form.set('line_items[0][price_data][product_data][name]', cob.descricao);
       form.set('client_reference_id', id);
+      // `tenant_id` no metadata: o webhook (`POST /v1/webhooks/stripe`) conecta
+      // como `orvyn_app` (NOBYPASSRLS) e não pode descobrir o tenant de uma
+      // cobrança por lookup cross-tenant — precisa vir de uma fonte confiável
+      // já na criação do checkout, mesmo padrão do roteamento Meta/STEVO.
+      form.set('metadata[kind]', 'financeiro_cobranca');
+      form.set('metadata[tenant_id]', tenantId);
+      form.set('metadata[cobranca_id]', id);
 
       const res = await this.stripeCircuito.run(async () => {
         const r = await fetch('https://api.stripe.com/v1/checkout/sessions', {

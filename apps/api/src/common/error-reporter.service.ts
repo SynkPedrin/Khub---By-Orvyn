@@ -1,11 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
+import * as Sentry from '@sentry/node';
 import { correlationId } from './request-context';
 
 /**
- * Seam de observabilidade de erros. Hoje registra o erro com correlation-id de
- * forma estruturada; quando `SENTRY_DSN` estiver setado e o pacote `@sentry/node`
- * instalado, é AQUI (e só aqui) que o `Sentry.captureException` entra — o resto
- * do código já chama `capture()` sem saber o destino. "Só falta plugar o DSN."
+ * Seam de observabilidade de erros. Sem `SENTRY_DSN`, só loga estruturado
+ * (correlation-id junto). Com a chave, `Sentry.init()` já rodou no bootstrap
+ * (main.ts) e esta classe também reporta pro Sentry — o resto do código
+ * sempre chamou `capture()` sem saber o destino, então nenhum call site
+ * precisou mudar pra ligar isto. "Só faltava plugar o DSN."
  */
 @Injectable()
 export class ErrorReporter {
@@ -20,10 +22,11 @@ export class ErrorReporter {
     const err = error instanceof Error ? error : new Error(String(error));
     // Estruturado com correlation-id — a trilha some junta com o log da requisição.
     this.log.error(
-      `${err.name}: ${err.message}${this.dsn ? ' [sentry-ready]' : ''} · cid=${correlationId()}${contexto ? ' · ' + JSON.stringify(contexto) : ''}`,
+      `${err.name}: ${err.message}${this.dsn ? ' [sentry]' : ''} · cid=${correlationId()}${contexto ? ' · ' + JSON.stringify(contexto) : ''}`,
       err.stack,
     );
-    // Quando o pacote/DSN estiverem presentes:
-    //   Sentry.captureException(err, { tags: { correlationId: correlationId() }, extra: contexto });
+    if (this.dsn) {
+      Sentry.captureException(err, { tags: { correlationId: correlationId() }, extra: contexto });
+    }
   }
 }

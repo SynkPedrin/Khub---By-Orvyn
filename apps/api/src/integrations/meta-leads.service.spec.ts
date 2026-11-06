@@ -22,20 +22,20 @@ const PAYLOAD = {
   ],
 };
 
-function ambiente(opts: { eventoJaExiste?: boolean; tenant?: string | null; comIntegracao?: boolean } = {}) {
+function ambiente(opts: { eventoJaExiste?: boolean; pendente?: boolean; semPageToken?: boolean; tenant?: string | null; comIntegracao?: boolean } = {}) {
   const config = new ConfigService();
   const crypto = new CryptoService(config);
   const upserts: any[] = [];
   const leads = { upsertFromLead: jest.fn(async (t: string, l: unknown) => { upserts.push({ t, l }); return { contactId: 'c1', criado: true }; }) } as unknown as LeadsService;
 
-  const cred = crypto.encryptJson({ accessToken: 'token-do-cliente' });
+  const cred = crypto.encryptJson({ accessToken: 'token-do-cliente', pages: opts.semPageToken ? [] : [{pageId:'PAGE_1',accessToken:'token-da-pagina'}] });
   const marcados: string[] = [];
   const prisma = {
     $queryRaw: jest.fn(async () => [{ tenant_id: opts.tenant === undefined ? TENANT : opts.tenant }]),
     withTenant: jest.fn(async (_t: string, work: (tx: unknown) => Promise<unknown>) =>
       work({
         webhookEvent: {
-          findFirst: jest.fn(async () => (opts.eventoJaExiste ? { id: 'e1' } : null)),
+          findFirst: jest.fn(async () => (opts.eventoJaExiste ? { id: 'e1', processedAt: opts.pendente ? null : new Date() } : null)),
           create: jest.fn(async () => ({ id: 'e1' })),
           updateMany: jest.fn(async ({ where }: any) => { marcados.push(where.eventId); return { count: 1 }; }),
         },
@@ -113,6 +113,19 @@ describe('MetaLeadsService (D1 — Lead Ads → contato)', () => {
     const { svc, leads } = ambiente({ tenant: null });
     const r = await svc.processar({ leadgenId: 'LEAD_1', pageId: 'PAGE_DESCONHECIDA' });
     expect(r).toEqual({ ok: false, motivo: 'page_sem_tenant' });
+    expect(leads.upsertFromLead).not.toHaveBeenCalled();
+  });
+
+  it('evento pendente pode ser retomado usando exclusivamente o token da página', async () => {
+    const {svc,graph}=ambiente({eventoJaExiste:true,pendente:true});
+    expect(await svc.processar({leadgenId:'LEAD_1',pageId:'PAGE_1'})).toEqual({ok:true});
+    expect(graph.get).toHaveBeenCalledWith('LEAD_1',expect.any(Object),'token-da-pagina');
+  });
+
+  it('sem token da página não usa o token de usuário como fallback', async () => {
+    const {svc,graph,leads}=ambiente({semPageToken:true});
+    expect(await svc.processar({leadgenId:'LEAD_1',pageId:'PAGE_1'})).toEqual({ok:false,motivo:'page_token_missing'});
+    expect(graph.get).not.toHaveBeenCalled();
     expect(leads.upsertFromLead).not.toHaveBeenCalled();
   });
 

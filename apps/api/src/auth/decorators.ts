@@ -9,6 +9,7 @@ export interface AuthUser {
   tenantId: string;
   role: string;
   email: string;
+  scopes?: string[];
 }
 
 /** Injeta o usuário autenticado (setado pelo JwtAuthGuard a partir do JWT). */

@@ -28,6 +28,7 @@ function ambiente(runInicial: Record<string, unknown> = {}) {
   const run: Record<string, unknown> = {
     id: 'run1', workflowId: 'wf1', versionId: 'v1', status: 'rodando', noAtual: 'sms',
     estado: { contato: { id: 'c1', nome: 'Ana', tags: [] } }, passos: 0,
+    startedAt: new Date('2026-01-01T12:00:00Z'), scheduledAt: new Date('2026-01-01T12:00:00Z'),
     version: { grafo: GRAFO }, ...runInicial,
   };
   const steps: any[] = [];

@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import * as Sentry from '@sentry/node';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
@@ -7,6 +8,14 @@ import { RedisIoAdapter } from './realtime/redis-io.adapter';
 import { securityHeaders } from './common/security-headers';
 import { makeLogger } from './common/json-logger';
 import { loadEnv } from './config/env';
+
+// Precisa rodar ANTES de qualquer outra coisa (inclusive `loadEnv()`) pra
+// capturar erro de boot também — não só erro depois que a API já subiu.
+// Sem SENTRY_DSN: no-op total, zero custo (achado real: código já estava
+// escrito em error-reporter.service.ts, só faltava chamar `Sentry.init`).
+if (process.env.SENTRY_DSN) {
+  Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV ?? 'development', tracesSampleRate: 0 });
+}
 
 /** Origens de CORS: CSV explícito; senão libera em dev e restringe ao WEB_URL em prod. */
 function corsOrigins(env: ReturnType<typeof loadEnv>): true | string[] {
@@ -24,6 +33,7 @@ async function bootstrap(): Promise<void> {
     logger: makeLogger(env.LOG_FORMAT, env.NODE_ENV),
   });
   app.use(securityHeaders(env.NODE_ENV));
+  app.enableShutdownHooks();
   app.setGlobalPrefix('v1');
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.useGlobalFilters(new ProblemDetailsFilter());

@@ -62,7 +62,10 @@ export class TokenService {
   async rotate(rawToken: string, userAgent?: string): Promise<{ raw: string; identityId: string; tenantId: string }> {
     const rec = await this.prisma.refreshToken.findUnique({ where: { tokenHash: sha256(rawToken) } });
     if (!rec || rec.revokedAt || rec.expiresAt < new Date()) throw new UnauthorizedException('refresh inválido ou expirado');
-    await this.prisma.refreshToken.update({ where: { id: rec.id }, data: { revokedAt: new Date() } });
+    const claimed = await this.prisma.refreshToken.updateMany({
+      where: { id: rec.id, revokedAt: null, expiresAt: { gt: new Date() } }, data: { revokedAt: new Date() },
+    });
+    if (claimed.count !== 1) throw new UnauthorizedException('refresh já utilizado');
     const tenantId = rec.tenantId ?? '';
     const raw = await this.issueRefresh(rec.identityId, tenantId, userAgent);
     return { raw, identityId: rec.identityId, tenantId };

@@ -171,3 +171,54 @@ describe('CrmService — eventos de domínio (D2/E)', () => {
     expect(publicados).toHaveLength(0);
   });
 });
+
+/** Prisma falso pro contato de LGPD: um único contato, com tudo vazio por padrão. */
+function prismaLgpd(contato: any = { id: 'c1', nome: 'Ana', company: null, consentimento: {} }) {
+  const auditados: string[] = [];
+  const atualizacoes: any[] = [];
+  return {
+    withTenant: jest.fn(async (_t: string, work: (tx: unknown) => Promise<unknown>) =>
+      work({
+        contact: {
+          findUnique: jest.fn(async () => contato),
+          update: jest.fn(async ({ data }: any) => { atualizacoes.push(data); return { ...contato, ...data }; }),
+        },
+        deal: { findMany: jest.fn(async () => []) },
+        conversation: { findMany: jest.fn(async () => []) },
+        task: { findMany: jest.fn(async () => []) },
+        note: { findMany: jest.fn(async () => []) },
+        activity: { findMany: jest.fn(async () => []) },
+        $executeRaw: jest.fn(async (strings: TemplateStringsArray) => { auditados.push(strings.join('')); return 1; }),
+      }),
+    ),
+    auditados,
+    atualizacoes,
+  } as unknown as PrismaService & { auditados: string[]; atualizacoes: any[] };
+}
+
+describe('CrmService — LGPD (RegrasNegocio §5)', () => {
+  it('registrarConsentimento grava baseLegal + timestamp e audita (contato.consentimento_registrado)', async () => {
+    const p = prismaLgpd();
+    const r = await crm(p).registrarConsentimento(TENANT, 'c1', { baseLegal: 'consentimento', origem: 'formulario_site' });
+    expect(r.consentimento).toMatchObject({ baseLegal: 'consentimento', origem: 'formulario_site' });
+    expect(r.consentimento.consentidoEm).toBeTruthy();
+    expect((p as any).auditados.join(' ')).toContain('contato.consentimento_registrado');
+  });
+
+  it('registrarConsentimento em contato inexistente: 404, não grava nada', async () => {
+    const p = prismaLgpd(null);
+    await expect(crm(p).registrarConsentimento(TENANT, 'inexistente', { baseLegal: 'consentimento' })).rejects.toThrow(/inexistente/);
+    expect((p as any).atualizacoes).toHaveLength(0);
+  });
+
+  it('exportarDadosContato devolve o conteúdo das mensagens (não só metadados) e audita o acesso', async () => {
+    const p = prismaLgpd({
+      id: 'c1', nome: 'Ana', email: 'ana@x.com', company: null, consentimento: { baseLegal: 'consentimento' },
+    });
+    const r = await crm(p).exportarDadosContato(TENANT, 'c1');
+    expect(r.titular).toMatchObject({ id: 'c1', nome: 'Ana', email: 'ana@x.com' });
+    expect(r).toHaveProperty('conversas');
+    expect(r).toHaveProperty('negocios');
+    expect((p as any).auditados.join(' ')).toContain('contato.exportado');
+  });
+});

@@ -1,3 +1,4 @@
+import { UnrecoverableError } from 'bullmq';
 import { ExecutorService, type Contexto } from './executor.service';
 import { ConfigService } from '../config/config.service';
 import type { PrismaService } from '../prisma/prisma.service';
@@ -104,7 +105,7 @@ describe('ExecutorService — controle', () => {
     expect((await svc.executar(TENANT, no('controle.condicao', config), CTX, GRAFO)).ramo).toBe('else');
   });
 
-  it('primeiro ramo que casa vence (ordem importa, como no GHL)', async () => {
+  it('primeiro ramo que casa vence (ordem importa)', async () => {
     const { svc } = ambiente();
     const config = {
       ramos: [
@@ -113,6 +114,15 @@ describe('ExecutorService — controle', () => {
       ],
     };
     expect((await svc.executar(TENANT, no('controle.condicao', config), CTX, GRAFO)).ramo).toBe('primeiro');
+  });
+
+  it('REGRESSÃO: condição em formato legado (`condicoes`, sem `ramos`) falha uma vez, sem retry, com causa legível', async () => {
+    const { svc } = ambiente();
+    const legado = no('controle.condicao', { condicoes: [{ campo: 'valor_estimado', operador: 'maior_que', valor: 50000 }] });
+    const erro = await svc.executar(TENANT, legado, CTX, GRAFO).catch((e: Error) => e);
+    expect(erro).toBeInstanceOf(UnrecoverableError);
+    expect((erro as Error).message).toContain('config inválida no nó "n1" (controle.condicao)');
+    expect((erro as Error).message).toContain('ramos');
   });
 
   it('drip libera quando a janela ainda tem espaço (count <= limite)', async () => {
@@ -258,15 +268,15 @@ describe('ExecutorService — ações', () => {
 
   it('criar oportunidade usa o contato do contexto e cai na etapa configurada', async () => {
     const { svc, chamadas } = ambiente();
-    const r = await svc.executar(TENANT, no('acao.criar_oportunidade', { titulo: 'Proposta {{contato.nome}}', stageId: 's9', valor: 900 }), CTX, GRAFO);
-    expect(chamadas.createDeal[0]).toMatchObject({ input: { titulo: 'Proposta Marina Alves', stageId: 's9', contactId: 'c1', valor: 900 } });
+    const r = await svc.executar(TENANT, no('acao.criar_oportunidade', { titulo: 'Proposta {{contato.nome}}', stageId: '99999999-9999-4999-8999-999999999999', valor: 900 }), CTX, GRAFO);
+    expect(chamadas.createDeal[0]).toMatchObject({ input: { titulo: 'Proposta Marina Alves', stageId: '99999999-9999-4999-8999-999999999999', contactId: 'c1', valor: 900 } });
     expect(r.contexto?.negocio?.id).toBe('novo-deal');
   });
 
   it('ação sem o contato no contexto falha explícito (não escreve em ninguém)', async () => {
     const { svc } = ambiente();
     await expect(svc.executar(TENANT, no('acao.enviar_sms', { texto: 'oi' }), {}, GRAFO)).rejects.toThrow(/sem contato/);
-    await expect(svc.executar(TENANT, no('acao.mover_etapa', { stageId: 's2' }), {}, GRAFO)).rejects.toThrow(/sem negócio/);
+    await expect(svc.executar(TENANT, no('acao.mover_etapa', { stageId: '22222222-2222-4222-8222-222222222222' }), {}, GRAFO)).rejects.toThrow(/sem negócio/);
   });
 
   it('webhook bloqueia rede interna (SSRF): automação do tenant não alcança metadata/localhost', async () => {

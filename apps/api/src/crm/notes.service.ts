@@ -18,7 +18,8 @@ export class NotesService {
       throw new BadRequestException('a nota precisa estar ligada a um contato, negócio ou empresa');
     }
     return this.prisma.withTenant(tenantId, async (tx) => {
-      const autor = await tx.user.findFirst({ where: { identityId }, select: { nome: true } });
+      // identityId vazio = autor é o sistema (nó de automação): sem lookup de usuário e sem authorId.
+      const autor = identityId ? await tx.user.findFirst({ where: { identityId }, select: { nome: true } }) : null;
       const n = await tx.note.create({
         data: {
           tenantId,
@@ -26,14 +27,14 @@ export class NotesService {
           contactId: input.contactId ?? null,
           dealId: input.dealId ?? null,
           companyId: input.companyId ?? null,
-          authorId: identityId,
+          authorId: identityId || null,
           // snapshot do nome: a nota tem que continuar legível se o autor sair do tenant
-          authorNome: autor?.nome ?? null,
+          authorNome: autor?.nome ?? (identityId ? null : 'Automação'),
         },
         select: { id: true, createdAt: true },
       });
       await tx.activity.create({
-        data: { tenantId, actor: autor?.nome ?? 'Você', acao: 'adicionou uma nota', tone: 'neutral', contactId: input.contactId ?? null, dealId: input.dealId ?? null },
+        data: { tenantId, actor: autor?.nome ?? (identityId ? 'Você' : 'Automação'), acao: 'adicionou uma nota', tone: 'neutral', contactId: input.contactId ?? null, dealId: input.dealId ?? null },
       });
       return { id: n.id, createdAt: n.createdAt };
     });

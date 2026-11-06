@@ -29,7 +29,7 @@ export class ApiKeysService {
   }
 
   /** Gera `orv_live_<segredo>`; guarda hash+prefixo; devolve a chave em claro 1x. */
-  async criar(tenantId: string, identityId: string, name: string) {
+  async criar(tenantId: string, identityId: string, name: string, scopes: string[] = ['contacts.read']) {
     const secret = randomBytes(24).toString('base64url'); // ~32 chars, url-safe
     const full = `${API_KEY_PREFIX}${secret}`;
     const keyPrefix = `${full.slice(0, API_KEY_PREFIX.length + 6)}…`;
@@ -37,7 +37,7 @@ export class ApiKeysService {
 
     return this.prisma.withTenant(tenantId, async (tx) => {
       const key = await tx.apiKey.create({
-        data: { tenantId, name: name.trim(), keyPrefix, keyHash, createdBy: identityId },
+        data: { tenantId, name: name.trim(), scopes, keyPrefix, keyHash, createdBy: identityId },
         select: SAFE,
       });
       await audit(tx, tenantId, identityId, 'api_key.criada', key.id);

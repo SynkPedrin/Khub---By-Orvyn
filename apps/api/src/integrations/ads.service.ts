@@ -22,16 +22,21 @@ export class AdsService {
 
   async overview(tenantId: string) {
     return this.prisma.withTenant(tenantId, async (tx) => {
+      // BUG real encontrado nesta auditoria: sem filtrar `level`, esta soma
+      // contava o mesmo dinheiro duas vezes — uma vez nas linhas 'creative'
+      // e de novo nas linhas 'campaign' (que já são o agregado das
+      // criativas). 'campaign' é o nível certo pro total da conta: cada
+      // campanha soma uma vez, não uma vez por criativo dentro dela.
       const [tot] = await tx.$queryRaw<any[]>`
         SELECT coalesce(sum(spend),0)::float8 spend, coalesce(sum(impressions),0)::float8 impressions,
                coalesce(sum(clicks),0)::float8 clicks, coalesce(sum(leads),0)::float8 leads,
                coalesce(sum(conversions),0)::float8 conversions, coalesce(sum(revenue),0)::float8 revenue
-        FROM ad_insights`;
+        FROM ad_insights WHERE level = 'campaign'`;
       const byProvider = await tx.$queryRaw<any[]>`
         SELECT provider, coalesce(sum(spend),0)::float8 spend, coalesce(sum(leads),0)::float8 leads,
                coalesce(sum(revenue),0)::float8 revenue, coalesce(sum(impressions),0)::float8 impressions,
                coalesce(sum(clicks),0)::float8 clicks, coalesce(sum(conversions),0)::float8 conversions
-        FROM ad_insights GROUP BY provider`;
+        FROM ad_insights WHERE level = 'campaign' GROUP BY provider`;
       const connections = await tx.integration.findMany({
         select: { id: true, provider: true, status: true, health: true, lastSyncAt: true },
         orderBy: { createdAt: 'desc' },
@@ -65,22 +70,42 @@ export class AdsService {
 
   async creatives(tenantId: string) {
     return this.prisma.withTenant(tenantId, async (tx) => {
+      // BUG real encontrado nesta auditoria: a versão anterior desta query
+      // agregava `ad_insights` no nível 'campaign' (via ad_campaigns), então
+      // TODO criativo de uma mesma campanha mostrava o mesmo número agregado
+      // da campanha inteira — nenhuma diferenciação por criativo era
+      // possível. O nível certo pra métrica de criativo é 'creative',
+      // casado pelo `external_id` do próprio criativo.
       const rows = await tx.$queryRaw<any[]>`
         SELECT cr.external_id, cr.name, cr.thumbnail_url, cr.preview_url, cr.format, cr.cta, cr.body,
-               coalesce(m.roas,0)::float8 roas, coalesce(m.spend,0)::float8 spend, coalesce(m.leads,0)::float8 leads
+               coalesce(m.spend,0)::float8 spend, coalesce(m.impressions,0)::float8 impressions,
+               coalesce(m.clicks,0)::float8 clicks, coalesce(m.leads,0)::float8 leads,
+               coalesce(m.conversions,0)::float8 conversions, coalesce(m.revenue,0)::float8 revenue
         FROM ad_creatives cr
         LEFT JOIN LATERAL (
-          SELECT sum(i.revenue)/NULLIF(sum(i.spend),0) roas, sum(i.spend) spend, sum(i.leads) leads
+          SELECT sum(i.spend) spend, sum(i.impressions) impressions, sum(i.clicks) clicks,
+                 sum(i.leads) leads, sum(i.conversions) conversions, sum(i.revenue) revenue
           FROM ad_insights i
-          JOIN ad_campaigns c ON c.id = cr.campaign_id AND i.tenant_id = cr.tenant_id AND i.level='campaign' AND i.external_ref_id = c.external_id
+          WHERE i.tenant_id = cr.tenant_id AND i.level = 'creative' AND i.external_ref_id = cr.external_id
         ) m ON true
-        ORDER BY roas DESC NULLS LAST, spend DESC`;
+        ORDER BY revenue DESC, spend DESC`;
       const mapped = rows.map((r) => ({
         externalId: r.external_id, nome: r.name, thumbnailUrl: r.thumbnail_url, previewUrl: r.preview_url,
-        format: r.format, cta: r.cta, body: r.body, roas: n(r.roas), spend: n(r.spend), leads: n(r.leads),
+        format: r.format, cta: r.cta, body: r.body, ...derive(r),
       }));
-      const bestIdx = mapped.findIndex((c) => c.roas > 0);
-      return mapped.map((c, i) => ({ ...c, melhor: i === bestIdx }));
+      // "Melhor" precisa dizer POR QUAL métrica — nunca um rótulo ambíguo.
+      // Dois rankings determinísticos (sem LLM, sem score arbitrário):
+      // menor CPL entre quem teve lead, e maior receita atribuída.
+      const comLead = mapped.filter((c) => c.leads > 0);
+      const melhorCplId = comLead.length ? comLead.reduce((a, b) => (b.cpl < a.cpl ? b : a)).externalId : null;
+      const maiorReceitaId = mapped.some((c) => c.revenue > 0)
+        ? mapped.reduce((a, b) => (b.revenue > a.revenue ? b : a)).externalId
+        : null;
+      return mapped.map((c) => ({
+        ...c,
+        melhorCpl: c.externalId === melhorCplId,
+        maiorReceita: c.externalId === maiorReceitaId,
+      }));
     });
   }
 }

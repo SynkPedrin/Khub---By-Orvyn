@@ -4,6 +4,7 @@ import { z } from 'zod';
  *  chave obrigatória (invariante 6). Ver RegrasNegocio.md §6. */
 const schema = z.object({
   NODE_ENV: z.string().default('development'),
+  ORVYN_PROCESS_ROLE: z.enum(['api','worker']).default('api'),
   PORT: z.coerce.number().int().positive().default(3333),
   DATABASE_URL: z.string().url().optional(),
   REDIS_URL: z.string().url().optional(),
@@ -53,6 +54,8 @@ const schema = z.object({
 
   // E-mail transacional (convites). Sem SMTP_URL o convite volta com link manual.
   SMTP_URL: z.string().optional(),
+  RESEND_API_KEY: z.string().optional(),
+  RESEND_FROM: z.string().optional(),
   SMTP_FROM: z.string().optional(),
 
   // Login social (sem estas, a rota responde 501 explicando o que falta)
@@ -84,5 +87,12 @@ export function loadEnv(): Env {
     const faltando = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join(' · ');
     throw new Error(`Env inválida — ${faltando}`);
   }
-  return parsed.data;
+  const env=parsed.data;
+  if(env.NODE_ENV==='production') {
+    const missing=['DATABASE_URL','REDIS_URL'].filter(k=>!process.env[k]?.trim());
+    if(missing.length) throw new Error(`Env obrigatória ausente: ${missing.join(', ')}`);
+    if(env.JWT_SECRET.length<32) throw new Error('JWT_SECRET deve ter pelo menos 32 caracteres em produção');
+    if(env.STEVO_TEST_NUMBER || env.STEVO_FALLBACK_TENANT_ID) throw new Error('roteamento de teste não permitido em produção');
+  }
+  return env;
 }

@@ -40,7 +40,11 @@ export class JwtAuthGuard implements CanActivate {
       if (!rows.length) throw new UnauthorizedException('API key inválida ou revogada');
       // identityId = UUID da própria chave (válido para colunas uuid: created_by,
       // audit actor_id). role 'api' distingue de humano; e-mail é rótulo.
-      const user: AuthUser = { identityId: rows[0].key_id, tenantId: rows[0].tenant_id, role: 'api', email: 'api-key' };
+      const key = await this.prisma.withTenant(rows[0].tenant_id, tx => tx.apiKey.findFirst({
+        where: { id: rows[0].key_id, tenantId: rows[0].tenant_id, revokedAt: null }, select: { scopes: true },
+      }));
+      if (!key) throw new UnauthorizedException('API key inválida ou revogada');
+      const user: AuthUser = { identityId: rows[0].key_id, tenantId: rows[0].tenant_id, role: 'api', email: 'api-key', scopes: key.scopes };
       (req as Request & { user: AuthUser }).user = user;
       return true;
     }
@@ -52,8 +56,13 @@ export class JwtAuthGuard implements CanActivate {
       // Ticket de socket é assinado com o mesmo segredo, mas NÃO abre a API REST
       // (ADR-0011): ele é curto e trafega na URL/handshake, superfície mais exposta.
       if (payload.typ === 'ws') throw new Error('ticket de socket não vale como access token');
-      const user: AuthUser = { identityId: payload.sub, tenantId: payload.tenant_id, role: payload.role, email: payload.email };
-      if (!user.tenantId) throw new Error('sem tenant no token');
+      if (!payload.sub || !payload.tenant_id) throw new Error('token sem identidade');
+      const membership = await this.prisma.membership.findUnique({
+        where: { identityId_tenantId: { identityId: payload.sub, tenantId: payload.tenant_id } },
+      });
+      const tenant = await this.prisma.tenant.findUnique({ where: { id: payload.tenant_id }, select: { status: true } });
+      if (!membership || tenant?.status !== 'active') throw new Error('vínculo revogado');
+      const user: AuthUser = { identityId: payload.sub, tenantId: payload.tenant_id, role: membership.role, email: payload.email };
       (req as Request & { user: AuthUser }).user = user;
       return true;
     } catch {

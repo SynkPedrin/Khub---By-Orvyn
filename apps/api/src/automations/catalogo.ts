@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /**
  * Catálogo congelado dos nós do workflow (ADR-0012 — fecha a LACUNA do PRD §7.1;
- * ampliado em E.2 e na trilha W de paridade com o GHL). Nó fora daqui não existe:
+ * ampliado em E.2 e na trilha W de paridade de motor). Nó fora daqui não existe:
  * a validação da publicação recusa o grafo. Conta atual: 7 gatilhos + 7 controle
  * + 14 ações = 28.
  */
@@ -59,7 +59,7 @@ export const regraSchema = z.object({
   valor: z.string().optional(),
 });
 
-/** Ramo do If/Else. `juncao` = AND | OR | NONE (como nas telas do GHL). */
+/** Ramo do If/Else. `juncao` = AND | OR | NONE. */
 export const ramoSchema = z.object({
   id: z.string().min(1),
   rotulo: z.string().default('Ramo'),

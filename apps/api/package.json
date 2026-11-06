@@ -11,8 +11,10 @@
     "test": "jest",
     "typecheck": "prisma generate && tsc --noEmit",
     "prisma:generate": "prisma generate",
-    "db:apply": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ../../db/000_foundation.sql -f ../../db/001_rag_schema.sql -f ../../db/001a_rls_harden.sql",
-    "db:isolation-test": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ../../db/002_isolation_test.sql"
+    "db:migrate": "node scripts/db-migrate.mjs",
+    "db:migrate:status": "node scripts/db-migrate.mjs --status",
+    "db:isolation-test": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ../../db/002_isolation_test.sql",
+    "start:worker": "node dist/worker.js"
   },
   "dependencies": {
     "@nestjs/bullmq": "^10.2.0",
@@ -25,6 +27,7 @@
     "@node-rs/argon2": "^2.0.2",
     "@orvyn/types": "workspace:*",
     "@prisma/client": "^5.22.0",
+    "@sentry/node": "11.11.0",
     "@socket.io/redis-adapter": "^8.3.0",
     "bullmq": "^5.12.0",
     "class-transformer": "^0.5.1",

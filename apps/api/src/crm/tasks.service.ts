@@ -60,13 +60,14 @@ export class TasksService {
           contactId: input.contactId ?? null,
           dealId: input.dealId ?? null,
           companyId: input.companyId ?? null,
-          assigneeId: input.assigneeId ?? identityId,
-          createdBy: identityId,
+          // identityId vazio = criada por automação (sistema): colunas uuid ficam nulas, nunca ''.
+          assigneeId: input.assigneeId ?? (identityId || null),
+          createdBy: identityId || null,
         },
         select: { id: true },
       });
       await tx.activity.create({
-        data: { tenantId, actor: 'Você', acao: `criou a tarefa "${input.titulo}"`, tone: 'neutral', contactId: input.contactId ?? null, dealId: input.dealId ?? null },
+        data: { tenantId, actor: identityId ? 'Você' : 'Automação', acao: `criou a tarefa "${input.titulo}"`, tone: 'neutral', contactId: input.contactId ?? null, dealId: input.dealId ?? null },
       });
       return { id: t.id };
     });

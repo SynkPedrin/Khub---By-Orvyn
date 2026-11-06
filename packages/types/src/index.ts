@@ -46,19 +46,29 @@ export interface ProblemDetails {
  * tipo aqui não compila. Todo evento é entregue apenas na sala do tenant —
  * o `tenantId` NUNCA vem do cliente, sempre do ticket assinado.
  */
+/** Quem responde a conversa agora: um agente de IA ou um humano (ADR-0030). */
+export type AtendimentoConversa = 'ia' | 'humano';
+
 export interface RealtimeEvents {
   'message.created': {
     conversationId: string;
     id: string;
-    de: string; // contato | humano | nyro
+    de: string; // contato | humano | ia | nyro
     texto: string;
     hora: string | null;
+    /** Agente que escreveu, quando `de === 'ia'` (ADR-0030). */
+    agentId?: string | null;
   };
   'conversation.updated': {
     id: string;
-    ultimaPrevia: string | null;
-    ultimaHora: string | null;
-    naoLidas: number;
+    ultimaPrevia?: string | null;
+    ultimaHora?: string | null;
+    naoLidas?: number;
+    /** Estado do atendimento (ADR-0030). Ausente = não mudou neste evento. */
+    atendimento?: AtendimentoConversa;
+    agentId?: string | null;
+    assigneeId?: string | null;
+    handoffMotivo?: string | null;
   };
   'deal.moved': { id: string; stageId: string; stageAnterior: string | null };
   'deal.created': { id: string; stageId: string };

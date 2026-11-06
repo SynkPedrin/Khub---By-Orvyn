@@ -2,17 +2,25 @@ import { HttpException, Injectable, Logger } from '@nestjs/common';
 
 /** Provedores externos que exigem credencial. Fonte da verdade: docs/ENV.md */
 export type Provider =
-  | 'stevo' | 'meta' | 'google_ads' | 'tiktok' | 'stripe'
+  | 'stevo' | 'evolution' | 'meta' | 'google_ads' | 'tiktok' | 'stripe'
   | 'voyage' | 'anthropic' | 'email' | 'oauth_google' | 'oauth_github'
   | 'google_calendar' | 'integrations_crypto';
 
 /** Variáveis obrigatórias por provedor (Seção 2 do Brief-Finalizacao). */
 const REQUIRED: Record<Provider, string[]> = {
   stevo: ['STEVO_API_URL', 'STEVO_API_KEY', 'STEVO_INSTANCE'],
+  // WhatsApp via Evolution API própria (CANAL_MVP do CLAUDE.md). Chave GLOBAL
+  // do servidor Evolution — não confundir com o token por-instância que a
+  // Evolution devolve em /instance/create (esse fica cifrado no banco).
+  evolution: ['EVOLUTION_BASE_URL', 'EVOLUTION_API_KEY'],
   meta: ['META_APP_ID', 'META_APP_SECRET'],
   google_ads: ['GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET'],
   tiktok: ['TIKTOK_APP_ID', 'TIKTOK_APP_SECRET'],
-  stripe: ['STRIPE_SECRET_KEY'],
+  // `STRIPE_WEBHOOK_SECRET` é obrigatória (não só "recomendada"): sem ela o
+  // controller de webhook (stripe-webhook.controller.ts) não tem como
+  // verificar NENHUM evento — pagamento confirmado nunca chegaria a marcar
+  // cobrança/assinatura como paga. Achado da auditoria de produção.
+  stripe: ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'],
   voyage: ['VOYAGE_API_KEY'],
   anthropic: ['ANTHROPIC_API_KEY'],
   email: ['SMTP_URL'],
@@ -45,6 +53,7 @@ export class ConfigService {
 
   /** Variáveis que faltam para o provedor operar em modo real. */
   missingVars(p: Provider): string[] {
+    if (p === 'email' && this.get('RESEND_API_KEY')) return this.get('RESEND_FROM') ? [] : ['RESEND_FROM'];
     return (REQUIRED[p] ?? []).filter((k) => !this.get(k));
   }
 

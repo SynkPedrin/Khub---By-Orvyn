@@ -16,8 +16,13 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   async onModuleInit(): Promise<void> {
     try {
       await this.$connect();
+      if(process.env.NODE_ENV==='production') {
+        const roles=await this.$queryRaw<{rolsuper:boolean;rolbypassrls:boolean}[]>`SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user`;
+        if(!roles.length || roles[0].rolsuper || roles[0].rolbypassrls) throw new Error('application role must enforce RLS');
+      }
       this.connected = true;
     } catch (e) {
+      if(process.env.NODE_ENV==='production') throw e;
       // Não derruba o boot: em dev sem banco a API sobe e /v1/health reporta db:false.
       this.log.warn(`Banco indisponível no boot: ${(e as Error).message}`);
     }

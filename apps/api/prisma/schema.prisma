@@ -33,6 +33,7 @@ enum RagDocStatus {
 }
 
 model Tenant {
+  settings         Json          @default("{}")
   id               String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   nome             String
   templateId       String?       @map("template_id")
@@ -45,6 +46,11 @@ model Tenant {
   idioma           String        @default("pt-BR")
   plano            String        @default("starter")
   status           String        @default("active")
+  // `isDemo` existia no banco desde a migration 023 mas nunca tinha entrado
+  // aqui (drift real, corrigido na migration 025 junto com os campos novos).
+  isDemo           Boolean       @default(false) @map("is_demo")
+  demoScenario     String?       @map("demo_scenario")
+  datasetVersion   String?       @map("dataset_version")
   createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
   documents        RagDocument[]
@@ -186,6 +192,80 @@ model Membership {
   @@map("memberships")
 }
 
+// ==================== Agency Mode (migration 026) ====================
+// Globais, sem tenant_id próprio, sem RLS — mesmo padrão de Identity/
+// Membership: descrevem a relação ENTRE tenants, não são dado de um tenant.
+
+model Agency {
+  settings         Json                  @default("{}")
+  id               String                @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name             String
+  slug             String                @unique
+  ownerIdentityId  String                @map("owner_identity_id") @db.Uuid
+  isDemo           Boolean               @default(false) @map("is_demo")
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
+  members          AgencyMember[]
+  clientAccounts   AgencyClientAccount[]
+
+  @@map("agencies")
+}
+
+model AgencyInvite {
+  id String @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  agencyId String @map("agency_id") @db.Uuid
+  email String
+  role String
+  clientIds String[] @map("client_ids") @db.Uuid
+  tokenHash String @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  acceptedAt DateTime? @map("accepted_at") @db.Timestamptz(6)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  @@map("agency_invites")
+}
+
+model AgencyMember {
+  id           String                          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  agencyId     String                          @map("agency_id") @db.Uuid
+  identityId   String                          @map("identity_id") @db.Uuid
+  role         String                          @default("member")
+  createdAt    DateTime                        @default(now()) @map("created_at") @db.Timestamptz(6)
+  agency       Agency                          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  clientAccess AgencyMemberClientAccess[]
+
+  @@unique([agencyId, identityId])
+  @@map("agency_members")
+}
+
+model AgencyClientAccount {
+  id          String                     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  agencyId    String                     @map("agency_id") @db.Uuid
+  tenantId    String                     @map("tenant_id") @db.Uuid
+  displayName String                     @map("display_name")
+  status      String                     @default("active")
+  isDemo      Boolean                    @default(false) @map("is_demo")
+  createdAt   DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime                   @default(now()) @map("updated_at") @db.Timestamptz(6)
+  agency      Agency                     @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  memberAccess AgencyMemberClientAccess[]
+
+  @@unique([agencyId, tenantId])
+  @@map("agency_client_accounts")
+}
+
+model AgencyMemberClientAccess {
+  id              String               @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  agencyMemberId  String               @map("agency_member_id") @db.Uuid
+  clientAccountId String               @map("client_account_id") @db.Uuid
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  member          AgencyMember         @relation(fields: [agencyMemberId], references: [id], onDelete: Cascade)
+  clientAccount   AgencyClientAccount  @relation(fields: [clientAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([agencyMemberId, clientAccountId])
+  @@map("agency_member_client_access")
+}
+
 model RefreshToken {
   id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   identityId String    @map("identity_id") @db.Uuid
@@ -267,6 +347,8 @@ model Stage {
 }
 
 model Contact {
+  optedOutAt DateTime? @map("opted_out_at") @db.Timestamptz(6)
+  lastInboundAt DateTime? @map("last_inbound_at") @db.Timestamptz(6)
   id              String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   tenantId        String         @map("tenant_id") @db.Uuid
   nome            String
@@ -279,6 +361,28 @@ model Contact {
   camposCustom    Json           @default("{}") @map("campos_custom")
   ultimoContatoAt DateTime?      @map("ultimo_contato_at") @db.Timestamptz(6)
   companyId       String?        @map("company_id") @db.Uuid
+  // Colunas reais desde a migration 023 (drift real encontrado nesta
+  // auditoria: existiam no Postgres, nunca tinham entrado no Prisma).
+  score           Int?           @db.SmallInt
+  scoreVersion    String?        @map("score_version")
+  scoreAt         DateTime?      @map("score_at") @db.Timestamptz(6)
+  scoreFatores    Json           @default("{}") @map("score_fatores")
+  cargo           String?
+  origem          String?
+  localizacao     String?
+  site            String?
+  linkedin        String?
+  /// Base legal/consentimento LGPD (RegrasNegocio §5). '{}' = não registrado
+  /// ainda — nunca retroage um consentimento que não foi de fato dado.
+  consentimento   Json           @default("{}")
+  ownerId         String?        @map("owner_id") @db.Uuid
+  proximaAcaoAt   DateTime?      @map("proxima_acao_at") @db.Timestamptz(6)
+  proximaAcaoTipo String?        @map("proxima_acao_tipo")
+  // Atribuição real (migration 025): de qual campanha/criativo este contato
+  // nasceu. Sem FK aqui, Analytics não tem como responder "que receita veio
+  // deste criativo?" sem inventar a resposta.
+  adCampaignId    String?        @map("ad_campaign_id") @db.Uuid
+  adCreativeId    String?        @map("ad_creative_id") @db.Uuid
   createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime       @default(now()) @map("updated_at") @db.Timestamptz(6)
   company         Company?       @relation(fields: [companyId], references: [id], onDelete: SetNull)
@@ -323,6 +427,13 @@ model Conversation {
   ultimaPrevia String?   @map("ultima_previa")
   naoLidas     Int       @default(0) @map("nao_lidas")
   ultimaHora   String?   @map("ultima_hora")
+  /// Quem responde agora: 'ia' (agente) ou 'humano' (db/030 · ADR-0030).
+  atendimento   String    @default("humano")
+  agentId       String?   @map("agent_id") @db.Uuid
+  /// identities.id do humano responsável (validado como membro do tenant na API).
+  assigneeId    String?   @map("assignee_id") @db.Uuid
+  handoffMotivo String?   @map("handoff_motivo")
+  handoffAt     DateTime? @map("handoff_at") @db.Timestamptz(6)
   updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   contact      Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
@@ -332,10 +443,18 @@ model Conversation {
 }
 
 model Message {
+  deliveryStatus String @default("legacy") @map("delivery_status")
+  idempotencyKey String? @map("idempotency_key")
+  providerId String? @map("provider_id")
+  deliveryError String? @map("delivery_error")
+  sentAt DateTime? @map("sent_at") @db.Timestamptz(6)
+  @@unique([tenantId, idempotencyKey], map: "messages_idempotency")
   id             String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   tenantId       String       @map("tenant_id") @db.Uuid
   conversationId String       @map("conversation_id") @db.Uuid
   autorTipo      String       @default("contato") @map("autor_tipo")
+  /// Agente que escreveu a mensagem (autor_tipo = 'ia').
+  agentId        String?      @map("agent_id") @db.Uuid
   corpo          String
   hora           String?
   createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -472,6 +591,11 @@ model WorkflowVersion {
 }
 
 model WorkflowRun {
+  scheduledAt DateTime @default(now()) @map("scheduled_at") @db.Timestamptz(6)
+  leaseUntil DateTime? @map("lease_until") @db.Timestamptz(6)
+  leaseOwner String? @map("lease_owner") @db.Uuid
+  generation Int @default(0)
+  attempts Int @default(0)
   id         String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   tenantId   String            @map("tenant_id") @db.Uuid
   workflowId String            @map("workflow_id") @db.Uuid
@@ -625,6 +749,23 @@ model FinanceiroCobranca {
   updatedAt           DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
 
   @@map("financeiro_cobrancas")
+}
+
+/// Assinatura do PRÓPRIO Orvyn (billing da plataforma) — não confundir com
+/// FinanceiroCobranca (o tenant cobrando OS CLIENTES dele). migration 028.
+model Subscription {
+  id                   String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId             String    @unique @map("tenant_id") @db.Uuid
+  plano                String // starter|growth|scale (PRD §17)
+  status               String    @default("incompleta") // incompleta|ativa|inadimplente|cancelada|pausada
+  stripeCustomerId     String?   @map("stripe_customer_id")
+  stripeSubscriptionId String?   @unique @map("stripe_subscription_id")
+  currentPeriodEnd     DateTime? @map("current_period_end") @db.Timestamptz(6)
+  cancelAtPeriodEnd    Boolean   @default(false) @map("cancel_at_period_end")
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("subscriptions")
 }
 
 /// Compromisso da Agenda. Sync com Google Calendar é gated. migration 021.
@@ -873,4 +1014,68 @@ model AdSyncRun {
   records       Int       @default(0)
 
   @@map("ad_sync_runs")
+}
+
+model OutboxEvent {
+ id String @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+ tenantId String @map("tenant_id") @db.Uuid
+ kind String
+ payload Json
+ dedupeKey String @map("dedupe_key")
+ status String @default("pending")
+ attempts Int @default(0)
+ lastError String? @map("last_error")
+ processedAt DateTime? @map("processed_at") @db.Timestamptz(6)
+ createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+ @@unique([tenantId,dedupeKey])
+ @@map("outbox_events")
+}
+
+/// Agente configurável pelo cliente (Agent Manager · db/030 · ADR-0030).
+model Agent {
+  id                   String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId             String   @map("tenant_id") @db.Uuid
+  nome                 String
+  descricao            String?
+  status               String   @default("rascunho")
+  modelo               String
+  instrucoes           String   @default("")
+  tom                  String   @default("cordial")
+  personalidade        String   @default("")
+  ferramentas          String[] @default([])
+  conhecimentoAtivo    Boolean  @default(true) @map("conhecimento_ativo")
+  conhecimentoEscopos  String[] @default(["tenant", "sub", "nicho", "global"]) @map("conhecimento_escopos")
+  maxRespostasConversa Int      @default(20) @map("max_respostas_conversa")
+  maxCaracteres        Int      @default(600) @map("max_caracteres")
+  canais               String[] @default(["WhatsApp"])
+  padrao               Boolean  @default(false)
+  createdBy            String?  @map("created_by") @db.Uuid
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("agents")
+}
+
+/// Uma execução do agente por mensagem do contato (idempotência por message_id).
+model AgentRun {
+  id                String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId          String    @map("tenant_id") @db.Uuid
+  agentId           String?   @map("agent_id") @db.Uuid
+  conversationId    String    @map("conversation_id") @db.Uuid
+  messageId         String    @map("message_id") @db.Uuid
+  status            String    @default("processando")
+  motivo            String?
+  respostaMessageId String?   @map("resposta_message_id") @db.Uuid
+  tools             Json      @default("[]")
+  fontes            Json      @default("[]")
+  modelo            String?
+  tokensEntrada     Int       @default(0) @map("tokens_entrada")
+  tokensSaida       Int       @default(0) @map("tokens_saida")
+  custoUsd          Decimal   @default(0) @map("custo_usd") @db.Decimal(12, 6)
+  latenciaMs        Int?      @map("latencia_ms")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  finishedAt        DateTime? @map("finished_at") @db.Timestamptz(6)
+
+  @@unique([tenantId, messageId], map: "agent_runs_por_mensagem")
+  @@map("agent_runs")
 }

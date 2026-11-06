@@ -1,7 +1,8 @@
-import { Body, Controller, HttpCode, Logger, Param, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Headers, HttpCode, Logger, Param, Post } from '@nestjs/common';
 import { Public } from '../auth/decorators';
 import { PrismaService } from '../prisma/prisma.service';
 import { TriggersService } from './triggers.service';
+import { Prisma } from '@prisma/client';
 
 /**
  * Entrada pública de webhook por workflow (`gatilho.webhook`).
@@ -23,7 +24,7 @@ export class HooksController {
 
   @Post(':chave')
   @HttpCode(202)
-  async receber(@Param('chave') chave: string, @Body() body: Record<string, unknown>) {
+  async receber(@Param('chave') chave: string, @Body() body: Record<string, unknown>, @Headers('idempotency-key') eventId?: string) {
     const rota = await this.resolver(chave);
     // 202 mesmo para chave desconhecida: responder 404 aqui viraria um oráculo
     // para descobrir chaves válidas por tentativa.
@@ -32,15 +33,12 @@ export class HooksController {
       return { recebido: true };
     }
 
-    const r = await this.triggers
-      .processarWebhook(rota.tenant_id, rota.workflow_id, body ?? {})
-      .catch((e: Error) => {
-        this.log.error(`falha ao processar webhook: ${e.message}`);
-        return { ok: false, motivo: 'erro interno' };
-      });
-
-    // 202 sempre: quem chama não precisa (nem deve) saber do fluxo interno.
-    return { recebido: true, ...(r.ok ? { runId: (r as { runId?: string }).runId } : { ignorado: r.motivo }) };
+    if(!eventId || eventId.length>200) throw new BadRequestException('Idempotency-Key obrigatório');
+    if(!body || typeof body!=='object' || Array.isArray(body)) throw new BadRequestException('payload inválido');
+    const tenantId=rota.tenant_id;
+    const dedupeKey=`hook:${rota.workflow_id}:${eventId}`;
+    await this.prisma.withTenant(tenantId,tx=>tx.outboxEvent.upsert({where:{tenantId_dedupeKey:{tenantId,dedupeKey}},create:{tenantId,kind:'workflow.hook',dedupeKey,payload:{workflowId:rota.workflow_id,body} as Prisma.InputJsonObject},update:{}}));
+    return {recebido:true};
   }
 
   private async resolver(chave: string): Promise<{ tenant_id: string; workflow_id: string } | null> {
