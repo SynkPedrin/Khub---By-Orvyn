@@ -207,3 +207,29 @@ Pedido de 06/11: "Quero o Revenue OS no lugar do GHL". Varredura completa (códi
 
 **Conclusão:** não há remoção destrutiva a fazer — o produto nunca dependeu do GHL. O que falta para "desligar o GHL e continuar operando" é capacidade nativa, já mapeada no plano (§10): subaccounts completas (sprints 1–2), WhatsApp via Stevo (3–4), agentes (5–6), CRM com propostas/carteira e campos personalizados (7–8), modos KROMA e indicadores (9), gestão da agência (10) e o **importador de dados de saída do GHL** (11), que é a única peça específica de GHL — e é importação de arquivo, não integração.
 
+## 12. Migração do cliente KROMA que já opera no GHL (2026-11-06)
+
+Situação informada: a KROMA tem 2 clientes; **1 já opera no GHL** com automações, histórico de mensagens e IA rodando. Token de Private Integration (PIT) do GHL entregue e guardado em `apps/api/.env` → `GHL_MIGRATION_TOKEN` (uso único, nunca no runtime — ADR-0031).
+
+Rotas oficiais **confirmadas** na documentação (`marketplace.gohighlevel.com/docs`, base `https://services.leadconnectorhq.com`, `Authorization: Bearer <PIT>`, header `Version`):
+
+| Dado | Rota | Escopo | Destino no Revenue OS |
+|---|---|---|---|
+| Subconta | `GET /locations/{locationId}` | `locations.readonly` | dados do cliente / tenant |
+| Contatos (com total) | `POST /contacts/search` (`locationId`, `pageLimit` ≤ 500; `searchAfter` acima de 10 mil) | `contacts.readonly` | `contacts` (dedupe por telefone/e-mail, origem `migracao_ghl`) |
+| Histórico de mensagens | `GET /conversations/messages/export` (`locationId`, cursor de 2 min, `total`) | `conversations/message.readonly` | `conversations` + `messages` (autor contato/humano/IA preservado) |
+| Mensagens por conversa | `GET /conversations/{conversationId}/messages` | `conversations/message.readonly` | complemento do export |
+
+Constam no índice oficial, mas **sem página lida** (validar antes de usar): oportunidades (`/opportunities/search`), funis (`/opportunities/pipelines`), campos custom e tags (`/locations/{locationId}/customFields`, `/tags`), agentes de Conversation AI (`/conversation-ai/agents/search`). **Workflows: nenhuma rota de exportação documentada** — as automações do cliente serão **reconstruídas** no motor do Revenue OS a partir de um levantamento feito na tela do GHL; o prompt/regras da IA serão recriados como agente do Revenue OS (Sprint AG).
+
+Limites: 100 req/10 s por PIT por location; 200 mil/dia por location; 429 sem `Retry-After`.
+
+**Bloqueio para começar:** o **Location ID** da subconta (GHL → Settings → Business Profile). Não há rota documentada que o descubra a partir do PIT.
+
+**Sequência proposta (só leitura no GHL; nada é apagado lá):**
+1. Inventário: contagens de contatos, conversas/mensagens, oportunidades, funis, tags, campos, agentes de IA (relatório, sem gravar).
+2. Mapeamento campo a campo → aprovação do product owner.
+3. Importador idempotente (script de migração fora do runtime, com relatório e reprocessamento) num tenant de homologação; conferência por amostragem.
+4. Reconstrução das automações e do agente no Revenue OS; testes no playground.
+5. Corte: Revenue OS assume o WhatsApp (Stevo) do cliente; GHL fica só leitura até a validação; depois, revogar o PIT e apagar `GHL_MIGRATION_TOKEN`.
+
