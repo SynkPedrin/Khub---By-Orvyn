@@ -57,6 +57,10 @@ Cada bloco lista o **conjunto mínimo**: com ele completo, o provedor sai de `co
 | `STEVO_FALLBACK_TENANT_ID` | — | Dev single-tenant: roteia a entrada quando a instância ainda não tem integração conectada. Em produção o roteamento é `instância → tenant` (migration 008). |
 | `STEVO_TEST_NUMBER` | — | **Obrigatória para enviar fora de produção.** Toda saída (Inbox, automações, Nyro, agentes) vai para este número, nunca para o telefone do contato. Sem ela, a mensagem é gravada como `bloqueado_dev` e não sai (doc 18, B-3). Proibida em produção. |
 | `STEVO_REVENUE_API_KEY` | — | Chave da **API de gestão** da Stevo (`stevo_sk_…`, `https://openapi.stevo.chat/v1`). Precisa ser de conta (sem restrição de instância) para webhook de conta. Escopos mínimos: `instances:read/write`, `messages:send/read`, `webhooks:read/write`. Ainda não lida pelo código (Fase 3). |
+| `STEVO_API_BASE_URL` | `https://openapi.stevo.chat` | Base da API de gestão da Stevo. |
+| `STEVO_WEBHOOK_SECRET` | — | Segredo `whsec_…` do webhook de conta (devolvido uma vez na criação; o script `scripts/operar/stevo.mjs webhook` grava aqui sem exibir). Sem ele o webhook responde 401. |
+| `STEVO_WEBHOOK_SECRET_PREVIOUS` | — | Segredo anterior durante a rotação (`rotate-secret`). Remover após o overlap. |
+| `GHL_MIGRATION_LOCATION_ID` | — | Location do cliente no GHL para a extração de migração (não é segredo). |
 | `GHL_MIGRATION_TOKEN` | — | Token do GHL de **uso único** para extrair dados de migração (ADR-0031). Nunca usado em runtime; revogar no GHL e apagar após a migração. |
 
 **Sem elas:** a mensagem **é gravada** e aparece no inbox; só a entrega fica pendente

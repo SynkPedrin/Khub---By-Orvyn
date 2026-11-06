@@ -4,7 +4,8 @@ import { ConfigService } from '../../config/config.service';
 export interface MessagingProvider {
   configured(): boolean;
   missing(): string[];
-  sendText(number: string, text: string, tenantInstance?: string): Promise<{ providerId?: string }>;
+  /** `idempotencyKey`: usado por quem suporta (API de gestão da Stevo); os demais ignoram. */
+  sendText(number: string, text: string, tenantInstance?: string, idempotencyKey?: string): Promise<{ providerId?: string }>;
 }
 
 /**
@@ -58,9 +59,11 @@ export class StevoProvider implements MessagingProvider {
 export class DeliveryError extends Error {
  readonly retryable: boolean;
  readonly uncertain: boolean;
- constructor(readonly status: number) {
-   super(`messaging_provider_http_${status}`);
-   this.retryable=status===429;
-   this.uncertain=status>=500 || status===408;
+ /** `opts` sobrepõe a heurística por status quando o provedor diz explicitamente
+  *  (ex.: Stevo `502 upstream_unavailable` = nada enviado, seguro repetir). */
+ constructor(readonly status: number, opts: { retryable?: boolean; uncertain?: boolean; codigo?: string } = {}) {
+   super(`messaging_provider_http_${status}${opts.codigo ? `_${opts.codigo}` : ''}`);
+   this.retryable=opts.retryable ?? status===429;
+   this.uncertain=opts.uncertain ?? (status>=500 || status===408);
  }
 }

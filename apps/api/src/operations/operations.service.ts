@@ -6,6 +6,8 @@ import { TriggersService } from '../automations/triggers.service';
 import { idDeJob, PassoJob } from '../automations/runs.service';
 import { MetaLeadsService } from '../integrations/meta-leads.service';
 import { MessagesService, InboundInput } from '../crm/messaging/messages.service';
+import { StevoApiEventosService } from '../crm/messaging/stevo-api-eventos.service';
+import type { EventoStevoApi } from '../crm/messaging/stevo-api-webhook.controller';
 import { GatilhoJob } from '../events/domain-events.service';
 import { isWorker } from '../common/queue-connection';
 import { ATRASO_RESPOSTA_MS, FILA_AGENTES, type AgenteJob } from '../agents/agent-runtime.service';
@@ -14,7 +16,7 @@ import { ATRASO_RESPOSTA_MS, FILA_AGENTES, type AgenteJob } from '../agents/agen
 export class OperationsService implements OnModuleInit {
  private readonly log = new Logger('Operations');
  constructor(private readonly db: PrismaService, private readonly triggers: TriggersService,
-   private readonly meta: MetaLeadsService, private readonly messages: MessagesService,
+   private readonly meta: MetaLeadsService, private readonly messages: MessagesService, private readonly stevoApi: StevoApiEventosService,
    @InjectQueue('orvyn-maintenance') private readonly queue: Queue,
    @InjectQueue('automation-steps') private readonly steps: Queue<PassoJob>,
    @InjectQueue(FILA_AGENTES) private readonly agentes: Queue<AgenteJob>) {}
@@ -64,6 +66,8 @@ export class OperationsService implements OnModuleInit {
      // stevo.inbound e evolution.inbound convergem no mesmo InboundInput
      // genérico — a diferença é só qual webhook os gerou.
      if(e.kind==='stevo.inbound' || e.kind==='evolution.inbound') await this.messages.receiveInbound(e.payload as unknown as InboundInput);
+     // Webhook de conta da Stevo (API de gestão): mensagem, recibo ou estado da instância.
+     else if(e.kind==='stevo_api.event') await this.stevoApi.processar(tenantId,e.payload as unknown as EventoStevoApi);
      else if(e.kind==='meta.lead') {
        const result=await this.meta.processar(e.payload as unknown as Parameters<MetaLeadsService['processar']>[0]);
        if(!result.ok) throw new Error(result.motivo ?? 'meta processing failed');

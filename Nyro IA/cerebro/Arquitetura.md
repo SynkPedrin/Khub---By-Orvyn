@@ -165,6 +165,14 @@ Em F0 (Bloco 4) esses arquivos serão movidos/copiados para `packages/ui/assets/
   - TypeScript **5.5.4** (strict) · Postgres alvo **pg16 + pgvector** (imagem `pgvector/pgvector:pg16` no compose)
 - **Consequências:** `prisma generate` OK gerando o modelo com `Unsupported("vector(1024)")` (R0.3). Migrações do RAG continuam em SQL puro (`db/`), não no Prisma Migrate. `packages/ui` fica como dívida pequena (web tem seus componentes locais). Turbo `tasks` (schema v2). **Verificado:** `pnpm build` → 2/2 apps; API sobe e responde `/v1/health` (db:false sem Postgres) e 404 em `application/problem+json`.
 
+### ADR-0032 — Stevo API de gestão como transporte de WhatsApp por subconta
+- **Status:** Aceito e implementado (2026-11-06). Concretiza ADR-0031 (Stevo = só transporte).
+- **Decisão:** cada subconta tem sua instância Stevo, vinculada em `integrations` (provider `stevo_api`, `external_business_id` = id da instância) e, na Stevo, `external_ref` = tenantId. Roteamento do webhook de conta por função `SECURITY DEFINER` (`db/032`), igual a 008/024. Envio por tenant via `POST /v1/instances/{id}/messages` com `Idempotency-Key`; sem vínculo, comportamento anterior (Evolution/Stevo legado).
+- **Webhook de conta** (`POST /v1/webhooks/stevo-api`): HMAC-SHA256 de `timestamp.corpoCru` (mesma semântica do `verifyWebhook` do SDK oficial: 300 s, segredo atual+anterior, tempo constante); dedupe por `event_id` no outbox; `raw` da Stevo não é guardado (minimização); instância sem vínculo → 200 ignorado; `external_ref` divergente → descartado. Worker processa `message.received` (inbox, sem grupo/`from_me`), recibos `sent/delivered/read` (status só avança), `failed`, e `instance.*` (estado da integração).
+- **Pareamento real** = `connected && logged_in` (`/connection`); `connected` sozinho só indica servidor.
+- **Sem dependência nova:** contrato lido do `openapi.yaml` e dos tipos do pacote `stevo-sdk` (inspecionado, não instalado); HTTP via `fetch`, HMAC via `node:crypto`.
+- **Operação** até existir o painel da agência: `apps/api/scripts/operar/stevo.mjs` (me, instancias, criar-cliente, vincular, webhook, webhooks) chamando os mesmos serviços (RLS, auditoria).
+
 ### ADR-0031 — O Revenue OS substitui o GoHighLevel (sem integração)
 - **Status:** Aceito (product owner, 2026-11-06). Emenda o ADR-0015 (que já tratava o GHL só como benchmark de motor/UX) e encerra a decisão pendente 5 de `docs/revenue-audit/18`.
 - **Decisão:** a KROMA desliga o GHL; o Revenue OS é a **fonte oficial e única** de agência, subaccounts, usuários/permissões, CRM (lead → atendimento → qualificação → oportunidade → negociação → proposta → venda → pós-venda → recompra), conversas, agentes, conhecimento, automações, follow-ups e indicadores. **Proibido:** integrar, sincronizar ou depender do GHL (OAuth, Agency Account, Locations, webhooks) ou trocá-lo por outro CRM externo.

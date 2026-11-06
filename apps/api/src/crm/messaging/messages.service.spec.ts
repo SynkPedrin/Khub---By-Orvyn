@@ -6,6 +6,7 @@ import type { EvolutionProvider } from './evolution.provider';
 import type { DomainEventsService } from '../../events/domain-events.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { AtendimentoService } from './atendimento.service';
+import type { StevoApiProvider } from './stevo-api.provider';
 
 const TENANT = '11111111-1111-1111-1111-111111111111';
 
@@ -14,7 +15,7 @@ const TENANT = '11111111-1111-1111-1111-111111111111';
  * BUG-011 (evento não publicado) e BUG-012 (contato duplicado). A Agenda vai
  * usá-lo para confirmação e lembrete, então a rede vem antes.
  */
-function ambiente(opts: { contatos?: any[]; conversas?: any[]; dedupe?: boolean; agentePadrao?: string } = {}) {
+function ambiente(opts: { contatos?: any[]; conversas?: any[]; dedupe?: boolean; agentePadrao?: string; stevoApi?: { externalBusinessId: string; status: string } } = {}) {
   const contatos = opts.contatos ?? ((opts.conversas ?? [])
     .filter((c) => c.contactId && c.contact)
     .map((c) => ({ id: c.contactId, ...c.contact })));
@@ -73,7 +74,7 @@ function ambiente(opts: { contatos?: any[]; conversas?: any[]; dedupe?: boolean;
       auditados.push(s.join(''));
       return 1;
     }),
-    integration: { findFirst: jest.fn(async () => null) },
+    integration: { findFirst: jest.fn(async ({ where }: any) => (where.provider === 'stevo_api' ? opts.stevoApi ?? null : null)) },
   };
 
   const prisma = { withTenant: jest.fn(async (_t: string, work: (tx: unknown) => Promise<unknown>) => work(tx)) } as unknown as PrismaService;
@@ -88,7 +89,9 @@ function ambiente(opts: { contatos?: any[]; conversas?: any[]; dedupe?: boolean;
     publicar: jest.fn(),
   } as unknown as AtendimentoService;
 
-  return { contatos, conversas, mensagens, auditados, locks, publicados, prisma, eventos, tx, atendimento };
+  const stevoApi = { configured: () => true, missing: () => [], sendText: jest.fn(async () => ({ providerId: 'wamid-stevo-1' })) } as unknown as StevoApiProvider;
+
+  return { contatos, conversas, mensagens, auditados, locks, publicados, prisma, eventos, tx, atendimento, stevoApi };
 }
 
 function evolutionDesligada() {
@@ -114,7 +117,7 @@ describe('MessagesService.send — a mensagem SEMPRE persiste (ADR-0008)', () =>
   it('com STEVO configurado: grava, audita e entrega', async () => {
     const a = ambiente({ conversas: CONV });
     const prov = stevo(true);
-    const r = await new MessagesService(a.prisma, prov, evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento).send(TENANT, 'conv1', 'Olá!');
+    const r = await new MessagesService(a.prisma, prov, evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).send(TENANT, 'conv1', 'Olá!');
 
     expect(r.status).toBe('sent');
     expect(a.mensagens[0]).toMatchObject({ corpo: 'Olá!', autorTipo: 'humano' });
@@ -129,7 +132,7 @@ describe('MessagesService.send — a mensagem SEMPRE persiste (ADR-0008)', () =>
   it('sem credencial: grava do mesmo jeito e devolve config_required + missing', async () => {
     const a = ambiente({ conversas: CONV });
     const prov = stevo(false);
-    const r = await new MessagesService(a.prisma, prov, evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento).send(TENANT, 'conv1', 'Olá!');
+    const r = await new MessagesService(a.prisma, prov, evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).send(TENANT, 'conv1', 'Olá!');
 
     expect(r.status).toBe('config_required');
     expect(r.missing).toEqual(['STEVO_API_URL', 'STEVO_INSTANCE']);
@@ -140,7 +143,7 @@ describe('MessagesService.send — a mensagem SEMPRE persiste (ADR-0008)', () =>
   it('STEVO com aceitação incerta: status unknown, mas a mensagem continua gravada', async () => {
     const a = ambiente({ conversas: CONV });
     const prov = stevo(true, async () => { throw new Error('STEVO 500'); });
-    const r = await new MessagesService(a.prisma, prov, evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento).send(TENANT, 'conv1', 'Olá!');
+    const r = await new MessagesService(a.prisma, prov, evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).send(TENANT, 'conv1', 'Olá!');
 
     expect(r.status).toBe('unknown');
     expect(r.erro).toBe('provider_acceptance_unknown');
@@ -150,21 +153,21 @@ describe('MessagesService.send — a mensagem SEMPRE persiste (ADR-0008)', () =>
   it('contato sem telefone: sem_telefone (não tenta enviar para o vazio)', async () => {
     const a = ambiente({ conversas: [{ id: 'conv1', contact: { telefone: null } }] });
     const prov = stevo(true);
-    const r = await new MessagesService(a.prisma, prov, evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento).send(TENANT, 'conv1', 'Olá!');
+    const r = await new MessagesService(a.prisma, prov, evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).send(TENANT, 'conv1', 'Olá!');
     expect(r.status).toBe('sem_telefone');
     expect(prov.sendText).not.toHaveBeenCalled();
   });
 
   it('conversa inexistente falha antes de qualquer efeito', async () => {
     const a = ambiente({ conversas: [] });
-    await expect(new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento).send(TENANT, 'sumiu', 'Oi'))
+    await expect(new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).send(TENANT, 'sumiu', 'Oi'))
       .rejects.toThrow(NotFoundException);
     expect(a.mensagens).toHaveLength(0);
   });
 
   it('publica message.created e conversation.updated (BUG-011)', async () => {
     const a = ambiente({ conversas: CONV });
-    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento).send(TENANT, 'conv1', 'Olá!');
+    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).send(TENANT, 'conv1', 'Olá!');
     expect(a.publicados.map((p) => p.evento)).toEqual(['message.created', 'conversation.updated']);
     expect(a.publicados[0].dados).toMatchObject({ de: 'humano', texto: 'Olá!' });
   });
@@ -176,7 +179,7 @@ describe('MessagesService.receiveInbound — entrada do WhatsApp', () => {
   /** BUG-012: número cru vs telefone formatado criava contato duplicado. */
   it('acha o contato salvo COM máscara a partir do número cru (regressão BUG-012)', async () => {
     const a = ambiente({ contatos: [{ id: 'c1', nome: 'Marina', telefone: '+55 11 99999-1111' }] });
-    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento).receiveInbound(ENTRADA);
+    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).receiveInbound(ENTRADA);
 
     expect(a.contatos).toHaveLength(1);       // NÃO duplicou
     expect(a.conversas[0].contactId).toBe('c1');
@@ -184,7 +187,7 @@ describe('MessagesService.receiveInbound — entrada do WhatsApp', () => {
 
   it('número desconhecido cria contato e publica contact.created', async () => {
     const a = ambiente();
-    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento).receiveInbound({ ...ENTRADA, fromName: 'Novo Lead' });
+    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).receiveInbound({ ...ENTRADA, fromName: 'Novo Lead' });
 
     expect(a.contatos[0]).toMatchObject({ nome: 'Novo Lead', tag: 'Lead' });
     expect(a.publicados.map((p) => p.evento)).toContain('contact.created');
@@ -192,7 +195,7 @@ describe('MessagesService.receiveInbound — entrada do WhatsApp', () => {
 
   it('IDEMPOTÊNCIA: reentrega do mesmo webhook não duplica nem republica', async () => {
     const a = ambiente({ contatos: [{ id: 'c1', nome: 'Marina', telefone: '+55 11 99999-1111' }], dedupe: true });
-    const r = await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento).receiveInbound(ENTRADA);
+    const r = await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).receiveInbound(ENTRADA);
 
     expect(r).toEqual({ deduped: true });
     expect(a.mensagens).toHaveLength(0);
@@ -204,7 +207,7 @@ describe('MessagesService.receiveInbound — entrada do WhatsApp', () => {
       contatos: [{ id: 'c1', nome: 'Marina', telefone: '+55 11 99999-1111' }],
       conversas: [{ id: 'conv1', contactId: 'c1', canal: 'WhatsApp', naoLidas: 2 }],
     });
-    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento).receiveInbound(ENTRADA);
+    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).receiveInbound(ENTRADA);
 
     expect(a.conversas[0].naoLidas).toBe(3);
     expect(a.conversas[0].ultimaPrevia).toBe('Oi, tenho interesse');
@@ -213,27 +216,27 @@ describe('MessagesService.receiveInbound — entrada do WhatsApp', () => {
 
   it('REGRESSÃO P2010: o lock advisory usa $executeRaw (um $queryRaw de `void` quebra no Prisma real)', async () => {
     const a = ambiente({});
-    await new MessagesService(a.prisma, stevo(false), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento).receiveInbound({ tenantId: TENANT, fromNumber: '5511988887777', fromName: 'Lead', text: 'oi', providerMessageId: 'm-lock' });
+    await new MessagesService(a.prisma, stevo(false), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).receiveInbound({ tenantId: TENANT, fromNumber: '5511988887777', fromName: 'Lead', text: 'oi', providerMessageId: 'm-lock' });
     expect(a.locks).toHaveLength(1);
     expect(a.locks[0]).toContain('pg_advisory_xact_lock');
   });
 
   it('contato que já existe NÃO publica contact.created de novo', async () => {
     const a = ambiente({ contatos: [{ id: 'c1', nome: 'Marina', telefone: '+55 11 99999-1111' }] });
-    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento).receiveInbound(ENTRADA);
+    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).receiveInbound(ENTRADA);
     expect(a.publicados.map((p) => p.evento)).not.toContain('contact.created');
   });
 
   it('a entrada vem marcada como do contato (senão o fluxo responderia a si mesmo)', async () => {
     const a = ambiente({ contatos: [{ id: 'c1', nome: 'M', telefone: '+55 11 99999-1111' }] });
-    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento).receiveInbound(ENTRADA);
+    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).receiveInbound(ENTRADA);
     expect(a.mensagens[0].autorTipo).toBe('contato');
     expect(a.publicados.find((p) => p.evento === 'message.created')?.dados.de).toBe('contato');
   });
 
   it('toda operação abre transação com o tenant da sessão (isolamento)', async () => {
     const a = ambiente({ contatos: [{ id: 'c1', nome: 'M', telefone: '+55 11 99999-1111' }] });
-    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento).receiveInbound(ENTRADA);
+    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).receiveInbound(ENTRADA);
     expect((a.prisma.withTenant as jest.Mock).mock.calls.every((c) => c[0] === TENANT)).toBe(true);
   });
 });
@@ -243,20 +246,20 @@ describe('MessagesService — atendimento IA/humano (ADR-0030)', () => {
 
   it('conversa nova nasce com a IA quando há agente padrão ativo', async () => {
     const a = ambiente({ agentePadrao: 'ag1' });
-    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento).receiveInbound(ENTRADA2);
+    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).receiveInbound(ENTRADA2);
     expect(a.conversas[0]).toMatchObject({ atendimento: 'ia', agentId: 'ag1' });
   });
 
   it('sem agente padrão, conversa nova nasce com humano (comportamento anterior)', async () => {
     const a = ambiente();
-    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento).receiveInbound(ENTRADA2);
+    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).receiveInbound(ENTRADA2);
     expect(a.conversas[0]).toMatchObject({ atendimento: 'humano', agentId: null });
   });
 
   it('humano digitando no Inbox aciona "assumir"; automação (sem identityId) não', async () => {
     const CONV = [{ id: 'conv1', contactId: 'c1', contact: { telefone: '+55 11 99999-1111' } }];
     const a = ambiente({ conversas: CONV });
-    const svc = new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento);
+    const svc = new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi);
     await svc.send(TENANT, 'conv1', 'Automação falando', 'chave-automacao-000001');
     expect(a.atendimento.aoHumanoEnviar).not.toHaveBeenCalled();
     await svc.send(TENANT, 'conv1', 'Oi, aqui é a Ana', 'chave-humano-00000001', undefined, { tipo: 'humano', identityId: 'id-ana' });
@@ -266,7 +269,7 @@ describe('MessagesService — atendimento IA/humano (ADR-0030)', () => {
   it('mensagem do agente é gravada como autor "ia" com o agente, e o evento diz "ia"', async () => {
     const CONV = [{ id: 'conv1', contactId: 'c1', contact: { telefone: '+55 11 99999-1111' } }];
     const a = ambiente({ conversas: CONV });
-    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento)
+    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi)
       .send(TENANT, 'conv1', 'Olá! Sou a assistente.', 'agent:msg-1', undefined, { tipo: 'ia', agentId: 'ag1' });
     expect(a.mensagens[0]).toMatchObject({ autorTipo: 'ia', agentId: 'ag1' });
     expect(a.publicados.find((p) => p.evento === 'message.created')?.dados).toMatchObject({ de: 'ia', agentId: 'ag1' });
@@ -281,7 +284,7 @@ describe('MessagesService — trava de envio fora de produção (doc 18, B-3)', 
     delete process.env.STEVO_TEST_NUMBER;
     const a = ambiente({ conversas: CONV });
     const prov = stevo(true);
-    const r = await new MessagesService(a.prisma, prov, evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento).send(TENANT, 'conv1', 'Olá!', 'chave-trava-dev-000001');
+    const r = await new MessagesService(a.prisma, prov, evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).send(TENANT, 'conv1', 'Olá!', 'chave-trava-dev-000001');
     expect(prov.sendText).not.toHaveBeenCalled();
     expect(r.status).toBe('bloqueado_dev');
     expect(a.mensagens[0]).toMatchObject({ deliveryStatus: 'bloqueado_dev' });
@@ -290,8 +293,29 @@ describe('MessagesService — trava de envio fora de produção (doc 18, B-3)', 
   it('com STEVO_TEST_NUMBER: envia para o número de teste, nunca para o telefone do contato', async () => {
     const a = ambiente({ conversas: CONV });
     const prov = stevo(true);
-    await new MessagesService(a.prisma, prov, evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento).send(TENANT, 'conv1', 'Olá!', 'chave-trava-dev-000002');
-    expect(prov.sendText).toHaveBeenCalledWith(NUMERO_TESTE, 'Olá!', undefined);
+    await new MessagesService(a.prisma, prov, evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).send(TENANT, 'conv1', 'Olá!', 'chave-trava-dev-000002');
+    expect(prov.sendText).toHaveBeenCalledWith(NUMERO_TESTE, 'Olá!', undefined, 'chave-trava-dev-000002');
+  });
+});
+
+describe('MessagesService — provedor por tenant: Stevo API de gestão', () => {
+  const CONV = [{ id: 'conv1', contactId: 'c1', contact: { telefone: '+55 11 98888-7777' } }];
+
+  it('tenant com instância Stevo conectada: envia pela API de gestão, com a instância e a MESMA Idempotency-Key', async () => {
+    const a = ambiente({ conversas: CONV, stevoApi: { externalBusinessId: 'inst-studio', status: 'connected' } });
+    const legado = stevo(true);
+    const r = await new MessagesService(a.prisma, legado, evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).send(TENANT, 'conv1', 'Olá!', 'chave-stevo-api-000001');
+    expect(a.stevoApi.sendText).toHaveBeenCalledWith(NUMERO_TESTE, 'Olá!', 'inst-studio', 'chave-stevo-api-000001');
+    expect(legado.sendText).not.toHaveBeenCalled();
+    expect(r.status).toBe('sent');
+    expect(a.mensagens[0]).toMatchObject({ providerId: 'wamid-stevo-1' });
+  });
+
+  it('instância vinculada mas desconectada: grava, não tenta enviar e diz canal_desconectado', async () => {
+    const a = ambiente({ conversas: CONV, stevoApi: { externalBusinessId: 'inst-studio', status: 'disconnected' } });
+    const r = await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).send(TENANT, 'conv1', 'Olá!', 'chave-stevo-api-000002');
+    expect(a.stevoApi.sendText).not.toHaveBeenCalled();
+    expect(r.status).toBe('canal_desconectado');
   });
 });
 

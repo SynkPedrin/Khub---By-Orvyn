@@ -250,3 +250,6 @@ Limites: 100 req/10 s por PIT por location; 200 mil/dia por location; 429 sem `R
 3. **Corte:** com automações e agente reconstruídos e validados, o Revenue OS passa a responder; a integração Stevo→GHL é desligada; GHL fica só leitura até a validação final.
 - **Bloqueio de infraestrutura:** a Stevo precisa alcançar o webhook por **HTTPS público**. Hoje a API roda em `localhost`. Precisa de deploy (API + worker + Postgres + Redis) ou túnel HTTPS para o ensaio.
 
+### 12.4 Sprint Stevo (2026-11-06)
+Integração com a API de gestão implementada (ADR-0032; 404 testes verdes). Subcontas **Studio da Beleza** (instância pareada, vinculada, `connected`) e **Dra. Bárbara Lopes** (instância não pareada, vinculada, `disconnected`) criadas na agência. Envio por tenant ativo, sob a trava de dev (só para `STEVO_TEST_NUMBER`). **Pendente para receber mensagens reais:** URL HTTPS pública para o webhook de conta.
+

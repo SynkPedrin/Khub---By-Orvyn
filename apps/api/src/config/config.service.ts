@@ -2,13 +2,16 @@ import { HttpException, Injectable, Logger } from '@nestjs/common';
 
 /** Provedores externos que exigem credencial. Fonte da verdade: docs/ENV.md */
 export type Provider =
-  | 'stevo' | 'evolution' | 'meta' | 'google_ads' | 'tiktok' | 'stripe'
+  | 'stevo' | 'stevo_api' | 'stevo_webhook' | 'evolution' | 'meta' | 'google_ads' | 'tiktok' | 'stripe'
   | 'voyage' | 'anthropic' | 'email' | 'oauth_google' | 'oauth_github'
   | 'google_calendar' | 'integrations_crypto';
 
 /** Variáveis obrigatórias por provedor (Seção 2 do Brief-Finalizacao). */
 const REQUIRED: Record<Provider, string[]> = {
   stevo: ['STEVO_API_URL', 'STEVO_API_KEY', 'STEVO_INSTANCE'],
+  // Stevo API de gestão (ADR-0031: Stevo = transporte de comunicação).
+  stevo_api: ['STEVO_REVENUE_API_KEY'],
+  stevo_webhook: ['STEVO_WEBHOOK_SECRET'],
   // WhatsApp via Evolution API própria (CANAL_MVP do CLAUDE.md). Chave GLOBAL
   // do servidor Evolution — não confundir com o token por-instância que a
   // Evolution devolve em /instance/create (esse fica cifrado no banco).

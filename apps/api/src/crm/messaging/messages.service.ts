@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { DeliveryError } from './stevo.provider';
 import { acharContatoPorTelefone } from '../telefone';
 import { AtendimentoService, type EstadoAtendimento } from './atendimento.service';
+import { StevoApiProvider } from './stevo-api.provider';
 
 /**
  * Autoria do envio. `humano` com `identityId` = alguém digitou no Inbox (e por
@@ -34,7 +35,13 @@ export class MessagesService {
     private readonly config: ConfigService,
     private readonly eventos: DomainEventsService,
     private readonly atendimento: AtendimentoService,
+    private readonly stevoApi: StevoApiProvider,
   ) {}
+
+  /** Implementação por nome (o nome é decidido POR TENANT dentro da transação). */
+  private impl(nome: 'stevo_api' | 'evolution' | 'stevo'): StevoApiProvider | EvolutionProvider | StevoProvider {
+    return nome === 'stevo_api' ? this.stevoApi : nome === 'evolution' ? this.evolution : this.stevo;
+  }
 
   /**
    * Provider ativo de WhatsApp. Evolution é o CANAL_MVP (CLAUDE.md) — quando
@@ -63,14 +70,19 @@ export class MessagesService {
       if (!conv) throw new NotFoundException('conversa inexistente');
       const previous = await tx.message.findUnique({where:{tenantId_idempotencyKey:{tenantId,idempotencyKey}}});
       if (previous && (previous.corpo!==texto || previous.conversationId!==conversationId)) throw new ConflictException('chave de idempotência já usada com outro conteúdo');
-      if (previous && previous.deliveryStatus!=='pending') return {msg:previous,send:false,phone:null,instance:undefined};
+      if (previous && previous.deliveryStatus!=='pending') return {msg:previous,send:false,phone:null,instance:undefined,providerNome:this.provider().nome as 'stevo_api'|'evolution'|'stevo'};
       if (conv.contactId) await tx.$queryRaw`SELECT id FROM contacts WHERE id=${conv.contactId}::uuid AND tenant_id=${tenantId}::uuid FOR UPDATE`;
       const contact=conv.contactId ? await tx.contact.findUnique({where:{id:conv.contactId,tenantId}}) : null;
-      const providerAtivo=this.provider().nome;
-      const integration=await tx.integration.findFirst({where:{tenantId,provider:providerAtivo,status:'connected'},select:{externalBusinessId:true}});
+      // Provedor POR TENANT (doc 18 / ADR-0031): instância Stevo vinculada ao
+      // tenant vence; sem ela, o comportamento anterior (Evolution global → Stevo legado).
+      const stevoApi=await tx.integration.findFirst({where:{tenantId,provider:'stevo_api',status:{not:'revoked'}},select:{externalBusinessId:true,status:true}});
+      const providerNome:'stevo_api'|'evolution'|'stevo'=stevoApi ? 'stevo_api' : this.provider().nome;
+      const integration=stevoApi?.status==='connected' ? stevoApi : stevoApi ? null : await tx.integration.findFirst({where:{tenantId,provider:providerNome,status:'connected'},select:{externalBusinessId:true}});
       let status='sending';
       if (!contact?.telefone) status='sem_telefone';
-      if (!this.provider().impl.configured() || (process.env.NODE_ENV==='production' && !integration?.externalBusinessId)) status='config_required';
+      if (!this.impl(providerNome).configured() || (process.env.NODE_ENV==='production' && !integration?.externalBusinessId)) status='config_required';
+      // Instância Stevo vinculada mas desconectada: não tenta (a Stevo responderia not_ready).
+      if (status==='sending' && stevoApi && stevoApi.status!=='connected') status='canal_desconectado';
       if (contact?.optedOutAt || (runStartedAt && contact?.lastInboundAt && contact.lastInboundAt >= new Date(runStartedAt))) status='cancelled';
       // TRAVA DE DEV (doc 18, B-3): fora de produção nada sai para o telefone real
       // do contato. Só para STEVO_TEST_NUMBER; sem ele, a mensagem é gravada e bloqueada.
@@ -85,7 +97,7 @@ export class MessagesService {
       const actorType = autor.tipo==='ia' ? 'nyro' : 'humano';
       const actorId = autor.tipo==='ia' ? autor.agentId : autor.identityId ?? null;
       await tx.$executeRaw`INSERT INTO audit_logs(tenant_id,actor_type,actor_id,acao,entidade,entidade_id) VALUES(${tenantId}::uuid,${actorType},${actorId},'message.reserve','message',${msg.id})`;
-      return {msg,send:status==='sending',phone:contact?.telefone,instance:integration?.externalBusinessId ?? undefined};
+      return {msg,send:status==='sending',phone:contact?.telefone,instance:integration?.externalBusinessId ?? undefined,providerNome};
     });
     let status=ctx.msg.deliveryStatus;
     let erro=ctx.msg.deliveryError;
@@ -93,7 +105,7 @@ export class MessagesService {
       try {
         // Nunca cai para o telefone real fora de produção (a trava acima garante que existe).
         const destination=this.emProducao() ? ctx.phone : this.config.get('STEVO_TEST_NUMBER')!;
-        const result=await this.provider().impl.sendText(destination,texto,ctx.instance);
+        const result=await this.impl(ctx.providerNome).sendText(destination,texto,ctx.instance,idempotencyKey);
         await this.prisma.withTenant(tenantId,tx=>tx.message.update({where:{id:ctx.msg.id,tenantId},data:{deliveryStatus:'sent',providerId:result.providerId,sentAt:new Date()}}));
         status='sent';
       } catch(error) {
@@ -107,7 +119,7 @@ export class MessagesService {
     this.eventos.publicar(tenantId,'message.created',{conversationId,id:ctx.msg.id,de:autor.tipo==='ia'?'ia':'humano',texto,hora:ctx.msg.hora ?? this.hora(),agentId:autor.tipo==='ia'?autor.agentId:null});
     this.eventos.publicar(tenantId,'conversation.updated',{id:conversationId,ultimaPrevia:texto.slice(0,140),ultimaHora:ctx.msg.hora ?? this.hora(),naoLidas:0});
     if (assumiu) this.atendimento.publicar(tenantId, assumiu);
-    return {id:ctx.msg.id,hora:ctx.msg.hora ?? this.hora(),status,erro,missing:status==='config_required'?this.provider().impl.missing():[]};
+    return {id:ctx.msg.id,hora:ctx.msg.hora ?? this.hora(),status,erro,missing:status==='config_required'?this.impl(ctx.providerNome).missing():[]};
   }
 
   /** Recebe mensagem de entrada (webhook STEVO): dedup + acha/cria contato+conversa. */

@@ -51,6 +51,15 @@ const schema = z.object({
   STEVO_WEBHOOK_TOKEN: z.string().optional(),
   STEVO_FALLBACK_TENANT_ID: z.string().optional(), // dev: roteia entrada quando não há integração mapeada
   STEVO_TEST_NUMBER: z.string().optional(), // dev: manda toda saída para este número
+  // Stevo — API de GESTÃO (https://openapi.stevo.chat/v1): instâncias, envio,
+  // webhooks de conta assinados. Chave de conta `stevo_sk_…` (sem restrição de
+  // instância, exigida para webhook de conta). Nunca vai ao browser.
+  STEVO_REVENUE_API_KEY: z.string().regex(/^stevo_sk_/, 'chave Stevo deve começar com stevo_sk_').optional(),
+  STEVO_API_BASE_URL: z.string().url().default('https://openapi.stevo.chat'),
+  // Segredo `whsec_…` devolvido UMA vez na criação do webhook de conta; o
+  // anterior vale durante a rotação (overlap).
+  STEVO_WEBHOOK_SECRET: z.string().optional(),
+  STEVO_WEBHOOK_SECRET_PREVIOUS: z.string().optional(),
 
   // E-mail transacional (convites). Sem SMTP_URL o convite volta com link manual.
   SMTP_URL: z.string().optional(),

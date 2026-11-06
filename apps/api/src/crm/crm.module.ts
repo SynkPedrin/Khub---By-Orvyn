@@ -8,6 +8,10 @@ import { TasksService } from './tasks.service';
 import { NotesService } from './notes.service';
 import { LeadsService } from './leads.service';
 import { AtendimentoService } from './messaging/atendimento.service';
+import { StevoApiProvider } from './messaging/stevo-api.provider';
+import { StevoApiEventosService } from './messaging/stevo-api-eventos.service';
+import { StevoApiVinculoService } from './messaging/stevo-api-vinculo.service';
+import { StevoApiWebhookController } from './messaging/stevo-api-webhook.controller';
 import { MessagesService } from './messaging/messages.service';
 import { StevoProvider } from './messaging/stevo.provider';
 import { StevoWebhookController } from './messaging/stevo-webhook.controller';
@@ -19,7 +23,7 @@ import { CryptoService } from '../integrations/crypto.service';
 
 @Module({
   imports: [RealtimeModule],
-  controllers: [CrmController, CrmF2Controller, StevoWebhookController, EvolutionWebhookController, WhatsAppController],
+  controllers: [CrmController, CrmF2Controller, StevoWebhookController, StevoApiWebhookController, EvolutionWebhookController, WhatsAppController],
   providers: [
     CrmService,
     CompaniesService,
@@ -28,6 +32,9 @@ import { CryptoService } from '../integrations/crypto.service';
     LeadsService,
     MessagesService,
     AtendimentoService,
+    StevoApiProvider,
+    StevoApiEventosService,
+    StevoApiVinculoService,
     StevoProvider,
     EvolutionProvider,
     WhatsAppConnectionService,
@@ -37,6 +44,6 @@ import { CryptoService } from '../integrations/crypto.service';
   ],
   // superfície pública do CRM: quem age em nome do usuário (automations,
   // integrations, e a Nyro em F) entra por aqui — nunca no banco direto.
-  exports: [CrmService, MessagesService, AtendimentoService, LeadsService, TasksService, CompaniesService, NotesService],
+  exports: [CrmService, MessagesService, AtendimentoService, StevoApiProvider, StevoApiEventosService, StevoApiVinculoService, LeadsService, TasksService, CompaniesService, NotesService],
 })
 export class CrmModule {}

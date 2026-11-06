@@ -4,6 +4,15 @@
 
 ---
 
+## ✅ SPRINT STEVO — WhatsApp por subconta via API de gestão  *(CONCLUÍDA no código — 2026-11-06; E2E aguarda URL pública)*
+- ADR-0032. `db/032` aplicada no dev. Provider, webhook de conta assinado, eventos no worker, envio por tenant, vínculo, script de operação.
+- Clientes KROMA criados como subcontas da agência: **Studio da Beleza** (instância `studio-da-beleza`, pareada → `connected`) e **Dra. Bárbara Lopes** (instância `dra-barbara-lopes`, não pareada → `disconnected`). `external_ref` gravado nas duas instâncias.
+- Bug achado e corrigido no caminho: `connected:true` sem `logged_in` não é WhatsApp pareado.
+- Gates: API 44 suítes / 404 testes; tsc API e web ok.
+- **Falta:** URL HTTPS pública para criar o webhook de conta (deploy ou túnel); escopo `messages:read` na chave; UI do painel de instâncias (sprint 10).
+
+---
+
 ## ✅ SPRINT 0-KROMA — Higiene de base  *(CONCLUÍDA — 2026-11-06)*
 
 **Contexto:** prompt master da KROMA; Fase 1 entregue em `docs/revenue-audit/18_FASE1_AUDITORIA_KROMA.md`; product owner: "autorizo tudo"; GHL fora do produto (ADR-0031).
