@@ -1,0 +1,7 @@
+node_modules
+**/node_modules
+**/.next
+**/dist
+_backup-completo-antes-do-reset
+_front-antes-de-reverter
+*.log

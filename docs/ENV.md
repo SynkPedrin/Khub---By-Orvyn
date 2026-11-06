@@ -31,10 +31,20 @@ Sem `DATABASE_URL` válida a API **sobe assim mesmo** e `/v1/health` reporta `db
 | `WEB_URL` | `http://localhost:3210` | Base dos redirects OAuth e do link de convite. |
 | `JWT_ACCESS_TTL` | `15m` | TTL do access token. |
 | `REFRESH_TTL_DAYS` | `30` | TTL do refresh (rotativo, hasheado). |
+| `SENTRY_DSN` | — (sem Sentry) | sentry.io → criar projeto Node → DSN. Sem ela, `ErrorReporter` só loga estruturado (correlation-id); com ela, todo erro não tratado também vai pro Sentry — achado da auditoria de produção: o código já existia (`error-reporter.service.ts`), só faltava chamar `Sentry.init()`. |
 
 ## 3. Provedores externos — o que cada um destrava
 
 Cada bloco lista o **conjunto mínimo**: com ele completo, o provedor sai de `config_required` e opera de verdade.
+
+### 3.1a `evolution` — WhatsApp (self-hosted, CANAL_MVP)
+| Variável | Obrigatória | Onde obter |
+|---|---|---|
+| `EVOLUTION_BASE_URL` | ✅ | URL da sua instância Evolution self-hosted (ex.: `https://evolution.seudominio.com`). |
+| `EVOLUTION_API_KEY` | ✅ | Chave GLOBAL do servidor Evolution (dona da instância — não confundir com o token por-instância, que a própria Evolution devolve em `/instance/create` e fica cifrado em `integrations.credentials_encrypted`). |
+
+**Sem elas:** `config_required` ao tentar conectar um número; nenhuma instância é criada.
+**Risco operacional (não é só config):** Evolution usa o protocolo do WhatsApp Web (Baileys), não a Cloud API oficial da Meta — número pode ser banido a qualquer momento, fora do controle do Orvyn. Ver auditoria de produção.
 
 ### 3.1 `stevo` — WhatsApp (API não oficial)
 | Variável | Obrigatória | Onde obter |
@@ -45,7 +55,9 @@ Cada bloco lista o **conjunto mínimo**: com ele completo, o provedor sai de `co
 | `STEVO_SEND_PATH` | — | Default `/message/sendText`. |
 | `STEVO_WEBHOOK_TOKEN` | — | Se definido, o webhook de entrada exige `?token=`. **Defina em produção.** |
 | `STEVO_FALLBACK_TENANT_ID` | — | Dev single-tenant: roteia a entrada quando a instância ainda não tem integração conectada. Em produção o roteamento é `instância → tenant` (migration 008). |
-| `STEVO_TEST_NUMBER` | — | Dev: manda toda saída para o seu número, ignorando o telefone do contato. |
+| `STEVO_TEST_NUMBER` | — | **Obrigatória para enviar fora de produção.** Toda saída (Inbox, automações, Nyro, agentes) vai para este número, nunca para o telefone do contato. Sem ela, a mensagem é gravada como `bloqueado_dev` e não sai (doc 18, B-3). Proibida em produção. |
+| `STEVO_REVENUE_API_KEY` | — | Chave da **API de gestão** da Stevo (`stevo_sk_…`, `https://openapi.stevo.chat/v1`). Precisa ser de conta (sem restrição de instância) para webhook de conta. Escopos mínimos: `instances:read/write`, `messages:send/read`, `webhooks:read/write`. Ainda não lida pelo código (Fase 3). |
+| `GHL_MIGRATION_TOKEN` | — | Token do GHL de **uso único** para extrair dados de migração (ADR-0031). Nunca usado em runtime; revogar no GHL e apagar após a migração. |
 
 **Sem elas:** a mensagem **é gravada** e aparece no inbox; só a entrega fica pendente
 (`status: "config_required"` + `missing[]`, HTTP **200** — ADR-0008). Nada se perde.
@@ -69,8 +81,17 @@ Developer token: Google Ads API Center (conta MCC).
 ### 3.4 `tiktok`
 `TIKTOK_APP_ID` ✅ · `TIKTOK_APP_SECRET` ✅ — TikTok for Business → Marketing API.
 
-### 3.5 `stripe` — billing
-`STRIPE_SECRET_KEY` ✅ · `STRIPE_WEBHOOK_SECRET` — · `STRIPE_PUBLISHABLE_KEY` —
+### 3.5 `stripe` — billing (DOIS fluxos, UMA conta Stripe)
+| Variável | Obrigatória | Onde obter |
+|---|---|---|
+| `STRIPE_SECRET_KEY` | ✅ | dashboard.stripe.com → Developers → API keys. |
+| `STRIPE_WEBHOOK_SECRET` | ✅ | Developers → Webhooks → endpoint `{API_URL}/v1/webhooks/stripe` → "Signing secret". **Sem ela, NENHUM evento é processado** (nem cobrança de cliente nem assinatura da plataforma confirmam sozinhas — fica preso em "enviada"/"incompleta" até alguém marcar na mão). |
+| `STRIPE_PUBLISHABLE_KEY` | — | Só se o front precisar do Stripe.js diretamente; hoje o checkout é 100% hospedado (redirect), não usa. |
+| `STRIPE_PRICE_STARTER` / `STRIPE_PRICE_GROWTH` / `STRIPE_PRICE_SCALE` | — (mas sem ela aquele plano específico não vende) | Price ID de cada plano da **assinatura do Orvyn** (Products → criar o preço → copiar `price_...`). Preço em si é decisão de negócio, nunca hardcoded — ver PRD §17 (LACUNA de pricing). |
+
+Dois fluxos pela mesma chave/webhook, diferenciados por `metadata.kind` no evento (nunca inferido):
+- **`financeiro_cobranca`** — o tenant cobrando OS CLIENTES dele (`/v1/financeiro`, checkout `mode=payment`).
+- **`orvyn_subscription`** — o tenant pagando o Orvyn (`/v1/billing`, checkout `mode=subscription`).
 
 ### 3.6 `voyage` — embeddings do RAG
 | Variável | Obrigatória | Onde obter |
@@ -96,6 +117,10 @@ migration 007) — mesmo filtro de escopo e RLS, sem vetor. Continua respondendo
 ### 3.9 `oauth_google` / `oauth_github` — login social
 `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` · `GITHUB_ID` + `GITHUB_SECRET` (+ `AUTH_SECRET`).
 Sem elas, os botões existem mas a rota responde 501 explicando o que falta — **nunca** login fake.
+
+### 3.9a `google_calendar` — sincronização de agenda
+`GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` (mesmo app OAuth do login social, escopo adicional de Calendar).
+Sem elas: agenda funciona só dentro do Orvyn, sem sincronizar com o Google Calendar do usuário.
 
 ### 3.10 `integrations_crypto` — cifra das credenciais dos clientes
 | Variável | Obrigatória | Como gerar |

@@ -42,6 +42,46 @@ Status: `aberto` · `em correção` · `corrigido` · `não reproduz`.
 - Origem: QA do usuário. O `NyroDock` (FAB, `fixed bottom-5 right-5 z-40`) cobre o botão de enviar do `/inbox`. Além disso o envio não está implementado (Enter/click não disparam) — é fachada até `POST /v1/messages`.
 - Correção: (a) quick-fix de layout — subir o input de envio / reposicionar o FAB ou reduzir z-index quando no inbox; (b) implementar envio real (FASE 3). Sugestão da Nyro é estática (mesmo texto p/ toda conversa) — ligar na IA (FASE 5).
 
+### BUG-017 — Nyro mandava `temperature` para `claude-sonnet-5`, que recusa amostragem (400)
+- Severidade: S2 · Status: **corrigido** (adaptador Anthropic, 2026-11-06)
+- Causa raiz: o adaptador sempre enviava `temperature: 0.3`; modelos 5.x e Opus 4.7/4.8 recusam parâmetros de amostragem (referência `claude-api`).
+- Correção: `aceitaTemperatura(modelo)` — só envia para modelos que aceitam; profundidade via `effort`. Não validado contra a API real (sem chamada paga nesta sessão).
+
+### BUG-018 — Seed de demo gravava grafos que o motor não executa (`ramos is not iterable` e follow-ups que paravam em silêncio)
+- Severidade: S2 · Status: **corrigido no código**; dados já semeados no banco de dev seguem com o formato antigo (re-seed corrige).
+- Reprodução: worker em 2026-11-06 — "Hot Opportunity" com 93 runs falhados; `seed-content-demo-run.mjs` usava `condicoes` e arestas `condicao: 'verdadeiro'|'respondeu'|'nao_respondeu'`, mas o motor usa `ramos` e arestas por `ramo` (`resposta`/`timeout`).
+- Causa raiz: o seed grava direto no banco, sem a validação do `WorkflowsService`.
+- Correção: executor valida a config do nó contra o catálogo e falha com `UnrecoverableError` legível (sem retry); seed reescrito no formato atual. Regressão em `executor.service.spec.ts`.
+
+### BUG-019 — Fora de produção, envio ia para o telefone real do contato
+- Severidade: S1 latente · Status: **corrigido** (doc 18, B-3)
+- Causa raiz: destino `STEVO_TEST_NUMBER || telefone`; a variável não existia no `.env`.
+- Correção: sem `STEVO_TEST_NUMBER` a mensagem é gravada como `bloqueado_dev` e nada sai; com ela, sai só para o número de teste. 2 testes de regressão.
+
+### BUG-020 — `/api/cerebro` servia o vault interno sem sessão; token de webhook ia para logs/Sentry
+- Severidade: S2 · Status: **corrigido**
+- Correção: rotas exigem sessão validada na API (5 testes); `urlSegura()` redige `/hooks/:chave`, `/hooks/evolution/:token` e `?token=` em log, Sentry e corpo de erro (5 testes). Pendente (produto): `/conhecimento` e ⌘K ainda mostram o vault da Orvyn a qualquer usuário logado — trocar pela base RAG do tenant.
+
+### BUG-021 — Teste intermitente "espera de 1 dia vira delay na fila"
+- Severidade: S3 · Status: aberto
+- Reprodução: falhou 1 vez em 3 na suíte completa; passa isolado. Provável cálculo de `delay` a partir do relógio (diferença de ms sob carga).
+
+### BUG-015 — Overlay dos modais cobria só o `<main>` e os sheets de vidro não desfocavam
+- Severidade: S3
+- Status: **corrigido** (ADR-0029)
+- Ambiente: local
+- Reprodução: abrir "Novo contato" em `/contatos`: o escurecimento não cobria sidebar/topbar e deixava uma faixa de 20px no topo; o texto atrás do sheet ficava nítido.
+- Causa raiz: o `PageTransition` (framer-motion) deixava `filter: blur(0px)` inline no wrapper da página — `filter` cria containing block para `position: fixed` e backdrop root. A faixa vinha do `space-y-5` do container injetando `margin-top` no overlay.
+- Existe em outros pontos?: todos os modais renderizados dentro de páginas (contatos, empresas, tarefas, automações, agência, marketing, DealDrawer).
+- Correção + teste de regressão: `transitionEnd: { filter: 'none', transform: 'none' }` em `pageVariants`; `.lg-backdrop { margin: 0 !important }`. Verificado no Chromium headless: overlay em `0,0,1440×900`.
+
+### BUG-016 — Menu do builder de automações sem fundo
+- Severidade: S3
+- Status: **corrigido** (ADR-0029)
+- Reprodução: `/automacoes/:id` → clicar na logo da ilha: o popup aparecia transparente sobre o canvas.
+- Causa raiz: usava `.frost`, neutralizada (classe vazia) na migração para o design flat.
+- Correção: `.frost` virou alias de `.lg-popover`.
+
 ### BUG-013 — Cristal quebrou o posicionamento de todo componente `.glass` (chat da Nyro fora da tela)
 - Severidade: S2 (UI inutilizável em componentes-chave)
 - Status: **corrigido** (F, 2026-07-17)

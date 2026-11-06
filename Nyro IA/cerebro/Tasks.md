@@ -5,6 +5,72 @@
 
 ---
 
+## Revenue OS — os 8 módulos  *(aprovado pelo product owner em 2026-11-06 · ADR-0030)*
+
+Ordem acordada: **RV-01.1 (SEC-01, P0)** → **Sprint AG = RV-03 + RV-06** → RV-07 → RV-08 → RV-02.1 · RV-04 · RV-01.2–4 · RV-05.
+Toda tabela nova: `tenant_id NOT NULL` + RLS FORCE + policy `tenant_rw` + bloco no `db/002_isolation_test.sql`. Migração aditiva, com rollback descrito em [[Banco]].
+
+### RV-01 — Agency Manager
+- [ ] **RV-01.1 (P0 · SEC-01)** — Remover membro da agência e arquivar cliente **revogam o acesso**.
+  - Aceite: `DELETE /v1/agency/members/:id` apaga `agency_members`, `agency_member_client_access` e as `memberships` nos tenants dos clientes, e chama `TokenService.revokeAllForIdentity`; arquivar cliente revoga os acessos ao tenant dele; o cenário `[SEC-01]` do runtime passa a devolver 401/403; teste unitário + cenário QA.
+- [ ] **RV-01.2** — Unidades: tabela `units` (`tenant_id`, `nome`, `endereco`, `fuso`, `telefone`, `ativo`) + `unit_id` opcional em `contacts`, `agenda_compromissos` e `conversations`.
+  - Aceite: CRUD em Configurações › Unidades; filtro por unidade em Leads, Agenda e Conversas; isolamento no `db/002`.
+- [ ] **RV-01.3** — Contratos: `agency_contracts` (`agency_id`, `client_account_id`, `plano`, `valor_mensal`, `inicio`, `fim`, `status`, `documento_uri`), isolada por agência.
+  - Aceite: CRUD em `/agency/clients/:id`; alerta de vencimento em 30 dias; agência A não lê contrato da agência B (teste).
+- [ ] **RV-01.4** — Permissões granulares: `memberships.role` vira enum validado (`owner|admin|gestor|atendente|leitura`) + matriz de permissão por módulo no guard.
+  - Aceite: `atendente` recebe 403 em Configurações e Financeiro; teste por papel.
+
+### RV-02 — CRM & Pipeline
+- [ ] **RV-02.1** — Campos personalizados com definição: `custom_field_defs` (`tenant_id`, `entidade` contact|deal|company, `chave`, `rotulo`, `tipo` text|number|date|select|boolean, `opcoes` jsonb, `obrigatorio`, `ordem`). Valores seguem em `contacts.campos_custom` (+ coluna equivalente em `deals`/`companies`).
+  - Aceite: CRUD em Configurações › Campos; formulário do contato renderiza e valida pelo tipo; filtro por campo em Leads; isolamento no `db/002`.
+
+### RV-03 — Agent Manager  *(Sprint AG)*
+- [ ] **RV-03.1** — Schema `agents` + `agent_runs` (`db/030_agents.sql`, desenho em [[Banco]] §2.8).
+  - Aceite: RLS FORCE + `tenant_rw`; `tenant_reference` cobre `conversations.agent_id` e `messages.agent_id`; bloco 17 no `db/002` (A não lê nem escreve agente/run de B).
+- [ ] **RV-03.2** — API `/v1/agents`: CRUD, ativar/pausar, catálogo (modelos, tons, ferramentas, escopos de conhecimento) e `testar` (sandbox, não envia WhatsApp).
+  - Aceite: modelo e ferramentas validados contra allowlist (400 fora dela); só `owner`/`admin` escreve; `testar` responde 501 `config_required` sem `ANTHROPIC_API_KEY`; testes unitários.
+- [ ] **RV-03.3** — Runtime do agente: mensagem do contato em conversa com `atendimento='ia'` → job `agent-replies` (jobId = id da mensagem) → o agente responde pelo `MessagesService` com idempotência `agent:<messageId>`.
+  - Aceite: tools escopadas ao contato da conversa (o `contactId` nunca vem do modelo); guardrail camada 2; limites (respostas por conversa, caracteres por mensagem); recusa, erro, falta de credencial e limite atingido **transferem para humano** (lead nunca fica sem resposta); custo em `ai_usage_events`; resposta da IA não dispara o agente de novo; teste unitário para cada desvio.
+- [ ] **RV-03.4** — UI `/agentes`: lista, editor (identidade, modelo, personalidade, instruções, ferramentas, limites, conhecimento, canal/padrão) e playground de teste.
+  - Aceite: typecheck, lint e testes verdes; verificado no navegador.
+
+### RV-04 — Knowledge Base
+- [ ] **RV-04.1** — Ingestão por URL (fetch + limpeza do HTML → mesmo pipeline de chunking), com limite de páginas e respeito a `robots.txt`.
+  - Aceite: documento com `fonte='url'` e `uri`; `rag:eval` sem regressão (delta reportado).
+- [ ] **RV-04.2** — FAQ estruturado (cada par pergunta/resposta vira um chunk).
+  - Aceite: CRUD em `/conhecimento`; a resposta exata aparece no top-1 do eval para a pergunta cadastrada.
+- [ ] **RV-04.3** — Conhecimento por agente: filtro por documento **dentro do WHERE** da busca (invariante 5).
+  - Aceite: `rag:eval` com delta reportado (invariante 6); agente só cita documentos permitidos.
+
+### RV-05 — Automation Builder
+- [ ] **RV-05.1** — Corrigir `ramos is not iterable` (nó de ramificação com config sem `ramos`; visto no worker em 2026-11-06). Registrar em [[Bugs]] com reprodução.
+  - Aceite: teste de regressão com config legada; run não entra em retry infinito.
+- [ ] **RV-05.2** — Gatilhos novos: `agendamento_criado`, `agendamento_confirmado`, `faltou` e `conversa_transferida` (IA → humano).
+  - Aceite: eventos nascem no outbox (trigger SQL); aparecem na paleta; testes no `triggers.service`.
+
+### RV-06 — Omnichannel Inbox  *(Sprint AG)*
+- [ ] **RV-06.1** — Atendimento IA/humano na conversa: colunas `atendimento`, `agent_id`, `assignee_id`, `handoff_motivo`, `handoff_at` (`db/030`).
+  - Aceite: conversa nova nasce `ia` se houver agente padrão ativo para o canal, senão `humano`; humano que envia mensagem assume a conversa.
+- [ ] **RV-06.2** — Transferência e distribuição: `PATCH /v1/crm/conversations/:id/atendimento` (assumir, devolver para IA, atribuir); a transferência feita pela IA atribui ao membro com menos conversas humanas abertas.
+  - Aceite: teste unitário da distribuição; auditoria; evento realtime `conversation.updated` com o novo estado.
+- [ ] **RV-06.3** — UI em `/conversas`: selo IA/Humano, filtros (Todas · IA · Humano · Minhas), Assumir · Devolver para IA · Atribuir, mensagem da IA identificada.
+  - Aceite: verificado no navegador.
+
+### RV-07 — Calendar & Sales
+- [ ] **RV-07.1** — Confirmação de agendamento: status `confirmado`; lembrete D-1 por automação; resposta afirmativa confirma.
+- [ ] **RV-07.2** — Recuperação de faltas: status `faltou` + gatilho para fluxo de reagendamento.
+- [ ] **RV-07.3** — Propostas: `proposals` (`tenant_id`, `deal_id`, `contact_id`, `itens` jsonb, `valor_total`, `validade`, `status` rascunho|enviada|aceita|recusada, `aceita_em`) + link público assinado; aceite move o negócio para ganho.
+- [ ] **RV-07.4** — Agente que agenda: tools `consultar_horarios` e `agendar` para os agentes (depende de RV-03.3).
+  - Aceite (módulo): testes por status; isolamento de `proposals` no `db/002`; verificado no navegador.
+
+### RV-08 — Analytics & Revenue
+- [ ] **RV-08.1** — Tempo de resposta (primeira resposta e média; humano × IA) calculado de `messages`.
+- [ ] **RV-08.2** — Funil de receita por origem: lead → conversa → agendamento → proposta → venda, com receita por origem e campanha.
+- [ ] **RV-08.3** — Desempenho dos agentes: conversas atendidas, transferências, custo e taxa de resolução (de `agent_runs`).
+  - Aceite (módulo): números conferidos contra consulta SQL direta num tenant de teste; só leitura, sempre sob RLS.
+
+---
+
 ## Trilha P — "Só faltar as APIs" (produto pronto, sem credencial) — em execução
 
 Pedido: fazer tudo que NÃO depende de API, testado, até só faltar plugar chave. Ordem por valor.
@@ -168,6 +234,8 @@ Critério de sucesso da fase (PRD §16): **conta criada e isolada por RLS; deplo
 - [x] **F0-17** — Zero tela em branco: todo estado vazio tem CTA da Nyro.
   - Aceite: dashboard, not-found e telas "em construção" (agenda/marketing/financeiro) renderizam CTA da Nyro. ✓ em `apps/web`.
 - [x] **F0-CRM** — Front CRM completo (UI/UX): login/signup (Google+GitHub), shell (sidebar/topbar/command bar/Nyro dock), Dashboard, Pipeline Kanban (drag-and-drop), Contatos, Inbox omnichannel, Conhecimento. Paleta roxo + off-white, dark mode, mobile-first.
+- [x] **F0-GLASS** — Sistema Liquid Glass (HIG da Apple) em todo o `apps/web` — pedido direto do product owner (2026-11-06). Ver ADR-0029.
+  - Aceite: tokens Apple (label/fill/separator/system colors acessíveis, raios concêntricos, springs, SF Pro primeiro); vidro só na camada de navegação/controle (sidebar, topbar, menus, sheets, ⌘K) e material espesso no conteúdo; botões em cápsula (glass/prominent/tinted/plain); todos os modais/drawers com `lg-backdrop` + `lg-sheet`; Reduzir transparência / Aumentar contraste / Reduzir movimento respeitados; typecheck + lint + 18 testes verdes; **verificado em runtime** (Chromium headless, light/dark, menu, ⌘K, modal, pipeline, login).
   - Aceite: `pnpm build` 14 rotas verdes; middleware protege rotas; verificado em runtime (localhost:3210). Dados **demo**; auth **demo** (client-side).
 - [x] **F0-11 (auth real) — FASE 1** — módulos `auth` + `tenants`, JWT (15min) + refresh rotativo, argon2id, guard global, sessão em cookies httpOnly, tenant do JWT. `db/004_auth_tenants.sql` (identities/memberships/refresh_tokens/invites/audit_logs imutável/webhook_events) + isolamento estendido. **Verificado end-to-end** (2 tenants isolados, rotação/revogação, 401 sem token). OAuth Google/GitHub **plugável** (falta `GOOGLE/GITHUB_*` + `AUTH_SECRET` para ligar). Ver ADR-0006.
 - [ ] **F0-18** — Relatório de prontidão de F0 + proposta de `Sprint.md` da semana seguinte.

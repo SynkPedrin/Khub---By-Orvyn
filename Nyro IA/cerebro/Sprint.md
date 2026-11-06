@@ -4,6 +4,32 @@
 
 ---
 
+## ✅ SPRINT 0-KROMA — Higiene de base  *(CONCLUÍDA — 2026-11-06)*
+
+**Contexto:** prompt master da KROMA; Fase 1 entregue em `docs/revenue-audit/18_FASE1_AUDITORIA_KROMA.md`; product owner: "autorizo tudo"; GHL fora do produto (ADR-0031).
+- Código versionado na branch `hardening/fase-0` (5 commits; sem push). Build dirs, evidência local e QA da LP no `.gitignore`. `docker-compose.qa.yml` **fora do commit** (senha literal do Postgres de QA — trocar por variável).
+- Trava de envio fora de produção (BUG-019) · vault protegido e URLs redigidas (BUG-020) · executor valida config + seed corrigido (BUG-018) · comentários de GHL neutralizados.
+- Stevo: chave da API de gestão validada (`GET /v1/me` 200; 60 req/min; escopos a mais) e guardada em `.env`. GHL: token de migração guardado (uso único).
+- Gates: API 43 suítes / 377 testes; web 5 arquivos / 23 testes; tsc e lint ok.
+- **Pendente de ação do operador:** reiniciar web (3210), API e worker com o código novo; número de teste (`STEVO_TEST_NUMBER`); chave Stevo de menor privilégio.
+
+---
+
+## ⏸ SPRINT AG — Agent Manager + atendimento IA↔humano no Inbox  *(PAUSADA — 2026-11-06)*
+
+> **Pausada pelo prompt master da KROMA (Fase 1 primeiro).** Entregue: backend completo (db/030 aplicada no dev, API `/v1/agents`, runtime no worker, atendimento IA↔humano na API, 369 testes verdes, isolamento bloco 17 verde). Pendente: UI `/agentes`, UI de atendimento em `/conversas`, deploy do worker. Retomada como sprint 5 do plano em `docs/revenue-audit/18_FASE1_AUDITORIA_KROMA.md` (§10), depois da higiene de base, fundação SaaS e Stevo.
+
+**Objetivo único:** um agente configurável pelo cliente atende o lead no WhatsApp e transfere para um humano quando precisa — e o humano assume, devolve ou atribui a conversa.
+**Tasks:** RV-03.1–4 e RV-06.1–3 ([[Tasks]]). **Decisão:** ADR-0030. **Aprovação estrutural:** product owner, 2026-11-06 (schema novo em `db/030`).
+
+### Definition of Done
+- `db/030_agents.sql` aplicado pelo runner, com rollback descrito; bloco 17 no `db/002` verde.
+- API + worker com testes unitários de cada desvio do runtime (sem credencial, recusa, limite, transferência, idempotência, não-loop).
+- `/agentes` e `/conversas` verificados no navegador; typecheck, lint e testes verdes em API e Web.
+- Cérebro atualizado: [[Banco]] §2.8, [[APIs]], ADR-0030, este registro.
+
+---
+
 ## ✅ SPRINT W1 — Enviar e-mail como nó de workflow  *(CONCLUÍDA — 2026-07-21)*
 
 **Pedido do usuário:** "criar o sistema de workflow igual ao do GHL, mas com a identidade da Orvyn" (benchmark do motor do GHL anexado). Decisão de escopo em **ADR-0015**: igualar o **motor e a UX**, não clonar menu de módulo inexistente. É épico multi-sprint (trilha W); **W1 = o gap nº 1** — e-mail pelo canal oficial, que o SMS (STEVO não oficial) não cobre.
