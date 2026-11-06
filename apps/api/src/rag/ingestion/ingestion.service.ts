@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'node:crypto';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   assertEscopoCoerente,
@@ -31,32 +32,47 @@ export class IngestionService {
     assertEscopoCoerente(input);
     const contentHash = IngestionService.contentHash(input.content);
 
-    const existing = await this.prisma.ragDocument.findFirst({
-      where: { tenantId: input.tenantId ?? null, escopo: input.escopo, contentHash },
-      select: { id: true, status: true },
-    });
-    if (existing) {
+    // BUG-022: base de TENANT só é gravável com `app.current_tenant_id` setado
+    // (RLS FORCE em rag_documents; orvyn_app não tem BYPASSRLS). Sem isso a
+    // escrita falhava na policy. Bases compartilhadas seguem pela role de serviço.
+    const gravar = async (db: Prisma.TransactionClient | PrismaService) => {
+      const existing = await db.ragDocument.findFirst({
+        where: { tenantId: input.tenantId ?? null, escopo: input.escopo, contentHash },
+        select: { id: true, status: true },
+      });
+      if (existing) return { ...existing, deduped: true };
+      const doc = await db.ragDocument.create({
+        data: {
+          tenantId: input.tenantId ?? null,
+          escopo: input.escopo,
+          nicho: input.nicho ?? null,
+          subespecialidade: input.subespecialidade ?? null,
+          titulo: input.titulo,
+          fonte: input.fonte,
+          mime: input.mime ?? 'text/markdown',
+          contentHash,
+          status: 'pending',
+          criadoPor: input.criadoPor ?? null,
+        },
+        select: { id: true, status: true },
+      });
+      return { ...doc, deduped: false };
+    };
+    const doc = input.escopo === 'tenant' && input.tenantId ? await this.prisma.withTenant(input.tenantId, gravar) : await gravar(this.prisma);
+    const tenantDaFila = input.escopo === 'tenant' ? input.tenantId ?? null : null;
+    if (doc.deduped) {
+      // Mesmo conteúdo de um documento que FALHOU (ex.: embedding fora do ar) volta
+      // para a fila — sem isso ele ficaria preso em `failed` para sempre.
+      if (doc.status === 'failed') {
+        this.log.warn(`documento ${doc.id} tinha falhado -> reprocessando`);
+        await this.queue.enqueue(doc.id, input.content, tenantDaFila);
+        return { id: doc.id, status: doc.status, deduped: false };
+      }
       this.log.debug(`documento já existe (hash ${contentHash.slice(0, 12)}) -> dedupe`);
-      return { id: existing.id, status: existing.status, deduped: true };
+      return { id: doc.id, status: doc.status, deduped: true };
     }
 
-    const doc = await this.prisma.ragDocument.create({
-      data: {
-        tenantId: input.tenantId ?? null,
-        escopo: input.escopo,
-        nicho: input.nicho ?? null,
-        subespecialidade: input.subespecialidade ?? null,
-        titulo: input.titulo,
-        fonte: input.fonte,
-        mime: input.mime ?? 'text/markdown',
-        contentHash,
-        status: 'pending',
-        criadoPor: input.criadoPor ?? null,
-      },
-      select: { id: true, status: true },
-    });
-
-    await this.queue.enqueue(doc.id, input.content);
+    await this.queue.enqueue(doc.id, input.content, tenantDaFila);
     return { id: doc.id, status: doc.status, deduped: false };
   }
 }

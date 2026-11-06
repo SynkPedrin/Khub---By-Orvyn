@@ -4,6 +4,16 @@
 
 ---
 
+## ✅ SPRINT MIGRA-GHL — Histórico do Studio da Beleza para o Revenue OS  *(CONCLUÍDA — 2026-11-06)*
+> ADR-0031: o Revenue OS substitui o GHL — importação única, sem integração nem sync. Autorizado pelo usuário ("pode importar tudo").
+
+- **Ferramentas** (reutilizáveis p/ a 2ª cliente): `apps/api/scripts/operar/ghl-exportar.mjs` (só leitura no GHL → JSON em `docs/revenue-audit/evidence/ghl/<location>/`, fora do git) e `ghl-importar.mjs` (simulação por padrão; `--aplicar` grava).
+- **Garantias:** histórico não dispara nada — os eventos de outbox gerados na transação viram `processed` (`importacao_ghl`) antes do commit; atendimento das conversas = humano; idempotente (2ª rodada: 0 criados); RLS por tenant; auditoria `migracao.ghl.importada`.
+- **Importado (Studio da Beleza):** 404 contatos (campos personalizados por nome + `ghl_id`), 405 conversas (379 WhatsApp, 26 Instagram), 6.572 mensagens, funil "Marketing Pipeline" (6 etapas) com 86 negócios, 9 tags, base de conhecimento (20 custom values → 20 trechos publicados). 3.537 eventos neutralizados; 0 envios, 0 execuções de agente/automação.
+- **Não importado (decisão registrada):** 1.521 mensagens de 39 conversas cujos contatos foram EXCLUÍDOS no GHL (respeita a exclusão; ficam no retrato); 3 mensagens que o GHL conta mas não exporta; passos das 6 automações e o prompt da IA (a API do GHL não expõe — recriar a partir de prints); mídia (1.100 anexos entram como link; os do Instagram expiram — copiar exige S3).
+- **Bug achado e corrigido:** [[Bugs|BUG-022]] (base de conhecimento de cliente nunca indexava).
+- **Pendente:** prints das automações e do prompt; Dra. Bárbara Lopes (2ª cliente) — exportar/importar quando houver o token da subconta dela; responsável (owner) dos contatos não mapeado (e-mail do GHL ≠ identidade do Revenue OS).
+
 ## ✅ SPRINT STEVO — WhatsApp por subconta via API de gestão  *(CONCLUÍDA no código — 2026-11-06; E2E aguarda URL pública)*
 - ADR-0032. `db/032` aplicada no dev. Provider, webhook de conta assinado, eventos no worker, envio por tenant, vínculo, script de operação.
 - Clientes KROMA criados como subcontas da agência: **Studio da Beleza** (instância `studio-da-beleza`, pareada → `connected`) e **Dra. Bárbara Lopes** (instância `dra-barbara-lopes`, não pareada → `disconnected`). `external_ref` gravado nas duas instâncias.

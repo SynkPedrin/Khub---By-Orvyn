@@ -62,6 +62,11 @@ Status: `aberto` · `em correção` · `corrigido` · `não reproduz`.
 - Severidade: S2 · Status: **corrigido**
 - Correção: rotas exigem sessão validada na API (5 testes); `urlSegura()` redige `/hooks/:chave`, `/hooks/evolution/:token` e `?token=` em log, Sentry e corpo de erro (5 testes). Pendente (produto): `/conhecimento` e ⌘K ainda mostram o vault da Orvyn a qualquer usuário logado — trocar pela base RAG do tenant.
 
+### BUG-022 — Base de conhecimento de cliente nunca indexava (RLS)
+- Severidade: S1 (IA sem base própria) · Status: **corrigido** (db/033)
+- Reprodução: `POST /v1/rag/documents` de qualquer tenant → documento não gravava (`rag_documents_write` exige `app.current_tenant_id`, o serviço gravava fora do `withTenant`); e mesmo com documento, todo chunk falhava com 42501 — `rag_chunks` só tinha policy de LEITURA. Achado na importação do GHL (0 documentos de tenant existiam no banco).
+- Correção: `IngestionService` grava base de tenant em `withTenant`; a fila leva o `tenantId` e o `IngestionProcessor` lê/grava/publica sob a RLS dele; db/033 cria `rag_chunks_write` (espelha a de documentos + exige documento do MESMO tenant); documento `failed` com o mesmo conteúdo volta para a fila em vez de ficar preso. 4 testes novos (31 no RAG) + bloco 18 no teste de isolamento (escrita em B, na global e em documento de B barradas).
+
 ### BUG-021 — Teste intermitente "espera de 1 dia vira delay na fila"
 - Severidade: S3 · Status: aberto
 - Reprodução: falhou 1 vez em 3 na suíte completa; passa isolado. Provável cálculo de `delay` a partir do relógio (diferença de ms sob carga).

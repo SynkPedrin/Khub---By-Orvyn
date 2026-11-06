@@ -21,7 +21,8 @@ export interface IngestionResult {
 /** Transporte de ingestão. Impl in-process agora; BullMQ é o path de escala
  *  (ADR-08) quando houver Redis. */
 export interface IngestionQueue {
-  enqueue(documentId: string, content: string): Promise<void>;
+  /** `tenantId` do documento (null = base compartilhada): o processador grava sob a RLS dele (BUG-022). */
+  enqueue(documentId: string, content: string, tenantId: string | null): Promise<void>;
 }
 
 export const INGESTION_QUEUE = Symbol('INGESTION_QUEUE');

@@ -13,9 +13,9 @@ export class InProcessIngestionQueue implements IngestionQueue {
 
   constructor(private readonly processor: IngestionProcessor) {}
 
-  async enqueue(documentId: string, content: string): Promise<void> {
+  async enqueue(documentId: string, content: string, tenantId: string | null): Promise<void> {
     void this.processor
-      .process(documentId, content)
+      .process(documentId, content, tenantId)
       .then((r) => this.log.debug(`documento ${documentId} processado: ${r.chunks} chunks`))
       .catch((e) => this.log.error(`processamento de ${documentId} falhou: ${(e as Error).message}`));
   }

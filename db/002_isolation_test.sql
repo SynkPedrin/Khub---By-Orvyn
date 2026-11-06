@@ -381,6 +381,48 @@ BEGIN
   RAISE NOTICE 'OK isolamento agentes: agents/agent_runs isolados; escrita e referência cross-tenant barradas';
 END $$;
 
+-- 18. Escrita de chunks do RAG (db/033 · BUG-022): A indexa a PRÓPRIA base;
+--     não grava chunk no tenant B, na base global, nem pendurado em documento de B.
+DO $$
+DECLARE v_doc_a uuid; v_doc_b uuid; v_doc_g uuid; v_n int;
+BEGIN
+  SELECT id INTO v_doc_a FROM rag_documents WHERE titulo = 'DOC_A';
+  SELECT document_id INTO v_doc_g FROM rag_chunks WHERE conteudo LIKE '%global publico%';
+  RESET ROLE;  -- só para descobrir o id do documento de B (invisível a A)
+  SELECT id INTO v_doc_b FROM rag_documents WHERE titulo = 'DOC_B';
+  SET LOCAL ROLE orvyn_app;
+
+  INSERT INTO rag_chunks (document_id, tenant_id, escopo, nicho, ordem, conteudo, status)
+  VALUES (v_doc_a, '11111111-1111-1111-1111-111111111111', 'tenant', 'medico', 1, 'chunk novo de A', 'published');
+
+  BEGIN
+    INSERT INTO rag_chunks (document_id, tenant_id, escopo, nicho, ordem, conteudo, status)
+    VALUES (v_doc_b, '22222222-2222-2222-2222-222222222222', 'tenant', 'juridico', 9, 'FORJADO_EM_B', 'published');
+    RAISE EXCEPTION 'VAZAMENTO[write rag_chunks]: tenant A gravou chunk no tenant B';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  BEGIN
+    INSERT INTO rag_chunks (document_id, tenant_id, escopo, nicho, ordem, conteudo, status)
+    VALUES (v_doc_b, '11111111-1111-1111-1111-111111111111', 'tenant', 'medico', 9, 'PENDURADO_NO_DOC_DE_B', 'published');
+    RAISE EXCEPTION 'VAZAMENTO[write rag_chunks]: chunk de A aceito no documento de B';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  BEGIN
+    INSERT INTO rag_chunks (document_id, tenant_id, escopo, ordem, conteudo, status)
+    VALUES (v_doc_g, NULL, 'global', 9, 'FORJADO_NA_GLOBAL', 'published');
+    RAISE EXCEPTION 'VAZAMENTO[write rag_chunks]: tenant A gravou na base global';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  DELETE FROM rag_chunks WHERE escopo = 'global' OR conteudo LIKE '%bravo%';
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  IF v_n <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[delete rag_chunks]: tenant A apagou % chunk(s) alheio(s)', v_n; END IF;
+
+  RAISE NOTICE 'OK RAG write: A indexa a propria base; escrita em B, na global e em doc de B barradas';
+END $$;
+
 RESET ROLE;
 ROLLBACK;  -- teste não deixa resíduo
 

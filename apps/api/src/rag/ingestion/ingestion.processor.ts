@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ChunkingService } from '../chunking.service';
 import { EmbeddingsService } from '../embeddings/embeddings.service';
@@ -28,37 +29,50 @@ export class IngestionProcessor {
     private readonly embeddings: EmbeddingsService,
   ) {}
 
-  async process(documentId: string, content: string): Promise<{ chunks: number }> {
-    const doc = (await this.prisma.ragDocument.findUnique({
-      where: { id: documentId },
-      select: { id: true, tenantId: true, escopo: true, nicho: true, subespecialidade: true },
-    })) as DocRow | null;
+  /**
+   * `tenantId` = dono do documento (null = base compartilhada). BUG-022: com RLS
+   * FORCE, ler/gravar documento e chunks de TENANT exige `app.current_tenant_id`
+   * na transação — sem ele o documento "não existia" e o chunk violava a policy.
+   */
+  async process(documentId: string, content: string, tenantId: string | null = null): Promise<{ chunks: number }> {
+    const doc = (await this.noEscopo(tenantId, (db) =>
+      db.ragDocument.findUnique({
+        where: { id: documentId },
+        select: { id: true, tenantId: true, escopo: true, nicho: true, subespecialidade: true },
+      }),
+    )) as DocRow | null;
     if (!doc) throw new Error(`documento ${documentId} não encontrado`);
 
     try {
       const chunks = this.chunking.chunk(content);
       if (!chunks.length) {
-        await this.setStatus(documentId, 'published', null);
+        await this.setStatus(tenantId, documentId, 'published', null);
         return { chunks: 0 };
       }
       const vectors = await this.embeddings.embed(chunks.map((c) => c.conteudo), 'document');
-      await this.writeChunks(doc, chunks, vectors);
-      await this.setStatus(documentId, 'published', null);
+      await this.writeChunks(tenantId, doc, chunks, vectors);
+      await this.setStatus(tenantId, documentId, 'published', null);
       return { chunks: chunks.length };
     } catch (e) {
       const msg = (e as Error).message;
       this.log.error(`falha ao processar ${documentId}: ${msg}`);
-      await this.setStatus(documentId, 'failed', msg).catch(() => undefined);
+      await this.setStatus(tenantId, documentId, 'failed', msg).catch(() => undefined);
       throw e;
     }
   }
 
+  /** Transação sob a RLS do tenant (base de cliente) ou comum (base compartilhada). */
+  private noEscopo<T>(tenantId: string | null, work: (db: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+    return tenantId ? this.prisma.withTenant(tenantId, work) : this.prisma.$transaction(work);
+  }
+
   private async writeChunks(
+    tenantId: string | null,
     doc: DocRow,
     chunks: { ordem: number; breadcrumb: string | null; conteudo: string; tokens: number }[],
     vectors: number[][],
   ): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
+    await this.noEscopo(tenantId, async (tx) => {
       await tx.$executeRawUnsafe(`DELETE FROM rag_chunks WHERE document_id = $1::uuid`, doc.id);
       for (let i = 0; i < chunks.length; i++) {
         const c = chunks[i];
@@ -83,14 +97,16 @@ export class IngestionProcessor {
     });
   }
 
-  private async setStatus(id: string, status: string, erro: string | null): Promise<void> {
-    await this.prisma.ragDocument.update({
-      where: { id },
-      data: {
-        status: status as never,
-        erro,
-        publishedAt: status === 'published' ? new Date() : null,
-      },
-    });
+  private async setStatus(tenantId: string | null, id: string, status: string, erro: string | null): Promise<void> {
+    await this.noEscopo(tenantId, (db) =>
+      db.ragDocument.update({
+        where: { id },
+        data: {
+          status: status as never,
+          erro,
+          publishedAt: status === 'published' ? new Date() : null,
+        },
+      }),
+    );
   }
 }
