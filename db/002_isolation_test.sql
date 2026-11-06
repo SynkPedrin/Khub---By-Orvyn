@@ -59,6 +59,10 @@ INSERT INTO integrations (tenant_id, provider, status) VALUES (:'tenant_a', 'met
 INSERT INTO integrations (tenant_id, provider, status, external_business_id, credentials_encrypted)
 VALUES (:'tenant_b', 'stevo', 'connected', 'instancia_do_B', 'SEGREDO_DE_B');
 
+-- Billing da plataforma (migration 028): assinatura do B, com stripe_customer_id secreto
+INSERT INTO subscriptions (tenant_id, plano, status, stripe_customer_id, stripe_subscription_id)
+VALUES (:'tenant_b', 'growth', 'ativa', 'cus_SEGREDO_DO_B', 'sub_SEGREDO_DO_B');
+
 -- CRM F2 (migration 009): empresas, tarefas, notas e páginas do B
 INSERT INTO companies (id, tenant_id, nome, dominio)
 VALUES ('cccccccc-0000-4000-8000-00000000000b', :'tenant_b', 'Empresa Secreta do B', 'segredo-b.com');
@@ -100,6 +104,17 @@ VALUES (:'tenant_b', 'growth', 'claude-sonnet-5', 9.99);
 
 INSERT INTO ad_insights (tenant_id, level, provider, external_ref_id, date, spend)
 VALUES (:'tenant_a', 'account', 'meta', 'acc_A', current_date, 10), (:'tenant_b', 'account', 'meta', 'acc_B', current_date, 20);
+
+-- Sprint AG (migration 030): agente, conversa em atendimento de IA, mensagem e run do B
+INSERT INTO agents (id, tenant_id, nome, modelo, instrucoes)
+VALUES ('ad000000-0000-4000-8000-00000000000b', :'tenant_b', 'AGENTE_SECRETO_DO_B', 'claude-opus-5-5', 'PROMPT_SECRETO_DO_B');
+INSERT INTO conversations (id, tenant_id, nome, atendimento, agent_id)
+VALUES ('ad000000-0000-4000-8000-0000000000cb', :'tenant_b', 'Conversa do B', 'ia', 'ad000000-0000-4000-8000-00000000000b');
+INSERT INTO messages (id, tenant_id, conversation_id, autor_tipo, corpo)
+-- autor 'humano': mensagem de contato dispararia o outbox (orvyn_service não grava outbox_events).
+VALUES ('ad000000-0000-4000-8000-0000000000eb', :'tenant_b', 'ad000000-0000-4000-8000-0000000000cb', 'humano', 'MENSAGEM_DO_LEAD_DE_B');
+INSERT INTO agent_runs (tenant_id, agent_id, conversation_id, message_id, status, motivo)
+VALUES (:'tenant_b', 'ad000000-0000-4000-8000-00000000000b', 'ad000000-0000-4000-8000-0000000000cb', 'ad000000-0000-4000-8000-0000000000eb', 'respondido', 'RUN_SECRETO_DO_B');
 
 -- ---------- ACT + ASSERT (como aplicação, tenant = A) ----------
 SET LOCAL ROLE orvyn_app;
@@ -314,6 +329,56 @@ BEGIN
   IF v_sem_rls <> 0 THEN RAISE EXCEPTION 'RISCO: % partição(ões) de ad_insights sem RLS — rodar db/014', v_sem_rls; END IF;
 
   RAISE NOTICE 'OK partições: RLS aplicada e sem vazamento pela partição';
+END $$;
+
+-- 16. BILLING DA PLATAFORMA (migration 028): stripe_customer_id é dado
+--     sensível (identifica a conta de pagamento do tenant na Stripe) — vazar
+--     é tão grave quanto vazar uma credencial de integração.
+DO $$
+DECLARE v_sub int; v_write int;
+BEGIN
+  SELECT count(*) INTO v_sub FROM subscriptions WHERE stripe_customer_id = 'cus_SEGREDO_DO_B';
+  IF v_sub <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[subscriptions]: tenant A leu % assinatura(s) de B', v_sub; END IF;
+
+  UPDATE subscriptions SET plano = 'scale' WHERE stripe_customer_id = 'cus_SEGREDO_DO_B';
+  GET DIAGNOSTICS v_write = ROW_COUNT;
+  IF v_write <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[write subscriptions]: tenant A alterou a assinatura de B'; END IF;
+  RAISE NOTICE 'OK write-guard billing: UPDATE cross-tenant em subscriptions não afetou nenhuma linha';
+
+  RAISE NOTICE 'OK isolamento billing: subscriptions isolada (stripe_customer_id de B invisível para A)';
+END $$;
+
+-- 17. AGENTES (migration 030 · Sprint AG): o prompt e o histórico de execução
+--     do agente de B são dado do cliente — vazar o prompt é vazar o playbook
+--     comercial; vazar o run é vazar conversa com lead.
+DO $$
+DECLARE v_ag int; v_run int; v_upd int;
+BEGIN
+  SELECT count(*) INTO v_ag FROM agents WHERE nome = 'AGENTE_SECRETO_DO_B' OR instrucoes = 'PROMPT_SECRETO_DO_B';
+  IF v_ag <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[agents]: tenant A leu o agente (prompt) de B'; END IF;
+  SELECT count(*) INTO v_run FROM agent_runs WHERE motivo = 'RUN_SECRETO_DO_B';
+  IF v_run <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[agent_runs]: tenant A leu execução de agente de B'; END IF;
+
+  UPDATE agents SET status = 'pausado' WHERE id = 'ad000000-0000-4000-8000-00000000000b';
+  GET DIAGNOSTICS v_upd = ROW_COUNT;
+  IF v_upd <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[write agents]: tenant A pausou o agente de B'; END IF;
+
+  -- Escrever agente no tenant B: barrado pelo WITH CHECK da policy.
+  BEGIN
+    INSERT INTO agents (tenant_id, nome, modelo) VALUES ('22222222-2222-2222-2222-222222222222', 'INTRUSO', 'claude-opus-5-5');
+    RAISE EXCEPTION 'VAZAMENTO[write agents]: tenant A criou agente no tenant B';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  -- Apontar uma conversa de A para o agente de B: barrado pelo tenant_reference.
+  BEGIN
+    INSERT INTO conversations (tenant_id, nome, atendimento, agent_id)
+    VALUES ('11111111-1111-1111-1111-111111111111', 'Conversa de A', 'ia', 'ad000000-0000-4000-8000-00000000000b');
+    RAISE EXCEPTION 'VAZAMENTO[ref agents]: conversa de A aceitou o agente de B';
+  EXCEPTION WHEN foreign_key_violation THEN NULL;
+  END;
+
+  RAISE NOTICE 'OK isolamento agentes: agents/agent_runs isolados; escrita e referência cross-tenant barradas';
 END $$;
 
 RESET ROLE;

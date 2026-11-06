@@ -2,22 +2,33 @@
 
 Camada de banco do módulo RAG da Nyro IA. **R0 = schema + RLS + teste de vazamento, sem nenhuma linha de IA.** É o gate inegociável: vazamento cross-tenant em base de saúde/jurídico é incidente de LGPD, não bug.
 
-## Pré-requisitos (não instalados nesta máquina)
+## Pré-requisitos
 - PostgreSQL 15+ com **pgvector 0.7+** (extensão `vector`), `pg_trgm`, `unaccent`, `uuid-ossp`.
-- `psql` no PATH.
-- Recomendado em dev: subir via Docker Compose (Postgres+pgvector) — pendente do Bloco 2 de F0 (F0-08).
+- `psql` no PATH (ou um container `orvyn-postgres` rodando — o runner cai pra `docker exec` sozinho se não achar o `psql` local).
 
-> ⚠️ Ambiente atual sem Node/pnpm/Docker/psql. Os arquivos abaixo estão **prontos e revisados estaticamente**, mas **ainda não foram executados** aqui. Rodar assim que a infra existir.
+## Ordem de execução — runner com controle de versão
 
-## Ordem de execução
+28 arquivos hoje, todos crus (`.sql`), aplicados em ordem numérica. Ninguém roda `psql -f` arquivo por
+arquivo à mão: `apps/api/scripts/db-migrate.mjs` mantém uma tabela `schema_migrations` (filename +
+checksum) e só aplica o que falta — idempotente, seguro pra rodar de novo, detecta se um arquivo já
+aplicado foi editado depois (fecha [[Bugs|D-08]]).
 
 ```bash
-export DATABASE_URL="postgres://postgres:postgres@localhost:5432/orvyn"
+export ADMIN_DATABASE_URL="postgres://postgres:postgres@localhost:5432/orvyn"
+cd apps/api
 
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/000_foundation.sql   # tenants mínima + roles orvyn_app/orvyn_service
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/001_rag_schema.sql   # extensões, tabelas, RLS, HNSW, rag_search_hybrid()
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/001a_rls_harden.sql  # FORCE RLS + RLS de guardrail_hits + grants
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/002_isolation_test.sql  # BLOQUEANTE: falha o build se vazar
+pnpm db:migrate:status   # só mostra o que falta, não aplica nada
+pnpm db:migrate          # aplica as migrations pendentes, em ordem, e registra cada uma
+```
+
+Banco que **já tem tudo** aplicado manualmente (ambiente antigo) e só precisa começar a usar o ledger:
+```bash
+node scripts/db-migrate.mjs --mark-applied   # registra as já aplicadas, sem rodar de novo
+```
+
+Teste de isolamento (bloqueante, roda à parte):
+```bash
+psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/002_isolation_test.sql  # BLOQUEANTE: falha o build se vazar
 ```
 
 `002` deve terminar com `R0.2 OK — nenhum vazamento cross-tenant.` Qualquer vazamento faz `RAISE EXCEPTION` e o `psql` sai com código ≠ 0 (barra o merge no CI).
