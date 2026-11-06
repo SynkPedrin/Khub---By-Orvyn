@@ -87,8 +87,9 @@ export function AreaReceita({
           >
             <defs>
               <linearGradient id={`g-${id}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.20" />
-                <stop offset="100%" stopColor="var(--brand)" stopOpacity="0.01" />
+                <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.34" />
+                <stop offset="55%" stopColor="var(--brand-2)" stopOpacity="0.12" />
+                <stop offset="100%" stopColor="var(--brand-2)" stopOpacity="0" />
               </linearGradient>
             </defs>
 
@@ -102,10 +103,12 @@ export function AreaReceita({
               points={pontos}
               fill="none"
               stroke="var(--brand)"
-              strokeWidth="2"
+              strokeWidth="2.25"
               strokeLinejoin="round"
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"
+              // Luz roxa na linha (ADR-0033) — o traço é o protagonista do gráfico.
+              style={{ filter: 'drop-shadow(0 4px 10px var(--glow-purple))' }}
             />
 
             {/* Crosshair do ponto em foco. Linha vertical sobrevive ao
@@ -126,7 +129,7 @@ export function AreaReceita({
 
           {/* Marcador do ponto: div em overlay, imune à distorção do viewBox. */}
           <span
-            className="pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand ring-2 ring-[var(--base-0)]"
+            className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand ring-2 ring-[var(--lime-edge)] shadow-[0_0_14px_var(--glow-purple)]"
             style={{ left: `${xPct}%`, top: `${(1 - ponto.valor / max) * altura}px` }}
             aria-hidden
           />
@@ -201,12 +204,14 @@ export function BarrasVerticais({
               {/* Rótulo direto: o valor em cima da barra dispensa ler o eixo */}
               <p className="mb-1.5 truncate text-center text-[11px] font-semibold tabular text-fg">{formatar(d.valor)}</p>
               <div
-                className={cx('w-full rounded-t-sm transition-opacity', ativo !== null && ativo !== i && 'opacity-60')}
+                className={cx('w-full rounded-t-md transition-[opacity,box-shadow] duration-200', ativo !== null && ativo !== i && 'opacity-60')}
                 style={{
                   height: `${pct}%`,
                   minHeight: 3,
-                  // Sequencial: um hue, intensidade acompanha a magnitude.
-                  background: `color-mix(in srgb, var(--brand) ${Math.round(38 + (pct / 100) * 62)}%, var(--brand-soft))`,
+                  // Sequencial: um hue, intensidade acompanha a magnitude; o
+                  // degradê vertical (mais claro no topo) só dá volume.
+                  background: `linear-gradient(180deg, color-mix(in srgb, var(--brand-2) ${Math.round(38 + (pct / 100) * 62)}%, var(--brand-soft)), color-mix(in srgb, var(--brand) ${Math.round(38 + (pct / 100) * 62)}%, var(--brand-soft)))`,
+                  boxShadow: ativo === i ? '0 8px 22px -6px var(--glow-purple), inset 0 1px 0 color-mix(in srgb, var(--lime-edge) 80%, transparent)' : undefined,
                 }}
                 role="img"
                 aria-label={`${d.rotulo}: ${formatar(d.valor)}`}
@@ -256,10 +261,11 @@ export function BarrasHorizontais({
             </div>
             <div className="h-5 min-w-0 flex-1">
               <div
-                className="h-full rounded-sm"
+                className="h-full rounded-full"
                 style={{
                   width: `${Math.max(4, pct)}%`,
-                  background: `color-mix(in srgb, var(--brand) ${Math.round(30 + (intensidade / 100) * 55)}%, var(--brand-soft))`,
+                  background: `linear-gradient(90deg, color-mix(in srgb, var(--brand) ${Math.round(30 + (intensidade / 100) * 55)}%, var(--brand-soft)), color-mix(in srgb, var(--brand-2) ${Math.round(30 + (intensidade / 100) * 55)}%, var(--brand-soft)))`,
+                  boxShadow: '0 4px 12px -6px var(--glow-purple)',
                 }}
                 role="img"
                 aria-label={`${d.rotulo}: ${formatar(d.valor)}`}
@@ -290,10 +296,10 @@ export function Funil({ etapas }: { etapas: { rotulo: string; valor: number; pct
           return (
             <div
               key={e.rotulo}
-              className="h-9 rounded-sm transition-opacity hover:opacity-85"
+              className="h-9 rounded-md transition-[opacity,box-shadow] duration-200 hover:opacity-90 hover:shadow-[0_8px_22px_-8px_var(--glow-purple)]"
               style={{
                 width: `${largura}%`,
-                background: `color-mix(in srgb, var(--brand) ${Math.round(30 + (i / Math.max(1, etapas.length - 1)) * 60)}%, var(--brand-soft))`,
+                background: `linear-gradient(90deg, color-mix(in srgb, var(--brand-2) ${Math.round(30 + (i / Math.max(1, etapas.length - 1)) * 60)}%, var(--brand-soft)), color-mix(in srgb, var(--brand) ${Math.round(30 + (i / Math.max(1, etapas.length - 1)) * 60)}%, var(--brand-soft)), color-mix(in srgb, var(--brand-2) ${Math.round(30 + (i / Math.max(1, etapas.length - 1)) * 60)}%, var(--brand-soft)))`,
               }}
               role="img"
               aria-label={`${e.rotulo}: ${numero(e.valor)} (${e.pct}%)`}

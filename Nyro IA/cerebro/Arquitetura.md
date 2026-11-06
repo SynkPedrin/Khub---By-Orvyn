@@ -165,6 +165,14 @@ Em F0 (Bloco 4) esses arquivos serão movidos/copiados para `packages/ui/assets/
   - TypeScript **5.5.4** (strict) · Postgres alvo **pg16 + pgvector** (imagem `pgvector/pgvector:pg16` no compose)
 - **Consequências:** `prisma generate` OK gerando o modelo com `Unsupported("vector(1024)")` (R0.3). Migrações do RAG continuam em SQL puro (`db/`), não no Prisma Migrate. `packages/ui` fica como dívida pequena (web tem seus componentes locais). Turbo `tasks` (schema v2). **Verificado:** `pnpm build` → 2/2 apps; API sobe e responde `/v1/health` (db:false sem Postgres) e 404 em `application/problem+json`.
 
+### ADR-0033 — Luz roxa & aro limão: identidade visual do produto
+- **Status:** Aceito (product owner, 2026-11-06). **Emenda o ADR-0029**: substitui a regra 3 ("luz, não cor") — o material Liquid Glass, as camadas e a concentricidade continuam.
+- **Pedido:** front "muito cru"; mais profissional e gráfico, com iluminação roxa e bordas verdes. Escolhas do usuário: **base clara** com acentos (escuro segue opcional no botão de tema) e **verde-limão KHUB**.
+- **Decisão:** o roxo da marca vira LUZ (facho e halos no `ambient-bg`, textura de pontos `.ambient-grid`, sombras `--sh-*`/`--lg-shadow` tingidas de violeta, `--glow`/`--glow-lg`, luz vazando no canto dos `.card-crystal`, brilho no `.btn-primary` e no item ativo) e o limão vira ARO (`--edge-lime` em `.card`, `.card-crystal`, sidebar/topbar, sheets, cabeçalho de `.tbl`, foco de campo, thumb do `.segbar`, barra do item ativo, sublinhado roxo→limão da `.tab`).
+- **Contraste:** o limão puro `#d9ff5a` some sobre branco (~1.1:1); no claro o aro usa `--lime-edge #a3d40f` (68%); no escuro o puro a 30%. Limão **nunca** é cor de texto nem de estado semântico (`--success` segue sendo o verde de "bom"). Reflexo limão desligado no escuro (vira verde-barro).
+- **Gráficos:** mesma paleta validada (hue e regra de intensidade sequencial inalterados); só acabamento — degradê do mesmo hue, brilho na linha de receita, cantos arredondados, marcador com anel limão.
+- **Prova visual:** página com o CSS compilado, claro e escuro, antes do merge.
+
 ### ADR-0032 — Stevo API de gestão como transporte de WhatsApp por subconta
 - **Status:** Aceito e implementado (2026-11-06). Concretiza ADR-0031 (Stevo = só transporte).
 - **Decisão:** cada subconta tem sua instância Stevo, vinculada em `integrations` (provider `stevo_api`, `external_business_id` = id da instância) e, na Stevo, `external_ref` = tenantId. Roteamento do webhook de conta por função `SECURITY DEFINER` (`db/032`), igual a 008/024. Envio por tenant via `POST /v1/instances/{id}/messages` com `Idempotency-Key`; sem vínculo, comportamento anterior (Evolution/Stevo legado).

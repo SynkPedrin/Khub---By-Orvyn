@@ -69,6 +69,31 @@
   --brand-border: #e4d8ff;
   --brand-deep: #5a20d9;
 
+  /* ---------- COLOR: KHUB — acento secundário (NICO/IA) ----------
+     Verde-limão da marca KHUB. Só para destaque de atividade/inteligência
+     (dock da NICO, indicadores "pensando", chrome star) — nunca cor de
+     botão geral nem fundo dominante (ver globals.css §LIQUID GLASS). */
+  --khub-lime: #d9ff5a;
+  --khub-lime-soft: #f3ffd9;
+  --khub-lime-border: #e3ff9e;
+  --khub-lime-ink: #4a5a00;
+
+  /* ---------- LUZ ROXA & ARO LIMÃO (ADR-0033) ----------
+     Identidade visual do produto: o roxo da marca vira LUZ (halos, brilho,
+     sombras tingidas) e o limão KHUB vira ARO (bordas de cards, sidebar,
+     foco). O limão puro (#d9ff5a) some sobre branco (contraste ~1.1:1);
+     no tema claro o aro usa a versão saturada --lime-edge, e o puro fica
+     para brilho. Verde semântico (--success) continua sendo outra cor. */
+  --lime: var(--khub-lime);
+  --lime-edge: #a3d40f;
+  --edge-lime: color-mix(in srgb, var(--lime-edge) 68%, transparent);
+  --edge-lime-strong: var(--lime-edge);
+  --glow-purple: color-mix(in srgb, var(--brand) 34%, transparent);
+  --glow: 0 12px 32px -14px var(--glow-purple);
+  --glow-lg: 0 22px 60px -20px color-mix(in srgb, var(--brand) 46%, transparent), 0 0 0 1px color-mix(in srgb, var(--brand) 6%, transparent);
+  --light-leak: color-mix(in srgb, var(--brand-2) 30%, transparent);
+  --lime-leak: color-mix(in srgb, var(--lime) 14%, transparent);
+
   /* ---------- COLOR: semânticas (system colors, variante acessível) ---------- */
   --success: #248a3d;
   --success-soft: #eaf6ed;
@@ -119,11 +144,13 @@
   --s-12: 48px;
 
   /* ---------- SHADOW (difusas, neutras, em camadas) ---------- */
-  --sh-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --sh-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.04);
-  --sh-md: 0 2px 6px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
-  --sh-lg: 0 4px 12px rgba(0, 0, 0, 0.05), 0 16px 40px rgba(0, 0, 0, 0.08);
-  --sh-pop: 0 8px 24px rgba(0, 0, 0, 0.08), 0 30px 80px rgba(0, 0, 0, 0.14);
+  /* Sombras tingidas de violeta (ADR-0033): a luz do produto é roxa, então a
+     sombra também puxa para o roxo — preto puro deixava o vidro "sujo". */
+  --sh-xs: 0 1px 2px rgba(46, 16, 101, 0.05);
+  --sh-sm: 0 1px 2px rgba(46, 16, 101, 0.05), 0 4px 14px -4px rgba(76, 29, 149, 0.1);
+  --sh-md: 0 2px 6px rgba(46, 16, 101, 0.05), 0 12px 30px -8px rgba(76, 29, 149, 0.16);
+  --sh-lg: 0 4px 12px rgba(46, 16, 101, 0.06), 0 22px 50px -12px rgba(76, 29, 149, 0.22);
+  --sh-pop: 0 8px 24px rgba(46, 16, 101, 0.1), 0 34px 90px -10px rgba(76, 29, 149, 0.28);
 
   /* ---------- LIQUID GLASS ----------
      regular  → navegação e controles (sidebar, topbar, toolbars)
@@ -155,7 +182,7 @@
   --lg-highlight-control:
     inset 0 1px 0 0 rgba(255, 255, 255, 0.9),
     inset 0 0 0 0.5px rgba(255, 255, 255, 0.5);
-  --lg-shadow: 0 1px 1px rgba(0, 0, 0, 0.03), 0 4px 16px rgba(0, 0, 0, 0.05), 0 16px 48px rgba(17, 17, 27, 0.06);
+  --lg-shadow: 0 1px 1px rgba(46, 16, 101, 0.04), 0 6px 18px -4px rgba(76, 29, 149, 0.1), 0 24px 56px -16px rgba(108, 43, 255, 0.2);
   --lg-shadow-control: 0 1px 2px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
   --lg-specular: rgba(255, 255, 255, 0.7);
   --lg-dim: rgba(0, 0, 0, 0.24);
@@ -268,6 +295,20 @@
   --brand-soft: #1f1733;
   --brand-softer: #17121f;
   --brand-border: #33264f;
+  --khub-lime: #d9ff5a;
+  --khub-lime-soft: #26300a;
+  --khub-lime-border: #3d4d12;
+  --khub-lime-ink: #e8ffb0;
+  /* No escuro o limão puro já contrasta: aro mais fino em opacidade. */
+  --lime-edge: #d9ff5a;
+  --edge-lime: color-mix(in srgb, var(--lime-edge) 30%, transparent);
+  --edge-lime-strong: color-mix(in srgb, var(--lime-edge) 70%, transparent);
+  --glow-purple: color-mix(in srgb, var(--brand) 55%, transparent);
+  --glow: 0 12px 36px -12px var(--glow-purple);
+  --glow-lg: 0 22px 70px -18px color-mix(in srgb, var(--brand) 60%, transparent), 0 0 0 1px color-mix(in srgb, var(--brand) 14%, transparent);
+  --light-leak: color-mix(in srgb, var(--brand) 30%, transparent);
+  /* Limão sobre preto vira verde-barro: no escuro o reflexo some. */
+  --lime-leak: transparent;
   --success: #30d158;
   --success-soft: #0f2417;
   --success-border: #1b3f27;
@@ -551,19 +592,41 @@ a {
     background: var(--mat-thick);
     -webkit-backdrop-filter: blur(var(--mat-blur)) saturate(160%);
     backdrop-filter: blur(var(--mat-blur)) saturate(160%);
-    border: 1px solid var(--lg-edge-soft);
+    /* ADR-0033: aro limão + sombra violeta — a "assinatura" de toda superfície. */
+    border: 1px solid var(--edge-lime);
     border-radius: var(--r-xl);
-    box-shadow: var(--lg-highlight-control), var(--sh-sm);
+    box-shadow: var(--lg-highlight-control), var(--sh-sm), var(--glow);
   }
 
   /* Card de vidro — hero KPIs e cards editoriais (Dashboard, Agency
-     Home). Só para pouco texto (número grande + label curto). */
+     Home). Só para pouco texto (número grande + label curto).
+     ADR-0033: aro limão que acende no hover e luz roxa vazando do canto
+     superior (::after, atrás do texto, acima do vidro). */
   .card-crystal {
     position: relative;
     isolation: isolate;
-    border: 1px solid var(--lg-edge);
+    border: 1px solid var(--edge-lime);
     border-radius: var(--r-xl);
-    box-shadow: var(--lg-shadow);
+    box-shadow: var(--lg-shadow), var(--glow);
+    transition:
+      border-color var(--dur) var(--ease),
+      box-shadow var(--dur-slow) var(--ease);
+  }
+  .card-crystal:hover {
+    border-color: var(--edge-lime-strong);
+    box-shadow: var(--lg-shadow), var(--glow-lg);
+  }
+  .card-crystal::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background:
+      radial-gradient(90% 120% at 0% 0%, var(--light-leak), transparent 60%),
+      radial-gradient(60% 80% at 100% 100%, var(--lime-leak), transparent 70%),
+      linear-gradient(90deg, transparent 8%, color-mix(in srgb, var(--lime-edge) 70%, transparent) 50%, transparent 92%) top / 100% 1px no-repeat;
   }
   .card-crystal::before {
     content: '';
@@ -674,9 +737,9 @@ a {
     background: var(--lg-fill-dense);
     -webkit-backdrop-filter: blur(32px) saturate(var(--lg-saturate));
     backdrop-filter: blur(32px) saturate(var(--lg-saturate));
-    border: 1px solid var(--lg-edge);
+    border: 1px solid var(--edge-lime);
     border-radius: var(--r-2xl);
-    box-shadow: var(--lg-highlight), var(--sh-pop);
+    box-shadow: var(--lg-highlight), var(--sh-pop), var(--glow-lg);
   }
 
   /* Sheet lateral (inspector): flutua com margem, não cola na borda. */
@@ -732,8 +795,14 @@ a {
 
   /* Seleção / estado ativo: tint de marca discreto, nunca decorativo. */
   .glass-accent {
-    background: color-mix(in srgb, var(--brand) 12%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand) 14%, transparent);
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--brand) 17%, transparent),
+      color-mix(in srgb, var(--brand-2) 7%, transparent)
+    );
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--brand) 18%, transparent),
+      0 8px 22px -10px var(--glow-purple);
   }
 
   /* =====================================================================
@@ -754,11 +823,14 @@ a {
     content: '';
     position: absolute;
     inset: -10%;
+    /* ADR-0033: iluminação roxa — facho do topo + halos laterais; o limão
+       entra só como reflexo fraco no canto oposto. */
     background:
-      radial-gradient(ellipse 55% 50% at 14% 8%, color-mix(in srgb, var(--brand) 34%, transparent), transparent 62%),
-      radial-gradient(ellipse 50% 45% at 88% 14%, color-mix(in srgb, var(--brand-2) 26%, transparent), transparent 58%),
-      radial-gradient(ellipse 60% 50% at 92% 88%, color-mix(in srgb, #0a84ff 12%, transparent), transparent 60%),
-      radial-gradient(ellipse 75% 60% at 10% 95%, color-mix(in srgb, var(--brand) 14%, transparent), transparent 65%),
+      radial-gradient(ellipse 38% 34% at 50% -4%, color-mix(in srgb, var(--brand-2) 42%, transparent), transparent 70%),
+      radial-gradient(ellipse 55% 50% at 10% 6%, color-mix(in srgb, var(--brand) 46%, transparent), transparent 62%),
+      radial-gradient(ellipse 50% 46% at 92% 12%, color-mix(in srgb, var(--brand-2) 36%, transparent), transparent 60%),
+      radial-gradient(ellipse 46% 40% at 96% 92%, color-mix(in srgb, var(--khub-lime) 26%, transparent), transparent 62%),
+      radial-gradient(ellipse 75% 60% at 4% 98%, color-mix(in srgb, var(--brand) 22%, transparent), transparent 66%),
       linear-gradient(165deg, var(--base-2) 0%, var(--base-1) 45%, var(--base-2) 100%);
     animation: ambient-drift 50s ease-in-out infinite alternate;
   }
@@ -767,7 +839,19 @@ a {
     content: '';
     position: absolute;
     inset: 0;
-    backdrop-filter: blur(90px) saturate(115%);
+    backdrop-filter: blur(90px) saturate(125%);
+  }
+
+  /* Textura de pontos (ADR-0033) ACIMA do desfoque — senão viraria névoa.
+     Mais visível no topo, some em direção ao conteúdo. */
+  .ambient-grid {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background-image: radial-gradient(color-mix(in srgb, var(--brand) 24%, transparent) 1px, transparent 1.3px);
+    background-size: 24px 24px;
+    -webkit-mask-image: radial-gradient(ellipse 85% 65% at 50% 0%, #000 0%, rgba(0, 0, 0, 0.3) 50%, transparent 82%);
+    mask-image: radial-gradient(ellipse 85% 65% at 50% 0%, #000 0%, rgba(0, 0, 0, 0.3) 50%, transparent 82%);
   }
 
   @keyframes ambient-drift {
@@ -787,9 +871,40 @@ a {
     border-radius: var(--r-2xl);
   }
 
+  /* Aro mais nítido que o `.glass-floating` padrão: sidebar/topbar
+     flutuam sobre o ambient colorido (roxo+limão), onde o aro de 6%
+     de opacidade some de vista. Especificidade de duas classes vence
+     `.lg, .glass-floating` independente da ordem no arquivo. */
+  .glass-floating.nav-floating {
+    /* ADR-0033: aro limão (antes: cinza 12%) + luz roxa ao redor. */
+    border-color: var(--edge-lime);
+    box-shadow: var(--lg-shadow), var(--glow);
+  }
+
   .nav-floating-item {
     position: relative;
     border-radius: var(--r-lg);
+  }
+
+  /* Item ativo da sidebar: o indicador (glass-accent animado) ganha barra
+     limão à esquerda e brilho roxo — o "onde estou" fica inconfundível. */
+  .nav-floating-item > .glass-accent::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 22%;
+    bottom: 22%;
+    width: 3px;
+    border-radius: var(--r-full);
+    background: var(--lime-edge);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--lime) 80%, transparent);
+  }
+  /* A barra limão já vem do indicador animado; aqui só cor/peso (sem a
+     barra inset de `.nav-item` ativo, que duplicaria). */
+  .nav-floating-item.nav-item[aria-current='page'] {
+    color: var(--brand);
+    font-weight: 600;
+    box-shadow: none;
   }
 
   .card-flat {
@@ -879,35 +994,38 @@ a {
     cursor: not-allowed;
   }
 
+  /* ADR-0033: degradê diagonal roxo → violeta com halo roxo (a ação
+     principal é literalmente a fonte de luz da tela). */
   .btn-primary {
     background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--brand) 84%, #fff) 0%,
-      var(--brand) 55%,
-      color-mix(in srgb, var(--brand) 92%, #000) 100%
+      135deg,
+      color-mix(in srgb, var(--brand-2) 92%, #fff) 0%,
+      var(--brand) 48%,
+      var(--brand-deep) 100%
     );
-    border-color: transparent;
+    border-color: color-mix(in srgb, var(--brand-deep) 60%, transparent);
     color: #fff;
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.32),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.1),
-      0 1px 2px color-mix(in srgb, var(--brand) 30%, transparent),
-      0 4px 14px color-mix(in srgb, var(--brand) 22%, transparent);
-    --lg-specular: rgba(255, 255, 255, 0.35);
+      inset 0 1px 0 rgba(255, 255, 255, 0.34),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.12),
+      0 1px 2px color-mix(in srgb, var(--brand) 34%, transparent),
+      0 6px 20px -4px color-mix(in srgb, var(--brand) 48%, transparent);
+    --lg-specular: rgba(255, 255, 255, 0.38);
   }
   .btn-primary:hover:not(:disabled) {
     background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--brand) 84%, #fff) 0%,
-      var(--brand) 55%,
-      color-mix(in srgb, var(--brand) 92%, #000) 100%
+      135deg,
+      color-mix(in srgb, var(--brand-2) 92%, #fff) 0%,
+      var(--brand) 48%,
+      var(--brand-deep) 100%
     );
-    filter: brightness(1.06) saturate(1.04);
+    filter: brightness(1.07) saturate(1.06);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.36),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.1),
-      0 1px 2px color-mix(in srgb, var(--brand) 30%, transparent),
-      0 8px 22px color-mix(in srgb, var(--brand) 28%, transparent);
+      inset 0 1px 0 rgba(255, 255, 255, 0.38),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.12),
+      0 1px 2px color-mix(in srgb, var(--brand) 34%, transparent),
+      0 10px 30px -6px color-mix(in srgb, var(--brand) 60%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--lime-edge) 45%, transparent);
   }
 
   /* Ação de IA: grafite, para se distinguir do roxo de ação comum */
@@ -1040,13 +1158,14 @@ a {
     border-color: var(--border-strong);
   }
 
+  /* ADR-0033: campo em foco = aro limão + halo roxo. */
   .input:focus,
   .select:focus,
   .textarea:focus {
     outline: none;
-    border-color: color-mix(in srgb, var(--brand) 70%, transparent);
+    border-color: var(--edge-lime-strong);
     background: var(--base-0);
-    box-shadow: 0 0 0 4px var(--ring);
+    box-shadow: 0 0 0 4px var(--ring), 0 8px 24px -12px var(--glow-purple);
   }
 
   .input:disabled,
@@ -1187,9 +1306,14 @@ a {
     height: 38px;
     flex-shrink: 0;
     border-radius: var(--r-md);
-    background: var(--brand-soft);
+    /* ADR-0033: squircle com luz própria (degradê + aro + halo). As
+       variantes semânticas abaixo trocam o fundo e mantêm o aro. */
+    background: linear-gradient(145deg, color-mix(in srgb, var(--brand) 22%, var(--base-0)), var(--brand-soft));
     color: var(--brand);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.55),
+      inset 0 0 0 1px color-mix(in srgb, var(--brand) 16%, transparent),
+      0 6px 16px -8px var(--glow-purple);
   }
   .icon-tile-success {
     background: var(--success-soft);
@@ -1230,8 +1354,9 @@ a {
     font-weight: 600;
     color: var(--text-2);
     white-space: nowrap;
-    border-bottom: 1px solid var(--border);
-    background: transparent;
+    /* ADR-0033: linha limão separa cabeçalho do corpo. */
+    border-bottom: 1px solid var(--edge-lime);
+    background: color-mix(in srgb, var(--brand) 3%, transparent);
   }
 
   .tbl tbody td {
@@ -1245,7 +1370,7 @@ a {
   }
 
   .tbl tbody tr:hover {
-    background: var(--fill-4);
+    background: color-mix(in srgb, var(--brand) 5%, transparent);
   }
 
   .tbl tbody tr[data-selected='true'] {
@@ -1283,9 +1408,11 @@ a {
   .tab:hover {
     color: var(--text);
   }
+  /* ADR-0033: sublinhado roxo → limão. */
   .tab[aria-selected='true'] {
     color: var(--brand);
     border-bottom-color: var(--brand);
+    border-image: linear-gradient(90deg, var(--brand), var(--lime-edge)) 1;
   }
 
   /* Aba em pílula (filtros de status: Todas / Ativas / Pausadas) */
@@ -1337,11 +1464,16 @@ a {
   }
   .segbar > .seg[aria-selected='true'] {
     background: var(--seg-thumb);
-    color: var(--text);
+    color: var(--brand);
     box-shadow:
-      0 1px 2px rgba(0, 0, 0, 0.08),
-      0 3px 8px rgba(0, 0, 0, 0.06),
-      inset 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+      0 1px 2px rgba(46, 16, 101, 0.08),
+      0 4px 12px -4px var(--glow-purple),
+      inset 0 0 0 1px var(--edge-lime);
+  }
+  /* No escuro o thumb é cinza (#636366): texto roxo ficava ilegível. */
+  :root[data-theme='dark'] .segbar > .seg[aria-selected='true'],
+  .dark .segbar > .seg[aria-selected='true'] {
+    color: var(--text);
   }
 
   /* Item da sidebar */
@@ -1364,9 +1496,10 @@ a {
     color: var(--text);
   }
   .nav-item[aria-current='page'] {
-    background: color-mix(in srgb, var(--brand) 12%, transparent);
+    background: linear-gradient(90deg, color-mix(in srgb, var(--brand) 16%, transparent), color-mix(in srgb, var(--brand-2) 6%, transparent));
     color: var(--brand);
     font-weight: 600;
+    box-shadow: inset 2px 0 0 var(--lime-edge);
   }
 
   /* =====================================================================
