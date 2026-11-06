@@ -1,18 +1,15 @@
 'use client';
 
-import { ApiError } from './api-error';
+import { clienteApi } from './session-fetch';
 
-async function req<T>(path: string, opts?: RequestInit): Promise<T> {
-  const call = () => fetch(`/api/v1/${path}`, { headers: { 'content-type': 'application/json' }, ...opts });
-  let r = await call();
-  if (r.status === 401) {
-    const rf = await fetch('/api/auth/refresh', { method: 'POST' });
-    if (rf.ok) r = await call();
-    else if (typeof window !== 'undefined') window.location.href = '/login';
-  }
-  if (!r.ok) throw new ApiError(r.status, await r.json().catch(() => ({})));
-  return r.json();
-}
+/**
+ * Cliente autenticado deste módulo.
+ *
+ * A lógica de 401 → renovar → repetir → encerrar sessão vive em
+ * `session-fetch.ts`. Ela estava copiada em dez arquivos e cada cópia
+ * carregava o mesmo loop de redirecionamento infinito.
+ */
+const req = clienteApi('/api/v1/');
 
 export interface Metrics {
   spend: number; leads: number; conversions: number; revenue: number; impressions: number; clicks: number;
@@ -25,12 +22,21 @@ export interface AdsOverview {
   counts: { accounts: number; campaigns: number };
 }
 export interface Campaign extends Metrics { id: string; nome: string; externalId: string; objetivo: string | null; status: string }
-export interface Creative { externalId: string; nome: string | null; thumbnailUrl: string | null; format: string | null; cta: string | null; body: string | null; roas: number; spend: number; leads: number; melhor: boolean }
+export interface Creative extends Metrics {
+  externalId: string; nome: string | null; thumbnailUrl: string | null; format: string | null; cta: string | null; body: string | null;
+  /** Rótulos explícitos — nunca "melhor" sozinho sem dizer por qual métrica. */
+  melhorCpl: boolean;
+  maiorReceita: boolean;
+}
 
 export const ads = {
   overview: () => req<AdsOverview>('ads/overview'),
   campaigns: () => req<Campaign[]>('ads/campaigns'),
   creatives: () => req<Creative[]>('ads/creatives'),
-  authUrl: (provider: string) => req<{ url: string }>(`integrations/${provider}/auth-url`),
+  // `capability` só importa para o provider 'meta' ('ads' | 'leads') — ver
+  // MetaAdsConnector: pedir os dois scopes num diálogo só faz "Invalid
+  // Scopes" em Lead Ads derrubar também a conexão de Ads.
+  authUrl: (provider: string, capability?: string) =>
+    req<{ url: string }>(`integrations/${provider}/auth-url${capability ? `?capability=${capability}` : ''}`),
   sync: (id: string) => req<{ ok: boolean }>(`integrations/${id}/sync`, { method: 'POST' }),
 };

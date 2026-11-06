@@ -5,6 +5,7 @@ import { Badge, Button, cx } from '@/components/ui';
 import { Icon } from '@/components/icons';
 import { BrandLogo, type BrandKey } from '@/components/brand/BrandLogo';
 import { ConfigRequired } from '@/components/app/ConfigRequired';
+import { WhatsAppConnectModal } from '@/components/app/WhatsAppConnectModal';
 import { ApiError } from '@/lib/api-error';
 import { ads } from '@/lib/ads';
 import { settingsApi } from '@/lib/settings';
@@ -19,13 +20,16 @@ interface App {
   desc: string;
   /** provider usado no fluxo real de conexão (integrations/:provider/auth-url). */
   provider: string;
+  /** Só usado com provider==='meta' — ver lib/ads.ts. */
+  capability?: 'ads' | 'leads';
   /**
    * oauth: conector real no servidor — "Conectar" abre o fluxo (degrada com
    *   config_required se a credencial não estiver posta).
    * nativa: ligada por credencial no servidor, sem OAuth do usuário.
+   * qr: fluxo de QR code (WhatsApp/Evolution) — não é redirect OAuth.
    * planejado: conector ainda em desenvolvimento — sem botão que engane.
    */
-  estado: 'oauth' | 'nativa' | 'planejado';
+  estado: 'oauth' | 'nativa' | 'qr' | 'planejado';
 }
 
 const CATS: { key: Categoria; label: string; icon: Parameters<typeof Icon>[0]['name'] }[] = [
@@ -39,11 +43,18 @@ const CATS: { key: Categoria; label: string; icon: Parameters<typeof Icon>[0]['n
 // Catálogo real: o que o Orvyn integra. Conexão passa pelo fluxo do servidor
 // (OAuth Meta hoje; demais degradam com config_required nomeando a variável).
 const APPS: App[] = [
-  { key: 'meta_ads', nome: 'Meta Ads', brand: 'meta_ads', categoria: 'anuncios', provider: 'meta', estado: 'oauth', desc: 'Campanhas do Facebook e Instagram — gasto, CPL, ROAS e melhor criativo.' },
+  // capability:'ads' — não pede leads_retrieval junto, então Ads conecta
+  // mesmo se a conta ainda não tiver Lead Ads/Advanced Access aprovado.
+  { key: 'meta_ads', nome: 'Meta Ads', brand: 'meta_ads', categoria: 'anuncios', provider: 'meta', capability: 'ads', estado: 'oauth', desc: 'Campanhas do Facebook e Instagram — gasto, CPL, ROAS e melhor criativo.' },
   { key: 'google_ads', nome: 'Google Ads', brand: 'google_ads', categoria: 'anuncios', provider: 'google', estado: 'oauth', desc: 'Search e Performance Max no mesmo painel das outras contas.' },
   { key: 'tiktok_ads', nome: 'TikTok Ads', brand: 'tiktok', categoria: 'anuncios', provider: 'tiktok', estado: 'oauth', desc: 'Traga as campanhas do TikTok para a análise cross-plataforma.' },
+  // TODO(meta-capabilities): usa o pacote 'ads' por ora — instagram_basic/
+  // instagram_manage_messages ainda não têm capability própria. Conecta,
+  // mas sem os scopes de mensageria do Instagram até isso existir.
   { key: 'instagram', nome: 'Instagram', brand: 'instagram', categoria: 'mensageria', provider: 'meta', estado: 'oauth', desc: 'Direct e comentários viram conversa no Inbox unificado.' },
-  { key: 'whatsapp', nome: 'WhatsApp Business', brand: 'whatsapp', categoria: 'mensageria', provider: 'meta', estado: 'oauth', desc: 'Atendimento e disparos no canal principal do MVP.' },
+  // Evolution API própria — CANAL_MVP (CLAUDE.md). Conexão por QR code, não
+  // por OAuth: NÃO reaproveitar o fluxo `conectar()` genérico de redirect.
+  { key: 'whatsapp', nome: 'WhatsApp Business', brand: 'whatsapp', categoria: 'mensageria', provider: 'evolution', estado: 'qr', desc: 'Atendimento e disparos via Evolution API — conexão por QR code.' },
   { key: 'messenger', nome: 'Messenger', brand: 'messenger', categoria: 'mensageria', provider: 'meta', estado: 'oauth', desc: 'Mensagens do Facebook no mesmo Inbox.' },
   { key: 'anthropic', nome: 'Claude (Nyro)', brand: 'claude', categoria: 'ia', provider: 'anthropic', estado: 'nativa', desc: 'O motor da Nyro. Ligado por credencial no servidor — sem OAuth.' },
   { key: 'webhook', nome: 'Webhook / API', brand: 'webhook', categoria: 'produtividade', provider: 'webhook', estado: 'nativa', desc: 'Dispare fluxos de qualquer sistema com uma URL de entrada.' },
@@ -58,15 +69,17 @@ export function IntegrationsMarketplace() {
   const [gated, setGated] = useState<{ provider: string; missing: string[] } | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [whatsappAberto, setWhatsappAberto] = useState(false);
 
-  useEffect(() => { settingsApi.integrations().then(setRows).catch(() => setRows([])); }, []);
+  const recarregar = () => settingsApi.integrations().then(setRows).catch(() => setRows([]));
+  useEffect(() => { recarregar(); }, []);
 
   const conectado = (provider: string) => rows?.find((r) => r.provider === provider) ?? null;
 
   const conectar = async (app: App) => {
     setGated(null); setMsg(null); setBusy(app.key);
     try {
-      const { url } = await ads.authUrl(app.provider);
+      const { url } = await ads.authUrl(app.provider, app.capability);
       window.location.href = url;
     } catch (e) {
       const cr = e instanceof ApiError ? e.configRequired : null;
@@ -78,7 +91,7 @@ export function IntegrationsMarketplace() {
   };
 
   const lista = useMemo(() => (cat === 'todas' ? APPS : APPS.filter((a) => a.categoria === cat)), [cat]);
-  const conectados = rows?.length ?? 0;
+  const conectados = rows?.filter((r) => r.status === 'connected').length ?? 0;
 
   return (
     <div className="space-y-5">
@@ -102,7 +115,7 @@ export function IntegrationsMarketplace() {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {lista.map((app) => {
           const conn = conectado(app.provider);
-          const on = !!conn;
+          const on = conn?.status === 'connected';
           return (
             <div key={app.key} className="card flex flex-col p-4">
               <div className="flex items-start gap-3">
@@ -121,7 +134,13 @@ export function IntegrationsMarketplace() {
               </div>
 
               <div className="mt-3 flex items-center gap-2">
-                {on ? (
+                {on && app.estado === 'qr' ? (
+                  <>
+                    <span className="flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400"><Icon name="check" size={14} /> Conectado</span>
+                    {conn!.lastSyncAt && <span className="text-[11px] text-muted">· sync {new Date(conn!.lastSyncAt).toLocaleDateString('pt-BR')}</span>}
+                    <button onClick={() => setWhatsappAberto(true)} className="ml-auto text-xs font-semibold text-muted hover:text-brand">Reconectar</button>
+                  </>
+                ) : on ? (
                   <>
                     <span className="flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400"><Icon name="check" size={14} /> Conectado</span>
                     {conn!.lastSyncAt && <span className="text-[11px] text-muted">· sync {new Date(conn!.lastSyncAt).toLocaleDateString('pt-BR')}</span>}
@@ -131,6 +150,10 @@ export function IntegrationsMarketplace() {
                   <span className="text-xs text-muted">Ligada por credencial no servidor.</span>
                 ) : app.estado === 'planejado' ? (
                   <span className="text-xs text-muted">Conector em desenvolvimento.</span>
+                ) : app.estado === 'qr' ? (
+                  <Button onClick={() => setWhatsappAberto(true)} className="!py-1.5 !text-xs">
+                    <Icon name="plus" size={13} /> Conectar
+                  </Button>
                 ) : (
                   <Button onClick={() => conectar(app)} disabled={busy === app.key} className="!py-1.5 !text-xs">
                     {busy === app.key ? 'Abrindo…' : <><Icon name="plus" size={13} /> Conectar</>}
@@ -145,6 +168,16 @@ export function IntegrationsMarketplace() {
       <p className="text-center text-xs text-muted">
         Conexões passam pelo servidor. Onde a credencial ainda não está configurada, o app mostra exatamente qual variável falta — nada é simulado.
       </p>
+
+      {whatsappAberto && (
+        <WhatsAppConnectModal
+          onClose={() => setWhatsappAberto(false)}
+          onConnected={() => {
+            setWhatsappAberto(false);
+            recarregar();
+          }}
+        />
+      )}
     </div>
   );
 }

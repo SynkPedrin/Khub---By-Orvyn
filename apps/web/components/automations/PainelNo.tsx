@@ -354,7 +354,7 @@ export function PainelNo({ no, meta, onMudar, onExcluir, onFechar, outrosNos, ou
   );
 }
 
-/** If/Else no formato das telas do GHL: ramos com AND/OR/NONE e regras. */
+/** If/Else: ramos com AND/OR/NONE e regras. */
 function EditorRamos({ ramos, onMudar }: { ramos: Ramo[]; onMudar: (r: Ramo[]) => void }) {
   const alterar = (i: number, patch: Partial<Ramo>) => onMudar(ramos.map((r, j) => (j === i ? { ...r, ...patch } : r)));
 

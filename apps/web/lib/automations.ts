@@ -1,18 +1,15 @@
 'use client';
 
-import { ApiError } from './api-error';
+import { clienteApi } from './session-fetch';
 
-async function req<T>(path: string, opts?: RequestInit): Promise<T> {
-  const call = () => fetch(`/api/v1/automations/${path}`, { headers: { 'content-type': 'application/json' }, ...opts });
-  let r = await call();
-  if (r.status === 401) {
-    const rf = await fetch('/api/auth/refresh', { method: 'POST' });
-    if (rf.ok) r = await call();
-    else if (typeof window !== 'undefined') window.location.href = '/login';
-  }
-  if (!r.ok) throw new ApiError(r.status, await r.json().catch(() => ({})));
-  return r.json();
-}
+/**
+ * Cliente autenticado deste módulo.
+ *
+ * A lógica de 401 → renovar → repetir → encerrar sessão vive em
+ * `session-fetch.ts`. Ela estava copiada em dez arquivos e cada cópia
+ * carregava o mesmo loop de redirecionamento infinito.
+ */
+const req = clienteApi('/api/v1/automations/');
 
 // ---- Contrato do grafo (espelha catalogo.ts na API; publicar valida lá) ----
 export type Categoria = 'gatilho' | 'controle' | 'acao';

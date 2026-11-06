@@ -16,7 +16,13 @@ export async function POST(req: NextRequest, { params }: { params: { chave: stri
 
   const r = await fetch(`${API}/v1/hooks/${encodeURIComponent(params.chave)}`, {
     method: 'POST',
-    headers: { 'content-type': req.headers.get('content-type') ?? 'application/json' },
+    headers: {
+      'content-type': req.headers.get('content-type') ?? 'application/json',
+      // A API deduplica por Idempotency-Key. Se o remetente manda a dele, ela vale
+      // (retries não duplicam); sem ela geramos uma por requisição, pois dois
+      // envios idênticos legítimos (ex.: 2 formulários iguais) não podem colapsar.
+      'idempotency-key': req.headers.get('idempotency-key')?.slice(0, 200) || crypto.randomUUID(),
+    },
     body: corpo,
     cache: 'no-store',
   }).catch(() => null);

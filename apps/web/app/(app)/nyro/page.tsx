@@ -48,7 +48,7 @@ export default function NyroPage() {
     <div className="mx-auto flex h-full max-w-3xl flex-col px-4">
       {vazio ? (
         <div className="flex flex-1 flex-col items-center justify-center pb-4 text-center">
-          <Image src="/logo.png" alt="" width={72} height={72} unoptimized className="crystal-logo h-16 w-16 object-contain" />
+          <Image src="/logo-nyro.png" alt="Nyro IA" width={217} height={72} unoptimized className="h-14 w-auto object-contain" />
           <h1 className="mt-5 text-3xl font-extrabold tracking-tight text-fg">{saudacao()}, {user?.name?.split(' ')[0] ?? 'Você'}</h1>
           <p className="mt-1.5 max-w-md text-sm text-muted">
             Sou a <b className="text-brand">Nyro</b> — arquiteta do CRM, operadora de leads, estrategista de growth e consultora do seu nicho. Peça algo abaixo.

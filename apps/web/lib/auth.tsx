@@ -7,6 +7,7 @@ export interface OrvynUser {
   email: string;
   role?: string;
   empresa?: string;
+  tenantId?: string;
 }
 
 interface AuthCtx {
@@ -27,7 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const r = await fetch('/api/auth/me', { cache: 'no-store' });
       if (r.ok) {
         const d = await r.json();
-        setUser({ name: d.nome || d.email || 'Você', email: d.email, role: d.role, empresa: d.tenant?.nome });
+        setUser({ name: d.nome || d.email || 'Você', email: d.email, role: d.role, empresa: d.tenant?.nome, tenantId: d.tenant?.id });
       } else {
         setUser(null);
       }

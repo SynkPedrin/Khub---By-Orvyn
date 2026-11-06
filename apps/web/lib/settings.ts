@@ -1,21 +1,18 @@
 'use client';
 
-import { ApiError } from './api-error';
+import { clienteApi } from './session-fetch';
 
-async function req<T>(path: string, opts?: RequestInit): Promise<T> {
-  const call = () => fetch(`/api/v1/${path}`, { headers: { 'content-type': 'application/json' }, ...opts });
-  let r = await call();
-  if (r.status === 401) {
-    const rf = await fetch('/api/auth/refresh', { method: 'POST' });
-    if (rf.ok) r = await call();
-    else if (typeof window !== 'undefined') window.location.href = '/login';
-  }
-  if (!r.ok) throw new ApiError(r.status, await r.json().catch(() => ({})));
-  return r.json();
-}
+/**
+ * Cliente autenticado deste módulo.
+ *
+ * A lógica de 401 → renovar → repetir → encerrar sessão vive em
+ * `session-fetch.ts`. Ela estava copiada em dez arquivos e cada cópia
+ * carregava o mesmo loop de redirecionamento infinito.
+ */
+const req = clienteApi('/api/v1/');
 
 export interface Profile { id: string; nome: string; email: string; role: string; idioma: string; prefs: Record<string, unknown> }
-export interface Business { nome: string; endereco: string | null; telefone: string | null; website: string | null; idioma: string; nicho: string | null; plano: string; status: string }
+export interface Business { nome: string; endereco: string | null; telefone: string | null; website: string | null; idioma: string; nicho: string | null; plano: string; status: string; settings: import('@/components/app/AccountPreferencesForm').AccountPreferences }
 export interface Member { identityId: string; role: string; isDefault: boolean; email: string; nome: string | null; idioma: string | null }
 export interface Invite { id: string; email: string; role: string; expiresAt: string; createdAt: string }
 export interface AuditRow { id: string; actorType: string; actorId: string | null; acao: string; entidade: string | null; entidadeId: string | null; ts: string }
@@ -27,6 +24,7 @@ export interface ApiKey { id: string; name: string; keyPrefix: string; scopes: s
 export interface ApiKeyCreated extends ApiKey { key: string }
 
 export const settingsApi = {
+  emailStatus: () => req<import('@/components/app/EmailDeliveryStatus').EmailStatus>('settings/email-status'),
   notifications: () => req<{ items: NotificationItem[]; naoLidas: number }>('settings/notifications'),
   markNotificationsRead: () => req<{ ok: boolean }>('settings/notifications/read', { method: 'POST' }),
   profile: () => req<Profile>('settings/profile'),
@@ -49,6 +47,6 @@ export const settingsApi = {
 
   // Private Integrations (API keys) — a chave em claro só volta na criação
   apiKeys: () => req<ApiKey[]>('settings/api-keys'),
-  createApiKey: (name: string) => req<ApiKeyCreated>('settings/api-keys', { method: 'POST', body: JSON.stringify({ name }) }),
+  createApiKey: (name: string, scopes: string[]) => req<ApiKeyCreated>('settings/api-keys', { method: 'POST', body: JSON.stringify({ name, scopes }) }),
   revokeApiKey: (id: string) => req<{ ok: boolean }>(`settings/api-keys/${id}`, { method: 'DELETE' }),
 };

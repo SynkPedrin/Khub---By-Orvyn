@@ -7,13 +7,16 @@ export const runtime = 'nodejs';
 
 async function forward(req: NextRequest, path: string[]) {
   const at = req.cookies.get(ACCESS)?.value;
-  if (!at) return NextResponse.json({ title: 'não autenticado', status: 401 }, { status: 401 });
+  const provided = req.headers.get('x-api-key') ?? req.headers.get('authorization')?.replace(/^Bearer /, '');
+  const apiKey = provided?.startsWith('orv_live_') ? provided : undefined;
+  if (!at && !apiKey) return NextResponse.json({ title: 'não autenticado', status: 401 }, { status: 401 });
   const url = new URL(req.url);
   const target = `${API}/v1/${path.map(encodeURIComponent).join('/')}${url.search}`;
   const init: RequestInit = {
     method: req.method,
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${at}` },
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey ?? at}`, ...(req.headers.get('idempotency-key') ? {'idempotency-key': req.headers.get('idempotency-key')!} : {}) },
     cache: 'no-store',
+    signal: AbortSignal.timeout(25_000),
   };
   if (req.method !== 'GET' && req.method !== 'HEAD') init.body = await req.text();
   try {

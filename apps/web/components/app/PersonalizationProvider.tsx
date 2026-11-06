@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { settingsApi } from '@/lib/settings';
 import { applyPrefs, type Prefs } from '@/lib/personalization';
+import { modoDemo } from '@/lib/demo/flag';
 
 interface Ctx {
   prefs: Prefs;
@@ -27,6 +28,15 @@ export function PersonalizationProvider({ children }: { children: React.ReactNod
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    // O modo demo é uma vitrine AUTOCONTIDA: não consulta o backend.
+    // Sem isto, esta chamada recebe 401 com a API fora do ar, dispara o
+    // encerramento de sessão e o operador nunca consegue ver a interface —
+    // que é justamente o propósito do modo demo.
+    if (modoDemo()) {
+      setReady(true);
+      return;
+    }
+
     settingsApi
       .profile()
       .then((p) => {

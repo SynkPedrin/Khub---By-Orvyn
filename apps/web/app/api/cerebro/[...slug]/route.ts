@@ -1,11 +1,14 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { getDoc } from '@/lib/cerebro';
+import { NAO_AUTENTICADO, sessaoValida } from '@/lib/server-auth';
 
 // Backend: um documento do cérebro. GET /api/cerebro/PRD  ou  /api/cerebro/RAG/RAG
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-export async function GET(_req: Request, { params }: { params: { slug: string[] } }) {
+// Vault interno (PRD, bugs): só com sessão válida (doc 18, B-4).
+export async function GET(req: NextRequest, { params }: { params: { slug: string[] } }) {
+  if (!(await sessaoValida(req.cookies))) return NextResponse.json(NAO_AUTENTICADO, { status: 401, headers: { 'content-type': 'application/problem+json' } });
   const segments = (params.slug ?? []).map((s) => decodeURIComponent(s));
   const doc = getDoc(segments);
   if (!doc) {

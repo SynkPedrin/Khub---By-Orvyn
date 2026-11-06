@@ -15,7 +15,9 @@ export class ApiError extends Error {
   }
 
   get configRequired(): { provider: string; missing: string[] } | null {
-    if (this.status !== 501 || this.body?.code !== 'config_required') return null;
+    // O filtro RFC 7807 publica o marcador em `code` e mantém `status`
+    // numérico. Aceitar também o formato legado sem o filtro.
+    if (this.status !== 501 || (this.body?.code !== 'config_required' && this.body?.status !== 'config_required')) return null;
     return {
       provider: String(this.body.provider ?? 'provedor'),
       missing: Array.isArray(this.body.missing) ? (this.body.missing as string[]) : [],
@@ -25,7 +27,8 @@ export class ApiError extends Error {
 
 /** Nome de exibição do provedor + onde a credencial é obtida. */
 export const PROVIDER_LABEL: Record<string, string> = {
-  stevo: 'STEVO (WhatsApp)',
+  stevo: 'STEVO (WhatsApp, legado)',
+  evolution: 'Evolution API (WhatsApp)',
   meta: 'Meta Ads',
   google_ads: 'Google Ads',
   tiktok: 'TikTok Ads',

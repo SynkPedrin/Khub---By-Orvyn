@@ -111,8 +111,8 @@ export default function TarefasPage() {
       </Card>
 
       {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: 'rgba(20,15,28,0.5)' }} onClick={() => setModal(false)}>
-          <Card className="w-full max-w-md animate-scale-in p-6">
+        <div className="lg-backdrop fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setModal(false)}>
+          <Card className="lg-sheet w-full max-w-md animate-scale-in p-6">
             <form onClick={(e) => e.stopPropagation()} onSubmit={salvar} className="space-y-4">
               <h2 className="text-lg font-bold text-fg">Nova tarefa</h2>
               <Field label="O que precisa ser feito"><Input value={form.titulo} onChange={(e) => setForm({ ...form, titulo: e.target.value })} placeholder="Ligar para o cliente…" autoFocus /></Field>

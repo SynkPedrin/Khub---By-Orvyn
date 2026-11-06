@@ -10,7 +10,6 @@ export async function GET() {
     status: 'ok',
     service: 'orvyn-web',
     backend: 'cerebro-obsidian',
-    cerebroDir: info.dir,
     cerebroExists: info.exists,
     docs: info.exists ? listDocs().length : 0,
     ts: new Date().toISOString(),

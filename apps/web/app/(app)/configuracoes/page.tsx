@@ -9,6 +9,11 @@ import { ACCENTS, otimizarImagem } from '@/lib/personalization';
 import { usePersonalization } from '@/components/app/PersonalizationProvider';
 import { IntegrationsMarketplace } from '@/components/app/IntegrationsMarketplace';
 import { ApiError } from '@/lib/api-error';
+import { useLocale } from '@/lib/locale';
+import { useAuth } from '@/lib/auth';
+import { AccountPreferencesForm } from '@/components/app/AccountPreferencesForm';
+import { EmailDeliveryStatus, type EmailStatus } from '@/components/app/EmailDeliveryStatus';
+import { TagsTab } from '@/components/settings/TagsTab';
 
 type Tab = 'perfil' | 'personalizacao' | 'empresa' | 'equipe' | 'integracoes' | 'tags' | 'chaves' | 'auditoria';
 const TABS: { key: Tab; label: string; icon: IconName; grupo: 'Conta' | 'Avançado' }[] = [
@@ -18,7 +23,7 @@ const TABS: { key: Tab; label: string; icon: IconName; grupo: 'Conta' | 'Avança
   { key: 'equipe', label: 'Equipe & permissões', icon: 'contacts', grupo: 'Conta' },
   { key: 'integracoes', label: 'Integrações', icon: 'marketing', grupo: 'Avançado' },
   { key: 'tags', label: 'Tags', icon: 'sparkles', grupo: 'Avançado' },
-  { key: 'chaves', label: 'Private integrations', icon: 'settings', grupo: 'Avançado' },
+  { key: 'chaves', label: 'Chaves de API', icon: 'settings', grupo: 'Avançado' },
   { key: 'auditoria', label: 'Auditoria', icon: 'knowledge', grupo: 'Avançado' },
 ];
 const GRUPOS = ['Conta', 'Avançado'] as const;
@@ -30,6 +35,9 @@ function Saved({ on }: { on: boolean }) {
 }
 
 export default function ConfiguracoesPage() {
+  const { t: tr } = useLocale();
+  const { user } = useAuth();
+  const admin = ['owner','admin'].includes(user?.role ?? '');
   const [tab, setTab] = useState<Tab>('perfil');
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get('tab') as Tab | null;
@@ -41,13 +49,13 @@ export default function ConfiguracoesPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
       {/* Hero em vidro: legível sobre qualquer fundo (inclusive imagem custom) */}
-      <header className="glass crystal-edge flex items-center gap-4 rounded-[1.6rem] px-6 py-5">
+      <header className="flex items-center gap-4 rounded-[1.6rem] px-6 py-7 text-white" style={{backgroundImage:"linear-gradient(100deg,#241037ee,#4a157daa),url('/Background-login.png')",backgroundSize:'cover'}}>
         <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-white shadow-brand" style={{ background: 'linear-gradient(135deg, var(--brand-bright), var(--brand-deep))' }}>
           <Icon name="settings" size={22} />
         </span>
         <div className="min-w-0">
-          <h1 className="text-2xl font-extrabold tracking-tight text-fg">Configurações</h1>
-          <p className="mt-0.5 text-sm text-muted">Conta, perfil, equipe, integrações e personalização — tudo salvo no seu tenant.</p>
+          <h1 className="text-2xl font-extrabold tracking-tight">{tr('Configurações')}</h1>
+          <p className="mt-1 text-sm text-purple-100">{user?.empresa ?? 'Sua operação'} · Preferências, acessos e integrações.</p>
         </div>
       </header>
 
@@ -56,7 +64,7 @@ export default function ConfiguracoesPage() {
           {GRUPOS.map((g) => (
             <div key={g} className="lg:contents">
               <p className="hidden px-2 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wider text-muted lg:block">{g}</p>
-              {TABS.filter((t) => t.grupo === g).map((t) => {
+              {TABS.filter((item) => item.grupo === g && (admin || ['perfil','personalizacao'].includes(item.key))).map((t) => {
                 const on = tab === t.key;
                 return (
                   <button
@@ -65,7 +73,7 @@ export default function ConfiguracoesPage() {
                     className={cx('flex shrink-0 items-center gap-2.5 rounded-2xl px-3 py-2.5 text-sm transition-all', on ? 'font-bold text-white shadow-brand' : 'font-medium text-fg hover:bg-white/40 dark:hover:bg-white/10')}
                     style={on ? { background: 'linear-gradient(135deg, var(--brand-bright), var(--brand-deep))' } : undefined}
                   >
-                    <Icon name={t.icon} size={18} className={on ? 'text-white' : 'text-muted'} /> {t.label}
+                    <Icon name={t.icon} size={18} className={on ? 'text-white' : 'text-muted'} /> {tr(t.label)}
                   </button>
                 );
               })}
@@ -93,10 +101,14 @@ export default function ConfiguracoesPage() {
 }
 
 function PerfilTab() {
+  const {t,reload}=useLocale();
+  const {refreshMe}=useAuth();
+  const [erro,setErro]=useState('');
+  const [busy,setBusy]=useState(false);
   const [p, setP] = useState<Profile | null>(null);
   const [saved, setSaved] = useState(false);
   useEffect(() => { settingsApi.profile().then(setP).catch(() => undefined); }, []);
-  const save = async () => { if (!p) return; await settingsApi.updateProfile({ nome: p.nome, idioma: p.idioma }); setSaved(true); setTimeout(() => setSaved(false), 2000); };
+  const save = async () => { if (!p) return; setBusy(true);setErro('');try{await settingsApi.updateProfile({ nome: p.nome, idioma: p.idioma }); reload();await refreshMe();setSaved(true);}catch(e){setErro(e instanceof Error?e.message:'Não foi possível salvar.');}finally{setBusy(false);} };
   if (!p) return <Card className="p-6 text-sm text-muted">Carregando…</Card>;
   return (
     <Card className="p-6">
@@ -111,7 +123,7 @@ function PerfilTab() {
           <select className="input" value={p.idioma} onChange={(e) => setP({ ...p, idioma: e.target.value })}>{IDIOMAS.map((i) => <option key={i}>{i}</option>)}</select>
         </Field>
       </div>
-      <div className="mt-5 flex items-center"><Button onClick={save}>Salvar perfil</Button><Saved on={saved} /></div>
+      <div className="mt-5 flex items-center"><Button onClick={save} disabled={busy}>{t(busy?'Salvando…':'Salvar perfil')}</Button>{erro&&<p role="alert" className="ml-3 text-sm text-red-600">{erro}</p>}<Saved on={saved} /></div>
     </Card>
   );
 }
@@ -230,55 +242,43 @@ function PersonalizacaoTab() {
 }
 
 function EmpresaTab() {
-  const [b, setB] = useState<Business | null>(null);
-  const [saved, setSaved] = useState(false);
-  useEffect(() => { settingsApi.business().then(setB).catch(() => undefined); }, []);
-  const save = async () => { if (!b) return; await settingsApi.updateBusiness({ nome: b.nome, endereco: b.endereco ?? '', telefone: b.telefone ?? '', website: b.website ?? '', idioma: b.idioma, nicho: b.nicho ?? '' }); setSaved(true); setTimeout(() => setSaved(false), 2000); };
-  if (!b) return <Card className="p-6 text-sm text-muted">Carregando…</Card>;
-  return (
-    <Card className="p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="font-bold text-fg">Perfil da empresa</h2>
-        <Badge tone="neutral">plano {b.plano}</Badge>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Nome da empresa"><Input value={b.nome} onChange={(e) => setB({ ...b, nome: e.target.value })} /></Field>
-        <Field label="Telefone"><Input value={b.telefone ?? ''} onChange={(e) => setB({ ...b, telefone: e.target.value })} placeholder="+55…" /></Field>
-        <Field label="Endereço"><Input value={b.endereco ?? ''} onChange={(e) => setB({ ...b, endereco: e.target.value })} placeholder="Rua, nº, cidade" /></Field>
-        <Field label="Website"><Input value={b.website ?? ''} onChange={(e) => setB({ ...b, website: e.target.value })} placeholder="https://" /></Field>
-        <Field label="Idioma"><select className="input" value={b.idioma} onChange={(e) => setB({ ...b, idioma: e.target.value })}>{IDIOMAS.map((i) => <option key={i}>{i}</option>)}</select></Field>
-        <Field label="Nicho"><Input value={b.nicho ?? ''} onChange={(e) => setB({ ...b, nicho: e.target.value })} placeholder="medico, juridico…" /></Field>
-      </div>
-      <div className="mt-5 flex items-center"><Button onClick={save}>Salvar empresa</Button><Saved on={saved} /></div>
-    </Card>
-  );
+ const [b,setB]=useState<Business|null>(null);const [error,setError]=useState('');const {refreshMe}=useAuth();
+ useEffect(()=>{settingsApi.business().then(setB).catch(e=>setError(e.message));},[]);
+ if(error)return <p role="alert" className="text-red-600">{error}</p>;
+ if(!b)return <p>Carregando configurações…</p>;
+ return <AccountPreferencesForm name={b.nome} preferences={{...b.settings,phone:b.telefone??'',website:b.website??'',address:b.endereco??'',locale:b.idioma}} onSave={async(nome,p)=>{await settingsApi.updateBusiness({nome,telefone:p.phone??'',website:p.website??'',endereco:p.address??'',idioma:p.locale??'pt-BR',settings:p});await refreshMe();}}/>;
 }
 
 function EquipeTab() {
+  const [busy,setBusy]=useState(false);
+  const [emailStatus,setEmailStatus]=useState<EmailStatus|null>(null);
+  useEffect(()=>{settingsApi.emailStatus().then(setEmailStatus).catch(()=>{});},[]);
   const [data, setData] = useState<{ members: Member[]; invites: Invite[] } | null>(null);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('member');
   const [link, setLink] = useState('');
   const [msg, setMsg] = useState('');
-  const load = () => settingsApi.members().then(setData).catch(() => undefined);
+  const load = () => settingsApi.members().then(setData).catch(e=>setMsg(e.message));
   useEffect(() => { load(); }, []);
 
   const invite = async () => {
     if (!email) return;
-    const r = await settingsApi.invite(email, role);
+    setBusy(true);setMsg('');setLink('');
+    try { const r = await settingsApi.invite(email, role);
     setLink(r.acceptUrl);
-    setMsg(r.emailSent ? 'Convite enviado por e-mail.' : 'Convite criado. Copie o link (envio por e-mail requer configurar SMTP/Gmail OAuth2).');
+    setMsg(r.emailSent ? 'Convite enviado por e-mail.' : r.erro ?? 'Convite criado. Defina o remetente no Resend para enviar por e-mail ou compartilhe o link.');
     setEmail(''); load();
+    }catch(e){setMsg(e instanceof Error?e.message:'Não foi possível criar o convite.');}finally{setBusy(false);}
   };
 
   return (
     <div className="space-y-5">
       <Card className="p-6">
-        <h2 className="mb-3 font-bold text-fg">Convidar usuário</h2>
+        <h2 className="mb-3 font-bold text-fg">Convidar usuário</h2><div className="mb-4"><EmailDeliveryStatus status={emailStatus}/></div>
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-[220px] flex-1"><Field label="E-mail"><Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="pessoa@empresa.com" /></Field></div>
           <Field label="Papel"><select className="input" value={role} onChange={(e) => setRole(e.target.value)}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select></Field>
-          <Button onClick={invite}><Icon name="plus" size={16} /> Convidar</Button>
+          <Button onClick={invite} disabled={busy||!email.trim()}><Icon name="plus" size={16} /> Convidar</Button>
         </div>
         {msg && <p className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">{msg}</p>}
         {link && (
@@ -297,7 +297,7 @@ function EquipeTab() {
               <tr key={m.identityId} className="border-b border-line last:border-0">
                 <td className="px-5 py-3"><div className="flex items-center gap-3"><Avatar name={m.nome ?? m.email} size={34} /><div><p className="font-semibold text-fg">{m.nome ?? '—'}</p><p className="text-xs text-muted">{m.email}</p></div></div></td>
                 <td className="px-5 py-3 text-right">
-                  <select className="input w-32" value={m.role} onChange={async (e) => { await settingsApi.changeRole(m.identityId, e.target.value); load(); }}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select>
+                  <select className="input w-32" value={m.role} onChange={async (e) => { try{await settingsApi.changeRole(m.identityId, e.target.value); load();}catch(e){setMsg(e instanceof Error?e.message:'Não foi possível alterar.');} }}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select>
                 </td>
               </tr>
             ))}
@@ -312,7 +312,7 @@ function EquipeTab() {
           {data?.invites.map((i) => (
             <div key={i.id} className="flex items-center justify-between border-b border-line px-5 py-3 last:border-0 text-sm">
               <div><p className="font-semibold text-fg">{i.email}</p><p className="text-xs text-muted">papel {i.role} · expira {new Date(i.expiresAt).toLocaleDateString('pt-BR')}</p></div>
-              <button onClick={async () => { await settingsApi.revokeInvite(i.id); load(); }} className="text-xs font-semibold text-red-600 dark:text-red-400">Revogar</button>
+              <button onClick={async () => { try{await settingsApi.revokeInvite(i.id); load();}catch(e){setMsg(e instanceof Error?e.message:'Não foi possível revogar.');} }} className="text-xs font-semibold text-red-600 dark:text-red-400">Revogar</button>
             </div>
           ))}
         </Card>
@@ -321,101 +321,40 @@ function EquipeTab() {
   );
 }
 
-const CORES_TAG = ['#7B2EFF', '#A855F7', '#C084FC', '#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#EC4899', '#14B8A6', '#64748B'];
-
-function TagsTab() {
-  const [tags, setTags] = useState<Tag[] | null>(null);
-  const [nome, setNome] = useState('');
-  const [cor, setCor] = useState(CORES_TAG[0]);
-  const [erro, setErro] = useState('');
-  const [busy, setBusy] = useState(false);
-  const load = () => settingsApi.tags().then(setTags).catch(() => setTags([]));
-  useEffect(() => { load(); }, []);
-
-  const criar = async () => {
-    if (!nome.trim()) return;
-    setErro(''); setBusy(true);
-    try {
-      await settingsApi.createTag({ name: nome.trim(), color: cor });
-      setNome(''); setCor(CORES_TAG[0]); load();
-    } catch (e) {
-      setErro(e instanceof ApiError ? (e.body?.detail as string) ?? 'Não consegui criar a tag.' : 'Não consegui criar a tag.');
-    } finally { setBusy(false); }
-  };
-  const remover = async (id: string) => { await settingsApi.deleteTag(id).catch(() => undefined); load(); };
-
-  return (
-    <div className="space-y-5">
-      <Card className="p-6">
-        <h2 className="font-bold text-fg">Nova tag</h2>
-        <p className="text-xs text-muted">Tags organizam contatos e disparam automações (gatilho “tag adicionada”).</p>
-        <div className="mt-4 flex flex-wrap items-end gap-3">
-          <div className="min-w-[200px] flex-1"><Field label="Nome"><Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="cliente-vip" onKeyDown={(e) => { if (e.key === 'Enter') criar(); }} /></Field></div>
-          <div>
-            <p className="mb-1 text-xs font-semibold text-muted">Cor</p>
-            <div className="flex flex-wrap gap-1.5">
-              {CORES_TAG.map((c) => (
-                <button key={c} onClick={() => setCor(c)} className={cx('h-7 w-7 rounded-full transition-transform', cor === c ? 'ring-2 ring-offset-2 ring-offset-surface' : 'hover:scale-110')} style={{ background: c, boxShadow: cor === c ? `0 0 0 2px ${c}` : undefined }} aria-label={c} />
-              ))}
-            </div>
-          </div>
-          <Button onClick={criar} disabled={busy}><Icon name="plus" size={16} /> Criar tag</Button>
-        </div>
-        {erro && <p className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">{erro}</p>}
-      </Card>
-
-      <Card className="overflow-hidden p-0">
-        <div className="border-b border-line px-5 py-3"><h2 className="font-bold text-fg">Tags do CRM</h2></div>
-        <div className="divide-y divide-line">
-          {tags?.map((t) => (
-            <div key={t.id} className="flex items-center gap-3 px-5 py-3">
-              <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold text-white" style={{ background: t.color }}>
-                {t.name}
-              </span>
-              {t.descricao && <span className="truncate text-xs text-muted">{t.descricao}</span>}
-              <span className="ml-auto text-xs text-muted">{t.usos} uso(s)</span>
-              <button onClick={() => remover(t.id)} className="rounded-lg p-1.5 text-muted hover:bg-surface2 hover:text-red-500" aria-label="Excluir"><Icon name="close" size={14} /></button>
-            </div>
-          ))}
-          {tags && tags.length === 0 && <p className="px-5 py-8 text-center text-sm text-muted">Nenhuma tag ainda. Crie a primeira acima.</p>}
-          {!tags && <p className="px-5 py-8 text-center text-sm text-muted">Carregando…</p>}
-        </div>
-      </Card>
-    </div>
-  );
-}
-
 function ApiKeysTab() {
+  const [erro,setErro]=useState('');
+  const [scopes,setScopes]=useState<string[]>(['contacts.read']);
+  const allowedScopes = [['contacts.read','Ler contatos'],['contacts.write','Criar e editar contatos'],['pipeline.read','Ler pipeline'],['pipeline.write','Gerenciar oportunidades'],['conversations.read','Ler conversas'],['conversations.reply','Responder conversas'],['automations.read','Ler automações'],['automations.write','Gerenciar automações'],['integrations.manage','Gerenciar integrações']];
   const [keys, setKeys] = useState<ApiKey[] | null>(null);
   const [nome, setNome] = useState('');
   const [criada, setCriada] = useState<ApiKeyCreated | null>(null);
   const [copiado, setCopiado] = useState(false);
   const [busy, setBusy] = useState(false);
-  const load = () => settingsApi.apiKeys().then(setKeys).catch(() => setKeys([]));
+  const load = () => settingsApi.apiKeys().then(setKeys).catch(e=>setErro(e.message));
   useEffect(() => { load(); }, []);
 
   const criar = async () => {
     if (!nome.trim()) return;
     setBusy(true);
-    try { const k = await settingsApi.createApiKey(nome.trim()); setCriada(k); setNome(''); load(); }
-    catch { /* noop */ } finally { setBusy(false); }
+    try { const k = await settingsApi.createApiKey(nome.trim(),scopes); setCriada(k); setNome(''); load(); }
+    catch(e) { setErro(e instanceof Error?e.message:'Não foi possível gerar a chave.'); } finally { setBusy(false); }
   };
-  const revogar = async (id: string) => { await settingsApi.revokeApiKey(id).catch(() => undefined); load(); };
-  const copiar = async () => { if (!criada) return; await navigator.clipboard.writeText(criada.key).catch(() => undefined); setCopiado(true); setTimeout(() => setCopiado(false), 2000); };
+  const revogar = async (id: string) => { try{await settingsApi.revokeApiKey(id);if(criada?.id===id)setCriada(null);load();}catch(e){setErro(e instanceof Error?e.message:'Não foi possível revogar.');} };
+  const copiar = async () => { if (!criada) return; try{await navigator.clipboard.writeText(criada.key);setCopiado(true);}catch{setErro('Selecione e copie a chave manualmente.');} setTimeout(() => setCopiado(false), 2000); };
 
   const baseUrl = typeof window !== 'undefined' ? `${window.location.origin}/api/v1` : '/api/v1';
 
   return (
     <div className="space-y-5">
       <Card className="p-6">
-        <h2 className="font-bold text-fg">Private integrations</h2>
+        <h2 className="font-bold text-fg">Chaves de API</h2>
         <p className="mt-1 text-sm text-muted">
-          Crie uma chave de API para um sistema externo chamar o Orvyn no lugar do seu tenant. A chave carrega as permissões do seu tenant — trate como senha.
+          Crie uma chave de API para um sistema externo chamar o Orvyn no lugar do seu tenant. Cada chave acessa apenas esta empresa e as permissões selecionadas abaixo.
         </p>
         <div className="mt-4 rounded-xl border border-line bg-surface2 p-3 text-xs">
           <p className="font-semibold text-fg">Como usar</p>
           <p className="mt-1 text-muted">Envie a chave no header <code className="rounded bg-surface3 px-1 py-0.5 font-mono">X-API-Key</code> (ou <code className="rounded bg-surface3 px-1 py-0.5 font-mono">Authorization: Bearer</code>) em cada request.</p>
-          <pre className="mt-2 overflow-x-auto rounded-lg bg-fg/90 p-3 font-mono text-[11px] leading-relaxed text-white scrollbar-thin">{`curl ${baseUrl}/contatos \\
+          <pre className="mt-2 overflow-x-auto rounded-lg bg-fg/90 p-3 font-mono text-[11px] leading-relaxed text-white scrollbar-thin">{`curl ${baseUrl}/crm/contacts \\
   -H "X-API-Key: orv_live_..."`}</pre>
         </div>
         <div className="mt-4 flex flex-wrap items-end gap-3">
@@ -429,7 +368,7 @@ function ApiKeysTab() {
           <div className="flex items-center gap-2"><Icon name="check" size={18} className="text-emerald-500" /><h2 className="font-bold text-fg">Chave “{criada.name}” criada</h2></div>
           <p className="mt-1 text-xs font-semibold text-amber-600 dark:text-amber-400">Copie agora — ela não será mostrada de novo.</p>
           <div className="mt-3 flex items-center gap-2 rounded-lg border border-line bg-surface2 px-3 py-2">
-            <code className="min-w-0 flex-1 truncate font-mono text-sm text-fg">{criada.key}</code>
+            <code className="min-w-0 flex-1 select-all break-all font-mono text-sm text-fg">{criada.key}</code>
             <Button variant="ghost" onClick={copiar} className="shrink-0 text-xs">{copiado ? '✓ copiado' : 'Copiar'}</Button>
           </div>
           <button onClick={() => setCriada(null)} className="mt-3 text-xs font-semibold text-muted hover:text-fg">Já copiei, fechar</button>

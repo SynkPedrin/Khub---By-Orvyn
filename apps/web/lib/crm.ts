@@ -1,28 +1,24 @@
 'use client';
 
-import { ApiError } from './api-error';
+import { clienteApi } from './session-fetch';
 
 export function brl(v: number): string {
   return (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 }
 
-async function req<T>(path: string, opts?: RequestInit): Promise<T> {
-  const call = () => fetch(`/api/crm/${path}`, { headers: { 'content-type': 'application/json' }, ...opts });
-  let r = await call();
-  if (r.status === 401) {
-    // access expirou → tenta refresh silencioso e repete 1x
-    const rf = await fetch('/api/auth/refresh', { method: 'POST' });
-    if (rf.ok) r = await call();
-    else if (typeof window !== 'undefined') window.location.href = '/login';
-  }
-  if (!r.ok) throw new ApiError(r.status, await r.json().catch(() => ({})));
-  return r.json();
-}
+/**
+ * Cliente autenticado deste módulo.
+ *
+ * A lógica de 401 → renovar → repetir → encerrar sessão vive em
+ * `session-fetch.ts`. Ela estava copiada em dez arquivos e cada cópia
+ * carregava o mesmo loop de redirecionamento infinito.
+ */
+const req = clienteApi('/api/crm/');
 
 export interface Overview {
   kpis: { contatos: number; negocios: number; valorFunil: number; ganho: number; conversao: number };
   funil: { id: string; nome: string; cor: string; total: number; valor: number }[];
-  atividades: { actor: string; acao: string; tone: string }[];
+  atividades: { actor: string; acao: string; tone: string; createdAt: string }[];
   contatosRecentes: { id: string; nome: string; tag: string; valor: number }[];
 }
 export interface PipelineData {
@@ -69,16 +65,24 @@ export interface Empresa360 {
   negocios: { id: string; titulo: string; valor: number; status: string; stage: string; cor: string; contato: string | null }[];
   valorAberto: number; tarefas: Tarefa[]; notas: Nota[];
 }
+export type Atendimento = 'ia' | 'humano';
 export interface Conversa {
   id: string; nome: string; canal: string; ultimaPrevia: string | null; naoLidas: number; ultimaHora: string | null;
-  mensagens: { id: string; de: string; texto: string; hora: string | null }[];
+  /** Quem responde agora (ADR-0030). */
+  atendimento: Atendimento;
+  agentId: string | null;
+  assigneeId: string | null;
+  handoffMotivo: string | null;
+  mensagens: { id: string; de: string; texto: string; hora: string | null; agentId?: string | null }[];
 }
+export interface EstadoAtendimento { id: string; atendimento: Atendimento; agentId: string | null; assigneeId: string | null; handoffMotivo: string | null }
+export interface Atendente { identityId: string; nome: string; email: string; role: string; abertas: number }
 
 /** A mensagem SEMPRE persiste; só a entrega externa pode ficar pendente (ADR-0008). */
 export interface SendResult {
   id: string;
   hora: string;
-  status: 'sent' | 'failed' | 'sem_telefone' | 'config_required';
+  status: 'sent' | 'failed' | 'sem_telefone' | 'config_required' | 'unknown' | 'pending' | 'cancelled';
   erro: string | null;
   missing?: string[];
 }
@@ -138,6 +142,9 @@ export const crm = {
 
   // ---- Inbox ----
   conversations: () => req<Conversa[]>('conversations'),
-  sendMessage: (conversationId: string, texto: string) =>
-    req<SendResult>(`conversations/${conversationId}/messages`, { method: 'POST', body: JSON.stringify({ texto }) }),
+  atendentes: () => req<Atendente[]>('atendentes'),
+  mudarAtendimento: (id: string, body: { acao: 'assumir' | 'devolver_ia' | 'atribuir'; agentId?: string; assigneeId?: string }) =>
+    req<EstadoAtendimento>(`conversations/${id}/atendimento`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+  sendMessage: (conversationId: string, texto: string, key: string = crypto.randomUUID()) =>
+    req<SendResult>(`conversations/${conversationId}/messages`, { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': key }, body: JSON.stringify({ texto }) }),
 };

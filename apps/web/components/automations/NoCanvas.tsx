@@ -104,7 +104,7 @@ export const NoCanvas = memo(({ data, selected }: NodeProps<DadosNo>) => {
         </p>
       )}
 
-      {/* Condição: uma saída por ramo, rotulada — igual às telas do GHL */}
+      {/* Condição: uma saída por ramo, rotulada */}
       {ramos.length > 0 ? (
         <div className="border-t border-line">
           {ramos.map((r, i) => (

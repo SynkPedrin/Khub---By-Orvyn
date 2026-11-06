@@ -28,7 +28,7 @@ const REENTRADA: { valor: ConfigWorkflow['reentrada']; titulo: string; desc: str
   { valor: 'sempre', titulo: 'Toda vez', desc: 'Entra sempre que o gatilho disparar. Cuidado: pode repetir mensagem.' },
 ];
 
-/** Configurações do fluxo (fora do canvas, como no GHL). */
+/** Configurações do fluxo (fora do canvas). */
 export function PainelConfig({ config, webhookUrl, temGatilhoWebhook, onSalvar, onGerarWebhook, onFechar }: Props) {
   const [c, setC] = useState(config);
   const [salvando, setSalvando] = useState(false);

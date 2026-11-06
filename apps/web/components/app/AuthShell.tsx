@@ -1,55 +1,168 @@
 import Image from 'next/image';
 import type { ReactNode } from 'react';
+import { OrvynBrandMotion } from '@/components/brand/OrvynBrandMotion';
+import { Icon } from '@/components/icons';
 
-export function AuthShell({ children }: { children: ReactNode }) {
+const BENEFICIOS: Array<{ icon: 'zap' | 'sparkles' | 'chat'; texto: string }> = [
+  { icon: 'zap', texto: 'Pipeline e automações prontas para operar' },
+  { icon: 'sparkles', texto: 'A IA ORVYN qualifica e prioriza seus leads' },
+  { icon: 'chat', texto: 'WhatsApp e multicanais no mesmo lugar' },
+];
+
+function LogoMark({ light = false }: { light?: boolean }) {
   return (
-    <div className="grid min-h-screen lg:grid-cols-2">
-      {/* Painel de marca com imagem de fundo */}
-      <div className="brand-mesh relative hidden flex-col justify-between overflow-hidden p-12 text-white lg:flex">
-        {/* imagem (coloque apps/web/public/Background-login.png) */}
-        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/Background-login.png')" }} aria-hidden />
-        {/* overlay: escurece o fundo (texto/logo mais visíveis) + gradiente para PRETO na divisa (direita) e no rodapé */}
-        <div
-          className="absolute inset-0"
-          aria-hidden
-          style={{
-            background:
-              'linear-gradient(180deg, rgba(20,8,38,0.30) 0%, rgba(18,7,34,0.52) 60%, rgba(14,5,28,0.82) 100%),' +
-              'linear-gradient(90deg, transparent 55%, rgba(43,12,74,0.85) 82%, rgba(26,7,48,0.96) 100%)',
-          }}
+    <div className="flex items-center gap-2.5">
+      <Image src="/logo.png" alt="" width={34} height={34} unoptimized className="rounded-lg" priority />
+      <span className="flex flex-col gap-0.5">
+        <span className={`text-[14px] font-bold leading-none tracking-[0.2em] ${light ? 'text-white' : 'text-fg'}`}>ORVYN</span>
+        <span className={`text-[9px] font-medium leading-none tracking-[0.26em] ${light ? 'text-white/75' : 'text-muted'}`}>Revenue OS</span>
+      </span>
+    </div>
+  );
+}
+
+export function AuthShell({
+  children,
+  headlineLines = ['Transforme', 'operação em'],
+  headlineAccent = 'receita.',
+  supportingCopy = 'Leads, conversas, automações e inteligência trabalhando no mesmo sistema.',
+}: {
+  children: ReactNode;
+  /** Cada string vira sua própria linha — a referência quebra em pontos
+   * específicos para dar peso, não deixa o navegador decidir sozinho. */
+  headlineLines?: string[];
+  /** Última linha, em destaque (degradê violeta). */
+  headlineAccent?: string;
+  supportingCopy?: string;
+}) {
+  return (
+    <div className="grid min-h-screen grid-cols-1 lg:h-screen lg:grid-cols-[52fr_48fr]">
+      {/* ESQUERDA — vídeo real, painel estrutural (não é fundo da tela
+          inteira: ocupa 52% no desktop, e vira uma faixa curta no mobile). */}
+      <div className="relative h-[32vh] overflow-hidden lg:h-full lg:border-r lg:border-[rgba(20,20,30,0.06)]">
+        <OrvynBrandMotion
+          poster="/Background-login.png"
+          eager
+          overlay={
+            <>
+              {/* Tratamento cinematográfico composto — não é uma opacity
+                  simples: escurece mais à esquerda (onde mora o texto) e
+                  dissolve pra quase transparente perto da divisa com o
+                  painel off-white, preservando o detalhe do cristal. */}
+              <div
+                className="pointer-events-none absolute inset-0"
+                aria-hidden
+                style={{ background: 'linear-gradient(90deg, rgba(11,4,20,.66) 0%, rgba(20,6,35,.45) 50%, rgba(20,6,35,.18) 100%)' }}
+              />
+              <div
+                className="pointer-events-none absolute inset-0"
+                aria-hidden
+                style={{ background: 'linear-gradient(180deg, rgba(6,3,12,.15) 0%, rgba(6,3,12,.05) 55%, rgba(6,3,12,.40) 100%)' }}
+              />
+            </>
+          }
         />
 
-        <div className="relative z-10 flex items-center gap-3">
-          <Image src="/logo.png" alt="ORVYN OS" width={88} height={88} unoptimized className="rounded-xl drop-shadow-[0_4px_16px_rgba(0,0,0,0.6)]" priority />
-          <span className="text-3xl font-extrabold tracking-tight drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]">ORVYN <span className="text-white/85">OS</span></span>
+        {/* Logo — compacta no mobile (faixa de 32vh), tamanho pleno no
+            desktop, na posição pedida. */}
+        <div className="absolute left-5 top-5 z-10 lg:hidden">
+          <LogoMark light />
+        </div>
+        <div className="absolute z-10 hidden lg:block" style={{ left: 'clamp(40px, 4vw, 72px)', top: 48 }}>
+          <LogoMark light />
         </div>
 
-        <div className="relative z-10 max-w-md [text-shadow:0_2px_18px_rgba(0,0,0,0.55)]">
-          <h1 className="text-4xl font-extrabold leading-tight tracking-tight">O CRM que já nasce pronto para o seu negócio.</h1>
-          <p className="mt-4 text-lg text-white/90">Configurado, automatizado e operado por uma IA que entende do seu mercado.</p>
-          <div className="mt-8 space-y-3">
-            {['Pipelines e automações prontos por nicho', 'Nyro IA qualifica e atende seus leads', 'Integra WhatsApp, Meta, Google e Stripe'].map((t) => (
-              <div key={t} className="flex items-center gap-3 text-white">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/25 backdrop-blur">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 5 5L20 7" /></svg>
+        {/* Conteúdo do hero — só desktop; no mobile a faixa de vídeo é curta
+            demais pra caber headline/benefícios sem espremer. */}
+        <div
+          className="absolute inset-x-0 hidden lg:block"
+          style={{ top: '55%', transform: 'translateY(-50%)', paddingLeft: 'clamp(40px, 4vw, 72px)', paddingRight: 'clamp(40px, 4vw, 72px)' }}
+        >
+          <div style={{ maxWidth: 580 }}>
+            <h1
+              style={{
+                fontSize: 'clamp(52px, 4.2vw, 76px)',
+                lineHeight: 0.96,
+                fontWeight: 700,
+                letterSpacing: '-0.045em',
+                color: '#F8F6F2',
+                textShadow: '0 2px 14px rgba(0,0,0,.22)',
+              }}
+            >
+              {headlineLines.map((linha) => (
+                <span key={linha} className="block">
+                  {linha}
                 </span>
-                {t}
-              </div>
-            ))}
+              ))}
+              <span
+                className="block"
+                style={{ background: 'linear-gradient(135deg, #C3A2FF, #8B4CFF)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}
+              >
+                {headlineAccent}
+              </span>
+            </h1>
+
+            <p style={{ marginTop: 24, maxWidth: 480, fontSize: 17, lineHeight: 1.5, color: 'rgba(255,255,255,.74)' }}>{supportingCopy}</p>
+
+            <div style={{ marginTop: 32 }} className="space-y-4">
+              {BENEFICIOS.map((b) => (
+                <div key={b.texto} className="flex items-center gap-3.5">
+                  <span
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full backdrop-blur-[8px]"
+                    style={{ background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.11)' }}
+                  >
+                    <Icon name={b.icon} size={14} style={{ color: 'rgba(255,255,255,.85)' }} />
+                  </span>
+                  <span style={{ fontSize: 14.5, color: 'rgba(255,255,255,.82)' }}>{b.texto}</span>
+                </div>
+              ))}
+            </div>
+
+            <div
+              className="flex items-center gap-2.5"
+              style={{ marginTop: 28, fontSize: 10.5, letterSpacing: '.14em', textTransform: 'uppercase', color: '#F8F6F2', opacity: 0.5 }}
+            >
+              <span>Mais conversas</span>
+              <span>·</span>
+              <span>Mais oportunidades</span>
+              <span>·</span>
+              <span>Mais receita</span>
+            </div>
           </div>
         </div>
 
-        <p className="relative z-10 text-sm text-white/75 [text-shadow:0_1px_8px_rgba(0,0,0,0.6)]">Powered by Nyro IA · © 2026 ORVYN OS</p>
+        {/* Rodapé — só desktop */}
+        <div className="absolute hidden lg:block" style={{ left: 'clamp(40px, 4vw, 72px)', bottom: 40 }}>
+          <p style={{ fontSize: 12, lineHeight: 1.5, color: 'rgba(255,255,255,.5)' }}>
+            Sistema para um crescimento real.
+            <br />© 2026 ORVYN
+          </p>
+        </div>
       </div>
 
-      {/* Formulário */}
-      <div className="flex items-center justify-center bg-bg px-5 py-10">
-        <div className="w-full max-w-sm animate-fade-in">
-          <div className="mb-8 flex items-center gap-2.5 lg:hidden">
-            <Image src="/logo.png" alt="ORVYN OS" width={72} height={72} unoptimized className="rounded-lg" />
-            <span className="text-xl font-extrabold tracking-tight text-fg">ORVYN <span className="text-brand">OS</span></span>
+      {/* DIREITA — superfície off-white, sem vídeo por trás. */}
+      <div className="relative flex items-center justify-center overflow-hidden bg-[#F8F6F2] px-6 py-10 lg:px-10">
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-hidden
+          style={{ background: 'radial-gradient(circle at 50% 38%, rgba(123,46,255,.045), transparent 42%)' }}
+        />
+
+        <div className="relative w-full animate-auth-in" style={{ maxWidth: 'min(440px, calc(100% - 80px))' }}>
+          <div className="auth-card relative">
+            <div
+              className="absolute flex h-9 w-9 items-center justify-center rounded-xl"
+              style={{ right: 22, top: 22, background: 'rgba(123,46,255,.05)', border: '1px solid rgba(123,46,255,.08)' }}
+            >
+              <Image src="/logo.png" alt="" width={20} height={20} unoptimized className="rounded-[5px] opacity-90" />
+            </div>
+            {children}
           </div>
-          {children}
+
+          <p className="mt-5 flex items-center justify-center gap-1.5 text-center text-xs text-muted">
+            <Icon name="lock" size={13} />
+            Seus dados permanecem protegidos.
+          </p>
         </div>
       </div>
     </div>

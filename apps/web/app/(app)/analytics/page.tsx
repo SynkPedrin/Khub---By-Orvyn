@@ -1,118 +1,404 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, cx } from '@/components/ui';
-import { Icon } from '@/components/icons';
+import Link from 'next/link';
+import { Icon, type IconName } from '@/components/icons';
+import { Avatar } from '@/components/ui';
+import { PageShell, PageHeader, KpiGrid, Section } from '@/components/revenue/Page';
+import { KpiCard } from '@/components/revenue/Kpi';
+import { SeloDemo } from '@/components/revenue/SeloDemo';
+import { EmptyState } from '@/components/revenue/States';
+import {
+  AreaReceita,
+  BarrasAgrupadas,
+  BarrasHorizontais,
+  BarrasVerticais,
+  Funil,
+  Rosca,
+} from '@/components/revenue/charts';
+import { duracao, moeda, percentual } from '@/lib/format';
+import { modoDemo } from '@/lib/demo/flag';
 import { analytics, type AiUsage, type AutomacoesStats } from '@/lib/analytics';
+import {
+  ANALYTICS_KPIS,
+  FUNIL_CONVERSAO,
+  INSIGHTS_ANALYTICS,
+  LEADS_POR_STATUS,
+  META_VS_REALIZADO,
+  RECEITA_30D,
+  RECEITA_POR_CANAL,
+  RELATORIOS_RAPIDOS,
+  TEMPO_RESPOSTA_EQUIPE,
+} from '@/lib/demo/dataset';
 
-const usd = (v: number) => `$${(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const num = (v: number) => (v || 0).toLocaleString('pt-BR');
-const PERIODOS = [7, 30, 90];
-
+/**
+ * ANALYTICS — o que aconteceu e por quê.
+ *
+ * Seis KPIs no topo, widgets de diagnóstico no corpo, e os insights da IA
+ * num painel SEPARADO à direita — separação deliberada: número medido e
+ * interpretação de modelo não podem se misturar na mesma superfície, senão
+ * o leitor não distingue fato de opinião.
+ */
 export default function AnalyticsPage() {
-  const [dias, setDias] = useState(30);
-  const [ia, setIa] = useState<AiUsage | null>(null);
-  const [auto, setAuto] = useState<AutomacoesStats | null>(null);
-
-  useEffect(() => {
-    setIa(null); setAuto(null);
-    analytics.aiUsage(dias).then(setIa).catch(() => setIa(null));
-    analytics.automacoes(dias).then(setAuto).catch(() => setAuto(null));
-  }, [dias]);
-
-  const maxDia = Math.max(1, ...(ia?.porDia.map((d) => d.custo) ?? [0]));
+  const demo = modoDemo();
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-fg">Análises</h1>
-          <p className="mt-1 text-sm text-muted">Custo de IA da Nyro e desempenho das automações — dados reais do seu tenant.</p>
-        </div>
-        <div className="flex gap-1">
-          {PERIODOS.map((p) => (
-            <button key={p} onClick={() => setDias(p)} className={cx('rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors', dias === p ? 'bg-brand text-white shadow-brand' : 'border border-line text-fg hover:bg-surface2')}>
-              {p}d
+    <PageShell>
+      <PageHeader
+        title="Analytics e Relatórios"
+        subtitle="Dados que impulsionam um crescimento previsível."
+        actions={
+          <>
+            <SeloDemo />
+            <button type="button" className="btn">
+              <Icon name="calendar" size={15} />
+              Últimos 30 dias
+              <Icon name="chevronDown" size={14} />
             </button>
-          ))}
-        </div>
+            <button type="button" className="btn">
+              <Icon name="filter" size={15} />
+              Todos os Canais
+              <Icon name="chevronDown" size={14} />
+            </button>
+          </>
+        }
+      />
+
+      {demo ? <AnalyticsComDados /> : <AnalyticsReal />}
+    </PageShell>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+/**
+ * Analytics REAL — só existem dois indicadores medidos hoje no backend
+ * (custo/uso de IA e performance de automações; `AnalyticsService`). Os
+ * demais widgets do modo demo (CAC, ROI, receita por canal, funil, meta vs.
+ * realizado, comparecimento, "insights da IA") não têm fonte de dado real
+ * ainda — não fabricamos número pra preencher espaço. Quando o backend
+ * ganhar essas métricas, este componente cresce; até lá, honesto > completo.
+ */
+function AnalyticsReal() {
+  const [ai, setAi] = useState<AiUsage | null>(null);
+  const [auto, setAuto] = useState<AutomacoesStats | null>(null);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState(false);
+
+  useEffect(() => {
+    let vivo = true;
+    setCarregando(true);
+    setErro(false);
+    Promise.all([analytics.aiUsage(30), analytics.automacoes(30)])
+      .then(([a, w]) => {
+        if (!vivo) return;
+        setAi(a);
+        setAuto(w);
+      })
+      .catch(() => {
+        if (vivo) setErro(true);
+      })
+      .finally(() => {
+        if (vivo) setCarregando(false);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  if (carregando) {
+    return (
+      <KpiGrid cols={4}>
+        {[0, 1, 2, 3].map((i) => (
+          <KpiCard key={i} loading label="" value="" icon="chart" />
+        ))}
+      </KpiGrid>
+    );
+  }
+
+  if (erro) {
+    return (
+      <div className="card">
+        <EmptyState
+          icon="alert"
+          title="Não foi possível carregar os indicadores"
+          description="Tente novamente em instantes."
+          action={
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => window.location.reload()}>
+              <Icon name="refresh" size={15} />
+              Tentar de novo
+            </button>
+          }
+        />
+      </div>
+    );
+  }
+
+  const semDado = (ai?.execucoes ?? 0) === 0 && (auto?.total ?? 0) === 0;
+  if (semDado) return <AnalyticsVazio />;
+
+  return (
+    <>
+      <KpiGrid cols={4}>
+        <KpiCard label="Custo de IA (30d)" compacto value={moeda(ai?.custoUsd ?? 0, true)} icon="ai" tom="brand" />
+        <KpiCard label="Execuções de IA" compacto value={(ai?.execucoes ?? 0).toLocaleString('pt-BR')} icon="sparkles" />
+        <KpiCard
+          label="Taxa de sucesso das automações"
+          compacto
+          value={auto?.taxaSucesso == null ? '—' : percentual(auto.taxaSucesso, 0, true)}
+          icon="zap"
+          tom={auto?.taxaSucesso != null && auto.taxaSucesso < 80 ? 'warning' : 'success'}
+        />
+        <KpiCard label="Na fila de falhas (DLQ)" compacto value={(auto?.naDlq ?? 0).toLocaleString('pt-BR')} icon="alert" tom={auto && auto.naDlq > 0 ? 'warning' : 'brand'} />
+      </KpiGrid>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Section title="Uso de IA por agente" info="Custo acumulado nos últimos 30 dias, por agente NYRO">
+          {ai && ai.porAgente.length > 0 ? (
+            <BarrasHorizontais dados={ai.porAgente.map((a) => ({ rotulo: a.agente, valor: a.custo }))} formatar={(n) => moeda(n, true)} />
+          ) : (
+            <p className="py-6 text-center text-sm text-muted">Ainda sem execuções de IA registradas.</p>
+          )}
+        </Section>
+
+        <Section title="Execuções de automação" info="Últimos 30 dias, por status">
+          {auto && auto.total > 0 ? (
+            <BarrasHorizontais
+              dados={Object.entries(auto.porStatus).map(([rotulo, valor]) => ({ rotulo, valor }))}
+              formatar={(n) => n.toLocaleString('pt-BR')}
+            />
+          ) : (
+            <p className="py-6 text-center text-sm text-muted">Ainda sem execuções de automação registradas.</p>
+          )}
+        </Section>
       </div>
 
-      {/* Custo de IA */}
-      <section className="space-y-3">
-        <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand/12 text-brand"><Icon name="sparkles" size={18} /></span>
-          <h2 className="text-lg font-bold text-fg">Custo de IA (Nyro)</h2>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-4">
-          {[
-            { l: 'Custo total', v: ia ? usd(ia.custoUsd) : '—' },
-            { l: 'Execuções', v: ia ? num(ia.execucoes) : '—' },
-            { l: 'Tokens', v: ia ? num(ia.tokens) : '—' },
-            { l: 'Erros', v: ia ? num(ia.erros) : '—' },
-          ].map((k) => (
-            <Card key={k.l} className="p-4">
-              <p className="text-xs font-medium text-muted">{k.l}</p>
-              <p className="mt-1.5 text-2xl font-extrabold text-fg">{k.v}</p>
-            </Card>
-          ))}
-        </div>
+      <div className="card mt-4 p-5">
+        <p className="flex items-start gap-2 text-[13px] text-muted">
+          <Icon name="info" size={15} className="mt-0.5 shrink-0 text-faint" />
+          Receita por canal, CAC, ROI, funil de conversão e comparecimento ainda não têm cálculo definido no produto —
+          preferimos não mostrar em vez de estimar. Assim que essas fórmulas existirem, aparecem aqui.
+        </p>
+      </div>
+    </>
+  );
+}
 
-        {ia && ia.execucoes === 0 && <p className="rounded-xl border border-dashed border-line py-6 text-center text-sm text-muted">Sem uso de IA no período. Conecte a Anthropic e fale com a Nyro para começar a medir.</p>}
+function AnalyticsComDados() {
+  const k = ANALYTICS_KPIS;
 
-        {ia && ia.execucoes > 0 && (
+  return (
+    <>
+      <KpiGrid cols={6}>
+        <KpiCard label="Receita Gerada" compacto value={moeda(k.receita.valor)} icon="dollar" tom="success" delta={k.receita.delta} comparacao="vs. mês anterior" />
+        {/* CAC caindo é bom: deltaBom=false pinta a queda de verde. */}
+        <KpiCard label="CAC" compacto value={moeda(k.cac.valor, true)} icon="user" delta={k.cac.delta} deltaBom={false} comparacao="vs. mês anterior" />
+        <KpiCard label="Taxa de Conversão" compacto value={percentual(k.conversao.valor, 0, true)} icon="chat" delta={k.conversao.delta} comparacao="vs. mês anterior" />
+        <KpiCard label="Tempo de Resposta" compacto value={duracao(k.tempoResposta.valor)} icon="clock" delta={k.tempoResposta.delta} deltaBom={false} comparacao="vs. mês anterior" />
+        <KpiCard label="ROI" compacto value={`${k.roi.valor.toLocaleString('pt-BR', { minimumFractionDigits: 1 })}x`} icon="chart" delta={k.roi.delta} comparacao="vs. mês anterior" />
+        <KpiCard label="Taxa de Comparecimento" compacto value={percentual(k.comparecimento.valor, 0, true)} icon="users" delta={k.comparecimento.delta} comparacao="vs. mês anterior" />
+      </KpiGrid>
+
+      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0 space-y-4">
           <div className="grid gap-4 lg:grid-cols-2">
-            <Card className="p-5">
-              <p className="mb-3 text-sm font-bold text-fg">Custo por dia</p>
-              <div className="flex h-28 items-end gap-1">
-                {ia.porDia.map((d) => (
-                  <div key={d.dia} className="flex-1 rounded-t bg-brand/70" style={{ height: `${Math.max(4, (d.custo / maxDia) * 100)}%` }} title={`${d.dia}: ${usd(d.custo)}`} />
-                ))}
-              </div>
-            </Card>
-            <Card className="p-5">
-              <p className="mb-3 text-sm font-bold text-fg">Por agente / modelo</p>
-              <div className="space-y-1.5">
-                {ia.porAgente.map((a) => (
-                  <div key={a.agente} className="flex items-center justify-between text-sm">
-                    <span className="capitalize text-fg">{a.agente}</span>
-                    <span className="text-muted">{usd(a.custo)} · {num(a.n)}x</span>
-                  </div>
-                ))}
-                <div className="mt-2 border-t border-line pt-2" />
-                {ia.porModelo.map((m) => (
-                  <div key={m.modelo} className="flex items-center justify-between text-xs">
-                    <span className="truncate font-mono text-muted">{m.modelo}</span>
-                    <span className="text-muted">{usd(m.custo)}</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </div>
-        )}
-      </section>
+            <Section
+              title={<ComAjuda>Receita por Canal</ComAjuda>}
+              info="Distribuição da receita gerada em cada canal"
+              action={
+                <select className="select h-8 w-auto text-[13px]" aria-label="Métrica do gráfico">
+                  <option>Receita</option>
+                </select>
+              }
+            >
+              <BarrasVerticais dados={RECEITA_POR_CANAL} />
+            </Section>
 
-      {/* Automações */}
-      <section className="space-y-3">
-        <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand/12 text-brand"><Icon name="pipeline" size={18} /></span>
-          <h2 className="text-lg font-bold text-fg">Automações</h2>
+            <Section
+              title={<ComAjuda>Funil de Conversão</ComAjuda>}
+              info="Do primeiro contato à receita gerada"
+              action={
+                <select className="select h-8 w-auto text-[13px]" aria-label="Período do funil">
+                  <option>Este mês</option>
+                </select>
+              }
+            >
+              <Funil etapas={FUNIL_CONVERSAO} />
+            </Section>
+
+            <Section
+              title={<ComAjuda>Tempo de Resposta por Equipe</ComAjuda>}
+              action={
+                <select className="select h-8 w-auto text-[13px]" aria-label="Período">
+                  <option>Este mês</option>
+                </select>
+              }
+            >
+              <BarrasHorizontais
+                dados={TEMPO_RESPOSTA_EQUIPE.map((t) => ({
+                  rotulo: t.nome,
+                  valor: t.minutos,
+                  extra: <Avatar name={t.nome} size={22} />,
+                }))}
+                formatar={(n) => `${n} min`}
+                menorEhMelhor
+              />
+            </Section>
+
+            <Section
+              title={<ComAjuda>Meta vs. Realizado</ComAjuda>}
+              action={
+                <select className="select h-8 w-auto text-[13px]" aria-label="Periodicidade">
+                  <option>Mensal</option>
+                </select>
+              }
+            >
+              <BarrasAgrupadas dados={META_VS_REALIZADO} />
+            </Section>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Section
+              title={<ComAjuda>Evolução da Receita</ComAjuda>}
+              action={
+                <div className="segbar" role="tablist" aria-label="Período">
+                  {['7D', '30D', '3M', '12M'].map((p) => (
+                    <button key={p} type="button" role="tab" className="seg" aria-selected={p === '30D'}>
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              }
+            >
+              <div className="mb-4 flex flex-wrap items-baseline gap-3">
+                <p className="text-[26px] font-bold tabular tracking-tight text-fg">{moeda(ANALYTICS_KPIS.receita.valor)}</p>
+                <span className="delta delta-up">
+                  <Icon name="arrowUp" size={12} strokeWidth={2.4} />
+                  {ANALYTICS_KPIS.receita.delta}%
+                </span>
+                <span className="text-[13px] text-muted">vs. mês anterior</span>
+              </div>
+              <AreaReceita dados={RECEITA_30D} altura={170} />
+            </Section>
+
+            <Section title={<ComAjuda>Leads por Status</ComAjuda>}>
+              <Rosca
+                dados={LEADS_POR_STATUS}
+                total={LEADS_POR_STATUS.reduce((s, l) => s + l.valor, 0)}
+                rotuloTotal="Leads"
+              />
+            </Section>
+          </div>
         </div>
-        <div className="grid gap-4 sm:grid-cols-4">
-          {[
-            { l: 'Execuções', v: auto ? num(auto.total) : '—' },
-            { l: 'Taxa de sucesso', v: auto ? (auto.taxaSucesso === null ? '—' : `${auto.taxaSucesso}%`) : '—' },
-            { l: 'Falhas', v: auto ? num(auto.falhas) : '—' },
-            { l: 'Na DLQ', v: auto ? num(auto.naDlq) : '—' },
-          ].map((k) => (
-            <Card key={k.l} className="p-4">
-              <p className="text-xs font-medium text-muted">{k.l}</p>
-              <p className="mt-1.5 text-2xl font-extrabold text-fg">{k.v}</p>
-            </Card>
-          ))}
+
+        {/* Painel lateral: interpretação, separada dos números medidos */}
+        <aside className="min-w-0 space-y-4">
+          <PainelInsights />
+          <RelatoriosRapidos />
+        </aside>
+      </div>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+function PainelInsights() {
+  return (
+    <section className="card">
+      <div className="flex items-center justify-between gap-2 px-5 pt-5">
+        <h2 className="t-section">Insights da IA ORVYN</h2>
+        <span className="pill pill-brand">Beta</span>
+      </div>
+
+      <div className="p-5">
+        <div className="rounded-lg border border-brand-border bg-brand-softer p-4">
+          <p className="flex items-start gap-2 text-[13.5px] font-semibold text-fg">
+            <Icon name="ai" size={17} className="mt-0.5 shrink-0 text-brand" />
+            {INSIGHTS_ANALYTICS.length} recomendações para você
+          </p>
+          <p className="ml-6 text-xs text-muted">Com base nos seus dados dos últimos 30 dias</p>
+
+          <ol className="mt-4 space-y-3.5">
+            {INSIGHTS_ANALYTICS.map((i, idx) => (
+              <li key={i.id} className="flex gap-2.5">
+                <span className="mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-soft text-[11px] font-semibold text-brand">
+                  {idx + 1}
+                </span>
+                <div>
+                  <p className="text-[13px] font-semibold text-fg">{i.titulo}</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-muted">{i.descricao}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
         </div>
-        {auto && auto.total === 0 && <p className="rounded-xl border border-dashed border-line py-6 text-center text-sm text-muted">Nenhuma execução de automação no período.</p>}
-      </section>
+
+        <Link href="/ia" className="btn btn-ai mt-4 w-full">
+          <Icon name="ai" size={16} />
+          Aplicar recomendações com IA
+          <Icon name="arrowRight" size={15} />
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+function RelatoriosRapidos() {
+  return (
+    <Section
+      title={
+        <span className="flex items-center gap-2">
+          <Icon name="file" size={16} className="text-muted" />
+          Relatórios Rápidos
+        </span>
+      }
+      bodyClassName="p-0"
+    >
+      <ul className="divide-y divide-line">
+        {RELATORIOS_RAPIDOS.map((r) => (
+          <li key={r.id}>
+            <button type="button" className="flex w-full items-center gap-3 px-5 py-3 text-left transition hover:bg-surface2">
+              <span className="icon-tile icon-tile-neutral h-8 w-8 shrink-0 rounded-sm">
+                <Icon name={r.icone as IconName} size={15} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] font-semibold text-fg">{r.titulo}</span>
+                <span className="block truncate text-[11.5px] text-muted">{r.descricao}</span>
+              </span>
+              <Icon name="chevronRight" size={16} className="shrink-0 text-faint" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </Section>
+  );
+}
+
+/** Título com ícone de ajuda — o widget explica a própria métrica. */
+function ComAjuda({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      {children}
+      <Icon name="info" size={14} className="text-faint" />
+    </span>
+  );
+}
+
+function AnalyticsVazio() {
+  return (
+    <div className="card">
+      <EmptyState
+        icon="trend"
+        title="Ainda não há dados para analisar"
+        description="Analytics cruza leads, conversas, negócios e campanhas. Assim que houver histórico suficiente, os indicadores e os insights aparecem aqui."
+        action={
+          <Link href="/leads" className="btn btn-primary btn-sm">
+            <Icon name="leads" size={15} />
+            Ir para Leads
+          </Link>
+        }
+      />
     </div>
   );
 }

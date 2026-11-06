@@ -516,7 +516,7 @@ function EditorInterno() {
           />
         )}
 
-        {/* Configurações do fluxo (fora do canvas, como no GHL) */}
+        {/* Configurações do fluxo (fora do canvas) */}
         {mostrarConfig && config && (
           <PainelConfig
             config={config}

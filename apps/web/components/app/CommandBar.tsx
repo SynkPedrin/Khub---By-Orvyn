@@ -12,7 +12,7 @@ interface Item {
   hint: string;
 }
 const NAV_ITEMS: Omit<Item, 'hint'>[] = [
-  { label: 'Dashboard', href: '/', icon: 'dashboard' },
+  { label: 'Dashboard', href: '/dashboard', icon: 'dashboard' },
   { label: 'Pipeline de negócios', href: '/pipeline', icon: 'pipeline' },
   { label: 'Contatos', href: '/contatos', icon: 'contacts' },
   { label: 'Inbox omnichannel', href: '/inbox', icon: 'inbox' },
@@ -100,8 +100,8 @@ export function CommandBar() {
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[12vh]" style={{ background: 'rgba(20,15,28,0.5)' }} onClick={() => setOpen(false)}>
-      <div className="w-full max-w-xl animate-scale-in overflow-hidden rounded-2xl border border-line bg-surface shadow-pop" onClick={(e) => e.stopPropagation()}>
+    <div className="lg-backdrop fixed inset-0 z-50 flex items-start justify-center px-4 pt-[12vh]" onClick={() => setOpen(false)}>
+      <div className="lg-sheet w-full max-w-xl animate-scale-in overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-3 border-b border-line px-4">
           <Icon name="search" size={18} className="text-muted" />
           <input
@@ -138,7 +138,7 @@ export function CommandBar() {
         </div>
         <div className="flex items-center justify-between border-t border-line px-4 py-2 text-[11px] text-muted">
           <span>↑↓ navegar · ↵ abrir · esc fechar</span>
-          <span>ORVYN OS</span>
+          <span className="font-medium tracking-[0.08em] text-faint">ORVYN Revenue OS</span>
         </div>
       </div>
     </div>

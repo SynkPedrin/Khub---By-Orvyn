@@ -1,0 +1,198 @@
+'use client';
+
+import Image from 'next/image';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { motion } from 'framer-motion';
+import { Icon } from '../icons';
+import { cx } from '../ui';
+import { PRIMARY_NAV, AGENCY_NAV, activeHref, type NavItem } from './nav';
+import { modoDemo } from '@/lib/demo/flag';
+import { useState } from 'react';
+import { useLocale } from '@/lib/locale';
+import { useAgency } from '@/components/agency/AgencyProvider';
+import { motionTokens } from '@/lib/motion';
+
+/**
+ * Sidebar fixa do ORVYN Revenue OS.
+ *
+ * Liquid Glass regular flutuando sobre o ambient (ADR-0029). O item ativo
+ * é um tint de marca que desliza entre itens (spring do framer-motion),
+ * e o que fica dentro do vidro usa preenchimento, nunca outro vidro.
+ *
+ * Acessibilidade: `<nav>` rotulado, `aria-current="page"` no item ativo
+ * (é ele quem pinta o estado — não uma classe condicional), e foco visível
+ * herdado de `:focus-visible` do design system.
+ */
+export function Sidebar({
+  badges,
+  onNavigate,
+  className,
+}: {
+  /** Contadores dinâmicos por chave (ex.: `{ conversas: 3 }`). */
+  badges?: Partial<Record<NonNullable<NavItem['badge']>, number>>;
+  /** Chamado ao navegar — usado pelo drawer mobile para se fechar. */
+  onNavigate?: () => void;
+  className?: string;
+}) {
+  const pathname = usePathname() ?? '/';
+  const {t}=useLocale();
+  const { contexto, clientes, clienteAtivo, entrarNoCliente, trocandoCliente, erro } = useAgency();
+  const [busca, setBusca] = useState('');
+  const normalizar = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const encontrados = clientes.filter(c => normalizar(c.nome).includes(normalizar(busca.trim())));
+  // Modo agência tem a PRÓPRIA navegação (seção 24 do brief) — nunca
+  // misturada com a operacional de um cliente. `/agency` nunca é rota de
+  // um cliente (nome reservado), então esta checagem é segura.
+  const modoAgencia = pathname.startsWith('/agency');
+  const nav = modoAgencia ? AGENCY_NAV : PRIMARY_NAV;
+  const active = activeHref(pathname, nav);
+
+  return (
+    <div className={cx('glass-floating nav-floating flex h-full w-sidebar flex-col', className)}>
+      {/* Marca */}
+      <div className="flex h-topbar shrink-0 items-center px-4">
+        <Link
+          href="/dashboard"
+          onClick={onNavigate}
+          aria-label="ORVYN Revenue OS — ir para o Dashboard"
+          className="flex w-full items-center"
+        >
+          <Image
+            src="/logo-revenue.png"
+            alt="ORVYN Revenue OS"
+            width={2172}
+            height={724}
+            unoptimized
+            priority
+            className="h-auto w-full object-contain dark:invert dark:hue-rotate-180"
+          />
+        </Link>
+      </div>
+
+      {/* Navegação primária */}
+      <nav aria-label="Navegação principal" className="flex-1 overflow-y-auto scrollbar-thin px-3 py-2">
+        {contexto && <section className="mb-3 border-b border-line pb-3" aria-label="Agência e subcontas">
+          <Link href="/agency" onClick={onNavigate} className="nav-item" aria-current={modoAgencia ? 'page' : undefined}>
+            <Icon name="building" size={19} /><span>Agência</span>
+          </Link>
+          <label htmlFor={`subcontas-${onNavigate ? 'mobile' : 'desktop'}`} className="mt-2 block text-xs text-muted">Pesquisar subcontas</label>
+          <input id={`subcontas-${onNavigate ? 'mobile' : 'desktop'}`} type="search" className="input mt-1 w-full" placeholder="Nome do cliente" value={busca} onChange={e => setBusca(e.target.value)} />
+          <div className="mt-2 max-h-48 overflow-y-auto">
+            {encontrados.map(c => <button key={c.id} type="button" className="nav-item w-full text-left" disabled={trocandoCliente || c.status !== 'active'} aria-pressed={clienteAtivo?.id === c.id} onClick={() => void entrarNoCliente(c.id)}>
+              <span className="truncate">{c.nome}</span>{clienteAtivo?.id === c.id && <Icon name="check2" size={14} />}
+            </button>)}
+            {!encontrados.length && <p className="px-2 py-3 text-xs text-muted">Nenhuma subconta encontrada.</p>}
+          </div>
+          {erro && <p role="alert" className="mt-2 text-xs text-red-600">{erro}</p>}
+        </section>}
+        <ul className="space-y-0.5">
+          {nav.map((item) => {
+            const isActive = item.href === active;
+            const count = item.badge ? badges?.[item.badge] : undefined;
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  onClick={onNavigate}
+                  aria-current={isActive ? 'page' : undefined}
+                  className="nav-floating-item nav-item !bg-transparent"
+                >
+                  {isActive && (
+                    <motion.span
+                      layoutId="active-nav-indicator"
+                      className="glass-accent absolute inset-0 rounded-[inherit]"
+                      transition={motionTokens.spring.responsive}
+                      aria-hidden
+                    />
+                  )}
+                  <Icon name={item.icon} size={19} className="relative shrink-0" />
+                  <span className="relative flex-1 truncate">{t(item.label)}</span>
+                  {count ? (
+                    <span
+                      className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1.5 text-[11px] font-semibold text-white"
+                      aria-label={`${count} não lidas`}
+                    >
+                      {count > 99 ? '99+' : count}
+                    </span>
+                  ) : null}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+
+      {/* Rodapé: plano. Desacoplado de billing — só apresenta o que recebe.
+          Sem módulo de cobrança, os números de uso só existem no modo demo;
+          em produção o cartão aparece sem barra, e não com zeros falsos. */}
+      <div className="shrink-0 p-3">
+        {modoDemo() ? <PlanCard usado={284} total={500_000} /> : <PlanCard />}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Cartão de plano da sidebar.
+ *
+ * Nesta fase é **apresentacional e desacoplado de billing**: não consulta
+ * nenhuma API de cobrança. Quando o módulo de billing existir, basta passar
+ * os números por props — o layout não muda.
+ */
+export function PlanCard({
+  plano = 'Plano Pro',
+  descricao = 'Seu crescimento sem limites.',
+  usado,
+  total,
+  unidade = 'leads',
+  href = '/configuracoes?aba=plano',
+}: {
+  plano?: string;
+  descricao?: string;
+  usado?: number;
+  total?: number;
+  unidade?: string;
+  href?: string;
+}) {
+  const temUso = typeof usado === 'number' && typeof total === 'number' && total > 0;
+  const pct = temUso ? Math.min(100, Math.round((usado / total) * 100)) : 0;
+
+  return (
+    <div className="lg-well p-4">
+      <div className="flex items-center gap-2.5">
+        <span className="icon-tile h-8 w-8">
+          <Icon name="crown" size={16} />
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-[13px] font-semibold text-fg">{plano}</p>
+        </div>
+      </div>
+      <p className="mt-1.5 text-xs leading-snug text-muted">{descricao}</p>
+
+      {temUso && (
+        <div className="mt-3">
+          <p className="text-xs text-muted">
+            <span className="font-semibold text-fg tabular">{usado.toLocaleString('pt-BR')}</span> de{' '}
+            {total.toLocaleString('pt-BR')} {unidade}
+          </p>
+          <div
+            className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface3"
+            role="progressbar"
+            aria-valuenow={pct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`Uso do plano: ${pct}%`}
+          >
+            <div className="h-full rounded-full bg-brand transition-[width]" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+      )}
+
+      <Link href={href} className="btn btn-soft btn-sm mt-3 w-full">
+        Fazer upgrade
+        <Icon name="arrowRight" size={14} />
+      </Link>
+    </div>
+  );
+}

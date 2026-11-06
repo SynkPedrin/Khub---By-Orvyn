@@ -182,8 +182,8 @@ export default function AutomacoesPage() {
       </div>
 
       {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: 'rgba(20,15,28,0.5)' }} onClick={() => setModal(false)}>
-          <Card className="w-full max-w-md animate-scale-in p-6">
+        <div className="lg-backdrop fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setModal(false)}>
+          <Card className="lg-sheet w-full max-w-md animate-scale-in p-6">
             <form onClick={(e) => e.stopPropagation()} onSubmit={criar} className="space-y-4">
               <h2 className="text-lg font-bold text-fg">Nova automação</h2>
               <Field label="Nome"><Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} placeholder="Follow-up de lead novo" autoFocus /></Field>

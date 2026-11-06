@@ -164,15 +164,22 @@ export default function AdsPage() {
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={cr.thumbnailUrl} alt={cr.nome ?? 'criativo'} className="h-full w-full object-cover" />
                       )}
-                      {cr.melhor && (
-                        <span className="absolute left-2 top-2 rounded-full bg-brand px-2 py-0.5 text-[10px] font-bold text-white shadow">★ Melhor performando</span>
-                      )}
+                      <div className="absolute left-2 top-2 flex flex-col gap-1">
+                        {cr.melhorCpl && (
+                          <span className="rounded-full bg-brand px-2 py-0.5 text-[10px] font-bold text-white shadow">★ Melhor CPL</span>
+                        )}
+                        {cr.maiorReceita && (
+                          <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white shadow">★ Maior receita atribuída</span>
+                        )}
+                      </div>
                     </div>
                     <div className="p-3">
                       <p className="truncate font-semibold text-fg">{cr.nome ?? cr.externalId}</p>
-                      <div className="mt-1.5 flex items-center justify-between text-xs">
-                        <span className="text-muted">{cr.format ?? '—'}{cr.cta ? ` · ${cr.cta}` : ''}</span>
-                        <span className="font-semibold text-brand">{cr.roas.toFixed(2)}x ROAS</span>
+                      <p className="mt-0.5 text-xs text-muted">{cr.format ?? '—'}{cr.cta ? ` · ${cr.cta}` : ''}</p>
+                      <div className="mt-2 grid grid-cols-3 gap-1.5 text-xs">
+                        <div><p className="text-faint">Leads</p><p className="font-semibold text-fg">{cr.leads}</p></div>
+                        <div><p className="text-faint">CPL</p><p className="font-semibold text-fg">{cr.leads > 0 ? `R$ ${cr.cpl.toFixed(0)}` : '—'}</p></div>
+                        <div><p className="text-faint">Receita</p><p className="font-semibold text-brand">{cr.revenue > 0 ? `R$ ${cr.revenue.toLocaleString('pt-BR')}` : '—'}</p></div>
                       </div>
                     </div>
                   </Card>

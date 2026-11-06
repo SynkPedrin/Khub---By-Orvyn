@@ -42,7 +42,12 @@ export function Badge({ children, tone = 'brand', className }: { children: React
   );
 }
 
-const AV_COLORS = ['#7B2EFF', '#A66BFF', '#6A1FE6', '#C0392B', '#2E86C1', '#1E8449', '#B7791F', '#8E44AD'];
+/**
+ * Cores de avatar. Mesma família da paleta de gráficos (passos escuros o
+ * bastante para texto branco em cima manter contraste AA). Determinístico
+ * pelo nome: a mesma pessoa tem sempre a mesma cor, em qualquer tela.
+ */
+const AV_COLORS = ['#6c2bff', '#b45309', '#0284c7', '#047857', '#7c3aed', '#be123c', '#0f766e', '#a16207'];
 export function Avatar({ name, size = 36, src }: { name: string; size?: number; src?: string }) {
   const initials = name.split(' ').filter(Boolean).slice(0, 2).map((n) => n[0]?.toUpperCase()).join('');
   const color = AV_COLORS[[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % AV_COLORS.length];

@@ -1,57 +1,96 @@
 'use client';
 
-import { useState } from 'react';
-import { AppSidebar } from '@/components/app/AppSidebar';
-import { DynamicIsland } from '@/components/app/DynamicIsland';
-import { TopRight } from '@/components/app/TopRight';
-import { TopCenterLogo } from '@/components/app/TopCenterLogo';
+import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
+import { Sidebar } from '@/components/shell/Sidebar';
+import { Topbar } from '@/components/shell/Topbar';
+import { OrvynSignature } from '@/components/shell/OrvynMark';
+import { AmbientBackground } from '@/components/shell/AmbientBackground';
+import { PageTransition } from '@/components/shell/PageTransition';
 import { PersonalizationProvider } from '@/components/app/PersonalizationProvider';
-import { NyroDock } from '@/components/app/NyroDock';
 import { CommandBar } from '@/components/app/CommandBar';
 import { Icon } from '@/components/icons';
 
+/**
+ * Shell do ORVYN Revenue OS.
+ *
+ * Duas superfícies de Liquid Glass flutuando sobre o ambient (ADR-0029):
+ * sidebar à esquerda e topbar no topo. O conteúdo rola por baixo delas.
+ *
+ * Layout: a sidebar é fixa e não rola; só o `<main>` rola. Isso mantém a
+ * navegação sempre alcançável em telas densas (pipeline, inbox, canvas).
+ */
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [drawer, setDrawer] = useState(false);
+  const pathname = usePathname();
+
+  // Navegar fecha o drawer — inclusive quando a navegação parte de um link
+  // dentro do conteúdo, não só da sidebar.
+  useEffect(() => {
+    setDrawer(false);
+  }, [pathname]);
+
+  // Drawer aberto trava o scroll do corpo (senão a página rola por baixo).
+  useEffect(() => {
+    if (!drawer) return;
+    const anterior = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = anterior;
+    };
+  }, [drawer]);
 
   return (
     <PersonalizationProvider>
-    <div className="flex h-screen flex-col overflow-hidden">
-      {/* faixa reservada para a ilha dinâmica + logo central (fixed) */}
-      <div className="h-[6.5rem] shrink-0 sm:h-[9rem]" />
+      <a href="#conteudo" className="skip-link">
+        Pular para o conteúdo
+      </a>
 
-      <div className="flex min-h-0 flex-1">
-        {/* Sidebar de vidro flutuante (desktop) */}
-        <aside className="hidden shrink-0 pb-3 pl-3 pr-1 lg:block">
-          <AppSidebar />
+      <AmbientBackground />
+
+      <div className="relative flex h-screen overflow-hidden">
+        {/* Sidebar flutuante — desktop */}
+        <aside className="hidden shrink-0 p-3 lg:block">
+          <Sidebar />
         </aside>
 
-        {/* Conteúdo */}
-        <main className="min-w-0 flex-1 overflow-y-auto scrollbar-thin pr-1">{children}</main>
-      </div>
-
-      {/* Ilha dinâmica (logo canto superior esquerdo + busca) */}
-      <DynamicIsland onMobileMenu={() => setDrawer(true)} />
-      {/* Marca ORVYN OS no topo-centro */}
-      <TopCenterLogo />
-      {/* Canto superior direito: usuário, configurações, tema */}
-      <TopRight />
-
-      {/* Drawer mobile */}
-      {drawer && (
-        <div className="fixed inset-0 z-[60] lg:hidden">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setDrawer(false)} />
-          <div className="absolute left-3 top-3 bottom-3 animate-fade-in">
-            <button className="absolute -right-11 top-2 rounded-full bg-surface p-2 text-fg shadow-card" onClick={() => setDrawer(false)}>
-              <Icon name="close" />
-            </button>
-            <AppSidebar onNavigate={() => setDrawer(false)} />
+        {/* Coluna de conteúdo */}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="p-3 pb-0">
+            <Topbar onMobileMenu={() => setDrawer(true)} />
           </div>
-        </div>
-      )}
 
-      <NyroDock />
-      <CommandBar />
-    </div>
+          <main id="conteudo" className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+            <PageTransition>{children}</PageTransition>
+            <OrvynSignature className="border-t border-line" />
+          </main>
+        </div>
+
+        {/* Drawer de navegação — mobile e tablet */}
+        {drawer && (
+          <div className="fixed inset-0 z-drawer lg:hidden">
+            <button
+              type="button"
+              className="lg-backdrop absolute inset-0"
+              onClick={() => setDrawer(false)}
+              aria-label="Fechar menu de navegação"
+            />
+            <div className="absolute inset-y-0 left-0 animate-fade-in p-2">
+              <Sidebar onNavigate={() => setDrawer(false)} />
+            </div>
+            <button
+              type="button"
+              className="btn btn-icon btn-sm absolute left-[calc(var(--sidebar-w)+20px)] top-4"
+              onClick={() => setDrawer(false)}
+              aria-label="Fechar menu"
+            >
+              <Icon name="close" size={18} />
+            </button>
+          </div>
+        )}
+
+        <CommandBar />
+      </div>
     </PersonalizationProvider>
   );
 }

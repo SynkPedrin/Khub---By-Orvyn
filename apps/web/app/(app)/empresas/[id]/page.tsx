@@ -174,8 +174,8 @@ export default function Empresa360Page() {
       </div>
 
       {confirmando && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: 'rgba(20,15,28,0.5)' }} onClick={() => setConfirmando(false)}>
-          <Card className="w-full max-w-sm animate-scale-in p-6">
+        <div className="lg-backdrop fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setConfirmando(false)}>
+          <Card className="lg-sheet w-full max-w-sm animate-scale-in p-6">
             <div onClick={(e) => e.stopPropagation()}>
               <h2 className="text-lg font-bold text-fg">Excluir {c.nome}?</h2>
               <p className="mt-2 text-sm text-muted">

@@ -22,7 +22,7 @@ const ICONE_GRUPO: Record<string, IconName> = {
 };
 
 /**
- * Painel "Adicionar" (referência: GHL). Com 21 nós, o que faz a diferença de UX
+ * Painel "Adicionar". Com 21 nós, o que faz a diferença de UX
  * não é a lista — é **a busca vir focada**: quem já sabe o que quer digita
  * "sms" e dá Enter, sem caçar categoria.
  */
@@ -72,8 +72,8 @@ export function PainelAdicionar({ catalogo, modo, onEscolher, onFechar }: Props)
   let indice = -1;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-start justify-center bg-black/40 pt-[10vh] backdrop-blur-sm" onClick={onFechar}>
-      <div className="glass crystal-edge w-full max-w-lg overflow-hidden rounded-2xl" onClick={(e) => e.stopPropagation()}>
+    <div className="lg-backdrop fixed inset-0 z-[70] flex items-start justify-center pt-[10vh]" onClick={onFechar}>
+      <div className="lg-sheet w-full max-w-lg animate-scale-in overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2 border-b border-line px-4">
           <Icon name="search" size={16} className="text-muted" />
           <input

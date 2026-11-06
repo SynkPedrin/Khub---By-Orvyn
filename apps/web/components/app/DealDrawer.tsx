@@ -81,9 +81,9 @@ export function DealDrawer({ dealId, stages, onClose, onChanged }: Props) {
   const toggleTarefa = async (id: string) => { await crm.toggleTask(id); await load(); };
 
   return (
-    <div className="fixed inset-0 z-[60] flex justify-end bg-black/40 backdrop-blur-sm" onClick={onClose}>
+    <div className="lg-backdrop fixed inset-0 z-[60] flex justify-end" onClick={onClose}>
       <div
-        className="h-full w-full max-w-lg animate-fade-in overflow-y-auto border-l border-line bg-surface p-5 scrollbar-thin"
+        className="lg-sheet lg-sheet-side w-full max-w-lg animate-fade-in overflow-y-auto p-5 scrollbar-thin"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
@@ -183,8 +183,8 @@ export function DealDrawer({ dealId, stages, onClose, onChanged }: Props) {
         )}
 
         {confirmando && d && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center px-4" style={{ background: 'rgba(20,15,28,0.5)' }} onClick={() => setConfirmando(false)}>
-            <Card className="w-full max-w-sm animate-scale-in p-6">
+          <div className="lg-backdrop fixed inset-0 z-[70] flex items-center justify-center px-4" onClick={() => setConfirmando(false)}>
+            <Card className="lg-sheet w-full max-w-sm animate-scale-in p-6">
               <div onClick={(e) => e.stopPropagation()}>
                 <h2 className="text-lg font-bold text-fg">Excluir “{d.titulo}”?</h2>
                 <p className="mt-2 text-sm text-muted">O negócio, suas tarefas e notas somem. O contato continua no CRM. Não dá para desfazer.</p>

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Card, cx } from '@/components/ui';
 import { Icon, type IconName } from '@/components/icons';
 import { marketplace, type TemplateResumo, type TemplateDetalhe } from '@/lib/marketplace';
+import { OrvynBrandMotion } from '@/components/brand/OrvynBrandMotion';
 
 interface Doc { slug: string; title: string; excerpt: string; words: number }
 
@@ -59,7 +60,6 @@ export default function BibliotecaPage() {
   const [instalando, setInstalando] = useState<string | null>(null);
   const [erroTpl, setErroTpl] = useState(false);
   const [erroDocs, setErroDocs] = useState(false);
-  const [mostrarVideo, setMostrarVideo] = useState(false);
   // Modal de binding: quando o template tem variáveis, coleta os valores antes de instalar.
   const [bind, setBind] = useState<{ tpl: TemplateDetalhe; valores: Record<string, string> } | null>(null);
 
@@ -70,16 +70,6 @@ export default function BibliotecaPage() {
   };
 
   useEffect(() => { carregar(); }, []);
-
-  // Vídeo do hero só entra quando a página já está ociosa (não bloqueia o carregamento
-  // dos templates/base nem o primeiro paint). Respeita "reduzir movimento".
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
-    const idle = (window as unknown as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
-    const t = idle ? idle(() => setMostrarVideo(true)) : window.setTimeout(() => setMostrarVideo(true), 1200);
-    return () => { if (!idle) window.clearTimeout(t as number); };
-  }, []);
 
   // Clique em Instalar: se o template tem variáveis, abre o modal de binding;
   // senão instala direto.
@@ -131,17 +121,17 @@ export default function BibliotecaPage() {
           quando a página fica ociosa: não bloqueia templates/base nem o 1º paint.
           Look escuro fixo nos 2 temas; scrim mantém o texto legível. */}
       <section className="relative overflow-hidden rounded-3xl border border-white/10 p-8" style={{ background: 'radial-gradient(120% 120% at 80% 0%, #3a1d6e, #14091f 70%)' }}>
-        {mostrarVideo && (
-          <video
-            autoPlay muted loop playsInline preload="none"
-            className="pointer-events-none absolute inset-0 h-full w-full object-cover"
-          >
-            <source src="/crystal-video.mp4" type="video/mp4" />
-          </video>
-        )}
-        {/* Scrim: escurece à esquerda (onde vive o texto) e revela o cristal à direita */}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/80 via-black/55 to-black/20" />
-        <div className="pointer-events-none absolute inset-0 bg-black/25" />
+        <div className="pointer-events-none absolute inset-0">
+          <OrvynBrandMotion
+            overlay={
+              <>
+                {/* Scrim: escurece à esquerda (onde vive o texto) e revela o cristal à direita */}
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/80 via-black/55 to-black/20" />
+                <div className="pointer-events-none absolute inset-0 bg-black/25" />
+              </>
+            }
+          />
+        </div>
 
         <div className="relative flex items-center gap-2 text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--brand-bright)' }}>
           <Icon name="knowledge" size={15} /> Biblioteca
@@ -229,8 +219,8 @@ export default function BibliotecaPage() {
       {/* Modal de binding — liga as variáveis do template aos dados do tenant */}
       {bind && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" role="dialog" aria-modal="true">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setBind(null)} />
-          <div className="glass crystal-edge relative w-full max-w-md rounded-3xl p-6">
+          <div className="lg-backdrop absolute inset-0" onClick={() => setBind(null)} />
+          <div className="lg-sheet relative w-full max-w-md animate-scale-in p-6">
             <h2 className="text-lg font-bold text-fg">Personalizar “{bind.tpl.name}”</h2>
             <p className="mt-1 text-xs text-muted">Ajuste os campos abaixo — eles entram no fluxo antes de instalar.</p>
             <div className="mt-4 space-y-3">

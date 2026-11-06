@@ -39,9 +39,8 @@ export function NyroDock() {
         <div className="glass crystal-edge fixed bottom-24 right-5 z-40 flex max-h-[76vh] w-[380px] max-w-[92vw] animate-scale-in flex-col overflow-hidden rounded-3xl">
           <div className="flex items-center justify-between border-b border-line px-4 py-3">
             <div className="flex items-center gap-2.5">
-              <Image src="/logo.png" alt="" width={32} height={32} unoptimized className="h-8 w-8 object-contain" />
+              <Image src="/logo-nyro.png" alt="Nyro IA" width={96} height={32} unoptimized className="h-6 w-auto object-contain" />
               <div>
-                <p className="text-sm font-bold text-fg">Nyro IA</p>
                 <p className="text-[11px]">
                   {status?.configurada === false
                     ? <span className="text-amber-600 dark:text-amber-400">● precisa de configuração</span>

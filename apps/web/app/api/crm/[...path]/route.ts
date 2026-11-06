@@ -14,8 +14,9 @@ async function forward(req: NextRequest, path: string[]) {
   const target = `${API}/v1/crm/${path.map(encodeURIComponent).join('/')}${url.search}`;
   const init: RequestInit = {
     method: req.method,
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${at}` },
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${at}`, ...(req.headers.get('idempotency-key') ? {'idempotency-key': req.headers.get('idempotency-key')!} : {}) },
     cache: 'no-store',
+    signal: AbortSignal.timeout(25_000),
   };
   if (req.method !== 'GET' && req.method !== 'HEAD') init.body = await req.text();
 

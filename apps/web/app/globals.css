@@ -2,511 +2,2094 @@
 @tailwind components;
 @tailwind utilities;
 
+/* =====================================================================
+   ORVYN REVENUE OS — DESIGN SYSTEM · LIQUID GLASS (ADR-0029)
+   =====================================================================
+   Linguagem de material baseada no Liquid Glass das Human Interface
+   Guidelines da Apple (developer.apple.com/design), traduzida para web.
+
+   Três regras mandam em tudo:
+
+   1. CAMADAS. Vidro é a camada de navegação e controle que flutua sobre
+      o conteúdo: sidebar, topbar, menus, sheets, paleta de comandos,
+      botões. O conteúdo (cards, tabelas, Kanban) usa material espesso,
+      quase sólido, porque legibilidade vem antes de efeito. Nunca vidro
+      sobre vidro: o que fica dentro de um vidro usa preenchimento
+      (`--fill-*`, `.lg-well`), não outro vidro.
+   2. CONCENTRICIDADE. Raio interno = raio externo − padding. Controles
+      são cápsulas; contêineres seguem a escala `--r-*`
+      (sidebar 28 − padding 12 = item 16).
+   3. LUZ, NÃO COR. O vidro ganha forma pelo aro de luz direcional, pelo
+      brilho especular e pela sombra, nunca por tint colorido. Tint de
+      marca só em ação primária e estado selecionado.
+
+   Acessibilidade faz parte do material: Reduzir transparência deixa
+   tudo opaco, Aumentar contraste troca o aro por borda sólida, Reduzir
+   movimento desliga springs (ver §ACESSIBILIDADE).
+
+   Os nomes de classe antigos (.glass, .glass-floating, .card,
+   .card-crystal, .btn, .input, .frost) foram mantidos e re-vestidos: as
+   chamadas existentes herdam o material novo sem reescrita.
+   ===================================================================== */
+
 :root {
-  /* ORVYN OS — Design System v3 (rebrand). Light premium, roxo #7B2EFF, grid 8pt,
-     raio 24. Tudo no app deriva daqui: mudar um token re-veste o sistema inteiro. */
-  /* Brand book 001 — Amethyst #7B2EFF · Purple Glow #A855F7 · Highlight #C084FC */
-  --brand: #7b2eff;          /* primária — ação, foco, estado ativo (Amethyst) */
-  --brand-deep: #6a1fe6;     /* hover / pressed */
-  --brand-bright: #a855f7;   /* auxiliar / gradiente (Purple Glow) */
-  --lilac: #c084fc;          /* highlight */
+  color-scheme: light;
 
-  --bg: var(--bg-light, #f8f6f2);   /* off-white quente (não cinza, não lavanda) */
-  --surface: #ffffff;
-  --surface-2: #faf9f6;
-  --surface-3: #f2f0ea;
-  --border: rgba(17, 17, 17, 0.06); /* hairline discreta */
-  --text: #111111;
-  --muted: #6b7280;
-  --ring: rgba(123, 46, 255, 0.32);
-  --glow: rgba(123, 46, 255, 0.18);
+  /* ---------- COLOR: base (grouped backgrounds) ---------- */
+  --white: #ffffff;
+  --base-0: #ffffff;
+  --base-1: #fbfbfd;
+  --base-2: #f5f5f7;
+  --base-3: #ececf0;
 
-  /* Tokens de material e movimento (Apple-like: silêncio, precisão, respiração) */
-  --radius: 24px;
-  --radius-sm: 16px;
-  --radius-xs: 12px;
-  --blur: 30px;
-  --dur: 180ms;
-  --acr-op: 62%;   /* leitoso do acrílico: ↓ = mais transparente, ↑ = mais sólido */
+  /* ---------- COLOR: label ----------
+     Valores opacos (não o rgba de secondaryLabel da Apple) para manter
+     WCAG AA sobre vidro: --text-2 dá 4.9:1 em branco. */
+  --text: #1d1d1f;
+  --text-2: #6e6e73;
+  --text-3: #86868b;
 
-  --cristal-brilho: rgba(255, 255, 255, 0.7);
-  --cristal-refracao: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.92) 0%,
-    color-mix(in srgb, var(--brand-bright) 38%, transparent) 30%,
-    rgba(255, 255, 255, 0.82) 55%,
-    color-mix(in srgb, var(--lilac) 52%, transparent) 78%,
-    rgba(255, 255, 255, 0.88) 100%
-  );
-  --cristal-sombra: 0 20px 50px -30px var(--glow);
+  /* ---------- COLOR: separator ---------- */
+  --border: #e5e5ea;
+  --border-strong: #d1d1d6;
+
+  /* ---------- COLOR: fill ----------
+     Os quatro níveis de systemFill: cinza translúcido que funciona sobre
+     qualquer superfície, inclusive dentro do vidro. 1 = mais forte. */
+  --fill-1: rgba(120, 120, 128, 0.2);
+  --fill-2: rgba(120, 120, 128, 0.16);
+  --fill-3: rgba(118, 118, 128, 0.12);
+  --fill-4: rgba(116, 116, 128, 0.07);
+
+  /* ---------- COLOR: marca (tint do app) ---------- */
+  --brand: #6c2bff;
+  --brand-2: #8b5cf6;
+  --brand-soft: #f4efff;
+  --brand-softer: #faf7ff;
+  --brand-border: #e4d8ff;
+  --brand-deep: #5a20d9;
+
+  /* ---------- COLOR: semânticas (system colors, variante acessível) ---------- */
+  --success: #248a3d;
+  --success-soft: #eaf6ed;
+  --success-border: #cbe9d3;
+  --warning: #c93400;
+  --warning-soft: #fdf1ea;
+  --warning-border: #f7d9c7;
+  --danger: #d70015;
+  --danger-soft: #fdedee;
+  --danger-border: #f8d0d3;
+  --info: #0066cc;
+  --info-soft: #ebf3fd;
+  --info-border: #cfe1f8;
+
+  /* ---------- COLOR: séries categóricas de gráfico ----------
+     Ordem FIXA — a 5ª série vira "Outros" ou small multiples, nunca um hue
+     gerado. Validada com o verificador de daltonismo/contraste: todos os
+     seis checks PASS em light. Não alterar sem re-rodar a validação. */
+  --cat-1: #6c2bff;
+  --cat-2: #b45309;
+  --cat-3: #0284c7;
+  --cat-4: #047857;
+
+  /* ---------- COLOR: canais (usados em badges/gráficos) ---------- */
+  --ch-whatsapp: #25d366;
+  --ch-instagram: #e1306c;
+  --ch-email: #6c2bff;
+  --ch-linkedin: #0a66c2;
+  --ch-site: #5f6175;
+
+  /* ---------- RADIUS (concêntrico) ---------- */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+  --r-2xl: 28px;
+  --r-full: 999px;
+
+  /* ---------- SPACING (grid 4pt) ---------- */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+  --s-12: 48px;
+
+  /* ---------- SHADOW (difusas, neutras, em camadas) ---------- */
+  --sh-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --sh-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --sh-md: 0 2px 6px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --sh-lg: 0 4px 12px rgba(0, 0, 0, 0.05), 0 16px 40px rgba(0, 0, 0, 0.08);
+  --sh-pop: 0 8px 24px rgba(0, 0, 0, 0.08), 0 30px 80px rgba(0, 0, 0, 0.14);
+
+  /* ---------- LIQUID GLASS ----------
+     regular  → navegação e controles (sidebar, topbar, toolbars)
+     clear    → sobre mídia rica (imagem/vídeo de fundo); precisa de dim
+     dense    → sheets e paletas com conteúdo denso (legibilidade)
+     popover  → menus e popovers sobre conteúdo
+     control  → botões de vidro sobre conteúdo (sem blur: área pequena)
+
+     O aro é LUZ DIRECIONAL em box-shadow inset (topo mais forte, base
+     fraca, brilho interno que imita a lente na borda). Sem pseudo-
+     elemento: não rola junto com conteúdo e não exige `position`. */
+  --lg-fill: rgba(255, 255, 255, 0.56);
+  --lg-fill-clear: rgba(255, 255, 255, 0.2);
+  --lg-fill-dense: rgba(251, 251, 253, 0.84);
+  --lg-fill-popover: rgba(255, 255, 255, 0.86);
+  --lg-fill-control: rgba(255, 255, 255, 0.72);
+  --lg-fill-control-hover: rgba(255, 255, 255, 0.94);
+  --lg-blur: 24px;
+  --lg-saturate: 180%;
+  --lg-brightness: 1.04;
+  --lg-edge: rgba(0, 0, 0, 0.06);
+  --lg-edge-soft: rgba(0, 0, 0, 0.045);
+  --lg-highlight:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.85),
+    inset 1px 0 0 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.25),
+    inset -1px 0 0 0 rgba(255, 255, 255, 0.2),
+    inset 0 0 20px 0 rgba(255, 255, 255, 0.22);
+  --lg-highlight-control:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.9),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.5);
+  --lg-shadow: 0 1px 1px rgba(0, 0, 0, 0.03), 0 4px 16px rgba(0, 0, 0, 0.05), 0 16px 48px rgba(17, 17, 27, 0.06);
+  --lg-shadow-control: 0 1px 2px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --lg-specular: rgba(255, 255, 255, 0.7);
+  --lg-dim: rgba(0, 0, 0, 0.24);
+
+  /* Material de CONTEÚDO (thick material): cards, tabelas, Kanban. */
+  --mat-thick: rgba(255, 255, 255, 0.86);
+  --mat-blur: 16px;
+
+  /* Campos de formulário e segmented control */
+  --field-bg: rgba(255, 255, 255, 0.78);
+  --field-border: rgba(0, 0, 0, 0.1);
+  --seg-thumb: #ffffff;
+
+  /* Aliases do material anterior (não usar em código novo) */
+  --glass-crystal: var(--lg-fill);
+  --glass-floating: var(--lg-fill);
+  --glass-dense: var(--mat-thick);
+  --glass-accent: color-mix(in srgb, var(--brand) 12%, transparent);
+  --glass-border: var(--lg-edge);
+  --glass-border-subtle: var(--lg-edge-soft);
+  --glass-shadow: var(--lg-shadow);
+  --glass-blur-sm: 12px;
+  --glass-blur-md: 20px;
+  --glass-blur-lg: var(--lg-blur);
+  --radius-floating: var(--r-2xl);
+
+  /* ---------- MOTION ----------
+     Curva padrão da Apple para transições e uma "spring" com leve
+     overshoot para press/hover e entrada de sheets. */
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  --dur-slow: 320ms;
+  --dur-page: 320ms;
+  --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.36, 0.64, 1);
+
+  /* ---------- Z-INDEX ---------- */
+  --z-base: 0;
+  --z-sticky: 20;
+  --z-sidebar: 30;
+  --z-topbar: 40;
+  --z-dropdown: 50;
+  --z-drawer: 60;
+  --z-modal: 70;
+  --z-toast: 80;
+
+  /* ---------- FOCUS ---------- */
+  --ring: color-mix(in srgb, var(--brand) 26%, transparent);
+
+  /* ---------- LAYOUT ---------- */
+  --sidebar-w: 236px;
+  --topbar-h: 64px;
+
+  /* ---------- LP marketing ("/") — paleta do brand book ----------
+     Mesma marca do produto (--brand = #6c2bff), fixada aqui na variante
+     clara de marketing (#7B2EFF) usada também nas telas de auth
+     (AuthShell/.btn-auth-primary já usam este hex literal — aqui vira
+     token para não duplicar o valor de novo). */
+  --offwhite: #f8f6f2;
+  --ink: #151219;
+  --amethyst: #7b2eff;
+  --amethyst-deep: #5a20d9;
+  --amethyst-glow: #a855f7;
+  --amethyst-highlight: #c084fc;
+  --amethyst-soft: #f4efff;
+  --amethyst-softer: #faf7ff;
+  --amethyst-border: #e4d8ff;
+
+  /* ---------- Aliases de compatibilidade (código legado) ---------- */
+  --bg: var(--base-2);
+  --surface: var(--base-0);
+  --surface-2: var(--base-1);
+  --surface-3: var(--base-3);
+  --muted: var(--text-2);
+  --brand-bright: var(--brand-2);
+  --lilac: var(--brand-2);
+  --radius: var(--r-xl);
+  --radius-sm: var(--r-lg);
+  --radius-xs: var(--r-md);
+  --font-apple: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue';
+  --font-display: var(--font-apple), var(--font-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
-/* Dark deixa de ser automático: é opt-in pelo seletor. A marca é light. */
+/* ---------------------------------------------------------------------
+   DARK MODE — opt-in, nunca a identidade principal.
+   Preto profundo com superfícies elevadas em cinza de sistema; o vidro
+   escurece e o aro de luz fica bem mais contido.
+   --------------------------------------------------------------------- */
 :root[data-theme='dark'],
 .dark {
-  --bg: var(--bg-dark, #0d0b12);
-  --surface: #17141f;
-  --surface-2: #1d1926;
-  --surface-3: #241f30;
-  --border: rgba(255, 255, 255, 0.08);
-  --text: #f4f2fa;
-  --muted: #9a94a8;
-  --ring: rgba(166, 107, 255, 0.45);
-  --glow: rgba(166, 107, 255, 0.22);
-  --cristal-brilho: rgba(255, 255, 255, 0.12);
-  --cristal-sombra: 0 26px 64px -30px rgba(0, 0, 0, 0.85);
+  color-scheme: dark;
+
+  --base-0: #1c1c1e;
+  --base-1: #111113;
+  --base-2: #0a0a0c;
+  --base-3: #2c2c2e;
+  --text: #f5f5f7;
+  --text-2: #a1a1a6;
+  --text-3: #8e8e93;
+  --border: #2c2c2e;
+  --border-strong: #3a3a3c;
+  --fill-1: rgba(120, 120, 128, 0.36);
+  --fill-2: rgba(120, 120, 128, 0.32);
+  --fill-3: rgba(118, 118, 128, 0.24);
+  --fill-4: rgba(118, 118, 128, 0.16);
+  --brand: #8b5cf6;
+  --brand-2: #a78bfa;
+  --brand-soft: #1f1733;
+  --brand-softer: #17121f;
+  --brand-border: #33264f;
+  --success: #30d158;
+  --success-soft: #0f2417;
+  --success-border: #1b3f27;
+  --warning: #ff9f0a;
+  --warning-soft: #2a1c08;
+  --warning-border: #4a3110;
+  --danger: #ff453a;
+  --danger-soft: #2c1211;
+  --danger-border: #4d1f1c;
+  --info: #0a84ff;
+  --info-soft: #0b1d33;
+  --info-border: #133559;
+  --sh-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --sh-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --sh-md: 0 4px 12px rgba(0, 0, 0, 0.45);
+  --sh-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
+  --sh-pop: 0 16px 48px rgba(0, 0, 0, 0.65);
+
+  --lg-fill: rgba(30, 30, 32, 0.52);
+  --lg-fill-clear: rgba(30, 30, 32, 0.18);
+  --lg-fill-dense: rgba(28, 28, 30, 0.86);
+  --lg-fill-popover: rgba(36, 36, 38, 0.88);
+  --lg-fill-control: rgba(58, 58, 60, 0.55);
+  --lg-fill-control-hover: rgba(72, 72, 74, 0.7);
+  --lg-brightness: 1;
+  --lg-edge: rgba(255, 255, 255, 0.08);
+  --lg-edge-soft: rgba(255, 255, 255, 0.06);
+  --lg-highlight:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.14),
+    inset 1px 0 0 0 rgba(255, 255, 255, 0.05),
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.04),
+    inset -1px 0 0 0 rgba(255, 255, 255, 0.03),
+    inset 0 0 20px 0 rgba(255, 255, 255, 0.03);
+  --lg-highlight-control: inset 0 1px 0 0 rgba(255, 255, 255, 0.12);
+  --lg-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35), 0 24px 64px rgba(0, 0, 0, 0.35);
+  --lg-shadow-control: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --lg-specular: rgba(255, 255, 255, 0.14);
+  --lg-dim: rgba(0, 0, 0, 0.5);
+  --mat-thick: rgba(28, 28, 30, 0.86);
+  --field-bg: rgba(118, 118, 128, 0.16);
+  --field-border: rgba(255, 255, 255, 0.1);
+  --seg-thumb: #636366;
+  --ring: color-mix(in srgb, var(--brand) 40%, transparent);
+
+  /* Séries categóricas do dark: passos PRÓPRIOS, não a inversão dos claros.
+     A banda de luminosidade do dark é mais estreita (L 0.48–0.67) e os
+     valores do light reprovam nela. Validados: seis checks PASS. */
+  --cat-1: #8b5cf6;
+  --cat-2: #d97706;
+  --cat-3: #0284c7;
+  --cat-4: #0fa97b;
 }
+
+/* =====================================================================
+   RESET / BASE
+   ===================================================================== */
 
 * {
   box-sizing: border-box;
 }
+
 html,
 body {
   padding: 0;
   margin: 0;
-  color: var(--text);
-  font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  font-weight: 430; /* base; elementos maiores ficam mais grossos, menores mais finos */
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
 }
 
-/* Brand book 001 — TIPOGRAFIA: Título = SF Pro Display · Corpo = Inter · Legenda.
-   Nos Macs -apple-system resolve para SF Pro Display; fora dele cai no Inter. */
-:root {
-  --font-display: -apple-system, 'SF Pro Display', BlinkMacSystemFont, var(--font-sans), ui-sans-serif, system-ui, sans-serif;
-}
-h1, h2, h3, .font-display {
-  font-family: var(--font-display);
-  letter-spacing: -0.015em;
-}
-/* O `html` só carrega a cor-base (fallback). O visual é do `.studio-bg` — uma
-   camada `fixed -z-10`. O `body` fica transparente para o estúdio aparecer sob
-   o conteúdo. Sem feixe diagonal nem gradientes concorrentes: o estúdio é calmo. */
 html {
-  background-color: var(--bg);
+  background-color: var(--base-2);
 }
+
 body {
-  background: transparent;
+  background-color: var(--base-2);
+  color: var(--text);
+  /* SF Pro em Mac/iOS (o próprio sistema da Apple); Inter no resto. */
+  font-family: var(--font-apple), var(--font-sans), ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--brand) 22%, transparent);
+}
+
+/* =====================================================================
+   TIPOGRAFIA
+   Hierarquia da Apple: Large Title pesado, títulos em semibold, corpo
+   neutro, legenda discreta. Tracking negativo só nos tamanhos grandes.
+   ===================================================================== */
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  color: var(--text);
+  font-weight: 650;
+  letter-spacing: -0.017em;
+}
+
+h1 {
+  font-size: 34px;
+  line-height: 1.12;
+  font-weight: 700;
+  letter-spacing: -0.024em;
+}
+h2 {
+  font-size: 20px;
+  line-height: 1.25;
+}
+h3 {
+  font-size: 16px;
+  line-height: 1.3;
+  letter-spacing: -0.012em;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Escala tipográfica utilitária */
+.t-display {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.024em;
+  line-height: 1.12;
+}
+.t-title {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.017em;
+}
+.t-section {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+}
+.t-body {
+  font-size: 14px;
+  font-weight: 400;
+}
+.t-label {
+  font-size: 13px;
+  font-weight: 500;
+}
+.t-caption {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-2);
+}
+.t-micro {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--text-2);
+}
+/* Número de KPI: o elemento com mais peso visual da tela */
+.t-kpi {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.026em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.text-muted {
+  color: var(--text-2);
+}
+
+/* =====================================================================
+   FOCUS / ACESSIBILIDADE
+   ===================================================================== */
+
+/* Em `@layer base` para `outline-none`/`focus-visible:*` do Tailwind
+   poderem sobrescrever (ex.: o campo da paleta ⌘K, cujo contexto de foco
+   é o próprio sheet). Sem `border-radius` aqui: o outline já acompanha o
+   raio do elemento, e forçar um raio deformava as cápsulas ao focar. */
+@layer base {
+  :focus-visible {
+    outline: 3px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Foco por teclado apenas: o mouse não desenha anel */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Pular para o conteúdo — primeiro tab-stop da página */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 8px;
+  z-index: var(--z-toast);
+  padding: 10px 16px;
+  border-radius: var(--r-full);
+  background: var(--brand);
+  color: #fff;
+  font-weight: 600;
+}
+.skip-link:focus {
+  left: 8px;
+}
+
+/* =====================================================================
+   LP MARKETING ("/") — utilitárias portadas de `LP REVENUE/site`.
+   Escopadas por nome (prefixo/sufixo próprio quando colide com algo já
+   usado no resto do produto) para não interferir no app autenticado.
+   ===================================================================== */
+.container-px {
+  padding-left: clamp(20px, 5vw, 96px);
+  padding-right: clamp(20px, 5vw, 96px);
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+.dot-grid {
+  background-image: radial-gradient(rgba(21, 18, 25, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* =====================================================================
+   CAMADA DE COMPONENTES
+   =====================================================================
+   Tudo daqui para baixo vive em `@layer components` para que as
+   utilitárias do Tailwind SEMPRE vençam. Sem a layer, `.select{width:100%}`
+   derrota `w-auto` (mesma especificidade, e este arquivo vem depois das
+   utilities) — foi exatamente o que quebrou a barra de ferramentas de Leads
+   em três linhas. Dentro da layer, `class="select w-auto"` faz o esperado.
+   Nenhuma classe de material define `position` (BUG-013).
+   ===================================================================== */
+
+@layer components {
+  /* =====================================================================
+     SUPERFÍCIES DE CONTEÚDO (thick material)
+     ===================================================================== */
+
+  .card {
+    /* Material espesso: `.card` é a superfície universal (Section/
+       PageShell), inclusive por trás de tabelas e Kanban densos. Quase
+       sólido para a leitura nunca competir com o ambiente atrás. */
+    background: var(--mat-thick);
+    -webkit-backdrop-filter: blur(var(--mat-blur)) saturate(160%);
+    backdrop-filter: blur(var(--mat-blur)) saturate(160%);
+    border: 1px solid var(--lg-edge-soft);
+    border-radius: var(--r-xl);
+    box-shadow: var(--lg-highlight-control), var(--sh-sm);
+  }
+
+  /* Card de vidro — hero KPIs e cards editoriais (Dashboard, Agency
+     Home). Só para pouco texto (número grande + label curto). */
+  .card-crystal {
+    position: relative;
+    isolation: isolate;
+    border: 1px solid var(--lg-edge);
+    border-radius: var(--r-xl);
+    box-shadow: var(--lg-shadow);
+  }
+  .card-crystal::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background: var(--lg-fill);
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate)) brightness(var(--lg-brightness));
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate)) brightness(var(--lg-brightness));
+    box-shadow: var(--lg-highlight);
+  }
+
+  /* =====================================================================
+     LIQUID GLASS — camada de navegação e controle
+     ===================================================================== */
+
+  /* Regular — superfícies do SHELL (sidebar, topbar, hero cards).
+     O material mora num ::before, não no elemento: um elemento com
+     backdrop-filter vira "backdrop root" e nenhum descendente consegue
+     desfocar o que está atrás dele (o menu da conta, dentro da topbar,
+     mostrava a página nítida por baixo). Com o vidro no pseudo, o
+     elemento fica livre e os popovers filhos desfocam a página.
+     Só para superfícies que NÃO rolam: o ::before rolaria junto. */
+  .lg,
+  .glass-floating {
+    position: relative;
+    isolation: isolate;
+    border: 1px solid var(--lg-edge);
+    box-shadow: var(--lg-shadow);
+  }
+  .lg::before,
+  .glass-floating::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background: var(--lg-surface, var(--lg-fill));
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate)) brightness(var(--lg-brightness));
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate)) brightness(var(--lg-brightness));
+    box-shadow: var(--lg-highlight);
+  }
+
+  /* `.glass` (legado): mesmo material, aplicado direto — é usado em
+     barras que podem rolar (nav de Configurações no mobile). */
+  .glass {
+    background: var(--lg-surface, var(--lg-fill));
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate)) brightness(var(--lg-brightness));
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate)) brightness(var(--lg-brightness));
+    border: 1px solid var(--lg-edge);
+    box-shadow: var(--lg-highlight), var(--lg-shadow);
+  }
+
+  /* Variantes: trocam só o preenchimento (vale para .lg e .glass). */
+  .lg-clear {
+    --lg-surface: var(--lg-fill-clear);
+  }
+  .lg-dense {
+    --lg-surface: var(--lg-fill-dense);
+  }
+  .lg-tinted {
+    --lg-surface: color-mix(in srgb, var(--brand) 16%, var(--lg-fill));
+  }
+
+  /* Preenchimento DENTRO de um vidro (nunca vidro sobre vidro). */
+  .lg-well {
+    background: var(--fill-4);
+    border-radius: var(--r-lg);
+    box-shadow: inset 0 0 0 1px var(--lg-edge-soft);
+  }
+
+  /* Popover / menu sobre conteúdo. `.frost` é o alias legado. */
+  .lg-popover,
+  .frost {
+    background: var(--lg-fill-popover);
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    border: 1px solid var(--lg-edge);
+    border-radius: var(--r-lg);
+    box-shadow: var(--lg-highlight), var(--sh-pop);
+  }
+
+  .lg-menu-item {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--r-md);
+    color: var(--text-2);
+    font-size: 13.5px;
+    font-weight: 500;
+    text-align: left;
+    transition:
+      background var(--dur-fast) var(--ease),
+      color var(--dur-fast) var(--ease);
+  }
+  .lg-menu-item:hover {
+    background: var(--fill-3);
+    color: var(--text);
+  }
+
+  /* Sheet: modal, drawer, paleta de comandos. Sobe com spring. */
+  .lg-sheet {
+    background: var(--lg-fill-dense);
+    -webkit-backdrop-filter: blur(32px) saturate(var(--lg-saturate));
+    backdrop-filter: blur(32px) saturate(var(--lg-saturate));
+    border: 1px solid var(--lg-edge);
+    border-radius: var(--r-2xl);
+    box-shadow: var(--lg-highlight), var(--sh-pop);
+  }
+
+  /* Sheet lateral (inspector): flutua com margem, não cola na borda. */
+  .lg-sheet-side {
+    margin: 8px;
+    height: calc(100% - 16px);
+  }
+
+  /* Camada de escurecimento atrás de sheets. A Apple escurece, não borra.
+     Anima a COR, nunca `opacity`: ancestral com opacidade animada vira
+     backdrop root e o sheet de vidro perde o desfoque. */
+  .lg-backdrop {
+    /* `!important`: o overlay costuma nascer dentro de um `space-y-*`, que
+       injetaria margem e deixaria uma faixa sem escurecer no topo. */
+    margin: 0 !important;
+    background-color: var(--lg-dim);
+    animation: lg-dim-in var(--dur) var(--ease) backwards;
+  }
+
+  @keyframes lg-dim-in {
+    from {
+      background-color: transparent;
+    }
+  }
+
+  /* Brilho especular que segue o ponteiro (ver components/shell/GlassLight).
+     Fica ATRÁS do texto: o elemento isola o próprio stacking context e o
+     brilho entra com z-index -1, acima do fundo e abaixo do conteúdo. */
+  .lg-interactive {
+    position: relative;
+    isolation: isolate;
+  }
+  .lg-interactive::after,
+  .btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background: radial-gradient(
+      90px circle at var(--lg-x, 50%) var(--lg-y, -30%),
+      var(--lg-specular),
+      transparent 70%
+    );
+    opacity: 0;
+    transition: opacity var(--dur-slow) var(--ease);
+  }
+  .lg-interactive:hover::after,
+  .btn:hover:not(:disabled)::after {
+    opacity: 1;
+  }
+
+  /* Seleção / estado ativo: tint de marca discreto, nunca decorativo. */
+  .glass-accent {
+    background: color-mix(in srgb, var(--brand) 12%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand) 14%, transparent);
+  }
+
+  /* =====================================================================
+     AMBIENT BACKGROUND — o que o vidro refrata.
+     CSS puro (sem foto): luz difusa nos tons da marca, que acompanha a
+     cor de destaque da personalização. Montado uma vez em
+     app/(app)/layout.tsx — nunca remonta entre rotas.
+     ===================================================================== */
+  .ambient-bg {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-base);
+    overflow: hidden;
+    background: var(--base-1);
+  }
+
+  .ambient-bg::before {
+    content: '';
+    position: absolute;
+    inset: -10%;
+    background:
+      radial-gradient(ellipse 55% 50% at 14% 8%, color-mix(in srgb, var(--brand) 34%, transparent), transparent 62%),
+      radial-gradient(ellipse 50% 45% at 88% 14%, color-mix(in srgb, var(--brand-2) 26%, transparent), transparent 58%),
+      radial-gradient(ellipse 60% 50% at 92% 88%, color-mix(in srgb, #0a84ff 12%, transparent), transparent 60%),
+      radial-gradient(ellipse 75% 60% at 10% 95%, color-mix(in srgb, var(--brand) 14%, transparent), transparent 65%),
+      linear-gradient(165deg, var(--base-2) 0%, var(--base-1) 45%, var(--base-2) 100%);
+    animation: ambient-drift 50s ease-in-out infinite alternate;
+  }
+
+  .ambient-bg::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    backdrop-filter: blur(90px) saturate(115%);
+  }
+
+  @keyframes ambient-drift {
+    0% { transform: translate3d(0, 0, 0) scale(1); }
+    100% { transform: translate3d(-1.5%, 1%, 0) scale(1.04); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ambient-bg::before { animation: none; }
+  }
+
+  /* =====================================================================
+     FLOATING NAVIGATION — sidebar/topbar flutuantes sobre o ambient.
+     Raio 28 com padding 12 ⇒ itens com raio 16 (concêntrico).
+     ===================================================================== */
+  .nav-floating {
+    border-radius: var(--r-2xl);
+  }
+
+  .nav-floating-item {
+    position: relative;
+    border-radius: var(--r-lg);
+  }
+
+  .card-flat {
+    background: var(--base-0);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+  }
+
+  .card-inset {
+    background: var(--fill-4);
+    border: 1px solid var(--lg-edge-soft);
+    border-radius: var(--r-lg);
+  }
+
+  /* Cabeçalho padrão de card: título à esquerda, ação à direita */
+  .card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s-3);
+    padding: var(--s-5) var(--s-5) 0;
+  }
+
+  .card-body {
+    padding: var(--s-5);
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    border: 0;
+    margin: 0;
+  }
+
+  /* =====================================================================
+     BOTÕES — cápsulas
+     .btn          → glass button (vidro claro sobre o conteúdo)
+     .btn-primary  → glass prominent (tint da marca + luz)
+     .btn-ai       → prominent grafite (ações de IA)
+     .btn-soft     → tinted (preenchimento de marca)
+     .btn-ghost    → plain
+     .btn-danger   → destrutivo
+     Press: encolhe com spring, como os controles do sistema.
+     ===================================================================== */
+
+  .btn {
+    position: relative;
+    isolation: isolate;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 38px;
+    padding: 0 16px;
+    border-radius: var(--r-full);
+    border: 1px solid var(--lg-edge);
+    background: var(--lg-fill-control);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 560;
+    line-height: 1;
+    letter-spacing: -0.006em;
+    white-space: nowrap;
+    cursor: pointer;
+    box-shadow: var(--lg-highlight-control), var(--lg-shadow-control);
+    transition:
+      transform var(--dur-slow) var(--ease-spring),
+      background var(--dur) var(--ease),
+      border-color var(--dur) var(--ease),
+      color var(--dur) var(--ease),
+      box-shadow var(--dur) var(--ease),
+      filter var(--dur) var(--ease);
+  }
+
+  .btn:hover:not(:disabled) {
+    background: var(--lg-fill-control-hover);
+    box-shadow: var(--lg-highlight-control), var(--sh-md);
+  }
+
+  .btn:active:not(:disabled) {
+    transform: scale(0.97);
+    transition-duration: var(--dur-fast);
+  }
+
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .btn-primary {
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--brand) 84%, #fff) 0%,
+      var(--brand) 55%,
+      color-mix(in srgb, var(--brand) 92%, #000) 100%
+    );
+    border-color: transparent;
+    color: #fff;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.32),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.1),
+      0 1px 2px color-mix(in srgb, var(--brand) 30%, transparent),
+      0 4px 14px color-mix(in srgb, var(--brand) 22%, transparent);
+    --lg-specular: rgba(255, 255, 255, 0.35);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--brand) 84%, #fff) 0%,
+      var(--brand) 55%,
+      color-mix(in srgb, var(--brand) 92%, #000) 100%
+    );
+    filter: brightness(1.06) saturate(1.04);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.36),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.1),
+      0 1px 2px color-mix(in srgb, var(--brand) 30%, transparent),
+      0 8px 22px color-mix(in srgb, var(--brand) 28%, transparent);
+  }
+
+  /* Ação de IA: grafite, para se distinguir do roxo de ação comum */
+  .btn-ai {
+    background: linear-gradient(180deg, #3a3a3c 0%, #1d1d1f 100%);
+    border-color: transparent;
+    color: #fff;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.16),
+      0 1px 2px rgba(0, 0, 0, 0.2),
+      0 4px 14px rgba(0, 0, 0, 0.14);
+    --lg-specular: rgba(255, 255, 255, 0.22);
+  }
+  .btn-ai:hover:not(:disabled) {
+    background: linear-gradient(180deg, #48484a 0%, #242426 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.18),
+      0 1px 2px rgba(0, 0, 0, 0.2),
+      0 8px 22px rgba(0, 0, 0, 0.18);
+  }
+  :root[data-theme='dark'] .btn-ai,
+  .dark .btn-ai {
+    background: linear-gradient(180deg, #f5f5f7 0%, #d1d1d6 100%);
+    color: #1d1d1f;
+  }
+
+  .btn-soft {
+    background: color-mix(in srgb, var(--brand) 12%, transparent);
+    border-color: transparent;
+    color: var(--brand);
+    box-shadow: none;
+  }
+  .btn-soft:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--brand) 18%, transparent);
+    box-shadow: none;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--text-2);
+    box-shadow: none;
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--fill-3);
+    color: var(--text);
+    box-shadow: none;
+  }
+
+  .btn-danger {
+    background: color-mix(in srgb, var(--danger) 11%, transparent);
+    border-color: transparent;
+    color: var(--danger);
+    box-shadow: none;
+  }
+  .btn-danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--danger) 17%, transparent);
+    box-shadow: none;
+  }
+
+  .btn-sm {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  .btn-lg {
+    height: 44px;
+    padding: 0 22px;
+    font-size: 15px;
+  }
+
+  .btn-icon {
+    width: 38px;
+    padding: 0;
+  }
+  .btn-icon.btn-sm {
+    width: 32px;
+  }
+  .btn-icon.btn-lg {
+    width: 44px;
+  }
+
+  /* =====================================================================
+     FORMULÁRIOS
+     ===================================================================== */
+
+  .input,
+  .select,
+  .textarea {
+    width: 100%;
+    height: 38px;
+    padding: 0 12px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--field-border);
+    background: var(--field-bg);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
+    box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.02);
+    transition:
+      border-color var(--dur) var(--ease),
+      background var(--dur) var(--ease),
+      box-shadow var(--dur) var(--ease);
+  }
+
+  .textarea {
+    height: auto;
+    min-height: 88px;
+    padding: 10px 12px;
+    line-height: 1.55;
+    resize: vertical;
+  }
+
+  /* Campo de busca: cápsula, como o search field do sistema.
+     `:where()` zera a especificidade do atributo: sem isso a regra vencia
+     `pl-9` das telas com ícone dentro do campo (ícone sobre o texto). */
+  .input:where([type='search']) {
+    border-radius: var(--r-full);
+  }
+
+  .input::placeholder,
+  .textarea::placeholder {
+    color: var(--text-3);
+  }
+
+  .input:hover,
+  .select:hover,
+  .textarea:hover {
+    border-color: var(--border-strong);
+  }
+
+  .input:focus,
+  .select:focus,
+  .textarea:focus {
+    outline: none;
+    border-color: color-mix(in srgb, var(--brand) 70%, transparent);
+    background: var(--base-0);
+    box-shadow: 0 0 0 4px var(--ring);
+  }
+
+  .input:disabled,
+  .select:disabled,
+  .textarea:disabled {
+    background: var(--fill-4);
+    color: var(--text-3);
+    cursor: not-allowed;
+  }
+
+  .select {
+    appearance: none;
+    padding-right: 32px;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2386868B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 15 5 5 5-5'/%3E%3Cpath d='m7 9 5-5 5 5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    cursor: pointer;
+  }
+
+  /* Gatilho de busca (topbar): search field em cápsula com fill */
+  .search-field {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 38px;
+    padding: 0 8px 0 14px;
+    border-radius: var(--r-full);
+    background: var(--fill-3);
+    color: var(--text-3);
+    transition: background var(--dur) var(--ease);
+  }
+  .search-field:hover {
+    background: var(--fill-2);
+  }
+
+  /* Campo com rótulo flutuante acima — padrão dos filtros nos mockups */
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .field > label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-2);
+  }
+
+  .checkbox {
+    width: 16px;
+    height: 16px;
+    border-radius: 5px;
+    border: 1.5px solid var(--border-strong);
+    accent-color: var(--brand);
+    cursor: pointer;
+  }
+
+  /* =====================================================================
+     PILLS / BADGES / TAGS — cápsulas
+     ===================================================================== */
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 24px;
+    padding: 0 9px;
+    border-radius: var(--r-full);
+    background: var(--fill-3);
+    color: var(--text-2);
+    font-size: 12px;
+    font-weight: 560;
+    white-space: nowrap;
+    border: 1px solid transparent;
+  }
+
+  .pill-brand {
+    background: var(--brand-soft);
+    color: var(--brand);
+    border-color: var(--brand-border);
+  }
+  .pill-success {
+    background: var(--success-soft);
+    color: var(--success);
+    border-color: var(--success-border);
+  }
+  .pill-warning {
+    background: var(--warning-soft);
+    color: var(--warning);
+    border-color: var(--warning-border);
+  }
+  .pill-danger {
+    background: var(--danger-soft);
+    color: var(--danger);
+    border-color: var(--danger-border);
+  }
+  .pill-info {
+    background: var(--info-soft);
+    color: var(--info);
+    border-color: var(--info-border);
+  }
+
+  /* Tag editável (perfil do lead, conversas) */
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 26px;
+    padding: 0 11px;
+    border-radius: var(--r-full);
+    background: var(--brand-soft);
+    color: var(--brand);
+    font-size: 12px;
+    font-weight: 560;
+  }
+
+  /* Delta de KPI: ↑ verde, ↓ vermelho — sempre com o número */
+  .delta {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 12px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+  }
+  .delta-up {
+    color: var(--success);
+  }
+  .delta-down {
+    color: var(--danger);
+  }
+
+  /* Quadrado de ícone tintado dos KPIs (squircle, como ícone de sistema) */
+  .icon-tile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    border-radius: var(--r-md);
+    background: var(--brand-soft);
+    color: var(--brand);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  }
+  .icon-tile-success {
+    background: var(--success-soft);
+    color: var(--success);
+  }
+  .icon-tile-warning {
+    background: var(--warning-soft);
+    color: var(--warning);
+  }
+  .icon-tile-danger {
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+  .icon-tile-info {
+    background: var(--info-soft);
+    color: var(--info);
+  }
+  .icon-tile-neutral {
+    background: var(--base-3);
+    color: var(--text-2);
+  }
+
+  /* =====================================================================
+     TABELAS — estilo lista: cabeçalho discreto, separadores finos
+     ===================================================================== */
+
+  .tbl {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 14px;
+  }
+
+  .tbl thead th {
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-2);
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border);
+    background: transparent;
+  }
+
+  .tbl tbody td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+
+  .tbl tbody tr {
+    transition: background var(--dur-fast) var(--ease);
+  }
+
+  .tbl tbody tr:hover {
+    background: var(--fill-4);
+  }
+
+  .tbl tbody tr[data-selected='true'] {
+    background: color-mix(in srgb, var(--brand) 7%, transparent);
+  }
+
+  .tbl tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  /* =====================================================================
+     NAVEGAÇÃO / ABAS
+     ===================================================================== */
+
+  /* Aba sublinhada (perfil do lead, painéis laterais) */
+  .tab {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 11px 2px;
+    font-size: 14px;
+    font-weight: 560;
+    color: var(--text-2);
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    background: none;
+    border-top: 0;
+    border-left: 0;
+    border-right: 0;
+    transition:
+      color var(--dur) var(--ease),
+      border-color var(--dur) var(--ease);
+  }
+  .tab:hover {
+    color: var(--text);
+  }
+  .tab[aria-selected='true'] {
+    color: var(--brand);
+    border-bottom-color: var(--brand);
+  }
+
+  /* Aba em pílula (filtros de status: Todas / Ativas / Pausadas) */
+  .seg {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 14px;
+    border-radius: var(--r-full);
+    font-size: 13px;
+    font-weight: 560;
+    color: var(--text-2);
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+    transition:
+      background var(--dur) var(--ease),
+      color var(--dur) var(--ease),
+      box-shadow var(--dur) var(--ease);
+  }
+  .seg:hover {
+    color: var(--text);
+    background: var(--fill-4);
+  }
+  .seg[aria-selected='true'] {
+    background: color-mix(in srgb, var(--brand) 12%, transparent);
+    color: var(--brand);
+  }
+
+  /* Segmented control (Dia/Semana/Mês, 7D/30D/3M/12M): trilho de fill e
+     "thumb" claro com sombra, como o UISegmentedControl. */
+  .segbar {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    border-radius: var(--r-full);
+    background: var(--fill-3);
+  }
+  .segbar > .seg {
+    height: 28px;
+    padding: 0 12px;
+    border-radius: var(--r-full);
+    font-size: 12.5px;
+  }
+  .segbar > .seg:hover {
+    background: transparent;
+  }
+  .segbar > .seg[aria-selected='true'] {
+    background: var(--seg-thumb);
+    color: var(--text);
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.08),
+      0 3px 8px rgba(0, 0, 0, 0.06),
+      inset 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  }
+
+  /* Item da sidebar */
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    height: 40px;
+    padding: 0 12px;
+    border-radius: var(--r-lg);
+    color: var(--text-2);
+    font-size: 14px;
+    font-weight: 500;
+    transition:
+      background var(--dur) var(--ease),
+      color var(--dur) var(--ease);
+  }
+  .nav-item:hover {
+    background: var(--fill-4);
+    color: var(--text);
+  }
+  .nav-item[aria-current='page'] {
+    background: color-mix(in srgb, var(--brand) 12%, transparent);
+    color: var(--brand);
+    font-weight: 600;
+  }
+
+  /* =====================================================================
+     SCROLLBAR — fina, como overlay scroller
+     ===================================================================== */
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--fill-1) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: var(--fill-1);
+    border-radius: var(--r-full);
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: var(--text-3);
+    background-clip: content-box;
+  }
+
+  /* =====================================================================
+     ESTADOS (loading / empty / error)
+     Nunca deixar a interface quebrada em silêncio.
+     ===================================================================== */
+
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--fill-3);
+    border-radius: var(--r-sm);
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+    animation: shimmer 1.4s infinite;
+  }
+  :root[data-theme='dark'] .skeleton::after,
+  .dark .skeleton::after {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
+  }
+
+  @keyframes shimmer {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
+  .state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 48px 24px;
+    text-align: center;
+  }
+
+  /* =====================================================================
+     ANIMAÇÃO — as utilitárias `animate-*` do tailwind.config usam estes
+     mesmos keyframes; aqui ficam as versões de classe.
+     ===================================================================== */
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .animate-fade-in {
+    animation: fade-in var(--dur-slow) var(--ease-out) both;
+  }
+  .animate-scale-in {
+    animation: scale-in var(--dur-slow) var(--ease-spring) both;
+  }
+
+  /* =====================================================================
+     PROSA (respostas da IA, notas, markdown)
+     ===================================================================== */
+
+  .prose-orvyn {
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--text);
+  }
+  .prose-orvyn > * + * {
+    margin-top: 12px;
+  }
+  .prose-orvyn h1,
+  .prose-orvyn h2,
+  .prose-orvyn h3 {
+    margin-top: 20px;
+    font-size: 15px;
+    font-weight: 650;
+  }
+  .prose-orvyn ul,
+  .prose-orvyn ol {
+    padding-left: 20px;
+  }
+  .prose-orvyn li + li {
+    margin-top: 4px;
+  }
+  .prose-orvyn code {
+    padding: 2px 5px;
+    border-radius: 6px;
+    background: var(--fill-3);
+    font-size: 12.5px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .prose-orvyn pre {
+    padding: 12px 14px;
+    border-radius: var(--r-md);
+    background: var(--fill-4);
+    overflow-x: auto;
+  }
+  .prose-orvyn pre code {
+    padding: 0;
+    background: none;
+  }
+  .prose-orvyn a {
+    color: var(--brand);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .prose-orvyn table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .prose-orvyn th,
+  .prose-orvyn td {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    text-align: left;
+  }
+  .prose-orvyn th {
+    background: var(--fill-4);
+    font-weight: 600;
+  }
+
+  /* =====================================================================
+     §ACESSIBILIDADE — o material responde às preferências do sistema.
+     ===================================================================== */
+
+  /* Reduzir transparência: tudo opaco, sem blur. */
+  @media (prefers-reduced-transparency: reduce) {
+    .lg::before,
+    .glass,
+    .glass-floating::before,
+    .card,
+    .card-crystal::before,
+    .lg-popover,
+    .frost,
+    .lg-sheet {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
+
+  /* Aumentar contraste: aro de luz vira borda sólida legível. */
+  @media (prefers-contrast: more) {
+    .lg,
+    .glass,
+    .glass-floating,
+    .card,
+    .card-crystal,
+    .lg-popover,
+    .frost,
+    .lg-sheet,
+    .btn,
+    .input,
+    .select,
+    .textarea {
+      border-color: var(--border-strong);
+    }
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --lg-fill: #f8f8fa;
+    --lg-fill-clear: #f8f8fa;
+    --lg-fill-dense: #ffffff;
+    --lg-fill-popover: #ffffff;
+    --lg-fill-control: #ffffff;
+    --mat-thick: #ffffff;
+    --field-bg: #ffffff;
+  }
+  :root[data-theme='dark'],
+  .dark {
+    --lg-fill: #1c1c1e;
+    --lg-fill-clear: #1c1c1e;
+    --lg-fill-dense: #1c1c1e;
+    --lg-fill-popover: #2c2c2e;
+    --lg-fill-control: #3a3a3c;
+    --mat-thick: #1c1c1e;
+    --field-bg: #2c2c2e;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --text-2: #3a3a3c;
+    --text-3: #636366;
+    --border-strong: #8e8e93;
+    --lg-edge: rgba(0, 0, 0, 0.32);
+  }
+  :root[data-theme='dark'],
+  .dark {
+    --text-2: #d1d1d6;
+    --text-3: #aeaeb2;
+    --border-strong: #8e8e93;
+    --lg-edge: rgba(255, 255, 255, 0.36);
+  }
+}
+
+/* Navegador sem backdrop-filter: vidro vira superfície quase opaca. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --lg-fill: rgba(250, 250, 252, 0.96);
+    --lg-fill-dense: #ffffff;
+    --lg-fill-popover: #ffffff;
+    --mat-thick: #ffffff;
+  }
+  :root[data-theme='dark'],
+  .dark {
+    --lg-fill: rgba(28, 28, 30, 0.97);
+    --lg-fill-dense: #1c1c1e;
+    --lg-fill-popover: #2c2c2e;
+    --mat-thick: #1c1c1e;
+  }
+}
+
+/* =====================================================================
+   COMPATIBILIDADE — classes do ORVYN OS anterior.
+   `.glass`, `.glass-floating` e `.frost` agora SÃO Liquid Glass (camada
+   acima). As demais seguem neutralizadas. NÃO usar em código novo.
+   ===================================================================== */
+
+.crystal-edge,
+.crystal-island,
+.crystal-logo,
+.liquid-chrome,
+.brand-mesh,
+.fluid {
+  /* neutralizado — o material vem de .glass/.lg */
+}
+
+.crystal-island::before,
+.crystal-logo::before {
+  content: none;
+}
+
+/* Antes: fundo de estúdio com 4 gradientes radiais. Agora: o ambient. */
+.studio-bg {
+  display: none;
+}
+
+.studio-preview {
+  background: var(--base-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+}
+
+.depth-hover {
+  transition: background var(--dur) var(--ease);
+}
+.depth-hover:hover {
+  background: var(--fill-4);
+}
+
+.brand-gradient {
+  background: var(--brand);
+  color: #fff;
+}
+
+
+/* =====================================================================
+   AUTH — superfície off-white premium, escopada a login/cadastro.
+   ---------------------------------------------------------------------
+   O painel direito do AuthShell NÃO tem vídeo atrás (ver componente):
+   fundo sólido #F8F6F2 + este card claro translúcido por cima. Nomes
+   escopados (`.auth-card`) de propósito — não usar fora do AuthShell.
+   ===================================================================== */
+.auth-card {
+  position: relative;
+  border-radius: var(--r-2xl);
+  padding: 34px 34px 30px;
+  background: rgba(255, 255, 255, 0.68);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  /* Mesmo aro de luz do Liquid Glass do app (ver --lg-highlight). */
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.95),
+    inset 0 0 24px 0 rgba(255, 255, 255, 0.3),
+    0 24px 70px rgba(20, 10, 40, 0.08),
+    0 4px 18px rgba(20, 10, 40, 0.04),
+    0 0 80px rgba(123, 46, 255, 0.06);
+  color: #151219;
+}
+
+.auth-card .input,
+.auth-card .select {
+  height: 48px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+  border-color: #ddd9e1;
+  color: #17141a;
+}
+.auth-card .input::placeholder {
+  color: #a29da9;
+}
+.auth-card .input:hover,
+.auth-card .select:hover {
+  border-color: #c9c2d1;
+}
+.auth-card .input:focus,
+.auth-card .select:focus {
+  border-color: rgba(123, 46, 255, 0.6);
+  box-shadow: 0 0 0 3px rgba(123, 46, 255, 0.08);
+  background: #fff;
+}
+
+/* Foco ametista controlado + validação só depois que o usuário digitou
+   (nunca vermelho num campo obrigatório ainda vazio, recém-aberto). */
+.auth-card .input:not(:placeholder-shown):invalid {
+  border-color: #dc2626;
+}
+.auth-card .input:not(:placeholder-shown):invalid:focus {
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.14);
+}
+
+/* Autofill do navegador herdando a superfície clara do card, não o
+   amarelo padrão do navegador. */
+.auth-card .input:-webkit-autofill,
+.auth-card .input:-webkit-autofill:hover,
+.auth-card .input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #17141a;
+  -webkit-box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.92) inset;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+.auth-card .btn-ghost {
+  height: 44px;
+  border-radius: var(--r-full);
+  border: 1px solid #e7e3e9;
+  background: rgba(255, 255, 255, 0.62);
+  color: #242128;
+  transition:
+    background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
+}
+.auth-card .btn-ghost:hover:not(:disabled) {
+  background: #fff;
+  border-color: rgba(123, 46, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+/* CTA principal do auth: gradiente + glow ametista, elevação no hover,
+   leve encolhimento no press — classe própria, sem alterar `.btn-primary`
+   global (usado em ~200 lugares no resto do produto). */
+.btn-auth-primary {
+  height: 48px;
+  border-radius: var(--r-full);
+  background: linear-gradient(135deg, #7b2eff, #6922e8);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(123, 46, 255, 0.22);
+  transition:
+    transform var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
+}
+.btn-auth-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 30px rgba(123, 46, 255, 0.28);
+}
+.btn-auth-primary:active:not(:disabled) {
+  transform: translateY(0) scale(0.99);
 }
 
 /* ---------------------------------------------------------------------
-   LUZ AMBIENTE (fundo)
-   Off-white quente com um glow roxo difuso vindo das quinas — como uma sala
-   de estúdio iluminada pela flor cristalizada. Sem movimento, sem ruído: o
-   "premium" vem da luz. `fixed` para não escorrer no scroll.
+   Fora de `@layer` de propósito: precisa vencer as utilitárias do
+   Tailwind (`.text-brand`, usada em LoginForm/SignupForm para o link
+   "Esqueci a senha"/"Criar conta" e o acento do título) para bater o hex
+   exato pedido — `.text-fg`/`.text-muted`/`.bg-line` já resolvem certo
+   sozinhas agora que o card voltou a ser claro (usam os tokens padrão do
+   tema, que já são pensados pra superfície branca).
    --------------------------------------------------------------------- */
-.studio-bg {
-  position: fixed;
-  inset: 0;
-  z-index: -10;
-  pointer-events: none;
-  background:
-    radial-gradient(60% 50% at 85% 0%, color-mix(in srgb, var(--brand-bright) 10%, transparent), transparent 68%),
-    radial-gradient(55% 48% at 8% 100%, color-mix(in srgb, var(--lilac) 12%, transparent), transparent 70%),
-    radial-gradient(120% 80% at 50% -20%, #ffffff, transparent 60%),
-    linear-gradient(180deg, #f4f1ec 0%, #f8f6f2 55%, #f2efe9 100%);
+.auth-card .text-brand {
+  color: #7b2eff;
 }
-:root[data-theme='dark'] .studio-bg,
-.dark .studio-bg {
-  background:
-    radial-gradient(60% 50% at 85% 0%, color-mix(in srgb, var(--brand-bright) 18%, transparent), transparent 68%),
-    radial-gradient(55% 48% at 8% 100%, color-mix(in srgb, var(--brand-deep) 26%, transparent), transparent 70%),
-    radial-gradient(120% 80% at 50% -20%, rgba(255, 255, 255, 0.05), transparent 60%),
-    linear-gradient(180deg, #0b0910 0%, #0d0b12 55%, #08060c 100%);
+.auth-card .text-brand:hover {
+  color: #6922e8;
 }
 
-/* Plano de fundo próprio do cliente: a imagem cobre a tela; um scrim leve na cor
-   do tema mantém o texto legível e amarra a imagem à paleta. Vence o estúdio. */
-:root[data-bg-image] .studio-bg {
-  background-image:
-    linear-gradient(color-mix(in srgb, var(--bg) 62%, transparent), color-mix(in srgb, var(--bg) 74%, transparent)),
-    var(--bg-image);
-  background-size: cover, cover;
-  background-position: center, center;
-  background-repeat: no-repeat, no-repeat;
+@keyframes auth-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
-:root[data-theme='dark'][data-bg-image] .studio-bg,
-.dark[data-bg-image] .studio-bg {
-  background-image:
-    linear-gradient(color-mix(in srgb, var(--bg) 68%, transparent), color-mix(in srgb, var(--bg) 82%, transparent)),
-    var(--bg-image);
+.animate-auth-in {
+  animation: auth-card-in 450ms cubic-bezier(0.2, 0, 0.2, 1) both;
 }
 
-/* Mini-estúdio para a prévia em Configurações (espelha o `.studio-bg`). */
-.studio-preview {
-  background:
-    radial-gradient(70% 60% at 92% 0%, color-mix(in srgb, var(--brand-bright) 12%, transparent), transparent 70%),
-    radial-gradient(120% 90% at 50% 128%, #ffffff 0%, transparent 55%),
-    linear-gradient(180deg, #f4f1ec 0%, #f8f6f2 60%, #f2efe9 100%);
-}
-:root[data-theme='dark'] .studio-preview,
-.dark .studio-preview {
-  background:
-    radial-gradient(70% 60% at 92% 0%, color-mix(in srgb, var(--brand-bright) 18%, transparent), transparent 70%),
-    radial-gradient(120% 90% at 50% 128%, rgba(255, 255, 255, 0.05) 0%, transparent 55%),
-    linear-gradient(180deg, #0c0a12 0%, #0d0b12 60%, #08060c 100%);
+/* =====================================================================
+   LP REVENUE OS ("/") — SISTEMA EDITORIAL (v2)
+   =====================================================================
+   Bloco ADITIVO: não remove nem redefine nenhum token usado pelo app
+   autenticado. Tudo aqui é prefixado `--lp-*` / `.lp-*` e só é consumido
+   por `app/(marketing)/*` e `components/marketing/*`.
+
+   Direção: página editorial em off-white, tipografia monumental com
+   tracking negativo (mesma família Inter do produto), ametista como
+   ACENTO — linha, estado ativo, uma palavra da headline — nunca fundo.
+   Uma única seção (Pipeline) rompe para graphite.
+   ===================================================================== */
+
+:root {
+  /* Superfícies e tinta */
+  --lp-bg: #f8f6f2;
+  --lp-bg-warm: #f2efe8;
+  --lp-ink: #151219;
+  --lp-ink-2: rgba(21, 18, 25, 0.62);
+  --lp-ink-3: rgba(21, 18, 25, 0.4);
+  --lp-ink-4: rgba(21, 18, 25, 0.24);
+  --lp-rule: rgba(21, 18, 25, 0.13);
+  --lp-rule-soft: rgba(21, 18, 25, 0.07);
+
+  /* Acento */
+  --lp-accent: #7b2eff;
+  --lp-accent-deep: #5a20d9;
+  --lp-accent-wash: rgba(123, 46, 255, 0.08);
+  --lp-accent-line: rgba(123, 46, 255, 0.34);
+
+  /* Ruptura dark (Pipeline) */
+  --lp-graphite: #151219;
+  --lp-graphite-2: #1c1822;
+  --lp-on-dark: #f8f6f2;
+  --lp-on-dark-2: rgba(248, 246, 242, 0.6);
+  --lp-on-dark-3: rgba(248, 246, 242, 0.34);
+  --lp-rule-dark: rgba(248, 246, 242, 0.14);
+
+  /* Layout */
+  --lp-gutter: clamp(20px, 5.2vw, 88px);
+  --lp-max: 1560px;
+  --lp-spine-x: clamp(14px, 2.8vw, 46px);
+  --lp-spine-track: rgba(21, 18, 25, 0.1);
+
+  /* Motion */
+  --lp-ease: cubic-bezier(0.22, 0.61, 0.24, 1);
+  --lp-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Tipografia: hierarquia por escala, peso contido (Apple/Linear — nunca pesado). */
-h1 { font-weight: 680; letter-spacing: -0.021em; }
-h2 { font-weight: 650; letter-spacing: -0.017em; }
-h3 { font-weight: 620; letter-spacing: -0.012em; }
-.text-muted { font-weight: 420; }
-kbd, .cap, small { font-weight: 420; }
-
-::selection {
-  background: color-mix(in srgb, var(--brand) 24%, transparent);
+/* ---------- Layout ---------- */
+.lp-container {
+  width: 100%;
+  max-width: var(--lp-max);
+  margin-inline: auto;
+  padding-inline: var(--lp-gutter);
 }
 
-:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--ring);
-  border-radius: 0.7rem;
+/* Sangra para fora do container pela direita, mantendo a margem esquerda. */
+.lp-bleed-r {
+  margin-right: calc(var(--lp-gutter) * -1);
+}
+@media (min-width: 1024px) {
+  .lp-bleed-r {
+    margin-right: calc((100vw - min(100vw, var(--lp-max))) / -2 - var(--lp-gutter));
+  }
 }
 
-/* Reusable primitives ------------------------------------------------ */
-.btn {
-  position: relative;
-  overflow: hidden;                 /* recorta o brilho que varre */
+/* ---------- Tipografia ---------- */
+.lp-display {
+  font-size: clamp(54px, 8.2vw, 118px);
+  line-height: 0.88;
+  letter-spacing: -0.05em;
+  font-weight: 600;
+  text-wrap: balance;
+}
+.lp-h2 {
+  font-size: clamp(36px, 5.4vw, 82px);
+  line-height: 0.94;
+  letter-spacing: -0.046em;
+  font-weight: 600;
+}
+.lp-h3 {
+  font-size: clamp(26px, 3vw, 46px);
+  line-height: 1.02;
+  letter-spacing: -0.036em;
+  font-weight: 600;
+}
+.lp-h4 {
+  font-size: clamp(18px, 1.5vw, 23px);
+  line-height: 1.22;
+  letter-spacing: -0.022em;
+  font-weight: 600;
+}
+.lp-body {
+  font-size: clamp(16px, 1.1vw, 19px);
+  line-height: 1.58;
+  letter-spacing: -0.003em;
+  color: var(--lp-ink-2);
+  max-width: 620px;
+}
+.lp-body-sm {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--lp-ink-2);
+  max-width: 520px;
+}
+.lp-label {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--lp-ink-3);
+}
+.lp-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* ---------- Ações ---------- */
+.lp-cta {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 10px;
+  height: 54px;
+  padding-inline: 28px;
+  border-radius: 6px;
+  background: var(--lp-ink);
+  color: var(--lp-bg);
+  font-size: 15px;
   font-weight: 600;
-  font-size: 0.9rem;
-  border-radius: var(--radius-sm);
-  padding: 0.68rem 1.15rem;
-  /* movimento fluido: elástico no transform, suave no resto */
-  transition: background var(--dur) ease, box-shadow var(--dur) ease,
-    transform 0.24s cubic-bezier(0.34, 1.4, 0.5, 1), border-color var(--dur) ease;
-  cursor: pointer;
+  letter-spacing: -0.012em;
   white-space: nowrap;
-  border: 1px solid var(--border);  /* borda em TODO botão */
-  user-select: none;
+  transition:
+    background 220ms var(--lp-ease),
+    transform 220ms var(--lp-ease);
 }
-/* Liquid chrome: uma lâmina de luz cruza o botão no hover. */
-.btn::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.28) 48%, transparent 66%);
-  transform: translateX(-130%);
-  transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);
-  pointer-events: none;
-}
-.btn:hover:not(:disabled)::after { transform: translateX(130%); }
-.btn:active:not(:disabled) { transform: scale(0.975); }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-/* Primário = metal líquido roxo: corpo em gradiente, gloss no topo, aresta clara. */
-.btn-primary {
-  color: #fff;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0) 44%),
-    linear-gradient(180deg, var(--brand-bright), var(--brand) 46%, var(--brand-deep));
-  border-color: color-mix(in srgb, var(--brand-bright) 60%, rgba(255, 255, 255, 0.5));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.4),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.12),
-    0 10px 26px -12px var(--glow),
-    0 1px 2px rgba(17, 17, 17, 0.08);
-}
-.btn-primary:hover:not(:disabled) {
-  transform: translateY(-1.5px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.12),
-    0 16px 36px -12px var(--glow),
-    0 1px 2px rgba(17, 17, 17, 0.1);
-}
-/* Vidro fosco premium com aresta de luz. */
-.btn-ghost {
-  background: color-mix(in srgb, var(--surface) 58%, transparent);
-  color: var(--text);
-  border-color: var(--border);
-  backdrop-filter: blur(var(--blur)) saturate(140%);
-  -webkit-backdrop-filter: blur(var(--blur)) saturate(140%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
-}
-.btn-ghost:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--surface) 82%, transparent);
-  border-color: color-mix(in srgb, var(--brand) 26%, var(--border));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 8px 22px -14px var(--glow);
+.lp-cta:hover {
+  background: var(--lp-accent);
   transform: translateY(-1px);
 }
-.btn-soft {
-  background: color-mix(in srgb, var(--brand) 10%, transparent);
-  color: var(--brand);
-  border-color: color-mix(in srgb, var(--brand) 20%, transparent);
-}
-.btn-soft:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--brand) 16%, transparent);
-  border-color: color-mix(in srgb, var(--brand) 34%, transparent);
-  box-shadow: 0 8px 22px -14px var(--glow);
-  transform: translateY(-1px);
+.lp-cta:active {
+  transform: translateY(0);
 }
 
-/* ---- Material & movimento: frost · liquid chrome · fluido ---- */
-
-/* Frost glass forte — painéis, modais, sobreposições. */
-.frost {
-  background: color-mix(in srgb, var(--surface) 55%, transparent);
-  backdrop-filter: blur(var(--blur)) saturate(150%);
-  -webkit-backdrop-filter: blur(var(--blur)) saturate(150%);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), var(--cristal-sombra);
+.lp-cta-quiet {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 54px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  color: var(--lp-ink);
+  box-shadow: inset 0 -1px 0 0 var(--lp-rule);
+  transition:
+    box-shadow 220ms var(--lp-ease),
+    color 220ms var(--lp-ease);
 }
-:root[data-theme='dark'] .frost,
-.dark .frost {
-  border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), var(--cristal-sombra);
+.lp-cta-quiet:hover {
+  color: var(--lp-accent);
+  box-shadow: inset 0 -1px 0 0 var(--lp-accent);
 }
 
-/* Liquid chrome — superfície metálica com um brilho girando devagar. */
-.liquid-chrome {
+.lp-cta-invert {
+  background: var(--lp-on-dark);
+  color: var(--lp-graphite);
+}
+.lp-cta-invert:hover {
+  background: #fff;
+  color: var(--lp-accent-deep);
+}
+
+/* ---------- Moldura de screenshot real ---------- */
+.lp-shot {
   position: relative;
   overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.14), transparent 42%),
-    linear-gradient(135deg, color-mix(in srgb, var(--brand-bright) 26%, var(--surface)), var(--surface) 58%, color-mix(in srgb, var(--brand) 20%, var(--surface)));
-}
-.liquid-chrome::before {
-  content: '';
-  position: absolute;
-  inset: -60%;
-  background: conic-gradient(from 0deg, transparent 0deg, rgba(255, 255, 255, 0.16) 38deg, transparent 90deg);
-  animation: chrome-spin 9s linear infinite;
-  pointer-events: none;
-}
-@keyframes chrome-spin { to { transform: rotate(1turn); } }
-
-/* Elevação fluida no hover (para divs/cards interativos). */
-.fluid { transition: transform 0.24s cubic-bezier(0.34, 1.4, 0.5, 1), box-shadow 0.24s ease; }
-.fluid:hover { transform: translateY(-2px); }
-
-/* Menos movimento quando o sistema pede. */
-@media (prefers-reduced-motion: reduce) {
-  .btn::after,
-  .liquid-chrome::before { animation: none !important; transition: none !important; transform: none !important; }
-  .btn:hover:not(:disabled),
-  .btn-primary:hover:not(:disabled),
-  .btn-ghost:hover:not(:disabled),
-  .btn-soft:hover:not(:disabled),
-  .card:hover,
-  .fluid:hover,
-  .depth-hover:hover { transform: none !important; }
-}
-
-.input {
-  width: 100%;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 0.8rem 1rem;
-  font-size: 0.95rem;
-  color: var(--text);
-  transition: border-color var(--dur) ease, box-shadow var(--dur) ease, background var(--dur) ease;
-}
-.input::placeholder {
-  color: var(--muted);
-}
-.input:focus {
-  border-color: color-mix(in srgb, var(--brand) 55%, var(--border));
-  box-shadow: 0 0 0 4px var(--glow);
-  background: var(--surface);
-  outline: none;
-}
-
-/* Card ACRÍLICO: vidro fosco translúcido que "gela" a luz ambiente do estúdio.
-   Rim light na borda + brilho interno no topo (a assinatura do acrílico), raio 24.
-   `--acr-op` controla o leitoso: menor = mais transparente. */
-.card {
-  position: relative;
-  background: color-mix(in srgb, var(--surface) var(--acr-op, 62%), transparent);
-  backdrop-filter: blur(var(--blur)) saturate(150%);
-  -webkit-backdrop-filter: blur(var(--blur)) saturate(150%);
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  border-radius: var(--radius);
+  border-radius: 12px;
+  background: #fff;
+  aspect-ratio: 1397 / 1014;
+  isolation: isolate;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.6),
-    0 1px 2px rgba(17, 17, 17, 0.03),
-    0 16px 44px -30px var(--glow);
-  transition: box-shadow var(--dur) ease, transform var(--dur) ease;
+    0 1px 1px rgba(21, 18, 25, 0.04),
+    0 3px 8px rgba(21, 18, 25, 0.04),
+    0 22px 44px -22px rgba(21, 18, 25, 0.2),
+    0 70px 120px -60px rgba(21, 18, 25, 0.26);
 }
-.card:hover {
-  transform: translateY(-2px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.7),
-    0 1px 2px rgba(17, 17, 17, 0.04),
-    0 24px 54px -28px var(--glow);
-}
-:root[data-theme='dark'] .card,
-.dark .card {
-  background: color-mix(in srgb, var(--surface) 55%, transparent);
-  border-color: rgba(255, 255, 255, 0.09);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 1px 2px rgba(0, 0, 0, 0.35),
-    0 22px 52px -30px rgba(0, 0, 0, 0.6);
-}
-/* Navegador sem backdrop-filter: superfície quase sólida (nada quebra). */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .card { background: color-mix(in srgb, var(--surface) 92%, var(--bg)); }
-}
-
-/* Vidro (frosted glass) — sidebar / ilha dinâmica */
-/* `@layer components`: sem isto, `position: relative` daqui GANHA de `fixed`/
-   `absolute` do Tailwind (mesma especificidade, e este arquivo vem depois das
-   utilities). Foi exatamente o que quebrou o chat da Nyro e o menu do topo
-   quando o cristal chegou. Dentro da layer, utility sempre vence — que é o que
-   quem escreve `glass fixed` espera. */
-@layer components {
-  .glass {
-    position: relative;
-  }
-  .crystal-edge {
-    position: relative;
-  }
-}
-
-.glass {
-  background: color-mix(in srgb, var(--surface) 72%, transparent);
-  backdrop-filter: blur(var(--blur)) saturate(140%);
-  -webkit-backdrop-filter: blur(var(--blur)) saturate(140%);
-  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-  box-shadow:
-    inset 0 1px 0 var(--cristal-brilho),
-    var(--cristal-sombra);
-}
-:root[data-theme='dark'] .glass,
-.dark .glass {
-  background: color-mix(in srgb, var(--surface) 52%, transparent);
-  border-color: color-mix(in srgb, #ffffff 12%, transparent);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    0 26px 64px -28px rgba(0, 0, 0, 0.9);
-}
-
-/* ---------------------------------------------------------------------
-   IDENTIDADE CRISTAL
-   O vidro (.glass) é o material base; o cristal acrescenta o que faz um
-   quartzo parecer quartzo: aresta que refrata luz e brilho especular.
-   --------------------------------------------------------------------- */
-
-/* Aresta refratada: 1px de gradiente prismático na borda, feito com máscara
-   (o `border-image` não acompanha border-radius). O `position: relative` está
-   em @layer components, lá em cima, para não vencer utility de posição. */
-.crystal-edge::before {
+.lp-shot::after {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  padding: 1px;
-  background: var(--cristal-refracao);
-  /* só a moldura fica visível: o miolo é recortado */
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  opacity: 0.22;
+  border: 1px solid rgba(21, 18, 25, 0.1);
   pointer-events: none;
-  transition: opacity 0.25s ease;
+  z-index: 2;
 }
-.crystal-edge:hover::before {
-  opacity: 0.42;
+.lp-shot-dark::after {
+  border-color: rgba(248, 246, 242, 0.16);
 }
-
-/* Logo: sem cartão, sem moldura — só o cristal, com a luz que ele emite.
-   O halo é `drop-shadow` (segue o recorte do PNG, ao contrário de box-shadow,
-   que desenharia o quadrado que o usuário pediu para tirar). */
-.crystal-logo {
-  transition: transform 0.28s cubic-bezier(0.2, 0.7, 0.2, 1), filter 0.28s ease;
-  filter: drop-shadow(0 4px 12px color-mix(in srgb, var(--brand-deep) 26%, transparent));
-}
-.crystal-logo:hover {
-  transform: translateY(-1px) scale(1.03);
-  filter: drop-shadow(0 6px 16px color-mix(in srgb, var(--brand-deep) 36%, transparent));
-}
-.crystal-logo:active {
-  transform: translateY(0) scale(0.99);
-}
-
-/* Ilha: vidro que nasce ATRÁS da logo. Arredondada só à direita — canto do lado
-   esquerdo seria uma borda no meio do cristal.
-   A máscara apaga os 2.75rem da esquerda (justo o pedaço encoberto pela logo):
-   a flor tem cantos transparentes entre as pétalas, e sem isso a aresta da ilha
-   apareceria nesses vãos, denunciando o truque. */
-.crystal-island {
-  background: color-mix(in srgb, var(--surface) 70%, transparent);
-  backdrop-filter: blur(22px) saturate(180%);
-  -webkit-backdrop-filter: blur(22px) saturate(180%);
-  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  border-left: none;
+.lp-shot-dark {
   box-shadow:
-    inset 0 1px 0 var(--cristal-brilho),
-    var(--cristal-sombra);
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 2.75rem);
-  mask-image: linear-gradient(90deg, transparent 0, #000 2.75rem);
+    0 2px 6px rgba(0, 0, 0, 0.3),
+    0 40px 90px -30px rgba(0, 0, 0, 0.6);
 }
-:root[data-theme='dark'] .crystal-island,
-.dark .crystal-island {
-  background: color-mix(in srgb, var(--surface) 55%, transparent);
-  border-color: color-mix(in srgb, #ffffff 12%, transparent);
-}
-
-/* Elevação sutil no hover (sem tilt: o rotateX dava aquele ar "gimmick"). */
-.depth-hover {
-  transition: transform 0.22s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.22s ease;
-}
-.depth-hover:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 18px 36px -24px rgba(20, 14, 32, 0.28);
+.lp-shot-img {
+  position: absolute;
+  max-width: none;
+  width: 103.6521%;
+  height: 107.1006%;
+  left: -1.7896%;
+  top: -2.3669%;
 }
 
-.scrollbar-thin::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
-}
-.scrollbar-thin::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 999px;
-}
-.scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: var(--muted);
-}
-
-.brand-gradient {
-  background-image: radial-gradient(120% 120% at 0% 0%, color-mix(in srgb, var(--brand) 22%, var(--surface)) 0%, var(--surface) 55%);
-}
-.brand-mesh {
-  background-color: #2a0f45;
-  background-image: radial-gradient(at 18% 22%, #7b2fbe 0px, transparent 55%),
-    radial-gradient(at 82% 12%, #9b4de0 0px, transparent 45%),
-    radial-gradient(at 70% 88%, #5b1e9e 0px, transparent 50%),
-    radial-gradient(at 12% 82%, #3c165e 0px, transparent 45%);
+/* ---------- Spine ---------- */
+.lp-spine-rail {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: var(--lp-spine-x);
+  width: 1px;
+  z-index: 5;
+  pointer-events: none;
+  background: var(--lp-spine-track);
+  transition: background 500ms var(--lp-ease);
 }
 
-/* Markdown (base de conhecimento) ----------------------------------- */
-.prose-orvyn {
-  color: var(--text);
-  line-height: 1.72;
-  font-size: 0.97rem;
-  overflow-wrap: anywhere;
+/* ---------- Grão editorial: rompe o "flat vetorial" de LP gerada ---------- */
+.lp-grain::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.4;
+  background-image: radial-gradient(rgba(21, 18, 25, 0.055) 0.5px, transparent 0.5px);
+  background-size: 3px 3px;
 }
-.prose-orvyn h1 { font-size: 1.8rem; font-weight: 800; letter-spacing: -0.02em; margin: 0.2em 0 0.6em; }
-.prose-orvyn h2 { font-size: 1.32rem; font-weight: 700; margin: 1.5em 0 0.5em; padding-bottom: 0.3em; border-bottom: 1px solid var(--border); }
-.prose-orvyn h3 { font-size: 1.08rem; font-weight: 700; margin: 1.25em 0 0.4em; color: var(--brand); }
-.prose-orvyn h4 { font-weight: 700; margin: 1.1em 0 0.3em; }
-.prose-orvyn p { margin: 0.7em 0; }
-.prose-orvyn a { color: var(--brand); text-decoration: underline; text-underline-offset: 2px; }
-.prose-orvyn ul, .prose-orvyn ol { margin: 0.6em 0; padding-left: 1.4em; }
-.prose-orvyn li { margin: 0.25em 0; }
-.prose-orvyn code { background: var(--surface-3); border: 1px solid var(--border); border-radius: 5px; padding: 0.1em 0.35em; font-size: 0.85em; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.prose-orvyn pre { background: var(--surface-3); border: 1px solid var(--border); border-radius: 12px; padding: 1em; overflow-x: auto; }
-.prose-orvyn pre code { background: transparent; border: 0; padding: 0; }
-.prose-orvyn blockquote { margin: 0.9em 0; padding: 0.5em 1em; border-left: 3px solid var(--brand); background: color-mix(in srgb, var(--brand) 7%, transparent); border-radius: 0 8px 8px 0; color: var(--muted); }
-.prose-orvyn table { width: 100%; border-collapse: collapse; margin: 1em 0; font-size: 0.88rem; display: block; overflow-x: auto; }
-.prose-orvyn th, .prose-orvyn td { border: 1px solid var(--border); padding: 0.5em 0.7em; text-align: left; vertical-align: top; }
-.prose-orvyn th { background: color-mix(in srgb, var(--brand) 10%, transparent); font-weight: 700; }
-.prose-orvyn hr { border: 0; border-top: 1px solid var(--border); margin: 1.5em 0; }
+
+/* ---------- Anotações finas sobre screenshot ---------- */
+.lp-annot {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  background: rgba(248, 246, 242, 0.92);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--lp-rule);
+  border-left: 1px solid var(--lp-accent);
+  border-radius: 4px;
+  padding: 10px 14px;
+  max-width: 260px;
+}
+
+/* Nenhuma animação de entrada quando o usuário pede menos movimento —
+   o bloco global já zera durações; aqui garantimos estado final visível. */
+@media (prefers-reduced-motion: reduce) {
+  .lp-shot {
+    box-shadow:
+      0 1px 2px rgba(21, 18, 25, 0.05),
+      0 20px 40px -24px rgba(21, 18, 25, 0.18);
+  }
+}
+
+/* Enquadramento por viewport dentro da moldura de produto.
+   Numa tela de 390px, uma captura de 1397px de largura renderiza o texto
+   da interface a ~4px: ilegível. `--lp-zoom-*` aproxima a região que
+   importa no mobile SEM gerar outro arquivo e sem redesenhar a tela — é
+   a mesma captura, só enquadrada mais perto. */
+.lp-shot-frame {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  transform: scale(var(--lp-zoom, 1));
+  transform-origin: var(--lp-zoom-x, 50%) var(--lp-zoom-y, 50%);
+}
+@media (max-width: 767px) {
+  .lp-shot-frame {
+    transform: scale(var(--lp-zoom-m, var(--lp-zoom, 1)));
+    transform-origin: var(--lp-zoom-mx, var(--lp-zoom-x, 50%)) var(--lp-zoom-my, var(--lp-zoom-y, 50%));
+  }
+}
+/* Troca de operação: cobre a sessão anterior até a nova ser confirmada. */
+.operation-content { transition: filter .45s ease, opacity .45s ease; }
+.operation-content-blurred { filter: blur(18px); opacity: .18; pointer-events: none; }
+.operation-transition { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; background: linear-gradient(120deg,rgba(23,8,44,.95),rgba(59,16,96,.88)),url('/Background-login.png') center/cover; backdrop-filter: blur(24px); animation: operation-enter .5s ease both; }
+.operation-transition-glow { position:absolute; width:360px; height:360px; border-radius:50%; background:#8b35ff; filter:blur(120px); opacity:.3; }
+.operation-progress { width:160px; height:3px; border-radius:9px; overflow:hidden; background:#ffffff20; }
+.operation-progress::after { content:''; display:block; height:100%; width:40%; border-radius:9px; background:#caa5ff; animation: operation-progress 1.4s ease-in-out infinite; }
+@keyframes operation-enter { from { opacity:0; } to { opacity:1; } }
+@keyframes operation-progress { 0% { transform:translateX(-100%); } 100% { transform:translateX(350%); } }
+@media(prefers-reduced-motion:reduce) { .operation-content,.operation-transition { transition:none;animation:none; } .operation-progress::after { animation:none;width:100%; } }
