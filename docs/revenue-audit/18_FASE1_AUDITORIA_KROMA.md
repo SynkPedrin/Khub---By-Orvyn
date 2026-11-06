@@ -239,3 +239,14 @@ Limites: 100 req/10 s por PIT por location; 200 mil/dia por location; 429 sem `R
 - Observação técnica: o Cloudflare do GHL bloqueia clientes HTTP sem User-Agent de navegador/cliente (erro 1010); o extrator usa `User-Agent: orvyn-migracao/1.0`.
 - **Para seguir:** editar o PIT no GHL (Settings → Private Integrations) e liberar **somente leitura**: `contacts.readonly`, `conversations/message.readonly` (confirmados na documentação) e, conforme a documentação de cada rota, os de leitura de conversas, oportunidades, funis, campos/tags, usuários, workflows e Conversation AI. Nenhum escopo de escrita.
 
+### 12.2 Limpeza e estado de partida (2026-11-06)
+- **Contas demo apagadas** (pedido do product owner): 3 tenants `is_demo` (Vitta Prime, Helios, Forma Casa), a conta de demonstração `demo@orvyn.local` (Clínica Aurora) e 2 contas de QA `@teste.invalido` — 6 tenants, 6 identidades, 583 eventos de fila. Backup completo do banco antes (`pg_dump -Fc`, fora do repositório). Trigger de imutabilidade do `audit_logs` desligado só dentro da transação e religado (verificado ATIVO).
+- Ficam: `Sua Empresa` (tenant de fallback do webhook Stevo), `Destino Ads`, `ORVYN Revenue OS`, `Orvyn IA` + agência "Pedro Gabriel".
+- **Stevo (`GET /v1/instances`, leitura):** 2 instâncias SM v2 na conta — `studio-da-beleza` (**conectada**, perfil "Studio da Beleza") e `dra-barbara-lopes` (inativa, desconectada). O WhatsApp do cliente que opera no GHL **já está pareado na Stevo**: não é preciso QR.
+
+### 12.3 Corte do inbox sem derrubar o GHL
+1. **Paralelo (sem risco):** webhook de conta Stevo → Revenue OS (assinatura HMAC, `event_id`, filtro pela instância `studio-da-beleza` vinculada ao tenant do cliente por `external_ref`). Webhooks de conta são aditivos (até 10): o GHL continua recebendo. Revenue OS só **lê** — mensagens e contatos entram, nenhum envio.
+2. **Ensaio de envio:** fora de produção a trava manda tudo para o número de teste (`STEVO_TEST_NUMBER`).
+3. **Corte:** com automações e agente reconstruídos e validados, o Revenue OS passa a responder; a integração Stevo→GHL é desligada; GHL fica só leitura até a validação final.
+- **Bloqueio de infraestrutura:** a Stevo precisa alcançar o webhook por **HTTPS público**. Hoje a API roda em `localhost`. Precisa de deploy (API + worker + Postgres + Redis) ou túnel HTTPS para o ensaio.
+
