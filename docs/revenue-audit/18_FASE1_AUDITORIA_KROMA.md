@@ -233,3 +233,9 @@ Limites: 100 req/10 s por PIT por location; 200 mil/dia por location; 429 sem `R
 4. Reconstrução das automações e do agente no Revenue OS; testes no playground.
 5. Corte: Revenue OS assume o WhatsApp (Stevo) do cliente; GHL fica só leitura até a validação; depois, revogar o PIT e apagar `GHL_MIGRATION_TOKEN`.
 
+### 12.1 Resultado do inventário (2026-11-06, só leitura)
+- Location ID recebido; `GET /locations/{id}` com `Version: v3` → **200**: subconta **"Studio da Beleza"**, fuso `America/Sao_Paulo`.
+- `POST /contacts/search` → **401** "The token is not authorized for this scope". `GET /conversations/messages/export` → **401** (mesmo motivo). O PIT só tem o escopo de location.
+- Observação técnica: o Cloudflare do GHL bloqueia clientes HTTP sem User-Agent de navegador/cliente (erro 1010); o extrator usa `User-Agent: orvyn-migracao/1.0`.
+- **Para seguir:** editar o PIT no GHL (Settings → Private Integrations) e liberar **somente leitura**: `contacts.readonly`, `conversations/message.readonly` (confirmados na documentação) e, conforme a documentação de cada rota, os de leitura de conversas, oportunidades, funis, campos/tags, usuários, workflows e Conversation AI. Nenhum escopo de escrita.
+
