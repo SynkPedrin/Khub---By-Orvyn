@@ -165,6 +165,11 @@ Em F0 (Bloco 4) esses arquivos serão movidos/copiados para `packages/ui/assets/
   - TypeScript **5.5.4** (strict) · Postgres alvo **pg16 + pgvector** (imagem `pgvector/pgvector:pg16` no compose)
 - **Consequências:** `prisma generate` OK gerando o modelo com `Unsupported("vector(1024)")` (R0.3). Migrações do RAG continuam em SQL puro (`db/`), não no Prisma Migrate. `packages/ui` fica como dívida pequena (web tem seus componentes locais). Turbo `tasks` (schema v2). **Verificado:** `pnpm build` → 2/2 apps; API sobe e responde `/v1/health` (db:false sem Postgres) e 404 em `application/problem+json`.
 
+### ADR-0035 — Plano de fundo oficial atrás do app (o vidro refrata a marca)
+- **Status:** Aceito (product owner, 2026-11-07). Emenda o ADR-0033/0034 no fundo do app.
+- **Problema:** o usuário viu o app "cru, nada muda" — o fundo era só degradê desfocado (90px) e os cards quase opacos (86%): o vidro não tinha o que refratar. A imagem oficial (`plano de fundo.png` = `public/khub-background.png`, vidro roxo + limão) não era usada.
+- **Decisão:** `.ambient-bg` mostra a imagem (versão leve `public/app-fundo.jpg`, 148 KB, gerada da original sem alterá-la) com deriva lenta; véu de legibilidade em degradê (8% topo → 42% base) + facho roxo; escuro aplica `brightness(.38) saturate(1.35)` e véu mais denso. Cards ficam translúcidos (`--mat-thick` 74% claro / 72% escuro, desfoque 24px) para a imagem aparecer através do vidro. Textura de pontos reduzida (competia com a imagem). "Reduzir transparência" continua deixando as superfícies opacas.
+
 ### ADR-0034 — Camada de experiência: luz que reage, bordas vivas, coreografia
 - **Status:** Aceito (product owner, 2026-11-07). Estende o ADR-0033 (luz roxa & aro limão).
 - **Pedido:** "melhore todo o frontend… iluminação, bordas, animação… que não seja só um sistema e sim uma real experiência".
