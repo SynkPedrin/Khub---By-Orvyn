@@ -60,14 +60,14 @@ export default function ExecucoesPage() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 px-4 py-6 sm:px-6">
+    <div className="mx-auto w-full max-w-[1680px] space-y-5 px-4 py-6 lg:px-8 lg:py-8">
       <Link href={`/automacoes/${id}`} className="inline-flex items-center gap-1 text-xs text-muted hover:text-brand">
         <Icon name="chevronRight" size={13} className="rotate-180" /> Voltar ao editor
       </Link>
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-extrabold tracking-tight text-fg">Execuções</h1>
+          <h1 className="t-display">Execuções</h1>
           <p className="text-sm text-muted">Cada passo do fluxo, com entrada, saída e erro.</p>
         </div>
         <div className="flex items-end gap-2">

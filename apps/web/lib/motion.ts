@@ -41,8 +41,8 @@ export const pageVariants: Variants = {
   },
 };
 
-/** Elevação sutil em hover de card — usar com `whileHover`, nunca scale forte. */
+/** Elevação sutil em hover de card (2px — ADR-0036) — usar com `whileHover`, nunca scale. */
 export const cardHover = {
-  y: -4,
+  y: -2,
   transition: motionTokens.spring.soft,
 };

@@ -98,7 +98,7 @@ export function DealDrawer({ dealId, stages, onClose, onChanged }: Props) {
           <div className="space-y-5">
             <div>
               <div className="flex items-start justify-between gap-3">
-                <h2 className="text-lg font-extrabold leading-tight text-fg">{d.titulo}</h2>
+                <h2 className="text-lg font-semibold leading-tight text-fg">{d.titulo}</h2>
                 <span className="shrink-0 text-lg font-bold text-brand">{brl(d.valor)}</span>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2">

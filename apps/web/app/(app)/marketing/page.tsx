@@ -43,7 +43,7 @@ function Divisor({ icon, titulo, sub, contagem }: { icon: IconName; titulo: stri
       </span>
       <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <h2 className="text-xl font-extrabold tracking-tight text-fg">{titulo}</h2>
+          <h2 className="text-xl font-semibold tracking-tight text-fg">{titulo}</h2>
           {contagem !== undefined && <span className="rounded-full bg-surface3 px-2 py-0.5 text-[11px] font-semibold text-muted">{contagem}</span>}
         </div>
         <p className="text-xs text-muted">{sub}</p>
@@ -116,7 +116,7 @@ export default function BibliotecaPage() {
   const totalDocs = useMemo(() => porCategoria.reduce((n, [, l]) => n + l.length, 0), [porCategoria]);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8 px-4 py-6 sm:px-6">
+    <div className="mx-auto w-full max-w-[1680px] space-y-8 px-4 py-6 lg:px-8 lg:py-8">
       {/* Hero — base em gradiente (instantânea) + vídeo do cristal carregado só
           quando a página fica ociosa: não bloqueia templates/base nem o 1º paint.
           Look escuro fixo nos 2 temas; scrim mantém o texto legível. */}
@@ -136,7 +136,7 @@ export default function BibliotecaPage() {
         <div className="relative flex items-center gap-2 text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--brand-bright)' }}>
           <Icon name="knowledge" size={15} /> Biblioteca
         </div>
-        <h1 className="relative mt-2 text-3xl font-extrabold tracking-tight text-white drop-shadow">Biblioteca</h1>
+        <h1 className="relative mt-2 text-3xl font-semibold tracking-tight text-white drop-shadow">Biblioteca</h1>
         <p className="relative mt-2 max-w-2xl text-sm text-white/85 sm:text-base">
           Tudo que a NICO usa para pensar e agir, em dois lugares: <strong className="text-white">automações prontas</strong> para instalar em um
           clique e a <strong className="text-white">base de marketing</strong> — os frameworks que ela consulta ao raciocinar sobre a sua estratégia.

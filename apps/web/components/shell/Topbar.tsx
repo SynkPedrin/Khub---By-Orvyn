@@ -94,21 +94,45 @@ function SearchTrigger() {
 /* ------------------------------------------------------------------ */
 
 function NotificationsButton() {
-  // Placeholder honesto: o ponto só aparece quando houver fonte real de
-  // notificações. Nada de badge decorativo fingindo atividade.
-  const naoLidas = 0;
+  // Ainda não existe fonte de notificações no backend. O botão não finge
+  // atividade (sem badge) e não fica sem ação: abre um aviso honesto.
+  const [aberto, setAberto] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!aberto) return;
+    const fora = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setAberto(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setAberto(false);
+    document.addEventListener('mousedown', fora);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', fora);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [aberto]);
 
   return (
-    <button
-      type="button"
-      className="btn btn-ghost btn-icon relative"
-      aria-label={naoLidas ? `Notificações: ${naoLidas} não lidas` : 'Notificações'}
-    >
-      <Icon name="bell" size={19} />
-      {naoLidas > 0 && (
-        <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-brand ring-2 ring-surface" aria-hidden />
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        className="btn btn-ghost btn-icon"
+        aria-label="Notificações"
+        aria-haspopup="dialog"
+        aria-expanded={aberto}
+        onClick={() => setAberto((v) => !v)}
+      >
+        <Icon name="bell" size={19} />
+      </button>
+      {aberto && (
+        <div role="dialog" aria-label="Notificações" className="lg-popover absolute right-0 top-[calc(100%+8px)] z-dropdown w-72 animate-scale-in p-4">
+          <p className="text-[13.5px] font-semibold text-fg">Notificações</p>
+          <p className="mt-1 text-[13px] leading-snug text-muted">
+            A central de notificações ainda não está disponível. Conversas novas aparecem com contador no menu Conversas.
+          </p>
+        </div>
       )}
-    </button>
+    </div>
   );
 }
 

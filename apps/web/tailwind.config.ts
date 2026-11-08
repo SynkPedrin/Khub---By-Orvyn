@@ -71,8 +71,8 @@ const config: Config = {
         },
       },
       fontFamily: {
-        // SF Pro em Mac/iOS; Inter (next/font) no resto — ver ADR-0029.
-        sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Text"', 'var(--font-sans)', 'ui-sans-serif', 'system-ui', 'Segoe UI', 'Roboto', 'sans-serif'],
+        // Inter (next/font) em todas as plataformas; SF Pro só como reserva — ADR-0036.
+        sans: ['var(--font-sans)', '-apple-system', 'BlinkMacSystemFont', '"SF Pro Text"', 'ui-sans-serif', 'system-ui', 'Segoe UI', 'Roboto', 'sans-serif'],
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       fontSize: {

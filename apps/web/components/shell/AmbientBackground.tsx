@@ -12,9 +12,5 @@
  * capturar clique por engano.
  */
 export function AmbientBackground() {
-  return (
-    <div className="ambient-bg pointer-events-none" aria-hidden>
-      <div className="ambient-grid" />
-    </div>
-  );
+  return <div className="ambient-bg pointer-events-none" aria-hidden />;
 }

@@ -53,7 +53,6 @@ export default function DashboardPage() {
         subtitle="Aqui está o que está movimentando a sua receita hoje."
         quote={'"Mais conversas. Mais oportunidades.\nMais receita."'}
         actions={<SeloDemo />}
-        motionAccent
       />
 
       {demo ? <DashboardComDados /> : <DashboardReal />}

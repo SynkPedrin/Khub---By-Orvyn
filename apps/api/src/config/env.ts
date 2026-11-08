@@ -54,7 +54,12 @@ const schema = z.object({
   // Stevo — API de GESTÃO (https://openapi.stevo.chat/v1): instâncias, envio,
   // webhooks de conta assinados. Chave de conta `stevo_sk_…` (sem restrição de
   // instância, exigida para webhook de conta). Nunca vai ao browser.
-  STEVO_REVENUE_API_KEY: z.string().regex(/^stevo_sk_/, 'chave Stevo deve começar com stevo_sk_').optional(),
+  // Vazio = não configurado (mesma convenção das outras chaves; o QA isola-se
+  // assim). Preenchida, tem de ter o formato da Stevo.
+  STEVO_REVENUE_API_KEY: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+    z.string().regex(/^stevo_sk_/, 'chave Stevo deve começar com stevo_sk_').optional(),
+  ),
   STEVO_API_BASE_URL: z.string().url().default('https://openapi.stevo.chat'),
   // Segredo `whsec_…` devolvido UMA vez na criação do webhook de conta; o
   // anterior vale durante a rotação (overlap).

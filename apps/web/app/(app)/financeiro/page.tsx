@@ -65,10 +65,10 @@ export default function FinanceiroPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6">
+    <div className="mx-auto w-full max-w-[1680px] space-y-6 px-4 py-6 lg:px-8 lg:py-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-fg">Financeiro</h1>
+          <h1 className="t-display">Financeiro</h1>
           <p className="mt-1 text-sm text-muted">Cobranças do seu tenant. O link de pagamento usa a Stripe — conecte para cobrar de verdade.</p>
         </div>
         <Button onClick={() => setNovo((v) => !v)}><Icon name="plus" size={16} /> Nova cobrança</Button>
@@ -84,7 +84,7 @@ export default function FinanceiroPage() {
               <p className="text-xs font-medium text-muted">{k.l}</p>
               <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand/12 text-brand"><Icon name={k.icon} size={17} /></span>
             </div>
-            <p className={cx('mt-2 text-2xl font-extrabold', k.cor)}>{k.v}</p>
+            <p className={cx('mt-2 text-2xl font-semibold', k.cor)}>{k.v}</p>
           </Card>
         ))}
       </div>

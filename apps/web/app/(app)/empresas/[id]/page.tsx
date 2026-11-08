@@ -70,7 +70,7 @@ export default function Empresa360Page() {
           <div className="flex items-center gap-4">
             <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-brand/12 text-lg font-bold text-brand">{c.nome.slice(0, 2).toUpperCase()}</span>
             <div>
-              <h1 className="text-xl font-extrabold tracking-tight text-fg">{c.nome}</h1>
+              <h1 className="text-xl font-semibold tracking-tight text-fg">{c.nome}</h1>
               <p className="mt-0.5 text-sm text-muted">{[c.segmento, c.tamanho && `${c.tamanho} pessoas`, c.dominio].filter(Boolean).join(' · ') || '—'}</p>
             </div>
           </div>

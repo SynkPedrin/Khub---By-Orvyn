@@ -145,7 +145,7 @@ export default function InboxPage() {
       <div className="flex w-full max-w-xs shrink-0 flex-col border-r border-line bg-surface md:w-80">
         <div className="border-b border-line px-4 py-4">
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-extrabold tracking-tight text-fg">Inbox</h1>
+            <h1 className="text-lg font-semibold tracking-tight text-fg">Inbox</h1>
             <span
               title={conectado ? 'Ao vivo: mensagens chegam na hora' : 'Sem conexão ao vivo — atualizando a cada 5s'}
               className={`h-2 w-2 shrink-0 rounded-full ${conectado ? 'bg-emerald-500' : 'bg-amber-500'}`}

@@ -6,12 +6,14 @@ import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Icon } from '../icons';
 import { cx } from '../ui';
-import { PRIMARY_NAV, AGENCY_NAV, activeHref, type NavItem } from './nav';
+import { PRIMARY_NAV, AGENCY_NAV, activeHref, agruparNav, type NavItem } from './nav';
 import { modoDemo } from '@/lib/demo/flag';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocale } from '@/lib/locale';
 import { useAgency } from '@/components/agency/AgencyProvider';
 import { motionTokens } from '@/lib/motion';
+
+const PREF_RECOLHIDA = 'khub:sidebar-recolhida';
 
 /**
  * Sidebar fixa do KHUB.
@@ -47,32 +49,66 @@ export function Sidebar({
   const modoAgencia = pathname.startsWith('/agency');
   const nav = modoAgencia ? AGENCY_NAV : PRIMARY_NAV;
   const active = activeHref(pathname, nav);
+  const grupos = agruparNav(nav);
+
+  // Recolher (ADR-0036): só no desktop — a gaveta mobile (tem `onNavigate`)
+  // sempre abre inteira. Preferência de conveniência por navegador.
+  const podeRecolher = !onNavigate;
+  const [recolhida, setRecolhida] = useState(false);
+  useEffect(() => {
+    if (!podeRecolher) return;
+    try {
+      setRecolhida(localStorage.getItem(PREF_RECOLHIDA) === '1');
+    } catch {
+      /* armazenamento indisponível: fica expandida */
+    }
+  }, [podeRecolher]);
+  const alternar = () =>
+    setRecolhida((r) => {
+      try {
+        localStorage.setItem(PREF_RECOLHIDA, r ? '0' : '1');
+      } catch {
+        /* sem persistência: vale só nesta visita */
+      }
+      return !r;
+    });
+  const curta = podeRecolher && recolhida;
 
   return (
-    <div className={cx('glass-floating nav-floating flex h-full w-sidebar flex-col', className)}>
-      {/* Marca */}
-      <div className="flex h-topbar shrink-0 items-center px-4">
+    <div
+      className={cx(
+        'glass-floating nav-floating flex h-full flex-col transition-[width] duration-200 ease-out',
+        curta ? 'w-[76px]' : 'w-sidebar',
+        className,
+      )}
+    >
+      {/* Marca — logo completa expandida; o símbolo KHUB quando recolhida. */}
+      <div className={cx('flex h-topbar shrink-0 items-center', curta ? 'justify-center px-2' : 'px-5')}>
         <Link
           href="/dashboard"
           onClick={onNavigate}
           aria-label="KHUB — ir para o Dashboard"
           className="flex items-center"
         >
-          <Image
-            src="/khub-logo.png"
-            alt="KHUB"
-            width={751}
-            height={301}
-            unoptimized
-            priority
-            className="h-8 w-auto object-contain"
-          />
+          {curta ? (
+            <Image src="/khub-mark.png" alt="KHUB" width={330} height={330} unoptimized priority className="h-8 w-8 object-contain" />
+          ) : (
+            <Image
+              src="/khub-logo.png"
+              alt="KHUB"
+              width={751}
+              height={301}
+              unoptimized
+              priority
+              className="h-8 w-auto object-contain"
+            />
+          )}
         </Link>
       </div>
 
       {/* Navegação primária */}
       <nav aria-label="Navegação principal" className="flex-1 overflow-y-auto scrollbar-thin px-3 py-2">
-        {contexto && <section className="mb-3 border-b border-line pb-3" aria-label="Agência e subcontas">
+        {contexto && !curta && <section className="mb-3 border-b border-line pb-3" aria-label="Agência e subcontas">
           <Link href="/agency" onClick={onNavigate} className="nav-item" aria-current={modoAgencia ? 'page' : undefined}>
             <Icon name="building" size={19} /><span>Agência</span>
           </Link>
@@ -86,48 +122,76 @@ export function Sidebar({
           </div>
           {erro && <p role="alert" className="mt-2 text-xs text-red-600">{erro}</p>}
         </section>}
-        <ul className="space-y-0.5">
-          {nav.map((item) => {
-            const isActive = item.href === active;
-            const count = item.badge ? badges?.[item.badge] : undefined;
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  onClick={onNavigate}
-                  aria-current={isActive ? 'page' : undefined}
-                  className="nav-floating-item nav-item !bg-transparent"
-                >
-                  {isActive && (
-                    <motion.span
-                      layoutId="active-nav-indicator"
-                      className="glass-accent absolute inset-0 rounded-[inherit]"
-                      transition={motionTokens.spring.responsive}
-                      aria-hidden
-                    />
-                  )}
-                  <Icon name={item.icon} size={19} className="relative shrink-0" />
-                  <span className="relative flex-1 truncate">{t(item.label)}</span>
-                  {count ? (
-                    <span
-                      className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1.5 text-[11px] font-semibold text-white"
-                      aria-label={`${count} não lidas`}
+        {contexto && curta && (
+          <Link href="/agency" onClick={onNavigate} title="Agência" className="nav-item mb-2 justify-center px-0" aria-current={modoAgencia ? 'page' : undefined}>
+            <Icon name="building" size={19} />
+            <span className="sr-only">Agência</span>
+          </Link>
+        )}
+        {grupos.map(({ grupo, itens }, gi) => (
+          <div key={grupo ?? gi} className={cx(gi > 0 && (curta ? 'mt-2 border-t border-line pt-2' : 'mt-4'))}>
+            {grupo && !curta && <p className="nav-grupo">{grupo}</p>}
+            <ul className="space-y-0.5">
+              {itens.map((item) => {
+                const isActive = item.href === active;
+                const count = item.badge ? badges?.[item.badge] : undefined;
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      onClick={onNavigate}
+                      aria-current={isActive ? 'page' : undefined}
+                      title={curta ? t(item.label) : undefined}
+                      className={cx('nav-floating-item nav-item !bg-transparent', curta && 'justify-center px-0')}
                     >
-                      {count > 99 ? '99+' : count}
-                    </span>
-                  ) : null}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+                      {isActive && (
+                        <motion.span
+                          layoutId="active-nav-indicator"
+                          className="glass-accent absolute inset-0 rounded-[inherit]"
+                          transition={motionTokens.spring.responsive}
+                          aria-hidden
+                        />
+                      )}
+                      <Icon name={item.icon} size={19} className="relative shrink-0" />
+                      <span className={cx('relative flex-1 truncate', curta && 'sr-only')}>{t(item.label)}</span>
+                      {count ? (
+                        <span
+                          className={cx(
+                            'inline-flex items-center justify-center rounded-full bg-brand font-semibold text-white',
+                            curta ? 'absolute right-2 top-1.5 h-4 min-w-4 px-1 text-[10px]' : 'h-5 min-w-5 px-1.5 text-[11px]',
+                          )}
+                          aria-label={`${count} não lidas`}
+                        >
+                          {count > 99 ? '99+' : count}
+                        </span>
+                      ) : null}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
       </nav>
 
       {/* Rodapé: plano. Desacoplado de billing — só apresenta o que recebe.
           Sem módulo de cobrança, os números de uso só existem no modo demo;
           em produção o cartão aparece sem barra, e não com zeros falsos. */}
-      <div className="shrink-0 p-3">
-        {modoDemo() ? <PlanCard usado={284} total={500_000} /> : <PlanCard />}
+      <div className="shrink-0 space-y-2 p-3">
+        {!curta && (modoDemo() ? <PlanCard usado={284} total={500_000} /> : <PlanCard />)}
+        {podeRecolher && (
+          <button
+            type="button"
+            onClick={alternar}
+            className={cx('nav-item w-full text-[13px]', curta && 'justify-center px-0')}
+            aria-label={curta ? 'Expandir menu lateral' : 'Recolher menu lateral'}
+            aria-expanded={!curta}
+            title={curta ? 'Expandir menu' : undefined}
+          >
+            <Icon name="chevronRight" size={17} className={cx('shrink-0 transition-transform duration-200', !curta && 'rotate-180')} />
+            {!curta && <span>Recolher menu</span>}
+          </button>
+        )}
       </div>
     </div>
   );

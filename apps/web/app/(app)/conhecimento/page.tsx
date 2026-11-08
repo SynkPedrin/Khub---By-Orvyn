@@ -15,12 +15,12 @@ export default function ConhecimentoPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6">
+    <div className="mx-auto w-full max-w-[1680px] space-y-6 px-4 py-6 lg:px-8 lg:py-8">
       <div className="flex items-center gap-3">
         <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand/12 text-brand"><Icon name="knowledge" /></span>
         <div>
-          <h1 className="text-xl font-extrabold tracking-tight text-fg">Base de conhecimento</h1>
-          <p className="text-sm text-muted">O cérebro que alimenta a Nyro (RAG) — {docs.length} documentos.</p>
+          <h1 className="t-display">Base de conhecimento</h1>
+          <p className="text-sm text-muted">O cérebro que alimenta a NICO (RAG) — {docs.length} documentos.</p>
         </div>
       </div>
 

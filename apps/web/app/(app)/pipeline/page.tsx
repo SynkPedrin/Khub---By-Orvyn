@@ -157,7 +157,7 @@ function PipelineReal() {
         </p>
       )}
 
-      <div className="flex gap-3 overflow-x-auto scrollbar-thin pb-3">
+      <div className="scroll-fade-x flex gap-3 overflow-x-auto scrollbar-thin pb-3 pr-8">
         {dados.stages.map((stage) => (
           <div
             key={stage.id}
@@ -312,7 +312,7 @@ function Quadro() {
       <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">
           {visao === 'kanban' ? (
-            <div className="flex gap-3 overflow-x-auto scrollbar-thin pb-3">
+            <div className="scroll-fade-x flex gap-3 overflow-x-auto scrollbar-thin pb-3 pr-8">
               {etapas.map((etapa) => (
                 <Coluna
                   key={etapa.id}

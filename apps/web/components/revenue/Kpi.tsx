@@ -64,7 +64,7 @@ export function KpiCard({
 
   return (
     <motion.div whileHover={cardHover} className={cx('card-crystal p-5', className)}>
-      <div className={cx('flex items-start', compacto ? 'gap-2.5' : 'gap-3.5')}>
+      <div className={cx('flex items-start max-sm:flex-col max-sm:gap-2.5', compacto ? 'gap-2.5' : 'gap-3.5')}>
         <span className={cx('icon-tile', compacto && 'h-8 w-8', tom !== 'brand' && `icon-tile-${tom}`)}>
           <Icon name={icon} size={compacto ? 16 : 19} />
         </span>

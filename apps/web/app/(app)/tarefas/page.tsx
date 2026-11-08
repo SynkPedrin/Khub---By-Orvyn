@@ -57,10 +57,10 @@ export default function TarefasPage() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5 px-4 py-6 sm:px-6">
+    <div className="mx-auto w-full max-w-[1680px] space-y-5 px-4 py-6 lg:px-8 lg:py-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-extrabold tracking-tight text-fg">Tarefas</h1>
+          <h1 className="t-display">Tarefas</h1>
           <p className="text-sm text-muted">{rows ? `${rows.length} tarefa${rows.length === 1 ? '' : 's'}` : 'carregando…'}</p>
         </div>
         <Button onClick={() => setModal(true)}><Icon name="plus" size={16} /> Nova tarefa</Button>

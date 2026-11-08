@@ -53,13 +53,13 @@ export default function AdsPage() {
   const kpis = ov?.totals;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6">
+    <div className="mx-auto w-full max-w-[1680px] space-y-6 px-4 py-6 lg:px-8 lg:py-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <Link href="/marketing" className="mb-1 inline-flex items-center gap-1 text-xs text-muted hover:text-brand">
             <Icon name="chevronRight" size={13} className="rotate-180" /> Biblioteca
           </Link>
-          <h1 className="text-xl font-extrabold tracking-tight text-fg">Anúncios · cross-plataforma</h1>
+          <h1 className="t-display">Anúncios · cross-plataforma</h1>
           <p className="text-sm text-muted">Meta hoje · TikTok e Google chegam no Sprint B.</p>
         </div>
         <div className="flex items-center gap-2">
@@ -103,7 +103,7 @@ export default function AdsPage() {
                   <p className="text-xs font-medium text-muted">{k.l}</p>
                   <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand/12 text-brand"><Icon name={k.icon} size={17} /></span>
                 </div>
-                <p className="mt-2 text-2xl font-extrabold text-fg">{k.v}</p>
+                <p className="mt-2 text-2xl font-semibold text-fg">{k.v}</p>
               </Card>
             ))}
           </div>

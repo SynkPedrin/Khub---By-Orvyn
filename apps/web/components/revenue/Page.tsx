@@ -75,8 +75,6 @@ export function PageHeader({
         <div className="min-w-0">
           <h1 className="t-display">{title}</h1>
           {subtitle && <p className="mt-1.5 text-[15px] text-muted">{subtitle}</p>}
-          {/* Traço roxo→limão que "assina" o título (ADR-0034). */}
-          <span className="page-title-trace" aria-hidden />
         </div>
       </div>
 
@@ -138,7 +136,8 @@ export function KpiGrid({ children, cols = 4 }: { children: ReactNode; cols?: 4 
   return (
     <div
       className={cx(
-        'mb-6 grid gap-4 sm:grid-cols-2',
+        // Celular: 2 colunas (ADR-0036) — 4 KPIs empilhados ocupavam a tela inteira.
+        'mb-6 grid grid-cols-2 gap-3 sm:gap-4',
         cols === 4 ? 'xl:grid-cols-4' : 'lg:grid-cols-3 2xl:grid-cols-6',
       )}
     >

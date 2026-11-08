@@ -376,7 +376,7 @@ function EditorInterno() {
             onChange={(e) => setNome(e.target.value)}
             onBlur={() => automations.renomear(id, { nome }).catch(() => undefined)}
             placeholder="Nome da automação"
-            className="min-w-0 flex-1 bg-transparent text-sm font-extrabold tracking-tight text-fg outline-none placeholder:text-muted"
+            className="min-w-0 flex-1 bg-transparent text-sm font-semibold tracking-tight text-fg outline-none placeholder:text-muted"
           />
 
           {/* Direita: tags · salvo · configuração · publicar · fechar */}

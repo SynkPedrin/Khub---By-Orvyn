@@ -214,7 +214,7 @@ function LeadsComDados() {
                           aria-label={`Selecionar ${l.nome}`}
                         />
                       </td>
-                      <td>
+                      <td className="whitespace-nowrap">
                         <div className="flex items-center gap-2.5">
                           <Avatar name={l.nome} size={32} />
                           <div className="min-w-0">

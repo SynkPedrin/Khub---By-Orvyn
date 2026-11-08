@@ -113,7 +113,7 @@ export default function Contato360Page() {
             <Avatar name={c.nome} size={56} />
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-extrabold tracking-tight text-fg">{c.nome}</h1>
+                <h1 className="text-xl font-semibold tracking-tight text-fg">{c.nome}</h1>
                 <Badge tone={TONE[c.tag] ?? 'neutral'}>{c.tag}</Badge>
               </div>
               <p className="mt-0.5 text-sm text-muted">

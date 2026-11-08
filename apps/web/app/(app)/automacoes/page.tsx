@@ -54,10 +54,10 @@ export default function AutomacoesPage() {
   const temFiltro = fStatus !== 'todos' || fTag !== null || q.length > 0;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 px-4 py-6 sm:px-6">
+    <div className="mx-auto w-full max-w-[1680px] space-y-5 px-4 py-6 lg:px-8 lg:py-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-extrabold tracking-tight text-fg">Automações</h1>
+          <h1 className="t-display">Automações</h1>
           <p className="text-sm text-muted">Gatilhos, condições e ações — executando de verdade, com log de cada passo.</p>
         </div>
         <Button onClick={() => setModal(true)}><Icon name="plus" size={16} /> Nova automação</Button>

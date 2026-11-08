@@ -4,6 +4,13 @@
 
 ---
 
+## ✅ SPRINT KHUB-UI — Redesign premium do front real  *(CONCLUÍDA — 2026-11-08)*
+> Brief "KHUB — Premium Product Redesign". Decisão em [[Arquitetura|ADR-0036]] (revisa 0033/0034/0035).
+
+- Design system consolidado nos tokens (paleta KHUB, vidro, sombras, tipografia Inter), shell (sidebar agrupada e recolhível, topbar), fundo CSS, movimento e 20 telas revisadas logado (desktop + celular) no QA isolado.
+- **Pendências reais:** "Plano Pro" da sidebar é texto fixo (sem billing — não é dado real); central de notificações não existe (o sino só avisa isso); cards de cliente da agência não revisados logado (conta de QA não é agência); área de Agentes de IA em reescrita por outra sessão (fora deste escopo); avisos de lint antigos (`<img>`, deps de hook em Automações).
+- **Achados de isolamento corrigidos:** `.env.qa` herdava a chave real da Stevo/GHL do `.env` de dev (5 variáveis bloqueadas); `STEVO_REVENUE_API_KEY` vazia derrubava a API (env.ts: vazio = não configurado).
+
 ## ✅ SPRINT MIGRA-GHL — Histórico do Studio da Beleza para o Revenue OS  *(CONCLUÍDA — 2026-11-06)*
 > ADR-0031: o Revenue OS substitui o GHL — importação única, sem integração nem sync. Autorizado pelo usuário ("pode importar tudo").
 

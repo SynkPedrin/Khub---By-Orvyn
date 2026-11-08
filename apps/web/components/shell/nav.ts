@@ -16,27 +16,45 @@ export interface NavItem {
   icon: IconName;
   /** Chave do contador dinâmico exibido como badge (ex.: conversas não lidas). */
   badge?: 'conversas';
+  /** Grupo visual da sidebar (ADR-0036): itens não ficam todos no mesmo nível. */
+  grupo?: NavGrupo;
+}
+
+export type NavGrupo = 'Operação' | 'Crescimento' | 'Inteligência' | 'Agência' | 'Conta';
+
+/** Agrupa preservando a ordem de declaração (o primeiro item define a ordem do grupo). */
+export function agruparNav(items: NavItem[]): { grupo: NavGrupo | null; itens: NavItem[] }[] {
+  const grupos: { grupo: NavGrupo | null; itens: NavItem[] }[] = [];
+  for (const item of items) {
+    const g = item.grupo ?? null;
+    const atual = grupos.find((x) => x.grupo === g);
+    if (atual) atual.itens.push(item);
+    else grupos.push({ grupo: g, itens: [item] });
+  }
+  return grupos;
 }
 
 export const PRIMARY_NAV: NavItem[] = [
-  { href: '/dashboard', label: 'Dashboard', icon: 'home' },
-  { href: '/leads', label: 'Leads', icon: 'leads' },
-  { href: '/pipeline', label: 'Pipeline', icon: 'chart' },
-  { href: '/conversas', label: 'Conversas', icon: 'chat', badge: 'conversas' },
-  { href: '/automacoes', label: 'Automações', icon: 'zap' },
-  { href: '/campanhas', label: 'Campanhas', icon: 'send' },
-  { href: '/agenda', label: 'Agenda', icon: 'calendar' },
-  { href: '/analytics', label: 'Analytics', icon: 'trend' },
-  { href: '/ia', label: 'IA', icon: 'ai' },
-  { href: '/configuracoes', label: 'Configurações', icon: 'settings' },
+  { href: '/dashboard', label: 'Dashboard', icon: 'home', grupo: 'Operação' },
+  { href: '/leads', label: 'Leads', icon: 'leads', grupo: 'Operação' },
+  { href: '/pipeline', label: 'Pipeline', icon: 'chart', grupo: 'Operação' },
+  { href: '/conversas', label: 'Conversas', icon: 'chat', badge: 'conversas', grupo: 'Operação' },
+  { href: '/agenda', label: 'Agenda', icon: 'calendar', grupo: 'Operação' },
+  { href: '/automacoes', label: 'Automações', icon: 'zap', grupo: 'Crescimento' },
+  { href: '/campanhas', label: 'Campanhas', icon: 'send', grupo: 'Crescimento' },
+  { href: '/analytics', label: 'Analytics', icon: 'trend', grupo: 'Crescimento' },
+  { href: '/ia', label: 'IA', icon: 'ai', grupo: 'Inteligência' },
+  { href: '/agentes', label: 'Agentes de IA', icon: 'sparkles', grupo: 'Inteligência' },
+  { href: '/configuracoes', label: 'Configurações', icon: 'settings', grupo: 'Conta' },
 ];
 
 /** Sidebar quando dentro de `/agency*` — nunca misturada com a navegação operacional de um cliente. */
 export const AGENCY_NAV: NavItem[] = [
-  { href: '/agency', label: 'Visão geral', icon: 'grid' },
-  { href: '/agency/clients', label: 'Clientes', icon: 'building' },
-  { href: '/agency/equipe', label: 'Equipe', icon: 'users' },
-  { href: '/agency/configuracoes', label: 'Configurações', icon: 'settings' },
+  { href: '/agency', label: 'Visão geral', icon: 'grid', grupo: 'Agência' },
+  { href: '/agency/clients', label: 'Clientes', icon: 'building', grupo: 'Agência' },
+  { href: '/agency/equipe', label: 'Equipe', icon: 'users', grupo: 'Agência' },
+  { href: '/ia', label: 'IA', icon: 'ai', grupo: 'Inteligência' },
+  { href: '/agency/configuracoes', label: 'Configurações', icon: 'settings', grupo: 'Conta' },
 ];
 
 export const SECONDARY_NAV: NavItem[] = [

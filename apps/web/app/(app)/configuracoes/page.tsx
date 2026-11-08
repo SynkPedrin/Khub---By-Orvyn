@@ -47,15 +47,15 @@ export default function ConfiguracoesPage() {
   const atual = TABS.find((t) => t.key === tab)!;
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
-      {/* Hero em vidro: legível sobre qualquer fundo (inclusive imagem custom) */}
-      <header className="flex items-center gap-4 rounded-[1.6rem] px-6 py-7 text-white" style={{backgroundImage:"linear-gradient(100deg,#241037ee,#4a157daa),url('/Background-login.png')",backgroundSize:'cover'}}>
-        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-white shadow-brand" style={{ background: 'linear-gradient(135deg, var(--brand-bright), var(--brand-deep))' }}>
+    <div className="mx-auto w-full max-w-6xl px-4 py-6 lg:px-8 lg:py-8">
+      {/* Cabeçalho no padrão do produto (ADR-0036): claro, título + contexto. */}
+      <header className="flex items-center gap-4">
+        <span className="icon-tile h-12 w-12 rounded-2xl">
           <Icon name="settings" size={22} />
         </span>
         <div className="min-w-0">
-          <h1 className="text-2xl font-extrabold tracking-tight">{tr('Configurações')}</h1>
-          <p className="mt-1 text-sm text-purple-100">{user?.empresa ?? 'Sua operação'} · Preferências, acessos e integrações.</p>
+          <h1 className="t-display">{tr('Configurações')}</h1>
+          <p className="mt-1.5 text-[15px] text-muted">{user?.empresa ?? 'Sua operação'} · Preferências, acessos e integrações.</p>
         </div>
       </header>
 
@@ -63,17 +63,18 @@ export default function ConfiguracoesPage() {
         <nav className="glass crystal-edge flex shrink-0 gap-1 overflow-x-auto rounded-[1.4rem] p-2 lg:w-60 lg:flex-col lg:overflow-visible">
           {GRUPOS.map((g) => (
             <div key={g} className="lg:contents">
-              <p className="hidden px-2 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wider text-muted lg:block">{g}</p>
+              <p className="hidden px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted lg:block">{g}</p>
               {TABS.filter((item) => item.grupo === g && (admin || ['perfil','personalizacao'].includes(item.key))).map((t) => {
                 const on = tab === t.key;
                 return (
                   <button
                     key={t.key}
                     onClick={() => setTab(t.key)}
-                    className={cx('flex shrink-0 items-center gap-2.5 rounded-2xl px-3 py-2.5 text-sm transition-all', on ? 'font-bold text-white shadow-brand' : 'font-medium text-fg hover:bg-white/40 dark:hover:bg-white/10')}
-                    style={on ? { background: 'linear-gradient(135deg, var(--brand-bright), var(--brand-deep))' } : undefined}
+                    // Mesmo estado ativo da sidebar (ADR-0036): roxo muito suave, não degradê forte.
+                    aria-current={on ? 'page' : undefined}
+                    className={cx('nav-item shrink-0 text-sm', on ? 'font-semibold' : 'font-medium text-fg')}
                   >
-                    <Icon name={t.icon} size={18} className={on ? 'text-white' : 'text-muted'} /> {tr(t.label)}
+                    <Icon name={t.icon} size={18} className={on ? 'text-brand' : 'text-muted'} /> {tr(t.label)}
                   </button>
                 );
               })}
@@ -165,7 +166,7 @@ function PersonalizacaoTab() {
             <img src={logo || '/logo.png'} alt="Prévia da logo" className="h-16 w-16 object-contain" />
           </span>
           <div className="min-w-0">
-            <p className="truncate text-lg font-extrabold text-fg">Sua marca, do seu jeito</p>
+            <p className="truncate text-lg font-semibold text-fg">Sua marca, do seu jeito</p>
             <p className="text-sm text-muted">Prévia ao vivo — muda conforme você escolhe.</p>
           </div>
           <button className="btn btn-primary ml-auto hidden text-sm sm:inline-flex">Ação</button>
