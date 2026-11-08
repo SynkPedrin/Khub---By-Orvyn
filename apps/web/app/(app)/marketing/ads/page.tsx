@@ -93,10 +93,10 @@ export default function AdsPage() {
           {/* KPIs agregados */}
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {[
-              { l: 'Investido (30d)', v: kpis ? brl(kpis.spend) : '—', icon: 'finance' as const },
-              { l: 'Leads', v: kpis ? String(kpis.leads) : '—', icon: 'contacts' as const },
-              { l: 'CPL médio', v: kpis ? brl(kpis.cpl) : '—', icon: 'trend' as const },
-              { l: 'ROAS', v: kpis ? `${kpis.roas.toFixed(2)}x` : '—', icon: 'pipeline' as const },
+              { l: 'Investido (30d)', v: kpis ? brl(kpis.spend) : '-', icon: 'finance' as const },
+              { l: 'Leads', v: kpis ? String(kpis.leads) : '-', icon: 'contacts' as const },
+              { l: 'CPL médio', v: kpis ? brl(kpis.cpl) : '-', icon: 'trend' as const },
+              { l: 'ROAS', v: kpis ? `${kpis.roas.toFixed(2)}x` : '-', icon: 'pipeline' as const },
             ].map((k) => (
               <Card key={k.l} className="p-4">
                 <div className="flex items-center justify-between">
@@ -137,7 +137,7 @@ export default function AdsPage() {
                     <tr key={c.id} className="border-b border-line last:border-0 hover:bg-surface2">
                       <td className="px-5 py-2.5">
                         <p className="font-semibold text-fg">{c.nome}</p>
-                        <p className="text-[11px] text-muted">{c.objetivo ?? '—'} · {c.status}</p>
+                        <p className="text-[11px] text-muted">{c.objetivo ?? '-'} · {c.status}</p>
                       </td>
                       <td className="px-3 py-2.5 text-right text-fg">{brl(c.spend)}</td>
                       <td className="px-3 py-2.5 text-right text-fg">{c.leads}</td>
@@ -175,11 +175,11 @@ export default function AdsPage() {
                     </div>
                     <div className="p-3">
                       <p className="truncate font-semibold text-fg">{cr.nome ?? cr.externalId}</p>
-                      <p className="mt-0.5 text-xs text-muted">{cr.format ?? '—'}{cr.cta ? ` · ${cr.cta}` : ''}</p>
+                      <p className="mt-0.5 text-xs text-muted">{cr.format ?? '-'}{cr.cta ? ` · ${cr.cta}` : ''}</p>
                       <div className="mt-2 grid grid-cols-3 gap-1.5 text-xs">
                         <div><p className="text-faint">Leads</p><p className="font-semibold text-fg">{cr.leads}</p></div>
-                        <div><p className="text-faint">CPL</p><p className="font-semibold text-fg">{cr.leads > 0 ? `R$ ${cr.cpl.toFixed(0)}` : '—'}</p></div>
-                        <div><p className="text-faint">Receita</p><p className="font-semibold text-brand">{cr.revenue > 0 ? `R$ ${cr.revenue.toLocaleString('pt-BR')}` : '—'}</p></div>
+                        <div><p className="text-faint">CPL</p><p className="font-semibold text-fg">{cr.leads > 0 ? `R$ ${cr.cpl.toFixed(0)}` : '-'}</p></div>
+                        <div><p className="text-faint">Receita</p><p className="font-semibold text-brand">{cr.revenue > 0 ? `R$ ${cr.revenue.toLocaleString('pt-BR')}` : '-'}</p></div>
                       </div>
                     </div>
                   </Card>

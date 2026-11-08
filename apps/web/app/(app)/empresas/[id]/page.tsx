@@ -71,7 +71,7 @@ export default function Empresa360Page() {
             <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-brand/12 text-lg font-bold text-brand">{c.nome.slice(0, 2).toUpperCase()}</span>
             <div>
               <h1 className="text-xl font-semibold tracking-tight text-fg">{c.nome}</h1>
-              <p className="mt-0.5 text-sm text-muted">{[c.segmento, c.tamanho && `${c.tamanho} pessoas`, c.dominio].filter(Boolean).join(' · ') || '—'}</p>
+              <p className="mt-0.5 text-sm text-muted">{[c.segmento, c.tamanho && `${c.tamanho} pessoas`, c.dominio].filter(Boolean).join(' · ') || '-'}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -89,7 +89,7 @@ export default function Empresa360Page() {
             <Field label="Segmento"><Input value={form.segmento} onChange={(e) => setForm({ ...form, segmento: e.target.value })} /></Field>
             <Field label="Tamanho">
               <select className="input" value={form.tamanho} onChange={(e) => setForm({ ...form, tamanho: e.target.value })}>
-                <option value="">—</option>{TAMANHOS.map((t) => <option key={t}>{t}</option>)}
+                <option value="">-</option>{TAMANHOS.map((t) => <option key={t}>{t}</option>)}
               </select>
             </Field>
             <div className="sm:col-span-2"><Field label="Endereço"><Input value={form.endereco} onChange={(e) => setForm({ ...form, endereco: e.target.value })} /></Field></div>
@@ -100,7 +100,7 @@ export default function Empresa360Page() {
             <Info rotulo="Contatos" valor={String(c.contatos.length)} />
             <Info rotulo="Negócios" valor={String(c.negocios.length)} />
             <Info rotulo="Em aberto" valor={brl(c.valorAberto)} />
-            <Info rotulo="Telefone" valor={c.telefone ?? '—'} />
+            <Info rotulo="Telefone" valor={c.telefone ?? '-'} />
           </div>
         )}
       </Card>
@@ -116,7 +116,7 @@ export default function Empresa360Page() {
                   <Avatar name={p.nome} size={32} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold text-fg">{p.nome}</span>
-                    <span className="block truncate text-xs text-muted">{p.email ?? p.telefone ?? '—'}</span>
+                    <span className="block truncate text-xs text-muted">{p.email ?? p.telefone ?? '-'}</span>
                   </span>
                   <Badge tone="neutral">{p.tag}</Badge>
                 </Link>

@@ -13,7 +13,7 @@ const TONE: Record<string, 'brand' | 'green' | 'amber' | 'neutral'> = {
 const TOM_TIMELINE: Record<string, string> = { success: 'bg-emerald-500', warn: 'bg-amber-500', neutral: 'bg-brand' };
 
 function quando(iso: string | null): string {
-  if (!iso) return '—';
+  if (!iso) return '-';
   const dias = Math.round((Date.now() - new Date(iso).getTime()) / 86400000);
   if (dias === 0) return 'hoje';
   if (dias === 1) return 'ontem';
@@ -135,7 +135,7 @@ export default function Contato360Page() {
             <Field label="Telefone"><Input value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} /></Field>
             <Field label="Empresa">
               <select className="input" value={form.companyId} onChange={(e) => setForm({ ...form, companyId: e.target.value })}>
-                <option value="">— sem empresa —</option>
+                <option value="">- sem empresa -</option>
                 {empresas.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
               </select>
             </Field>
@@ -149,8 +149,8 @@ export default function Contato360Page() {
           </form>
         ) : (
           <div className="mt-5 grid gap-4 border-t border-line pt-4 sm:grid-cols-4">
-            <Info rotulo="E-mail" valor={c.email ?? '—'} />
-            <Info rotulo="Telefone" valor={c.telefone ?? '—'} />
+            <Info rotulo="E-mail" valor={c.email ?? '-'} />
+            <Info rotulo="Telefone" valor={c.telefone ?? '-'} />
             <Info rotulo="Valor estimado" valor={brl(c.valor)} />
             <Info rotulo="Último contato" valor={quando(c.ultimoContatoAt)} />
           </div>
@@ -254,7 +254,7 @@ export default function Contato360Page() {
                   <Icon name="inbox" size={15} className="shrink-0 text-muted" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-xs font-semibold text-fg">{cv.canal}</span>
-                    <span className="block truncate text-[11px] text-muted">{cv.ultimaPrevia ?? '—'}</span>
+                    <span className="block truncate text-[11px] text-muted">{cv.ultimaPrevia ?? '-'}</span>
                   </span>
                   {cv.naoLidas > 0 && <span className="shrink-0 rounded-full bg-brand px-1.5 text-[10px] font-bold text-white">{cv.naoLidas}</span>}
                 </Link>

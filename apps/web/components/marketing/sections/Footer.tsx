@@ -47,7 +47,7 @@ export function Footer() {
 
       <Container className="flex flex-col gap-2 border-t border-[var(--lp-rule-soft)] py-5 text-[12px] text-[var(--lp-ink-4)] sm:flex-row sm:items-center sm:justify-between">
         <p>© {new Date().getFullYear()} KHUB</p>
-        <p>NICO — camada de automação e inteligência da ORVYN</p>
+        <p>NICO, camada de automação e inteligência da ORVYN</p>
       </Container>
     </footer>
   );

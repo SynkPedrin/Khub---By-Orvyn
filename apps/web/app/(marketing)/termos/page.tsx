@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { LegalShell, Secao } from '@/components/marketing/legal/LegalShell';
 
-export const metadata: Metadata = { title: 'Termos de Uso — KHUB' };
+export const metadata: Metadata = { title: 'Termos de Uso · KHUB' };
 
 export default function TermosPage() {
   return (
@@ -15,7 +15,7 @@ export default function TermosPage() {
           que crie uma conta ou utilize a plataforma.
         </p>
         <p className="text-sm text-amber-700">
-          [PREENCHER: razão social, CNPJ e endereço da empresa responsável pelo KHUB — obrigatório antes de
+          [PREENCHER: razão social, CNPJ e endereço da empresa responsável pelo KHUB, obrigatório antes de
           publicar.]
         </p>
       </Secao>
@@ -34,11 +34,11 @@ export default function TermosPage() {
           <li>Não enviar mensagens em massa não solicitadas (spam) através dos canais de WhatsApp/e-mail integrados.</li>
           <li>Não usar a NICO (assistente de IA) para gerar conteúdo ilegal, enganoso ou que viole direitos de terceiros.</li>
           <li>Não tentar acessar dados de outro tenant, contornar o isolamento multi-tenant ou os limites de uso do plano.</li>
-          <li>Respeitar as políticas de uso dos provedores integrados (Meta, WhatsApp/Evolution, Anthropic, Stripe) — o KHUB não se responsabiliza por penalidades aplicadas por esses provedores por uso indevido.</li>
+          <li>Respeitar as políticas de uso dos provedores integrados (Meta, WhatsApp/Evolution, Anthropic, Stripe), o KHUB não se responsabiliza por penalidades aplicadas por esses provedores por uso indevido.</li>
         </ul>
       </Secao>
 
-      <Secao titulo="4. Canal de WhatsApp — aviso importante">
+      <Secao titulo="4. Canal de WhatsApp, aviso importante">
         <p>
           O KHUB oferece conexão de WhatsApp via API não-oficial (protocolo WhatsApp Web), sujeita a
           bloqueio do número pelo WhatsApp/Meta a qualquer momento, fora do controle do KHUB. O uso desse
@@ -83,14 +83,14 @@ export default function TermosPage() {
 
       <Secao titulo="9. Foro e lei aplicável">
         <p className="text-sm text-amber-700">
-          [PREENCHER: comarca/foro de eleição — este documento segue a legislação brasileira, mas o foro
+          [PREENCHER: comarca/foro de eleição, este documento segue a legislação brasileira, mas o foro
           específico deve ser definido com apoio jurídico.]
         </p>
       </Secao>
 
       <div className="mt-10 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
         <strong>Nota de implementação:</strong> este é um modelo funcional, escrito para refletir o que o
-        produto realmente faz hoje — não é aconselhamento jurídico nem substitui revisão por um advogado
+        produto realmente faz hoje, não é aconselhamento jurídico nem substitui revisão por um advogado
         antes da operação comercial real.
       </div>
     </LegalShell>

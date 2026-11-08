@@ -14,7 +14,7 @@ export function ConfigRequired({ provider, missing, compact }: { provider: strin
         Configurar {label}
       </p>
       <p className={`mt-1 text-amber-700/90 dark:text-amber-200/80 ${compact ? 'text-[11px]' : 'text-xs'}`}>
-        Tudo já está implementado — falta a credencial. Defina no <code className="font-mono">.env</code> da API:
+        Tudo já está implementado, falta a credencial. Defina no <code className="font-mono">.env</code> da API:
       </p>
       <ul className="mt-1.5 flex flex-wrap gap-1.5">
         {missing.map((v) => (

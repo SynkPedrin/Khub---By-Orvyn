@@ -144,10 +144,10 @@ function TransicaoCliente({ nome }: { nome: string }) {
       <div className="operation-transition-glow" />
       <div className="relative flex max-w-lg flex-col items-center px-8 text-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/khub-logo.png" alt="KHUB" className="mb-14 w-44 rounded-xl bg-white p-3" />
-        <span className="mb-5 text-[10px] uppercase tracking-[.32em] text-purple-200">Seu próximo movimento</span>
-        <h2 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">{nome}</h2>
-        <p className="mt-4 text-sm text-purple-100/80">Preparando sua operação</p>
+        <img src="/khub-logo.png" alt="KHUB" className="mb-14 w-44" />
+        <span className="mb-5 text-[11px] uppercase tracking-[.32em] text-brand">Seu próximo movimento</span>
+        <h2 className="text-3xl font-semibold tracking-tight text-fg sm:text-4xl">{nome}</h2>
+        <p className="mt-4 text-sm text-muted">Preparando sua operação</p>
         <span className="operation-progress mt-9" aria-hidden="true" />
       </div>
     </div>

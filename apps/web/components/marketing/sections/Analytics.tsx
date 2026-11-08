@@ -22,7 +22,7 @@ export function Analytics() {
         </h2>
         <Reveal delay={0.24}>
           <p className="lp-body mt-8 max-w-[52ch]">
-            Receita por canal, funil, tempo de resposta por equipe e meta versus realizado — lidos direto do
+            Receita por canal, funil, tempo de resposta por equipe e meta versus realizado, lidos direto do
             que o time fez, sem exportar nada.
           </p>
         </Reveal>

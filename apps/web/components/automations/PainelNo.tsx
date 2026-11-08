@@ -128,8 +128,8 @@ export function PainelNo({ no, meta, onMudar, onExcluir, onFechar, outrosNos, ou
             <Field label="Valor" hint="Aceita {{contato.telefone}}, {{negocio.valor}}, {{variaveis.x}}…"><Input value={cfg.valor ?? ''} onChange={(e) => set({ valor: e.target.value })} placeholder="{{contato.telefone}}" /></Field>
             <Field label="Formato">
               <select className="input" value={cfg.formato ?? 'telefone'} onChange={(e) => set({ formato: e.target.value })}>
-                <option value="telefone">Telefone — (11) 99999-9999</option>
-                <option value="moeda">Moeda — R$ 1.234,56</option>
+                <option value="telefone">Telefone, (11) 99999-9999</option>
+                <option value="moeda">Moeda · R$ 1.234,56</option>
                 <option value="maiuscula">MAIÚSCULAS</option>
                 <option value="minuscula">minúsculas</option>
                 <option value="capitalizar">Capitalizar Cada Palavra</option>
@@ -170,7 +170,7 @@ export function PainelNo({ no, meta, onMudar, onExcluir, onFechar, outrosNos, ou
               />
             </Field>
             <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-[11px] leading-snug text-amber-700 dark:text-amber-400">
-              Entregue no WhatsApp pelo STEVO, que é <strong>API não oficial</strong>: texto simples, sem mídia e sem template aprovado — por isso o nó se chama SMS.
+              Entregue no WhatsApp pelo STEVO, que é <strong>API não oficial</strong>: texto simples, sem mídia e sem template aprovado, por isso o nó se chama SMS.
             </p>
           </>
         )}
@@ -209,7 +209,7 @@ export function PainelNo({ no, meta, onMudar, onExcluir, onFechar, outrosNos, ou
         )}
         {no.tipo === 'acao.criar_oportunidade' && (
           <>
-            <Field label="Título"><Input value={cfg.titulo ?? ''} onChange={(e) => set({ titulo: e.target.value })} placeholder="Proposta — {{contato.nome}}" /></Field>
+            <Field label="Título"><Input value={cfg.titulo ?? ''} onChange={(e) => set({ titulo: e.target.value })} placeholder="Proposta · {{contato.nome}}" /></Field>
             <Field label="Etapa">
               <select className="input" value={cfg.stageId ?? ''} onChange={(e) => set({ stageId: e.target.value })}>
                 <option value="">Escolha…</option>
@@ -296,7 +296,7 @@ export function PainelNo({ no, meta, onMudar, onExcluir, onFechar, outrosNos, ou
               </select>
             </Field>
             <p className="rounded-lg bg-brand/10 px-3 py-2 text-[11px] leading-snug text-brand">
-              A URL fica em <strong>Configurações do fluxo</strong> (engrenagem no topo) — só aparece depois de publicar.
+              A URL fica em <strong>Configurações do fluxo</strong> (engrenagem no topo), só aparece depois de publicar.
             </p>
           </>
         )}

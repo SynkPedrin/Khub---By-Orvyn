@@ -725,11 +725,11 @@ export const CAMPANHAS: Campanha[] = [
     descricao:
       'Campanha multicanal para atrair startups de tecnologia no Brasil, com foco em decisores de produto e crescimento.',
     sequencia: [
-      { ordem: 1, canal: 'email', titulo: 'E-mail 1 — Apresentação', descricao: 'Apresenta o valor do KHUB em 3 linhas.', dia: 1 },
-      { ordem: 2, canal: 'whatsapp', titulo: 'WhatsApp 1 — Contexto', descricao: 'Mensagem breve e personalizada.', dia: 3 },
-      { ordem: 3, canal: 'email', titulo: 'Follow-up 2 — Case', descricao: 'Compartilha case relevante do setor.', dia: 7 },
-      { ordem: 4, canal: 'linkedin', titulo: 'LinkedIn — Conexão', descricao: 'Solicita conexão com mensagem curta.', dia: 10 },
-      { ordem: 5, canal: 'email', titulo: 'Follow-up 3 — Última tentativa', descricao: 'Reforça proposta e sugere reunião.', dia: 14 },
+      { ordem: 1, canal: 'email', titulo: 'E-mail 1 · Apresentação', descricao: 'Apresenta o valor do KHUB em 3 linhas.', dia: 1 },
+      { ordem: 2, canal: 'whatsapp', titulo: 'WhatsApp 1 · Contexto', descricao: 'Mensagem breve e personalizada.', dia: 3 },
+      { ordem: 3, canal: 'email', titulo: 'Follow-up 2 · Case', descricao: 'Compartilha case relevante do setor.', dia: 7 },
+      { ordem: 4, canal: 'linkedin', titulo: 'LinkedIn · Conexão', descricao: 'Solicita conexão com mensagem curta.', dia: 10 },
+      { ordem: 5, canal: 'email', titulo: 'Follow-up 3 · Última tentativa', descricao: 'Reforça proposta e sugere reunião.', dia: 14 },
     ],
   },
   {

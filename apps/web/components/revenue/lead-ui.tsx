@@ -76,7 +76,7 @@ export function statusRotulo(status: StatusLead): string {
  */
 export function ScoreBadge({ score, faixa }: { score: number | null; faixa?: FaixaScore }) {
   if (score == null || faixa === 'sem_sinal') {
-    return <span className="text-[13px] text-faint" title="Ainda sem sinais suficientes para pontuar">—</span>;
+    return <span className="text-[13px] text-faint" title="Ainda sem sinais suficientes para pontuar">-</span>;
   }
 
   const f: FaixaScore = faixa ?? (score >= 75 ? 'quente' : score >= 45 ? 'morno' : 'frio');

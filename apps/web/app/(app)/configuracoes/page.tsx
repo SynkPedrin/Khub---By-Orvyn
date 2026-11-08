@@ -167,7 +167,7 @@ function PersonalizacaoTab() {
           </span>
           <div className="min-w-0">
             <p className="truncate text-lg font-semibold text-fg">Sua marca, do seu jeito</p>
-            <p className="text-sm text-muted">Prévia ao vivo — muda conforme você escolhe.</p>
+            <p className="text-sm text-muted">Prévia ao vivo, muda conforme você escolhe.</p>
           </div>
           <button className="btn btn-primary ml-auto hidden text-sm sm:inline-flex">Ação</button>
         </div>
@@ -179,7 +179,7 @@ function PersonalizacaoTab() {
         {/* Logo */}
         <Card className="p-6">
           <h2 className="font-bold text-fg">Logo da marca</h2>
-          <p className="text-xs text-muted">Aparece no canto superior esquerdo. PNG ou SVG com fundo transparente fica melhor — qualquer tamanho serve, otimizamos para você.</p>
+          <p className="text-xs text-muted">Aparece no canto superior esquerdo. PNG ou SVG com fundo transparente fica melhor, qualquer tamanho serve, otimizamos para você.</p>
           <div className="mt-4 flex items-center gap-4">
             <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-line bg-surface2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -296,7 +296,7 @@ function EquipeTab() {
           <tbody>
             {data?.members.map((m) => (
               <tr key={m.identityId} className="border-b border-line last:border-0">
-                <td className="px-5 py-3"><div className="flex items-center gap-3"><Avatar name={m.nome ?? m.email} size={34} /><div><p className="font-semibold text-fg">{m.nome ?? '—'}</p><p className="text-xs text-muted">{m.email}</p></div></div></td>
+                <td className="px-5 py-3"><div className="flex items-center gap-3"><Avatar name={m.nome ?? m.email} size={34} /><div><p className="font-semibold text-fg">{m.nome ?? '-'}</p><p className="text-xs text-muted">{m.email}</p></div></div></td>
                 <td className="px-5 py-3 text-right">
                   <select className="input w-32" value={m.role} onChange={async (e) => { try{await settingsApi.changeRole(m.identityId, e.target.value); load();}catch(e){setMsg(e instanceof Error?e.message:'Não foi possível alterar.');} }}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select>
                 </td>
@@ -367,7 +367,7 @@ function ApiKeysTab() {
       {criada && (
         <Card className="border-2 border-brand p-6">
           <div className="flex items-center gap-2"><Icon name="check" size={18} className="text-emerald-500" /><h2 className="font-bold text-fg">Chave “{criada.name}” criada</h2></div>
-          <p className="mt-1 text-xs font-semibold text-amber-600 dark:text-amber-400">Copie agora — ela não será mostrada de novo.</p>
+          <p className="mt-1 text-xs font-semibold text-amber-600 dark:text-amber-400">Copie agora, ela não será mostrada de novo.</p>
           <div className="mt-3 flex items-center gap-2 rounded-lg border border-line bg-surface2 px-3 py-2">
             <code className="min-w-0 flex-1 select-all break-all font-mono text-sm text-fg">{criada.key}</code>
             <Button variant="ghost" onClick={copiar} className="shrink-0 text-xs">{copiado ? '✓ copiado' : 'Copiar'}</Button>

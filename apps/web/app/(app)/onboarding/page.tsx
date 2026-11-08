@@ -40,7 +40,7 @@ export default function OnboardingPage() {
         </span>
         <h1 className="mt-4 text-3xl font-semibold tracking-tight text-fg">Vamos montar seu KHUB</h1>
         <p className="mx-auto mt-2 max-w-xl text-sm text-muted">
-          Escolha o modelo do seu nicho — a gente cria o <strong>funil com as etapas certas</strong> e instala as
+          Escolha o modelo do seu nicho, a gente cria o <strong>funil com as etapas certas</strong> e instala as
           <strong> automações prontas</strong>. Dá pra ajustar tudo depois.
         </p>
         <Link href={`/nyro?q=${encodeURIComponent(NYRO_Q)}`} className="btn btn-primary mt-4">
@@ -84,7 +84,7 @@ export default function OnboardingPage() {
         {!lista && <p className="col-span-full text-center text-sm text-muted">Carregando modelos…</p>}
       </div>
 
-      <p className="text-center text-xs text-muted">Aplicar um modelo cria dados reais no seu CRM (funil + automações) — nada é simulado.</p>
+      <p className="text-center text-xs text-muted">Aplicar um modelo cria dados reais no seu CRM (funil + automações), nada é simulado.</p>
     </div>
   );
 }

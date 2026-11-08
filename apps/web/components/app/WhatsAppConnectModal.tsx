@@ -160,7 +160,7 @@ export function WhatsAppConnectModal({ onClose, onConnected }: { onClose: () => 
               <img src={conexao.qr.qrImageDataUrl} alt="QR code para conectar o WhatsApp" width={240} height={240} className="rounded-lg border border-line" />
               <p className="flex items-center gap-1.5 text-xs text-muted">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
-                Aguardando leitura — abra o WhatsApp {'>'} Aparelhos conectados
+                Aguardando leitura, abra o WhatsApp {'>'} Aparelhos conectados
               </p>
               {conexao.qr.pairingCode && (
                 <p className="text-[11px] text-muted">
@@ -177,7 +177,7 @@ export function WhatsAppConnectModal({ onClose, onConnected }: { onClose: () => 
         </div>
 
         <p className="mt-4 text-center text-[11px] text-faint">
-          A conexão fica no servidor do KHUB — nada de credencial no navegador.
+          A conexão fica no servidor do KHUB, nada de credencial no navegador.
         </p>
       </div>
     </div>

@@ -174,7 +174,7 @@ export function Hero() {
             href={LOGIN_URL}
             className="text-[13px] font-medium text-[var(--lp-ink-3)] transition-colors hover:text-[var(--lp-ink)]"
           >
-            Já uso o KHUB — entrar
+            Já uso o KHUB, entrar
           </Link>
         </div>
       </Container>

@@ -59,9 +59,9 @@ export default function FinanceiroPage() {
   };
 
   const kpis = [
-    { l: 'Recebido', v: resumo ? money(resumo.recebidoCentavos) : '—', icon: 'finance' as const, cor: 'text-emerald-600 dark:text-emerald-400' },
-    { l: 'A receber', v: resumo ? money(resumo.aReceberCentavos) : '—', icon: 'trend' as const, cor: 'text-fg' },
-    { l: 'Vencido', v: resumo ? money(resumo.vencidoCentavos) : '—', icon: 'inbox' as const, cor: 'text-amber-600 dark:text-amber-400' },
+    { l: 'Recebido', v: resumo ? money(resumo.recebidoCentavos) : '-', icon: 'finance' as const, cor: 'text-emerald-600 dark:text-emerald-400' },
+    { l: 'A receber', v: resumo ? money(resumo.aReceberCentavos) : '-', icon: 'trend' as const, cor: 'text-fg' },
+    { l: 'Vencido', v: resumo ? money(resumo.vencidoCentavos) : '-', icon: 'inbox' as const, cor: 'text-amber-600 dark:text-amber-400' },
   ];
 
   return (
@@ -69,7 +69,7 @@ export default function FinanceiroPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="t-display">Financeiro</h1>
-          <p className="mt-1 text-sm text-muted">Cobranças do seu tenant. O link de pagamento usa a Stripe — conecte para cobrar de verdade.</p>
+          <p className="mt-1 text-sm text-muted">Cobranças do seu tenant. O link de pagamento usa a Stripe, conecte para cobrar de verdade.</p>
         </div>
         <Button onClick={() => setNovo((v) => !v)}><Icon name="plus" size={16} /> Nova cobrança</Button>
       </div>

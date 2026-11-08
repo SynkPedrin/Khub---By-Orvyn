@@ -13,10 +13,10 @@ import { SCREENS } from '@/lib/marketing/screens';
  *  (`automations-flat.png`): gatilho, IA de qualificação, espera,
  *  condição e as duas saídas. Nada aqui é inventado para a LP. */
 const PASSOS = [
-  { tipo: 'Gatilho', titulo: 'Entrada de lead', texto: 'Novo lead via WhatsApp — o fluxo começa sozinho, sem ninguém abrir o sistema.' },
+  { tipo: 'Gatilho', titulo: 'Entrada de lead', texto: 'Novo lead via WhatsApp, o fluxo começa sozinho, sem ninguém abrir o sistema.' },
   { tipo: 'IA', titulo: 'Qualificação', texto: 'A NICO lê perfil, interesse e urgência e devolve variáveis tipadas para o resto do fluxo.' },
   { tipo: 'Controle', titulo: 'Espera', texto: 'Dois minutos. Tempo humano, não disparo instantâneo que denuncia robô.' },
-  { tipo: 'Condição', titulo: 'Lead qualificado?', texto: 'Sim segue para mensagem e agendamento. Não entra em nutrição — e volta depois.', ramifica: true },
+  { tipo: 'Condição', titulo: 'Lead qualificado?', texto: 'Sim segue para mensagem e agendamento. Não entra em nutrição, e volta depois.', ramifica: true },
   { tipo: 'Ação', titulo: 'Follow-up e agenda', texto: 'Mensagem personalizada, reunião marcada, CRM atualizado. Tudo registrado no lead.' },
 ] as const;
 

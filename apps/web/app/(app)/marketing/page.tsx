@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { Card, cx } from '@/components/ui';
 import { Icon, type IconName } from '@/components/icons';
 import { marketplace, type TemplateResumo, type TemplateDetalhe } from '@/lib/marketplace';
-import { OrvynBrandMotion } from '@/components/brand/OrvynBrandMotion';
 
 interface Doc { slug: string; title: string; excerpt: string; words: number }
 
@@ -117,41 +116,27 @@ export default function BibliotecaPage() {
 
   return (
     <div className="mx-auto w-full max-w-[1680px] space-y-8 px-4 py-6 lg:px-8 lg:py-8">
-      {/* Hero — base em gradiente (instantânea) + vídeo do cristal carregado só
-          quando a página fica ociosa: não bloqueia templates/base nem o 1º paint.
-          Look escuro fixo nos 2 temas; scrim mantém o texto legível. */}
-      <section className="relative overflow-hidden rounded-3xl border border-white/10 p-8" style={{ background: 'radial-gradient(120% 120% at 80% 0%, #3a1d6e, #14091f 70%)' }}>
-        <div className="pointer-events-none absolute inset-0">
-          <OrvynBrandMotion
-            overlay={
-              <>
-                {/* Scrim: escurece à esquerda (onde vive o texto) e revela o cristal à direita */}
-                <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/80 via-black/55 to-black/20" />
-                <div className="pointer-events-none absolute inset-0 bg-black/25" />
-              </>
-            }
-          />
-        </div>
-
-        <div className="relative flex items-center gap-2 text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--brand-bright)' }}>
+      {/* Hero com o papel de parede KHUB (branco, roxo e verde) e véu claro à esquerda, onde vive o texto. */}
+      <section className="card relative overflow-hidden p-8" style={{ backgroundImage: "linear-gradient(90deg, rgba(255,255,255,.92) 0%, rgba(255,255,255,.7) 55%, rgba(255,255,255,.15) 100%), url('/khub-fundo.jpg')", backgroundSize: 'cover', backgroundPosition: 'center' }}>
+        <div className="relative flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-brand">
           <Icon name="knowledge" size={15} /> Biblioteca
         </div>
-        <h1 className="relative mt-2 text-3xl font-semibold tracking-tight text-white drop-shadow">Biblioteca</h1>
-        <p className="relative mt-2 max-w-2xl text-sm text-white/85 sm:text-base">
-          Tudo que a NICO usa para pensar e agir, em dois lugares: <strong className="text-white">automações prontas</strong> para instalar em um
-          clique e a <strong className="text-white">base de marketing</strong> — os frameworks que ela consulta ao raciocinar sobre a sua estratégia.
+        <h1 className="t-display relative mt-2">Biblioteca</h1>
+        <p className="relative mt-2 max-w-2xl text-sm text-muted sm:text-base">
+          Tudo que a NICO usa para pensar e agir, em dois lugares: <strong className="text-fg">automações prontas</strong> para instalar em um
+          clique e a <strong className="text-fg">base de marketing</strong>, os frameworks que ela consulta ao raciocinar sobre a sua estratégia.
           Em cada material, um clique pergunta à NICO <em>como usar aquilo na sua empresa</em>.
         </p>
         <div className="relative mt-5 flex flex-wrap gap-2">
           <Link href="/marketing/ads" className="btn btn-primary"><Icon name="marketing" size={16} /> Gerenciador de Anúncios</Link>
-          <Link href="/nyro" className="btn inline-flex items-center gap-1.5 border border-white/25 bg-white/10 text-white backdrop-blur hover:bg-white/20"><Icon name="sparkles" size={16} /> Perguntar à NICO</Link>
-          <Link href="/automacoes" className="btn inline-flex items-center gap-1.5 border border-white/25 bg-white/10 text-white backdrop-blur hover:bg-white/20"><Icon name="sparkles" size={16} /> Minhas automações</Link>
+          <Link href="/nyro" className="btn inline-flex items-center gap-1.5"><Icon name="sparkles" size={16} /> Perguntar à NICO</Link>
+          <Link href="/automacoes" className="btn inline-flex items-center gap-1.5"><Icon name="sparkles" size={16} /> Minhas automações</Link>
         </div>
       </section>
 
       {/* ===================== DIVISÃO 1 · AUTOMAÇÃO ===================== */}
       <section className="space-y-4">
-        <Divisor icon="sparkles" titulo="Automação" sub="Fluxos prontos para instalar em um clique — a NICO configura o resto." contagem={templates?.length ?? '…'} />
+        <Divisor icon="sparkles" titulo="Automação" sub="Fluxos prontos para instalar em um clique, a NICO configura o resto." contagem={templates?.length ?? '…'} />
         {!templates && !erroTpl && <p className="text-sm text-muted">Carregando os templates…</p>}
         {erroTpl && (
           <p className="rounded-xl bg-amber-500/10 px-4 py-2.5 text-sm text-amber-700 dark:text-amber-400">
@@ -183,7 +168,7 @@ export default function BibliotecaPage() {
 
       {/* ===================== DIVISÃO 2 · BASE DE MARKETING ===================== */}
       <section className="space-y-6">
-        <Divisor icon="marketing" titulo="Base de marketing" sub="A inteligência da NICO — frameworks, playbooks e operação que ela recupera ao pensar." contagem={totalDocs || '…'} />
+        <Divisor icon="marketing" titulo="Base de marketing" sub="A inteligência da NICO, frameworks, playbooks e operação que ela recupera ao pensar." contagem={totalDocs || '…'} />
         {!docs && !erroDocs && <p className="text-sm text-muted">Carregando a inteligência da NICO…</p>}
         {erroDocs && (
           <p className="rounded-xl bg-amber-500/10 px-4 py-2.5 text-sm text-amber-700 dark:text-amber-400">
@@ -222,7 +207,7 @@ export default function BibliotecaPage() {
           <div className="lg-backdrop absolute inset-0" onClick={() => setBind(null)} />
           <div className="lg-sheet relative w-full max-w-md animate-scale-in p-6">
             <h2 className="text-lg font-bold text-fg">Personalizar “{bind.tpl.name}”</h2>
-            <p className="mt-1 text-xs text-muted">Ajuste os campos abaixo — eles entram no fluxo antes de instalar.</p>
+            <p className="mt-1 text-xs text-muted">Ajuste os campos abaixo, eles entram no fluxo antes de instalar.</p>
             <div className="mt-4 space-y-3">
               {bind.tpl.variables.map((v) => (
                 <div key={v.chave}>

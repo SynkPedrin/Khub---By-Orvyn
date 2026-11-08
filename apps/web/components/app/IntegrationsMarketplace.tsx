@@ -46,7 +46,7 @@ const CATS: { key: Categoria; label: string; icon: Parameters<typeof Icon>[0]['n
 const APPS: App[] = [
   // capability:'ads' — não pede leads_retrieval junto, então Ads conecta
   // mesmo se a conta ainda não tiver Lead Ads/Advanced Access aprovado.
-  { key: 'meta_ads', nome: 'Meta Ads', brand: 'meta_ads', categoria: 'anuncios', provider: 'meta', capability: 'ads', estado: 'oauth', desc: 'Campanhas do Facebook e Instagram — gasto, CPL, ROAS e melhor criativo.' },
+  { key: 'meta_ads', nome: 'Meta Ads', brand: 'meta_ads', categoria: 'anuncios', provider: 'meta', capability: 'ads', estado: 'oauth', desc: 'Campanhas do Facebook e Instagram, gasto, CPL, ROAS e melhor criativo.' },
   { key: 'google_ads', nome: 'Google Ads', brand: 'google_ads', categoria: 'anuncios', provider: 'google', estado: 'oauth', desc: 'Search e Performance Max no mesmo painel das outras contas.' },
   { key: 'tiktok_ads', nome: 'TikTok Ads', brand: 'tiktok', categoria: 'anuncios', provider: 'tiktok', estado: 'oauth', desc: 'Traga as campanhas do TikTok para a análise cross-plataforma.' },
   // TODO(meta-capabilities): usa o pacote 'ads' por ora — instagram_basic/
@@ -55,9 +55,9 @@ const APPS: App[] = [
   { key: 'instagram', nome: 'Instagram', brand: 'instagram', categoria: 'mensageria', provider: 'meta', estado: 'oauth', desc: 'Direct e comentários viram conversa no Inbox unificado.' },
   // Evolution API própria — CANAL_MVP (CLAUDE.md). Conexão por QR code, não
   // por OAuth: NÃO reaproveitar o fluxo `conectar()` genérico de redirect.
-  { key: 'whatsapp', nome: 'WhatsApp Business', brand: 'whatsapp', categoria: 'mensageria', provider: 'evolution', estado: 'qr', desc: 'Atendimento e disparos via Evolution API — conexão por QR code.' },
+  { key: 'whatsapp', nome: 'WhatsApp Business', brand: 'whatsapp', categoria: 'mensageria', provider: 'evolution', estado: 'qr', desc: 'Atendimento e disparos via Evolution API, conexão por QR code.' },
   { key: 'messenger', nome: 'Messenger', brand: 'messenger', categoria: 'mensageria', provider: 'meta', estado: 'oauth', desc: 'Mensagens do Facebook no mesmo Inbox.' },
-  { key: 'anthropic', nome: 'Claude (NICO)', brand: 'claude', categoria: 'ia', provider: 'anthropic', estado: 'nativa', desc: 'O motor da NICO. Ligado por credencial no servidor — sem OAuth.' },
+  { key: 'anthropic', nome: 'Claude (NICO)', brand: 'claude', categoria: 'ia', provider: 'anthropic', estado: 'nativa', desc: 'O motor da NICO. Ligado por credencial no servidor, sem OAuth.' },
   { key: 'webhook', nome: 'Webhook / API', brand: 'webhook', categoria: 'produtividade', provider: 'webhook', estado: 'nativa', desc: 'Dispare fluxos de qualquer sistema com uma URL de entrada.' },
   { key: 'stripe', nome: 'Stripe', brand: 'stripe', categoria: 'pagamentos', provider: 'stripe', estado: 'planejado', desc: 'Cobranças, assinaturas e receita ligadas ao contato do CRM.' },
   { key: 'google_calendar', nome: 'Google Calendar', brand: 'google_calendar', categoria: 'produtividade', provider: 'google_calendar', estado: 'planejado', desc: 'Agendamentos da Agenda sincronizados nos dois sentidos.' },
@@ -197,7 +197,7 @@ export function IntegrationsMarketplace() {
       </div>
 
       <p className="text-center text-xs text-muted">
-        Conexões passam pelo servidor. Onde a credencial ainda não está configurada, o app mostra exatamente qual variável falta — nada é simulado.
+        Conexões passam pelo servidor. Onde a credencial ainda não está configurada, o app mostra exatamente qual variável falta, nada é simulado.
       </p>
 
       {whatsappAberto && (

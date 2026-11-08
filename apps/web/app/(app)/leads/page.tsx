@@ -280,7 +280,7 @@ function LeadsComDados() {
 
 function BotaoProximaAcao({ lead }: { lead: Lead }) {
   const acao = lead.proximaAcao;
-  if (!acao) return <span className="text-[13px] text-faint">—</span>;
+  if (!acao) return <span className="text-[13px] text-faint">-</span>;
 
   const icone = { responder: 'chat', abrir: 'external', reengajar: 'mail', ligar: 'phone' } as const;
   // Ação de conversa vai para Conversas; as demais abrem o lead.
@@ -411,10 +411,10 @@ function LeadsReal() {
                 </Link>
               </td>
               <td className="px-4 py-2.5"><span className="pill">{c.tag}</span></td>
-              <td className="px-4 py-2.5 text-muted">{c.telefone ?? c.email ?? '—'}</td>
-              <td className="px-4 py-2.5 text-muted">{c.empresa ?? '—'}</td>
-              <td className="px-4 py-2.5 text-right font-semibold text-fg">{c.valor > 0 ? moeda(c.valor) : '—'}</td>
-              <td className="px-4 py-2.5 text-muted">{c.ultimoContatoAt ? <Quando data={c.ultimoContatoAt} /> : '—'}</td>
+              <td className="px-4 py-2.5 text-muted">{c.telefone ?? c.email ?? '-'}</td>
+              <td className="px-4 py-2.5 text-muted">{c.empresa ?? '-'}</td>
+              <td className="px-4 py-2.5 text-right font-semibold text-fg">{c.valor > 0 ? moeda(c.valor) : '-'}</td>
+              <td className="px-4 py-2.5 text-muted">{c.ultimoContatoAt ? <Quando data={c.ultimoContatoAt} /> : '-'}</td>
             </tr>
           ))}
         </tbody>

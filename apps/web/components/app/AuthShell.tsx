@@ -1,6 +1,5 @@
 import Image from 'next/image';
 import type { ReactNode } from 'react';
-import { OrvynBrandMotion } from '@/components/brand/OrvynBrandMotion';
 import { Icon } from '@/components/icons';
 
 const BENEFICIOS: Array<{ icon: 'zap' | 'sparkles' | 'chat'; texto: string }> = [
@@ -40,36 +39,26 @@ export function AuthShell({
       {/* ESQUERDA — vídeo real, painel estrutural (não é fundo da tela
           inteira: ocupa 52% no desktop, e vira uma faixa curta no mobile). */}
       <div className="relative h-[32vh] overflow-hidden lg:h-full lg:border-r lg:border-[rgba(20,20,30,0.06)]">
-        <OrvynBrandMotion
-          poster="/Background-login.png"
-          eager
-          overlay={
-            <>
-              {/* Tratamento cinematográfico composto — não é uma opacity
-                  simples: escurece mais à esquerda (onde mora o texto) e
-                  dissolve pra quase transparente perto da divisa com o
-                  painel off-white, preservando o detalhe do cristal. */}
-              <div
-                className="pointer-events-none absolute inset-0"
-                aria-hidden
-                style={{ background: 'linear-gradient(90deg, rgba(11,4,20,.66) 0%, rgba(20,6,35,.45) 50%, rgba(20,6,35,.18) 100%)' }}
-              />
-              <div
-                className="pointer-events-none absolute inset-0"
-                aria-hidden
-                style={{ background: 'linear-gradient(180deg, rgba(6,3,12,.15) 0%, rgba(6,3,12,.05) 55%, rgba(6,3,12,.40) 100%)' }}
-              />
-            </>
-          }
+        {/* Novo papel de parede KHUB (branco, roxo e verde) com véu claro à
+            esquerda, onde mora o texto. Imagem estática e leve. */}
+        <div
+          className="absolute inset-0"
+          aria-hidden
+          style={{ backgroundImage: "url('/khub-fundo.jpg')", backgroundSize: 'cover', backgroundPosition: 'center' }}
+        />
+        <div
+          className="pointer-events-none absolute inset-0"
+          aria-hidden
+          style={{ background: 'linear-gradient(90deg, rgba(248,248,252,.88) 0%, rgba(248,248,252,.62) 48%, rgba(248,248,252,.12) 100%)' }}
         />
 
         {/* Logo — compacta no mobile (faixa de 32vh), tamanho pleno no
             desktop, na posição pedida. */}
         <div className="absolute left-5 top-5 z-10 lg:hidden">
-          <LogoMark light />
+          <LogoMark />
         </div>
         <div className="absolute z-10 hidden lg:block" style={{ left: 'clamp(40px, 4vw, 72px)', top: 48 }}>
-          <LogoMark light />
+          <LogoMark />
         </div>
 
         {/* Conteúdo do hero — só desktop; no mobile a faixa de vídeo é curta
@@ -83,10 +72,9 @@ export function AuthShell({
               style={{
                 fontSize: 'clamp(52px, 4.2vw, 76px)',
                 lineHeight: 0.96,
-                fontWeight: 700,
+                fontWeight: 650,
                 letterSpacing: '-0.045em',
-                color: '#F8F6F2',
-                textShadow: '0 2px 14px rgba(0,0,0,.22)',
+                color: '#171526',
               }}
             >
               {headlineLines.map((linha) => (
@@ -96,31 +84,31 @@ export function AuthShell({
               ))}
               <span
                 className="block"
-                style={{ background: 'linear-gradient(135deg, #C3A2FF, #8B4CFF)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}
+                style={{ background: 'linear-gradient(135deg, #963EFF, #792EFF)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}
               >
                 {headlineAccent}
               </span>
             </h1>
 
-            <p style={{ marginTop: 24, maxWidth: 480, fontSize: 17, lineHeight: 1.5, color: 'rgba(255,255,255,.74)' }}>{supportingCopy}</p>
+            <p style={{ marginTop: 24, maxWidth: 480, fontSize: 17, lineHeight: 1.5, color: '#6B6980' }}>{supportingCopy}</p>
 
             <div style={{ marginTop: 32 }} className="space-y-4">
               {BENEFICIOS.map((b) => (
                 <div key={b.texto} className="flex items-center gap-3.5">
                   <span
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full backdrop-blur-[8px]"
-                    style={{ background: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.11)' }}
+                    style={{ background: 'rgba(255,255,255,.72)', border: '1px solid rgba(91,75,130,.12)' }}
                   >
-                    <Icon name={b.icon} size={14} style={{ color: 'rgba(255,255,255,.85)' }} />
+                    <Icon name={b.icon} size={14} style={{ color: '#792EFF' }} />
                   </span>
-                  <span style={{ fontSize: 14.5, color: 'rgba(255,255,255,.82)' }}>{b.texto}</span>
+                  <span style={{ fontSize: 14.5, color: '#171526' }}>{b.texto}</span>
                 </div>
               ))}
             </div>
 
             <div
               className="flex items-center gap-2.5"
-              style={{ marginTop: 28, fontSize: 10.5, letterSpacing: '.14em', textTransform: 'uppercase', color: '#F8F6F2', opacity: 0.5 }}
+              style={{ marginTop: 28, fontSize: 10.5, letterSpacing: '.14em', textTransform: 'uppercase', color: '#6B6980', opacity: 0.8 }}
             >
               <span>Mais conversas</span>
               <span>·</span>
@@ -133,7 +121,7 @@ export function AuthShell({
 
         {/* Rodapé — só desktop */}
         <div className="absolute hidden lg:block" style={{ left: 'clamp(40px, 4vw, 72px)', bottom: 40 }}>
-          <p style={{ fontSize: 12, lineHeight: 1.5, color: 'rgba(255,255,255,.5)' }}>
+          <p style={{ fontSize: 12, lineHeight: 1.5, color: '#6B6980' }}>
             Sistema para um crescimento real.
             <br />© 2026 ORVYN
           </p>

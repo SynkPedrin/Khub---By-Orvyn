@@ -58,7 +58,7 @@ export default function AutomacoesPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="t-display">Automações</h1>
-          <p className="text-sm text-muted">Gatilhos, condições e ações — executando de verdade, com log de cada passo.</p>
+          <p className="text-sm text-muted">Gatilhos, condições e ações, executando de verdade, com log de cada passo.</p>
         </div>
         <Button onClick={() => setModal(true)}><Icon name="plus" size={16} /> Nova automação</Button>
       </div>
@@ -71,7 +71,7 @@ export default function AutomacoesPage() {
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand/12 text-brand"><Icon name="sparkles" size={17} /></span>
             <h2 className="font-bold text-fg">Como funciona uma automação</h2>
           </div>
-          <p className="mt-1.5 max-w-2xl text-sm text-muted">Um fluxo que trabalha sozinho, 24/7: um <b className="text-fg">gatilho</b> inicia, o <b className="text-fg">controle</b> decide o caminho e as <b className="text-fg">ações</b> acontecem — cada passo com log.</p>
+          <p className="mt-1.5 max-w-2xl text-sm text-muted">Um fluxo que trabalha sozinho, 24/7: um <b className="text-fg">gatilho</b> inicia, o <b className="text-fg">controle</b> decide o caminho e as <b className="text-fg">ações</b> acontecem, cada passo com log.</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             {[
               { n: '1', t: 'Gatilho', d: 'O que dá a largada: lead novo, mensagem recebida, tag, negócio ganho/perdido, webhook…', i: 'plus' as const },
@@ -147,7 +147,7 @@ export default function AutomacoesPage() {
           <div className="text-3xl">⚠️</div>
           <p className="mt-2 font-bold text-fg">Não consegui carregar as automações</p>
           <p className="mx-auto mt-1 max-w-md text-sm text-muted">
-            A conta atual pode não ter permissão, ou o servidor não respondeu. Isto não é a mesma coisa que &ldquo;nenhuma automação ainda&rdquo; — tente de novo antes de assumir que a conta está vazia.
+            A conta atual pode não ter permissão, ou o servidor não respondeu. Isto não é a mesma coisa que &ldquo;nenhuma automação ainda&rdquo;, tente de novo antes de assumir que a conta está vazia.
           </p>
           <Button className="mt-4" variant="ghost" onClick={load}><Icon name="refresh" size={16} /> Tentar de novo</Button>
         </Card>

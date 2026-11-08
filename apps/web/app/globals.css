@@ -820,10 +820,11 @@ a {
   }
 
   /* =====================================================================
-     BACKGROUND GLOBAL (ADR-0036) — CSS puro, estável, branco dominante.
-     Luz roxa quase imperceptível no alto à esquerda, verde suave no canto
-     oposto, centro branco. É o que o vidro do shell refrata; não anima
-     (estável durante a navegação) e não usa imagem. Montado uma vez em
+     BACKGROUND GLOBAL (ADR-0037) — papel de parede oficial KHUB (branco,
+     roxo e verde: `public/khub-fundo.jpg`, 190 KB, versão leve de
+     khub-background.png) sob um véu branco que mantém o branco dominante e
+     o conteúdo protagonista. Estável (não anima). Os radiais em CSS ficam
+     por baixo como reserva enquanto a imagem carrega. Montado uma vez em
      app/(app)/layout.tsx.
      ===================================================================== */
   .ambient-bg {
@@ -832,18 +833,18 @@ a {
     z-index: var(--z-base);
     overflow: hidden;
     background:
+      linear-gradient(180deg, rgba(248, 248, 252, 0.5) 0%, rgba(248, 248, 252, 0.62) 55%, rgba(248, 248, 252, 0.72) 100%),
+      url('/khub-fundo.jpg') center / cover no-repeat,
       radial-gradient(ellipse 60% 55% at 5% 8%, rgba(121, 46, 255, 0.09), transparent 62%),
-      radial-gradient(ellipse 45% 40% at 70% 0%, rgba(178, 138, 255, 0.06), transparent 65%),
       radial-gradient(ellipse 55% 50% at 96% 90%, rgba(167, 240, 68, 0.1), transparent 60%),
-      radial-gradient(ellipse 50% 45% at 50% 45%, rgba(255, 255, 255, 0.7), transparent 75%),
       var(--base-2);
   }
 
   :root[data-theme='dark'] .ambient-bg,
   .dark .ambient-bg {
     background:
-      radial-gradient(ellipse 60% 55% at 5% 8%, rgba(150, 62, 255, 0.16), transparent 62%),
-      radial-gradient(ellipse 55% 50% at 96% 90%, rgba(167, 240, 68, 0.06), transparent 60%),
+      linear-gradient(180deg, rgba(10, 10, 12, 0.8), rgba(10, 10, 12, 0.88)),
+      url('/khub-fundo.jpg') center / cover no-repeat,
       var(--base-2);
   }
 
@@ -2186,10 +2187,10 @@ a {
 /* Troca de operação: cobre a sessão anterior até a nova ser confirmada. */
 .operation-content { transition: filter .45s ease, opacity .45s ease; }
 .operation-content-blurred { filter: blur(18px); opacity: .18; pointer-events: none; }
-.operation-transition { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; background: linear-gradient(120deg,rgba(23,8,44,.95),rgba(59,16,96,.88)),url('/Background-login.png') center/cover; backdrop-filter: blur(24px); animation: operation-enter .5s ease both; }
-.operation-transition-glow { position:absolute; width:360px; height:360px; border-radius:50%; background:#8b35ff; filter:blur(120px); opacity:.3; }
-.operation-progress { width:160px; height:3px; border-radius:9px; overflow:hidden; background:#ffffff20; }
-.operation-progress::after { content:''; display:block; height:100%; width:40%; border-radius:9px; background:#caa5ff; animation: operation-progress 1.4s ease-in-out infinite; }
+.operation-transition { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; background: linear-gradient(120deg,rgba(248,248,252,.86),rgba(248,248,252,.6)),url('/khub-fundo.jpg') center/cover; backdrop-filter: blur(24px); animation: operation-enter .5s ease both; }
+.operation-transition-glow { position:absolute; width:360px; height:360px; border-radius:50%; background:#963eff; filter:blur(120px); opacity:.12; }
+.operation-progress { width:160px; height:3px; border-radius:9px; overflow:hidden; background:rgba(91,75,130,.14); }
+.operation-progress::after { content:''; display:block; height:100%; width:40%; border-radius:9px; background:#792eff; animation: operation-progress 1.4s ease-in-out infinite; }
 @keyframes operation-enter { from { opacity:0; } to { opacity:1; } }
 @keyframes operation-progress { 0% { transform:translateX(-100%); } 100% { transform:translateX(350%); } }
 @media(prefers-reduced-motion:reduce) { .operation-content,.operation-transition { transition:none;animation:none; } .operation-progress::after { animation:none;width:100%; } }

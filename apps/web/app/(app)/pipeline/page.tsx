@@ -94,7 +94,7 @@ function PipelineReal() {
         setAviso('Etapa atualizada.');
       } catch {
         // Rollback: falhou no servidor, o card volta pra onde estava — nunca mente pro usuário sobre o estado real.
-        setAviso('Não foi possível mover — tente novamente.');
+        setAviso('Não foi possível mover, tente novamente.');
         carregar();
       }
     },
@@ -305,7 +305,7 @@ function Quadro() {
       {historico.length > 0 && (
         <p className="mb-3 flex items-center gap-2 text-[13px] text-muted" role="status" aria-live="polite">
           <Icon name="check2" size={15} className="text-success" />
-          Etapa atualizada — {historico[0]}
+          Etapa atualizada · {historico[0]}
         </p>
       )}
 

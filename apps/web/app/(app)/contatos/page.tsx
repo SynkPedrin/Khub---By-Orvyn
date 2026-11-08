@@ -117,12 +117,12 @@ export default function ContatosPage() {
                       <Avatar name={c.nome} size={36} />
                       <div>
                         <p className="font-semibold text-fg">{c.nome}</p>
-                        <p className="text-xs text-muted">{c.email ?? '—'}</p>
+                        <p className="text-xs text-muted">{c.email ?? '-'}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-muted">{c.empresa ?? '—'}</td>
-                  <td className="whitespace-nowrap px-4 py-3 text-muted">{c.telefone ?? '—'}</td>
+                  <td className="px-4 py-3 text-muted">{c.empresa ?? '-'}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-muted">{c.telefone ?? '-'}</td>
                   <td className="px-4 py-3"><Badge tone={TONE[c.tag] ?? 'neutral'}>{c.tag}</Badge></td>
                   <td className="whitespace-nowrap px-4 py-3 text-right font-semibold text-fg">{brl(c.valor)}</td>
                 </tr>
@@ -155,7 +155,7 @@ export default function ContatosPage() {
               </div>
               <Field label="Empresa">
                 <select className="input" value={form.companyId} onChange={(e) => setForm({ ...form, companyId: e.target.value })}>
-                  <option value="">— sem empresa —</option>
+                  <option value="">- sem empresa -</option>
                   {empresas.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
                 </select>
               </Field>

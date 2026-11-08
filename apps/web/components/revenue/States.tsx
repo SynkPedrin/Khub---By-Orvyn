@@ -109,7 +109,7 @@ export function ConfigRequiredState({
       </span>
       <p className="t-section mt-1">{recurso} ainda não está configurado</p>
       <p className="max-w-md text-[13.5px] text-muted">
-        Este módulo precisa de uma credencial para funcionar. Enquanto ela não for configurada, nada é exibido —
+        Este módulo precisa de uma credencial para funcionar. Enquanto ela não for configurada, nada é exibido -
         preferimos não mostrar dado nenhum a mostrar dado falso.
       </p>
       {faltando && faltando.length > 0 && (

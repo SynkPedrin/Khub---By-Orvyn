@@ -37,7 +37,7 @@ export function Conversations() {
             <Reveal delay={0.2}>
               <p className="lp-body mt-7 max-w-[38ch] text-[16px]">
                 Ele responde onde é mais fácil para ele. Aqui, WhatsApp, Instagram, e-mail e site caem na mesma
-                fila — com etiqueta, etapa do funil e histórico do lead ao lado da mensagem, para quem atende
+                fila, com etiqueta, etapa do funil e histórico do lead ao lado da mensagem, para quem atende
                 não precisar perguntar de novo o que já foi dito.
               </p>
             </Reveal>

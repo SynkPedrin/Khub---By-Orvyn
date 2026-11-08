@@ -571,7 +571,7 @@ function ConversasVazio() {
       <EmptyState
         icon="chat"
         title="Nenhuma conversa ainda"
-        description="Conecte o WhatsApp para começar a receber e responder mensagens aqui. Instagram, e-mail e webchat entram em seguida — a arquitetura de canais já está pronta para eles."
+        description="Conecte o WhatsApp para começar a receber e responder mensagens aqui. Instagram, e-mail e webchat entram em seguida, a arquitetura de canais já está pronta para eles."
         action={
           <Link href="/configuracoes?aba=whatsapp" className="btn btn-primary btn-sm">
             <Icon name="whatsapp" size={15} />

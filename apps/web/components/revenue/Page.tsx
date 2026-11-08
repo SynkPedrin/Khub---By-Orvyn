@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import { cx } from '../ui';
-import { OrvynBrandMotion } from '../brand/OrvynBrandMotion';
 
 /**
  * Moldura padrão de página do Revenue OS.
@@ -27,7 +26,6 @@ export function PageHeader({
   actions,
   icon,
   className,
-  motionAccent,
 }: {
   title: string;
   subtitle?: string;
@@ -35,41 +33,9 @@ export function PageHeader({
   actions?: ReactNode;
   icon?: ReactNode;
   className?: string;
-  /**
-   * Assinatura em vídeo da ORVYN, como uma faixa estreita à direita do
-   * cabeçalho — "Revenue Pulse". Fica atrás do texto (`quote`/`actions`
-   * continuam por cima) e se dissolve num degradê pro fundo da página, então
-   * nunca compete com o conteúdo real. `false` por padrão: só o Dashboard
-   * liga isso — as outras páginas usam `PageHeader` sem qualquer mudança de
-   * comportamento ou risco de regressão.
-   */
-  motionAccent?: boolean;
 }) {
   return (
     <div className={cx('relative mb-6 flex flex-wrap items-start justify-between gap-x-8 gap-y-4', className)}>
-      {motionAccent && (
-        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[34%] max-w-[460px] xl:block">
-          <OrvynBrandMotion
-            className="rounded-2xl"
-            overlay={
-              // `quote`/`actions` (o mote e o selo demo) ficam alinhados à
-              // direita, DENTRO desta mesma faixa — o cristal só pode
-              // aparecer puro na pontinha extrema (depois de 78%); onde o
-              // texto vive (os primeiros ~78%), o véu fica quase opaco.
-              <div
-                className="pointer-events-none absolute inset-0 rounded-2xl"
-                aria-hidden
-                style={{
-                  background:
-                    'linear-gradient(90deg, var(--base-2) 0%, color-mix(in srgb, var(--base-2) 88%, transparent) 55%, color-mix(in srgb, var(--base-2) 45%, transparent) 78%, transparent 96%),' +
-                    'linear-gradient(0deg, var(--base-2) 0%, transparent 30%, transparent 70%, var(--base-2) 100%)',
-                }}
-              />
-            }
-          />
-        </div>
-      )}
-
       <div className="relative flex min-w-0 items-center gap-3.5">
         {icon}
         <div className="min-w-0">

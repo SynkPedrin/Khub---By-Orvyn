@@ -38,7 +38,7 @@ export function Founder() {
                 <p className="text-[clamp(18px,1.7vw,26px)] font-medium leading-[1.4] tracking-[-0.022em] text-[var(--lp-ink)]">
                   A mesma cena se repetia em toda operação que crescia por canal digital: o lead entrava em um
                   lugar, a conversa acontecia em outro e o pipeline era reconstruído numa planilha no fim do
-                  mês. Ninguém estava errado — as ferramentas é que não se falavam.
+                  mês. Ninguém estava errado, as ferramentas é que não se falavam.
                 </p>
               </Reveal>
               <Reveal delay={0.12}>

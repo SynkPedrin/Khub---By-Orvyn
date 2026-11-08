@@ -6,7 +6,7 @@ export default function NotFound() {
       <div className="text-4xl">✦</div>
       <h1 className="mt-3 text-xl font-extrabold">Documento não encontrado no cérebro</h1>
       <p className="mt-1 text-sm" style={{ color: 'var(--muted)' }}>
-        Esse trecho do cérebro ainda não existe — ou o link aponta para uma nota que a NICO criará depois.
+        Esse trecho do cérebro ainda não existe, ou o link aponta para uma nota que a NICO criará depois.
       </p>
       <Link
         href="/"

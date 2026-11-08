@@ -87,7 +87,7 @@ export function Sidebar({
         <Link
           href="/dashboard"
           onClick={onNavigate}
-          aria-label="KHUB — ir para o Dashboard"
+          aria-label="KHUB, ir para o Dashboard"
           className="flex items-center"
         >
           {curta ? (

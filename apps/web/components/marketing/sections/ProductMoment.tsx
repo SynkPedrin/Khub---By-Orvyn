@@ -26,7 +26,7 @@ const CALLOUTS = [
     alinha: 'items-start text-left',
   },
   {
-    texto: 'Pipeline por etapa e crescimento de receita lado a lado — mesma base, mesma leitura.',
+    texto: 'Pipeline por etapa e crescimento de receita lado a lado, mesma base, mesma leitura.',
     alinha: 'items-start text-left',
   },
   {

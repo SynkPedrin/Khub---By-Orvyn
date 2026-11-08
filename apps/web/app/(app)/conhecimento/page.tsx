@@ -20,7 +20,7 @@ export default function ConhecimentoPage() {
         <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand/12 text-brand"><Icon name="knowledge" /></span>
         <div>
           <h1 className="t-display">Base de conhecimento</h1>
-          <p className="text-sm text-muted">O cérebro que alimenta a NICO (RAG) — {docs.length} documentos.</p>
+          <p className="text-sm text-muted">O cérebro que alimenta a NICO (RAG) · {docs.length} documentos.</p>
         </div>
       </div>
 

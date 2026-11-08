@@ -97,7 +97,7 @@ export function PainelConfig({ config, webhookUrl, temGatilhoWebhook, onSalvar, 
           <span>
             <span className="block text-xs font-semibold text-fg">Parar se o contato responder</span>
             <span className="block text-[11px] leading-snug text-muted">
-              Ele virou conversa humana — a automação sai da frente e não manda mais nada.
+              Ele virou conversa humana, a automação sai da frente e não manda mais nada.
             </span>
           </span>
         </label>
@@ -166,7 +166,7 @@ export function PainelConfig({ config, webhookUrl, temGatilhoWebhook, onSalvar, 
           <div className="rounded-xl border border-line p-3">
             <p className="text-xs font-bold text-fg">URL de entrada</p>
             <p className="mt-0.5 text-[11px] leading-snug text-muted">
-              Cole no seu site/formulário. Quem tiver esta URL dispara o fluxo — trate como senha.
+              Cole no seu site/formulário. Quem tiver esta URL dispara o fluxo, trate como senha.
             </p>
             {webhookUrl ? (
               <>

@@ -158,7 +158,7 @@ function CampanhasComDados() {
                         <Numero valor={c.respostas} />
                         <Numero valor={c.reunioes} />
                         <td className="text-right tabular text-fg">
-                          {c.conversao == null ? <span className="text-faint">—</span> : percentual(c.conversao, 1, true)}
+                          {c.conversao == null ? <span className="text-faint">-</span> : percentual(c.conversao, 1, true)}
                         </td>
                         <td onClick={(e) => e.stopPropagation()}>
                           <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label={`Ações de ${c.nome}`}>
@@ -210,7 +210,7 @@ function CampanhasComDados() {
 /* ------------------------------------------------------------------ */
 
 function Numero({ valor }: { valor: number | null }) {
-  return <td className="text-right tabular text-fg">{valor == null ? <span className="text-faint">—</span> : numero(valor)}</td>;
+  return <td className="text-right tabular text-fg">{valor == null ? <span className="text-faint">-</span> : numero(valor)}</td>;
 }
 
 function StatusCampanha({ status }: { status: Campanha['status'] }) {
@@ -354,13 +354,13 @@ function PainelCampanha({ campanha }: { campanha: Campanha }) {
             { rotulo: 'Reuniões', valor: campanha.reunioes },
           ].map((m) => (
             <div key={m.rotulo}>
-              <dd className="text-[17px] font-bold tabular text-fg">{m.valor == null ? '—' : numero(m.valor)}</dd>
+              <dd className="text-[17px] font-bold tabular text-fg">{m.valor == null ? '-' : numero(m.valor)}</dd>
               <dt className="text-[11px] text-muted">{m.rotulo}</dt>
             </div>
           ))}
           <div>
             <dd className="text-[17px] font-bold tabular text-fg">
-              {campanha.conversao == null ? '—' : percentual(campanha.conversao, 1, true)}
+              {campanha.conversao == null ? '-' : percentual(campanha.conversao, 1, true)}
             </dd>
             <dt className="text-[11px] text-muted">Conversão</dt>
           </div>

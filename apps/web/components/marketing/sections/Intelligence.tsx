@@ -25,7 +25,7 @@ const ANOTACOES = [
   },
   {
     rotulo: 'Próxima ação',
-    texto: 'Etapa no funil com o próximo passo sugerido — enviar proposta comercial — já ligado ao negócio aberto.',
+    texto: 'Etapa no funil com o próximo passo sugerido, enviar proposta comercial, já ligado ao negócio aberto.',
     lado: 'dir',
     offset: 'xl:mt-[4%]',
   },
@@ -65,8 +65,8 @@ export function Intelligence() {
           </div>
           <Reveal delay={0.2}>
             <p className="text-[15px] leading-[1.62] text-[var(--lp-ink-2)]">
-              A NICO não é um chat colado num canto. Ela lê o que já está no sistema — conversa, negócio,
-              campanha, tarefa — e devolve leitura dentro da mesma tela onde o time trabalha. Ação sensível
+              A NICO não é um chat colado num canto. Ela lê o que já está no sistema, conversa, negócio,
+              campanha, tarefa, e devolve leitura dentro da mesma tela onde o time trabalha. Ação sensível
               passa por aprovação humana, sempre.
             </p>
           </Reveal>

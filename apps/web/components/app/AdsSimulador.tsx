@@ -58,7 +58,7 @@ export function AdsSimulador() {
           <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand/12 text-brand"><Icon name="marketing" size={17} /></span>
           <div>
             <h2 className="font-bold text-fg">Gerenciador de campanhas</h2>
-            <p className="text-[11px] text-muted">Modo simulação — conecte a Meta para operar contas reais.</p>
+            <p className="text-[11px] text-muted">Modo simulação, conecte a Meta para operar contas reais.</p>
           </div>
         </div>
         <button onClick={() => setNovo((v) => !v)} className="btn btn-primary text-sm"><Icon name="plus" size={15} /> Nova campanha</button>

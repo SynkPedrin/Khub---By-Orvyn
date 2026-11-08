@@ -24,7 +24,7 @@ const ESTAGIOS: readonly Estagio[] = [
     id: 'aquisicao',
     titulo: 'Aquisição',
     resumo:
-      'Campanha, anúncio, indicação, direct. A origem entra marcada — e continua marcada até o fechamento.',
+      'Campanha, anúncio, indicação, direct. A origem entra marcada, e continua marcada até o fechamento.',
     tela: SCREENS.campaigns,
     focoMobile: { x: 0.45, y: 0.45, scale: 2.4 },
   },

@@ -13,7 +13,7 @@ export function LegalShell({ titulo, atualizadoEm, children }: { titulo: string;
     <div className="min-h-screen">
       <header className="border-b border-[var(--lp-rule)] py-5">
         <Container className="flex items-center justify-between">
-          <Link href="/" aria-label="KHUB — início">
+          <Link href="/" aria-label="KHUB, início">
             <Image src="/khub-logo.png" alt="KHUB" width={751} height={301} unoptimized className="h-[22px] w-auto object-contain" />
           </Link>
           <Link href="/" className="text-sm font-medium text-[var(--lp-ink-2)] hover:text-[var(--lp-ink)]">
@@ -31,7 +31,7 @@ export function LegalShell({ titulo, atualizadoEm, children }: { titulo: string;
       </Container>
 
       <footer className="border-t border-[var(--lp-rule)] py-8 text-center text-xs text-[var(--lp-ink-2)]">
-        KHUB — <Link href="/termos" className="hover:underline">Termos de Uso</Link> ·{' '}
+        KHUB · <Link href="/termos" className="hover:underline">Termos de Uso</Link> ·{' '}
         <Link href="/privacidade" className="hover:underline">Privacidade</Link>
       </footer>
     </div>

@@ -45,7 +45,7 @@ export function Pipeline() {
           <Reveal delay={0.2}>
             <p className="text-[15px] leading-[1.62] text-[var(--lp-on-dark-2)]">
               Cada oportunidade carrega valor, etapa, dono e a conversa que a originou. Valor em pipeline,
-              ticket médio e ciclo de vendas saem disso — não de um fechamento manual no fim do mês.
+              ticket médio e ciclo de vendas saem disso, não de um fechamento manual no fim do mês.
             </p>
           </Reveal>
         </div>
@@ -84,7 +84,7 @@ export function Pipeline() {
         <Container className="mt-[clamp(40px,5vw,72px)]">
           <ul className="grid gap-px overflow-hidden border-y border-[var(--lp-rule-dark)] sm:grid-cols-3">
             {[
-              ['Etapas configuráveis', 'Entrada, qualificação, reunião, proposta, negociação, fechamento — do jeito que a sua operação já fala.'],
+              ['Etapas configuráveis', 'Entrada, qualificação, reunião, proposta, negociação, fechamento, do jeito que a sua operação já fala.'],
               ['Valor por etapa', 'O funil mostra quanto está parado em cada estágio, não só quantos cartões existem.'],
               ['Contexto junto', 'Abrir um cartão abre a conversa, as tarefas e a campanha que trouxe aquele lead.'],
             ].map(([titulo, texto], i) => (

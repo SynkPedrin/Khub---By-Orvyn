@@ -127,7 +127,7 @@ export default function TarefasPage() {
               </div>
               <Field label="Contato (opcional)">
                 <select className="input" value={form.contactId} onChange={(e) => setForm({ ...form, contactId: e.target.value })}>
-                  <option value="">— nenhum —</option>
+                  <option value="">- nenhum -</option>
                   {contatos.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
                 </select>
               </Field>

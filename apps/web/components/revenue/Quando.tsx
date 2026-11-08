@@ -26,7 +26,7 @@ export function Quando({
   const [montado, setMontado] = useState(false);
   useEffect(() => setMontado(true), []);
 
-  if (!data) return <span className={className}>—</span>;
+  if (!data) return <span className={className}>-</span>;
 
   if (formato === 'hora') return <span className={className}>{hora(data)}</span>;
   if (formato === 'data') return <span className={className}>{dataCurta(data)}</span>;

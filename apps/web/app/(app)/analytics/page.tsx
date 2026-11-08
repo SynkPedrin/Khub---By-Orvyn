@@ -145,7 +145,7 @@ function AnalyticsReal() {
         <KpiCard
           label="Taxa de sucesso das automações"
           compacto
-          value={auto?.taxaSucesso == null ? '—' : percentual(auto.taxaSucesso, 0, true)}
+          value={auto?.taxaSucesso == null ? '-' : percentual(auto.taxaSucesso, 0, true)}
           icon="zap"
           tom={auto?.taxaSucesso != null && auto.taxaSucesso < 80 ? 'warning' : 'success'}
         />
@@ -176,7 +176,7 @@ function AnalyticsReal() {
       <div className="card mt-4 p-5">
         <p className="flex items-start gap-2 text-[13px] text-muted">
           <Icon name="info" size={15} className="mt-0.5 shrink-0 text-faint" />
-          Receita por canal, CAC, ROI, funil de conversão e comparecimento ainda não têm cálculo definido no produto —
+          Receita por canal, CAC, ROI, funil de conversão e comparecimento ainda não têm cálculo definido no produto -
           preferimos não mostrar em vez de estimar. Assim que essas fórmulas existirem, aparecem aqui.
         </p>
       </div>

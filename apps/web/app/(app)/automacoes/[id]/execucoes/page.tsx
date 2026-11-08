@@ -50,7 +50,7 @@ export default function ExecucoesPage() {
     setAviso('');
     try {
       const r = await automations.testar(id, contatoTeste);
-      setAviso(r.runId ? 'Execução de teste iniciada — as ações acontecem de verdade.' : 'Nada a executar (gatilho sem nó ligado?).');
+      setAviso(r.runId ? 'Execução de teste iniciada, as ações acontecem de verdade.' : 'Nada a executar (gatilho sem nó ligado?).');
       setTimeout(load, 800);
     } catch {
       setAviso('Não consegui testar: o workflow tem problemas de validação.');
@@ -82,14 +82,14 @@ export default function ExecucoesPage() {
       </div>
 
       <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-400">
-        O teste <strong>executa de verdade</strong>: manda mensagem, cria tarefa, mexe no funil. Não é simulação — use um contato seu.
+        O teste <strong>executa de verdade</strong>: manda mensagem, cria tarefa, mexe no funil. Não é simulação, use um contato seu.
       </p>
       {aviso && <p className="rounded-lg bg-brand/10 px-3 py-2 text-xs text-brand">{aviso}</p>}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="p-2">
           {!runs && <p className="py-8 text-center text-sm text-muted">Carregando…</p>}
-          {runs?.length === 0 && <p className="py-8 text-center text-sm text-muted">Nenhuma execução ainda. Publique, ative e dispare o gatilho — ou teste acima.</p>}
+          {runs?.length === 0 && <p className="py-8 text-center text-sm text-muted">Nenhuma execução ainda. Publique, ative e dispare o gatilho, ou teste acima.</p>}
           {runs?.map((r) => (
             <button
               key={r.id}
@@ -145,7 +145,7 @@ export default function ExecucoesPage() {
                 ))}
                 {aberta.status === 'esperando' && (
                   <p className="rounded-lg bg-brand/10 px-3 py-2 text-[11px] text-brand">
-                    Em espera no nó <strong>{aberta.noAtual}</strong>. Retoma sozinha — mesmo depois de restart.
+                    Em espera no nó <strong>{aberta.noAtual}</strong>. Retoma sozinha, mesmo depois de restart.
                   </p>
                 )}
               </div>

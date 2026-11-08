@@ -111,7 +111,7 @@ export function DealDrawer({ dealId, stages, onClose, onChanged }: Props) {
                   <Icon name="contacts" size={15} className="text-muted" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold text-fg">{d.contato.nome}</span>
-                    <span className="block truncate text-xs text-muted">{d.contato.email ?? d.contato.telefone ?? '—'}</span>
+                    <span className="block truncate text-xs text-muted">{d.contato.email ?? d.contato.telefone ?? '-'}</span>
                   </span>
                   <Icon name="chevronRight" size={14} className="text-muted" />
                 </Link>

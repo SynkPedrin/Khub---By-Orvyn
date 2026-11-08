@@ -165,6 +165,11 @@ Em F0 (Bloco 4) esses arquivos serão movidos/copiados para `packages/ui/assets/
   - TypeScript **5.5.4** (strict) · Postgres alvo **pg16 + pgvector** (imagem `pgvector/pgvector:pg16` no compose)
 - **Consequências:** `prisma generate` OK gerando o modelo com `Unsupported("vector(1024)")` (R0.3). Migrações do RAG continuam em SQL puro (`db/`), não no Prisma Migrate. `packages/ui` fica como dívida pequena (web tem seus componentes locais). Turbo `tasks` (schema v2). **Verificado:** `pnpm build` → 2/2 apps; API sobe e responde `/v1/health` (db:false sem Postgres) e 404 em `application/problem+json`.
 
+### ADR-0037 — Papel de parede KHUB (branco, roxo e verde) e sem travessão na interface
+- **Status:** Aceito (product owner, 2026-11-08). Emenda o ADR-0036 no fundo; vence a linha "prefira CSS puro" do brief por pedido explícito do dono do produto.
+- **Papel de parede:** o oficial `khub-background.png` (branco dominante, vidro roxo e verde) em versão leve `public/khub-fundo.jpg` (190 KB) passa a ser o fundo do app (sob véu branco de 50 a 72%), do painel do login, do convite de agência, da transição de troca de operação e do topo da Biblioteca. Saem TODOS os fundos roxos: `Background-login.png` (login, convite, configurações da agência, transição), o vídeo de cristal roxo (`OrvynBrandMotion`) do login, da Biblioteca e a opção `motionAccent` do cabeçalho de página. Textos sobre o fundo passam a escuros (`#171526` / `#6B6980`). O componente de vídeo continua só na landing page.
+- **Sem travessão:** nenhum "—" em texto visível da interface autenticada, login, termos, privacidade e landing (152 trocas em 51 arquivos): aposto vira vírgula, separador vira " · ", valor vazio vira "-". Comentários de código não mudam.
+
 ### ADR-0036 — KHUB Premium: design system claro, vidro funcional, luz pontual
 - **Status:** Aceito (brief "KHUB — Premium Product Redesign", 2026-11-07/08). **Revisa ADR-0033, 0034 e 0035** (o brief é a direção mais recente e explícita).
 - **Paleta (tokens, mesmos nomes):** base `#F8F8FC`, superfícies `#FFF`/`#F4F3F9`, texto `#171526`, texto secundário `#6B6980` (o `#77758A` do brief escurecido um passo para AA 4.5:1), borda `rgba(91,75,130,.12)`; roxo `#792EFF`/`#963EFF`/`#B28AFF`/`#F0E8FF`; verde `#A7F044`/`#C7FF79`/`#F0F9E6` (`--lime-edge #8FD42A` para aparecer sobre branco).

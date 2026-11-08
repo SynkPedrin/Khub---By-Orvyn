@@ -22,13 +22,13 @@ const BRL_CENTS = new Intl.NumberFormat('pt-BR', {
 
 /** `284500` → `R$ 284.500`. Com `centavos`, `42` → `R$ 42,00`. */
 export function moeda(valor: number | null | undefined, centavos = false): string {
-  if (valor == null || !Number.isFinite(valor)) return '—';
+  if (valor == null || !Number.isFinite(valor)) return '-';
   return (centavos ? BRL_CENTS : BRL).format(valor);
 }
 
 /** `1845000` → `R$ 1,8M`. Para eixos de gráfico e espaços apertados. */
 export function moedaCurta(valor: number | null | undefined): string {
-  if (valor == null || !Number.isFinite(valor)) return '—';
+  if (valor == null || !Number.isFinite(valor)) return '-';
   const abs = Math.abs(valor);
   if (abs >= 1_000_000) return `R$ ${(valor / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}M`;
   if (abs >= 1_000) return `R$ ${(valor / 1_000).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}K`;
@@ -37,20 +37,20 @@ export function moedaCurta(valor: number | null | undefined): string {
 
 /** `1245` → `1.245`. */
 export function numero(valor: number | null | undefined): string {
-  if (valor == null || !Number.isFinite(valor)) return '—';
+  if (valor == null || !Number.isFinite(valor)) return '-';
   return valor.toLocaleString('pt-BR');
 }
 
 /** `0.62` → `62%` (fração) ou `62` → `62%` (já em pontos, com `jaEmPontos`). */
 export function percentual(valor: number | null | undefined, casas = 0, jaEmPontos = false): string {
-  if (valor == null || !Number.isFinite(valor)) return '—';
+  if (valor == null || !Number.isFinite(valor)) return '-';
   const pontos = jaEmPontos ? valor : valor * 100;
   return `${pontos.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas })}%`;
 }
 
 /** Minutos → `2 min`, `1h 20min`, `2 dias`. */
 export function duracao(minutos: number | null | undefined): string {
-  if (minutos == null || !Number.isFinite(minutos) || minutos < 0) return '—';
+  if (minutos == null || !Number.isFinite(minutos) || minutos < 0) return '-';
   if (minutos < 1) return 'menos de 1 min';
   if (minutos < 60) return `${Math.round(minutos)} min`;
   if (minutos < 60 * 24) {
@@ -64,9 +64,9 @@ export function duracao(minutos: number | null | undefined): string {
 
 /** Data/hora relativa: `2 min atrás`, `Ontem`, `28 de abr.`. */
 export function tempoRelativo(data: string | Date | null | undefined, agora = new Date()): string {
-  if (!data) return '—';
+  if (!data) return '-';
   const d = typeof data === 'string' ? new Date(data) : data;
-  if (Number.isNaN(d.getTime())) return '—';
+  if (Number.isNaN(d.getTime())) return '-';
 
   const diffMs = agora.getTime() - d.getTime();
   const min = Math.floor(diffMs / 60_000);
@@ -92,9 +92,9 @@ export function tempoRelativo(data: string | Date | null | undefined, agora = ne
 
 /** `28 de abr.` — e inclui o ano quando não é o corrente. */
 export function dataCurta(data: string | Date | null | undefined, agora = new Date()): string {
-  if (!data) return '—';
+  if (!data) return '-';
   const d = typeof data === 'string' ? new Date(data) : data;
-  if (Number.isNaN(d.getTime())) return '—';
+  if (Number.isNaN(d.getTime())) return '-';
   const mesmoAno = d.getFullYear() === agora.getFullYear();
   return d.toLocaleDateString('pt-BR', {
     day: 'numeric',
@@ -105,15 +105,15 @@ export function dataCurta(data: string | Date | null | undefined, agora = new Da
 
 /** `10:24`. */
 export function hora(data: string | Date | null | undefined): string {
-  if (!data) return '—';
+  if (!data) return '-';
   const d = typeof data === 'string' ? new Date(data) : data;
-  if (Number.isNaN(d.getTime())) return '—';
+  if (Number.isNaN(d.getTime())) return '-';
   return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
 /** `+55 11 98765-4321` a partir de dígitos. Devolve a entrada se não reconhecer. */
 export function telefone(valor: string | null | undefined): string {
-  if (!valor) return '—';
+  if (!valor) return '-';
   const d = valor.replace(/\D/g, '');
   if (d.length === 13 && d.startsWith('55')) return `+55 ${d.slice(2, 4)} ${d.slice(4, 9)}-${d.slice(9)}`;
   if (d.length === 12 && d.startsWith('55')) return `+55 ${d.slice(2, 4)} ${d.slice(4, 8)}-${d.slice(8)}`;

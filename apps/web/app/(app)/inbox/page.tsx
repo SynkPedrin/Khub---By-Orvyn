@@ -147,7 +147,7 @@ export default function InboxPage() {
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-semibold tracking-tight text-fg">Inbox</h1>
             <span
-              title={conectado ? 'Ao vivo: mensagens chegam na hora' : 'Sem conexão ao vivo — atualizando a cada 5s'}
+              title={conectado ? 'Ao vivo: mensagens chegam na hora' : 'Sem conexão ao vivo, atualizando a cada 5s'}
               className={`h-2 w-2 shrink-0 rounded-full ${conectado ? 'bg-emerald-500' : 'bg-amber-500'}`}
             />
           </div>

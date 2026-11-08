@@ -68,7 +68,7 @@ export default function EmpresasPage() {
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-bold text-fg">{c.nome}</p>
-                <p className="truncate text-xs text-muted">{c.dominio ?? c.site ?? c.segmento ?? '—'}</p>
+                <p className="truncate text-xs text-muted">{c.dominio ?? c.site ?? c.segmento ?? '-'}</p>
               </div>
             </div>
             <div className="mt-3 flex items-center gap-3 border-t border-line pt-3 text-xs text-muted">
@@ -99,7 +99,7 @@ export default function EmpresasPage() {
                 <Field label="Segmento"><Input value={form.segmento} onChange={(e) => setForm({ ...form, segmento: e.target.value })} placeholder="Saúde, Jurídico…" /></Field>
                 <Field label="Tamanho">
                   <select className="input" value={form.tamanho} onChange={(e) => setForm({ ...form, tamanho: e.target.value })}>
-                    <option value="">—</option>
+                    <option value="">-</option>
                     {TAMANHOS.map((t) => <option key={t}>{t}</option>)}
                   </select>
                 </Field>

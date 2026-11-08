@@ -437,7 +437,7 @@ function IaVazia() {
         premium
         icon="ai"
         title="O Copiloto precisa de uma credencial de IA"
-        description="Sem provedor configurado, o Copiloto não responde — e preferimos não responder a inventar uma análise. Configure uma chave em Configurações › IA para ativá-lo."
+        description="Sem provedor configurado, o Copiloto não responde, e preferimos não responder a inventar uma análise. Configure uma chave em Configurações › IA para ativá-lo."
         action={
           <Link href="/configuracoes?aba=ia" className="btn btn-primary btn-sm">
             <Icon name="settings" size={15} />
