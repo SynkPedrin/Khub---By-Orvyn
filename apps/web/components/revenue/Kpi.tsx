@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Icon, type IconName } from '../icons';
 import { cx } from '../ui';
 import { cardHover } from '@/lib/motion';
+import { ContaNumero } from './ContaNumero';
 
 export type Tom = 'brand' | 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
@@ -71,7 +72,9 @@ export function KpiCard({
           <p className={cx('font-medium text-muted', compacto ? 'text-[12px] leading-snug' : 'truncate text-[13px]')}>
             {label}
           </p>
-          <p className={cx('mt-1 text-fg', compacto ? 'text-[22px] font-bold tabular tracking-tight' : 't-kpi')}>{value}</p>
+          <p className={cx('mt-1 text-fg', compacto ? 'text-[22px] font-bold tabular tracking-tight' : 't-kpi')}>
+            <ContaNumero value={value} />
+          </p>
           {(typeof delta === 'number' || comparacao) && (
             <p className={cx('flex flex-wrap items-center gap-x-1.5 gap-y-0.5', compacto ? 'mt-1.5' : 'mt-2')}>
               {typeof delta === 'number' && (

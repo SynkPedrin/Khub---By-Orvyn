@@ -75,6 +75,8 @@ export function PageHeader({
         <div className="min-w-0">
           <h1 className="t-display">{title}</h1>
           {subtitle && <p className="mt-1.5 text-[15px] text-muted">{subtitle}</p>}
+          {/* Traço roxo→limão que "assina" o título (ADR-0034). */}
+          <span className="page-title-trace" aria-hidden />
         </div>
       </div>
 
@@ -85,7 +87,7 @@ export function PageHeader({
               <p className="whitespace-pre-line text-[13.5px] italic leading-relaxed text-muted">{quote}</p>
               <div className="mt-1.5 flex items-center justify-end gap-3">
                 <span className="h-px w-8 bg-line" aria-hidden />
-                <span className="text-[10px] font-medium tracking-[0.28em] text-faint">ORVYN</span>
+                <span className="text-[10px] font-medium tracking-[0.28em] text-faint">KHUB</span>
               </div>
             </div>
           )}

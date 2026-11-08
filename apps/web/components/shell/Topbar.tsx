@@ -15,10 +15,23 @@ import { useAgency } from '@/components/agency/AgencyProvider';
  * escuta. Evita dois campos concorrentes e mantém um único caminho de busca.
  */
 export function Topbar({ onMobileMenu }: { onMobileMenu?: () => void }) {
+  // ADR-0034: a barra "acende" (aro + luz roxa) quando o conteúdo rola por
+  // baixo dela — dá profundidade e mostra que há conteúdo acima.
+  const [rolou, setRolou] = useState(false);
+  useEffect(() => {
+    const area = document.getElementById('conteudo');
+    if (!area) return;
+    const medir = () => setRolou(area.scrollTop > 8);
+    medir();
+    area.addEventListener('scroll', medir, { passive: true });
+    return () => area.removeEventListener('scroll', medir);
+  }, []);
+
   return (
     <header
       className="glass-floating nav-floating sticky top-0 z-topbar flex h-topbar shrink-0 items-center gap-3 px-4 lg:px-6"
       role="banner"
+      data-rolou={rolou}
     >
       <button
         type="button"

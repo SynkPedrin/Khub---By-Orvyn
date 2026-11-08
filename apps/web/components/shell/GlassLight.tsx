@@ -2,18 +2,23 @@
 
 import { useEffect } from 'react';
 
-/** Elementos cujo brilho especular segue o ponteiro (ver globals.css). */
-const ALVO = '.btn, .lg-interactive';
+/**
+ * Grupos de elementos cuja luz segue o ponteiro (ver globals.css):
+ *  - controles: brilho especular de `.btn`/`.lg-interactive` (ADR-0029);
+ *  - superfícies: holofote roxo de `.card`/`.card-crystal` (ADR-0034).
+ * Um botão dentro de um card atualiza OS DOIS — a luz do card não "congela"
+ * quando o ponteiro passa por cima de um controle.
+ */
+const GRUPOS = ['.btn, .lg-interactive', '.card, .card-crystal'];
 
 /**
- * Luz do Liquid Glass: o brilho especular dos controles acompanha o
- * ponteiro, como o realce que reage ao movimento nas plataformas Apple.
+ * Luz que reage ao ponteiro.
  *
  * Um único listener passivo no documento (delegação), no máximo uma
- * escrita por frame, e só no elemento sob o ponteiro: grava `--lg-x` e
- * `--lg-y`, que o `::after` de `.btn`/`.lg-interactive` usa como centro
- * do gradiente. Em telas de toque não há hover, então nem registra.
- * Sem o script, o brilho cai no padrão (topo-centro) — nada quebra.
+ * escrita por frame, e só nos elementos sob o ponteiro: grava `--lg-x` e
+ * `--lg-y`, que os gradientes usam como centro. Em telas de toque não há
+ * hover, então nem registra. Sem o script, a luz cai no padrão (topo-centro)
+ * — nada quebra.
  */
 export function GlassLight() {
   useEffect(() => {
@@ -26,11 +31,13 @@ export function GlassLight() {
       frame = 0;
       const e = ultimo;
       if (!e || !(e.target instanceof Element)) return;
-      const el = e.target.closest<HTMLElement>(ALVO);
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      el.style.setProperty('--lg-x', `${e.clientX - r.left}px`);
-      el.style.setProperty('--lg-y', `${e.clientY - r.top}px`);
+      for (const alvo of GRUPOS) {
+        const el = e.target.closest<HTMLElement>(alvo);
+        if (!el) continue;
+        const r = el.getBoundingClientRect();
+        el.style.setProperty('--lg-x', `${e.clientX - r.left}px`);
+        el.style.setProperty('--lg-y', `${e.clientY - r.top}px`);
+      }
     };
 
     const mover = (e: PointerEvent) => {

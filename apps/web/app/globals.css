@@ -185,7 +185,7 @@
   --lg-shadow: 0 1px 1px rgba(46, 16, 101, 0.04), 0 6px 18px -4px rgba(76, 29, 149, 0.1), 0 24px 56px -16px rgba(108, 43, 255, 0.2);
   --lg-shadow-control: 0 1px 2px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
   --lg-specular: rgba(255, 255, 255, 0.7);
-  --lg-dim: rgba(0, 0, 0, 0.24);
+  --lg-dim: rgba(24, 10, 52, 0.3); /* escurecimento puxado ao violeta (ADR-0034) */
 
   /* Material de CONTEÚDO (thick material): cards, tabelas, Kanban. */
   --mat-thick: rgba(255, 255, 255, 0.86);
@@ -616,17 +616,34 @@ a {
     border-color: var(--edge-lime-strong);
     box-shadow: var(--lg-shadow), var(--glow-lg);
   }
+  /* ADR-0034: borda viva — luz limão→roxo percorre o aro enquanto o ponteiro
+     está no card. Anel recortado por máscara (só a borda aparece). A luz do
+     canto e o holofote moram no ::before (vidro), mais abaixo. */
   .card-crystal::after {
     content: '';
     position: absolute;
-    inset: 0;
+    inset: -1px;
     z-index: -1;
+    padding: 2px;
     border-radius: inherit;
     pointer-events: none;
-    background:
-      radial-gradient(90% 120% at 0% 0%, var(--light-leak), transparent 60%),
-      radial-gradient(60% 80% at 100% 100%, var(--lime-leak), transparent 70%),
-      linear-gradient(90deg, transparent 8%, color-mix(in srgb, var(--lime-edge) 70%, transparent) 50%, transparent 92%) top / 100% 1px no-repeat;
+    background: conic-gradient(
+      from var(--ring-angle),
+      transparent 0deg,
+      var(--lime-edge) 60deg,
+      var(--brand-2) 120deg,
+      transparent 180deg,
+      transparent 360deg
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+    opacity: 0;
+    transition: opacity var(--dur-slow) var(--ease);
+  }
+  .card-crystal:hover::after {
+    opacity: 1;
+    animation: ring-spin 3.2s linear infinite;
   }
   .card-crystal::before {
     content: '';
@@ -635,7 +652,14 @@ a {
     z-index: -1;
     border-radius: inherit;
     pointer-events: none;
-    background: var(--lg-fill);
+    /* ADR-0033/0034: holofote que segue o ponteiro (--lg-x/--lg-y, ver
+       GlassLight) + luz roxa vazando do canto + reflexo limão oposto. */
+    background:
+      radial-gradient(340px circle at var(--lg-x, 50%) var(--lg-y, -40%), color-mix(in srgb, var(--brand) var(--spot), transparent), transparent 46%),
+      radial-gradient(90% 120% at 0% 0%, var(--light-leak), transparent 60%),
+      radial-gradient(60% 80% at 100% 100%, var(--lime-leak), transparent 70%),
+      var(--lg-fill);
+    transition: --spot var(--dur-slow) var(--ease);
     -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate)) brightness(var(--lg-brightness));
     backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate)) brightness(var(--lg-brightness));
     box-shadow: var(--lg-highlight);
@@ -2226,3 +2250,216 @@ a {
 @keyframes operation-enter { from { opacity:0; } to { opacity:1; } }
 @keyframes operation-progress { 0% { transform:translateX(-100%); } 100% { transform:translateX(350%); } }
 @media(prefers-reduced-motion:reduce) { .operation-content,.operation-transition { transition:none;animation:none; } .operation-progress::after { animation:none;width:100%; } }
+
+/* =====================================================================
+   EXPERIÊNCIA (ADR-0034) — luz que reage, bordas vivas, coreografia.
+   Tudo aqui é progressivo: sem JS, sem @property ou com "Reduzir
+   movimento", a interface fica estática e íntegra (a regra global de
+   prefers-reduced-motion zera durações; o contador do KPI respeita o mesmo).
+   ===================================================================== */
+
+/* Propriedades animáveis (precisam de registro para transicionar dentro de
+   gradientes). Fora de @layer por exigência da especificação. */
+@property --spot {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 0%;
+}
+@property --ring-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes ring-spin {
+  to {
+    --ring-angle: 360deg;
+  }
+}
+
+@layer components {
+  /* ---------- 1. Holofote do ponteiro nos cards de conteúdo ----------
+     O centro vem de --lg-x/--lg-y (GlassLight). `--spot` = intensidade,
+     0% em repouso: nada aparece sem hover. */
+  .card {
+    background:
+      radial-gradient(560px circle at var(--lg-x, 50%) var(--lg-y, -40%), color-mix(in srgb, var(--brand) var(--spot), transparent), transparent 42%),
+      var(--mat-thick);
+    transition:
+      --spot var(--dur-slow) var(--ease),
+      border-color var(--dur) var(--ease),
+      box-shadow var(--dur-slow) var(--ease);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .card:hover {
+      --spot: 9%;
+      border-color: color-mix(in srgb, var(--lime-edge) 85%, transparent);
+    }
+    .card-crystal:hover::before {
+      --spot: 12%;
+    }
+  }
+
+  /* ---------- 2. Coreografia de entrada ----------
+     Os cards sobem em cascata quando a página monta. `backwards` (não
+     `both`): terminada a entrada a animação larga o transform, e o hover do
+     framer-motion volta a funcionar. */
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(16px) scale(0.985);
+      filter: blur(6px);
+    }
+  }
+  #conteudo :is(.card, .card-crystal) {
+    animation: rise-in 0.62s var(--ease-out) backwards;
+  }
+  #conteudo :is(.card, .card-crystal):nth-child(2) { animation-delay: 70ms; }
+  #conteudo :is(.card, .card-crystal):nth-child(3) { animation-delay: 140ms; }
+  #conteudo :is(.card, .card-crystal):nth-child(4) { animation-delay: 210ms; }
+  #conteudo :is(.card, .card-crystal):nth-child(5) { animation-delay: 280ms; }
+  #conteudo :is(.card, .card-crystal):nth-child(6) { animation-delay: 350ms; }
+  #conteudo :is(.card, .card-crystal):nth-child(n + 7) { animation-delay: 420ms; }
+
+  /* ---------- 3. Botão principal: reflexo que atravessa no hover ---------- */
+  .btn-primary::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(110deg, transparent 38%, rgba(255, 255, 255, 0.42) 50%, transparent 62%) 140% 0 / 260% 100% no-repeat;
+    transition: background-position 0.9s var(--ease-out);
+  }
+  .btn-primary:hover:not(:disabled)::before {
+    background-position: -40% 0;
+  }
+
+  /* ---------- 4. Topbar acende ao rolar (data-rolou no Topbar) ---------- */
+  .glass-floating.nav-floating[data-rolou='true'] {
+    border-color: color-mix(in srgb, var(--lime-edge) 85%, transparent);
+    box-shadow: var(--lg-shadow), var(--glow-lg);
+  }
+  .glass-floating.nav-floating {
+    transition:
+      border-color var(--dur-slow) var(--ease),
+      box-shadow var(--dur-slow) var(--ease);
+  }
+
+  /* ---------- 5. Sidebar viva ---------- */
+  .nav-item svg {
+    transition: transform var(--dur-slow) var(--ease-spring);
+  }
+  .nav-item:hover svg {
+    transform: translateX(2px) scale(1.08);
+  }
+  .nav-floating-item:hover {
+    color: var(--brand);
+  }
+  /* Contador de não lidas: pulso limão — "tem gente esperando". */
+  @keyframes pulse-ring {
+    0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--lime-edge) 70%, transparent); }
+    70%, 100% { box-shadow: 0 0 0 7px transparent; }
+  }
+  .nav-item [aria-label$='não lidas'] {
+    animation: pulse-ring 2.2s var(--ease) infinite;
+  }
+
+  /* ---------- 6. Tabelas: linha em foco marcada em limão ---------- */
+  .tbl tbody tr td:first-child {
+    transition: box-shadow var(--dur) var(--ease);
+  }
+  .tbl tbody tr:hover td:first-child {
+    box-shadow: inset 2px 0 0 var(--lime-edge);
+  }
+
+  /* ---------- 7. Carregando: brilho roxo em vez de cinza ---------- */
+  .skeleton {
+    background: color-mix(in srgb, var(--brand) 7%, var(--fill-3));
+  }
+  .skeleton::after {
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--brand-2) 16%, rgba(255, 255, 255, 0.6)),
+      transparent
+    );
+  }
+
+  /* ---------- 8. Estado vazio: ícone flutuando num halo ---------- */
+  @keyframes float-y {
+    50% { transform: translateY(-5px); }
+  }
+  .state .icon-tile {
+    animation: float-y 4.8s ease-in-out infinite;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.55),
+      0 0 0 7px color-mix(in srgb, var(--brand) 6%, transparent),
+      0 14px 30px -12px var(--glow-purple);
+  }
+
+  /* ---------- 9. Título de página com traço roxo→limão ---------- */
+  @keyframes trace-in {
+    from { transform: scaleX(0); }
+  }
+  .page-title-trace {
+    display: block;
+    width: 44px;
+    height: 3px;
+    margin-top: 10px;
+    border-radius: var(--r-full);
+    background: linear-gradient(90deg, var(--brand), var(--lime-edge));
+    box-shadow: 0 2px 10px -2px var(--glow-purple);
+    transform-origin: left;
+    animation: trace-in 0.8s 0.15s var(--ease-out) backwards;
+  }
+
+  /* ---------- 10. Barra de rolagem violeta ---------- */
+  .scrollbar-thin {
+    scrollbar-color: color-mix(in srgb, var(--brand) 26%, transparent) transparent;
+  }
+
+  /* ---------- 11. Fundo respira ---------- */
+  @keyframes grid-breathe {
+    from { opacity: 0.55; }
+    to { opacity: 1; }
+  }
+  .ambient-grid {
+    animation: grid-breathe 7s ease-in-out infinite alternate;
+  }
+}
+
+/* Foco por teclado: anel limão com halo roxo (base, para o Tailwind sobrepor). */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--lime-edge);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 5px var(--ring);
+  }
+}
+
+/* ---------- 12. Login: o primeiro contato já é a experiência ---------- */
+.auth-card {
+  isolation: isolate;
+  border-color: color-mix(in srgb, var(--lime-edge) 60%, transparent);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.95),
+    inset 0 0 24px 0 rgba(255, 255, 255, 0.3),
+    0 24px 70px rgba(46, 16, 101, 0.12),
+    0 0 90px -10px rgba(123, 46, 255, 0.22);
+}
+.auth-card::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  padding: 1.5px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: conic-gradient(from var(--ring-angle), transparent 0deg, var(--lime-edge) 50deg, #a855f7 110deg, transparent 170deg, transparent 360deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: ring-spin 6s linear infinite;
+}

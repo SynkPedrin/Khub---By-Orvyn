@@ -165,6 +165,13 @@ Em F0 (Bloco 4) esses arquivos serão movidos/copiados para `packages/ui/assets/
   - TypeScript **5.5.4** (strict) · Postgres alvo **pg16 + pgvector** (imagem `pgvector/pgvector:pg16` no compose)
 - **Consequências:** `prisma generate` OK gerando o modelo com `Unsupported("vector(1024)")` (R0.3). Migrações do RAG continuam em SQL puro (`db/`), não no Prisma Migrate. `packages/ui` fica como dívida pequena (web tem seus componentes locais). Turbo `tasks` (schema v2). **Verificado:** `pnpm build` → 2/2 apps; API sobe e responde `/v1/health` (db:false sem Postgres) e 404 em `application/problem+json`.
 
+### ADR-0034 — Camada de experiência: luz que reage, bordas vivas, coreografia
+- **Status:** Aceito (product owner, 2026-11-07). Estende o ADR-0033 (luz roxa & aro limão).
+- **Pedido:** "melhore todo o frontend… iluminação, bordas, animação… que não seja só um sistema e sim uma real experiência".
+- **Decisão (sistema inteiro, nada por página):** holofote roxo que segue o ponteiro em `.card`/`.card-crystal` (`GlassLight` agora grava `--lg-x/--lg-y` também nos cards); borda viva (anel cônico limão→violeta girando) no hover dos KPIs e permanente no card de login; entrada em cascata dos cards em `#conteudo` (`animation-fill-mode: backwards`, para não brigar com o hover do framer-motion); contador nos KPIs (`ContaNumero`: anima só o número, termina no texto original, leitor de tela recebe o valor final); reflexo que atravessa o `.btn-primary`; topbar acende ao rolar; ícone do menu reage ao hover e contador de não lidas pulsa; linha de tabela marcada em limão; foco por teclado limão + halo roxo; skeleton com brilho roxo; ícone do estado vazio flutuando; traço roxo→limão sob o título de página; escurecimento de modal puxado ao violeta; fundo "respira".
+- **Regras:** animação só com `transform`/`opacity`/propriedades registradas (`@property --spot`, `--ring-angle`) — sem layout thrash; progressivo (sem JS/`@property` fica estático e íntegro); "Reduzir movimento" desliga tudo (regra global + checagem no contador); nada de animação em loop em área de leitura, exceto o contador de não lidas (sinal de atenção) e o card de login.
+- **Verificação:** 4 testes do contador (33 no front), typecheck, lint; prova visual claro/escuro e login real.
+
 ### ADR-0033 — Luz roxa & aro limão: identidade visual do produto
 - **Status:** Aceito (product owner, 2026-11-06). **Emenda o ADR-0029**: substitui a regra 3 ("luz, não cor") — o material Liquid Glass, as camadas e a concentricidade continuam.
 - **Pedido:** front "muito cru"; mais profissional e gráfico, com iluminação roxa e bordas verdes. Escolhas do usuário: **base clara** com acentos (escuro segue opcional no botão de tema) e **verde-limão KHUB**.
