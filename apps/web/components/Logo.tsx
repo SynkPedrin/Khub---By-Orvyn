@@ -5,17 +5,17 @@ export function Logo({ compact = false }: { compact?: boolean }) {
   return (
     <Link href="/" className="flex items-center gap-2.5 group">
       <Image
-        src="/logo.png"
-        alt="ORVYN OS"
+        src="/khub-mark.png"
+        alt="KHUB"
         width={72}
         height={72}
         unoptimized
         priority
-        className="rounded-lg transition-transform group-hover:scale-105"
+        className="object-contain transition-transform group-hover:scale-105"
       />
       {!compact && (
         <span className="text-lg font-extrabold tracking-tight" style={{ color: 'var(--text)' }}>
-          ORVYN <span className="text-brand">OS</span>
+          KHUB
         </span>
       )}
     </Link>

@@ -360,7 +360,7 @@ function EditorInterno() {
         )}
       </div>
 
-      {/* Header do "window": ORVYN + nome + tags | status/autosave + X */}
+      {/* Header do "window": KHUB + nome + tags | status/autosave + X */}
       <div className="z-10 -mt-5 shrink-0 px-3">
         <div
           className="glass mx-auto flex w-full max-w-4xl flex-wrap items-center gap-x-2.5 gap-y-2 rounded-[1.4rem] px-3.5 py-2"
@@ -368,7 +368,7 @@ function EditorInterno() {
         >
           <span className="flex shrink-0 items-center gap-1.5 pr-0.5 text-xs font-bold tracking-[0.16em] text-fg">
             <span className="grid h-5 w-5 place-items-center rounded-md" style={{ boxShadow: 'inset 0 0 0 1px color-mix(in srgb,var(--brand) 40%,transparent)' }}><Icon name="dashboard" size={12} className="text-brand" /></span>
-            ORVYN
+            KHUB
           </span>
           {/* Nome completo (ocupa o espaço livre) */}
           <input

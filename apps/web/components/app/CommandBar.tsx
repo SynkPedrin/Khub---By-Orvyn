@@ -138,7 +138,7 @@ export function CommandBar() {
         </div>
         <div className="flex items-center justify-between border-t border-line px-4 py-2 text-[11px] text-muted">
           <span>↑↓ navegar · ↵ abrir · esc fechar</span>
-          <span className="font-medium tracking-[0.08em] text-faint">ORVYN Revenue OS</span>
+          <span className="font-medium tracking-[0.08em] text-faint">KHUB</span>
         </div>
       </div>
     </div>

@@ -68,7 +68,7 @@ export function statusRotulo(status: StatusLead): string {
 /* ---------------------------- Score ---------------------------- */
 
 /**
- * Score ORVYN.
+ * Score NICO.
  *
  * A faixa (quente/morno/frio) vem do backend junto do número. `sem_sinal`
  * mostra um travessão, não zero: lead recém-criado não tem score baixo, tem

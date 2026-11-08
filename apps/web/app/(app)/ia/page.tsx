@@ -40,7 +40,7 @@ export default function IaPage() {
   return (
     <PageShell className="max-w-none">
       <PageHeader
-        icon={<Image src="/logo-nyro.png" alt="Nyro IA" width={217} height={72} unoptimized priority className="h-16 w-auto object-contain" />}
+        icon={<Image src="/nico-logo.png" alt="NICO" width={217} height={72} unoptimized priority className="h-16 w-auto object-contain" />}
         title=""
         subtitle="Seu parceiro de IA para acelerar receita."
         quote={'"Dados viram insights.\nInsights viram receita."'}
@@ -131,7 +131,7 @@ function Conversa({ nome }: { nome: string }) {
             <div className="rounded-lg bg-surface2 p-4">
               <p className="text-[14px] font-semibold text-fg">Oi, {nome}! 👋</p>
               <p className="mt-1.5 text-[13.5px] leading-relaxed text-fg">
-                Sou o Copiloto da ORVYN e estou aqui para transformar seus dados em ações que geram receita.
+                Sou a NICO e estou aqui para transformar seus dados em ações que geram receita.
               </p>
               <p className="mt-1.5 text-[13.5px] leading-relaxed text-fg">
                 Posso analisar seu pipeline, leads, campanhas, follow-ups e automações e sugerir os próximos

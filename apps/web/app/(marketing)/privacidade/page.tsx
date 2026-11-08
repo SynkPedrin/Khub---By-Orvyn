@@ -1,14 +1,14 @@
 import type { Metadata } from 'next';
 import { LegalShell, Secao } from '@/components/marketing/legal/LegalShell';
 
-export const metadata: Metadata = { title: 'Política de Privacidade — ORVYN Revenue OS' };
+export const metadata: Metadata = { title: 'Política de Privacidade — KHUB' };
 
 export default function PrivacidadePage() {
   return (
     <LegalShell titulo="Política de Privacidade" atualizadoEm="[PREENCHER: data da última revisão]">
       <Secao titulo="1. Escopo e papéis sob a LGPD">
         <p>
-          Esta política explica como a ORVYN Revenue OS (&ldquo;Orvyn&rdquo;) trata dados pessoais, nos termos
+          Esta política explica como o KHUB (&ldquo;KHUB&rdquo;), desenvolvido e operado pela ORVYN ai, trata dados pessoais, nos termos
           da Lei Geral de Proteção de Dados (Lei 13.709/2018 — LGPD). Distinguimos dois papéis:
         </p>
         <ul className="list-disc space-y-1.5 pl-5">
@@ -22,7 +22,7 @@ export default function PrivacidadePage() {
           <li><strong>Da sua conta:</strong> nome, e-mail, senha (com hash, nunca em texto puro), identidade da empresa, histórico de login.</li>
           <li><strong>Dos seus contatos/leads (como operador):</strong> nome, telefone, e-mail, empresa, conteúdo de conversas de WhatsApp/outros canais conectados, histórico de interações, dados vindos de anúncios (Meta Lead Ads).</li>
           <li><strong>De uso e cobrança:</strong> logs de auditoria de ações na plataforma, dados de pagamento processados pela Stripe (não armazenamos número de cartão).</li>
-          <li><strong>Da Nyro (IA):</strong> mensagens trocadas com a assistente de IA, para fornecer a funcionalidade e, de forma agregada/anonimizada, melhorar a qualidade das respostas.</li>
+          <li><strong>Da NICO (IA):</strong> mensagens trocadas com a assistente de IA, para fornecer a funcionalidade e, de forma agregada/anonimizada, melhorar a qualidade das respostas.</li>
         </ul>
       </Secao>
 
@@ -39,7 +39,7 @@ export default function PrivacidadePage() {
       <Secao titulo="4. Com quem compartilhamos">
         <p>Dados podem ser processados pelos seguintes operadores/subprocessadores, estritamente para operar o serviço:</p>
         <ul className="list-disc space-y-1.5 pl-5">
-          <li><strong>Anthropic</strong> — processa mensagens enviadas à Nyro (IA conversacional).</li>
+          <li><strong>Anthropic</strong> — processa mensagens enviadas à NICO (IA conversacional).</li>
           <li><strong>Voyage AI</strong> — gera vetores de busca semântica da base de conhecimento (RAG), quando habilitado.</li>
           <li><strong>Meta (Facebook/Instagram)</strong> — integração de anúncios e Lead Ads, quando você conecta uma conta.</li>
           <li><strong>Provedor de WhatsApp</strong> (Evolution self-hosted ou similar) — entrega de mensagens no canal conectado.</li>
@@ -66,7 +66,7 @@ export default function PrivacidadePage() {
           <li><strong>Revogação de consentimento</strong> — quando o tratamento for baseado em consentimento.</li>
         </ul>
         <p>
-          Se você é um contato/lead cadastrado por um cliente da Orvyn (não um usuário direto da
+          Se você é um contato/lead cadastrado por um cliente do KHUB (não um usuário direto da
           plataforma), o pedido deve ser direcionado à empresa que coletou seus dados — ela é a
           controladora. Usuários diretos da plataforma podem solicitar exportação/exclusão de um contato
           pela própria interface do CRM, ou pelo contato abaixo.

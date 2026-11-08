@@ -67,7 +67,7 @@ export function SignupForm() {
         {invite ? 'Você foi convidado 🎉' : <>Crie <span className="whitespace-nowrap text-brand">sua conta.</span></>}
       </h1>
       <p className="mt-1.5 text-[13.5px] text-muted">
-        {invite ? 'Defina seu nome e uma senha para entrar na equipe.' : 'Comece sua operação com a ORVYN.'}
+        {invite ? 'Defina seu nome e uma senha para entrar na equipe.' : 'Comece sua operação com o KHUB.'}
       </p>
 
       {!invite && (

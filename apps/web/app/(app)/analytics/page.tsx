@@ -153,7 +153,7 @@ function AnalyticsReal() {
       </KpiGrid>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Section title="Uso de IA por agente" info="Custo acumulado nos últimos 30 dias, por agente NYRO">
+        <Section title="Uso de IA por agente" info="Custo acumulado nos últimos 30 dias, por agente NICO">
           {ai && ai.porAgente.length > 0 ? (
             <BarrasHorizontais dados={ai.porAgente.map((a) => ({ rotulo: a.agente, valor: a.custo }))} formatar={(n) => moeda(n, true)} />
           ) : (
@@ -307,7 +307,7 @@ function PainelInsights() {
   return (
     <section className="card">
       <div className="flex items-center justify-between gap-2 px-5 pt-5">
-        <h2 className="t-section">Insights da IA ORVYN</h2>
+        <h2 className="t-section">Insights da NICO</h2>
         <span className="pill pill-brand">Beta</span>
       </div>
 

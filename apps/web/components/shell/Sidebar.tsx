@@ -14,7 +14,7 @@ import { useAgency } from '@/components/agency/AgencyProvider';
 import { motionTokens } from '@/lib/motion';
 
 /**
- * Sidebar fixa do ORVYN Revenue OS.
+ * Sidebar fixa do KHUB.
  *
  * Liquid Glass regular flutuando sobre o ambient (ADR-0029). O item ativo
  * é um tint de marca que desliza entre itens (spring do framer-motion),
@@ -55,17 +55,17 @@ export function Sidebar({
         <Link
           href="/dashboard"
           onClick={onNavigate}
-          aria-label="ORVYN Revenue OS — ir para o Dashboard"
-          className="flex w-full items-center"
+          aria-label="KHUB — ir para o Dashboard"
+          className="flex items-center"
         >
           <Image
-            src="/logo-revenue.png"
-            alt="ORVYN Revenue OS"
-            width={2172}
-            height={724}
+            src="/khub-logo.png"
+            alt="KHUB"
+            width={751}
+            height={301}
             unoptimized
             priority
-            className="h-auto w-full object-contain dark:invert dark:hue-rotate-180"
+            className="h-8 w-auto object-contain"
           />
         </Link>
       </div>

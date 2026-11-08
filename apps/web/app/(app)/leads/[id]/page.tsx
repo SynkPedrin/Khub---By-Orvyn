@@ -189,7 +189,7 @@ function Cabecalho({ lead }: { lead: typeof LEAD_PERFIL }) {
             <Icon name="flame" size={19} />
           </span>
           <div>
-            <p className="text-[13px] font-medium text-muted">Score ORVYN</p>
+            <p className="text-[13px] font-medium text-muted">Score NICO</p>
             <p className="t-kpi mt-1">{lead.score}</p>
             <p className="delta delta-up mt-1.5">
               <Icon name="arrowUp" size={12} strokeWidth={2.4} />
@@ -482,7 +482,7 @@ function CartaoInsights() {
   return (
     <section className="card">
       <div className="flex items-center justify-between gap-2 px-5 pt-5">
-        <h2 className="t-section">Insights da IA ORVYN</h2>
+        <h2 className="t-section">Insights da NICO</h2>
         <span className="pill pill-brand">Beta</span>
       </div>
 

@@ -2,20 +2,20 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { LegalShell, Secao } from '@/components/marketing/legal/LegalShell';
 
-export const metadata: Metadata = { title: 'Termos de Uso — ORVYN Revenue OS' };
+export const metadata: Metadata = { title: 'Termos de Uso — KHUB' };
 
 export default function TermosPage() {
   return (
     <LegalShell titulo="Termos de Uso" atualizadoEm="[PREENCHER: data da última revisão]">
       <Secao titulo="1. Quem somos e o que este documento cobre">
         <p>
-          A ORVYN Revenue OS (&ldquo;Orvyn&rdquo;, &ldquo;nós&rdquo;) é uma plataforma de CRM, atendimento,
-          automação e inteligência artificial para operações de vendas e marketing. Este documento rege o
-          uso do software por qualquer pessoa ou empresa (&ldquo;Cliente&rdquo;, &ldquo;você&rdquo;) que crie uma
-          conta ou utilize a plataforma.
+          O KHUB (&ldquo;KHUB&rdquo;, &ldquo;nós&rdquo;), desenvolvido e operado pela ORVYN ai, é uma plataforma
+          de CRM, atendimento, automação e inteligência artificial para operações de vendas e marketing. Este
+          documento rege o uso do software por qualquer pessoa ou empresa (&ldquo;Cliente&rdquo;, &ldquo;você&rdquo;)
+          que crie uma conta ou utilize a plataforma.
         </p>
         <p className="text-sm text-amber-700">
-          [PREENCHER: razão social, CNPJ e endereço da empresa responsável pela Orvyn — obrigatório antes de
+          [PREENCHER: razão social, CNPJ e endereço da empresa responsável pelo KHUB — obrigatório antes de
           publicar.]
         </p>
       </Secao>
@@ -32,24 +32,24 @@ export default function TermosPage() {
       <Secao titulo="3. Uso aceitável">
         <ul className="list-disc space-y-1.5 pl-5">
           <li>Não enviar mensagens em massa não solicitadas (spam) através dos canais de WhatsApp/e-mail integrados.</li>
-          <li>Não usar a Nyro (assistente de IA) para gerar conteúdo ilegal, enganoso ou que viole direitos de terceiros.</li>
+          <li>Não usar a NICO (assistente de IA) para gerar conteúdo ilegal, enganoso ou que viole direitos de terceiros.</li>
           <li>Não tentar acessar dados de outro tenant, contornar o isolamento multi-tenant ou os limites de uso do plano.</li>
-          <li>Respeitar as políticas de uso dos provedores integrados (Meta, WhatsApp/Evolution, Anthropic, Stripe) — a Orvyn não se responsabiliza por penalidades aplicadas por esses provedores por uso indevido.</li>
+          <li>Respeitar as políticas de uso dos provedores integrados (Meta, WhatsApp/Evolution, Anthropic, Stripe) — o KHUB não se responsabiliza por penalidades aplicadas por esses provedores por uso indevido.</li>
         </ul>
       </Secao>
 
       <Secao titulo="4. Canal de WhatsApp — aviso importante">
         <p>
-          A Orvyn oferece conexão de WhatsApp via API não-oficial (protocolo WhatsApp Web), sujeita a
-          bloqueio do número pelo WhatsApp/Meta a qualquer momento, fora do controle da Orvyn. O uso desse
+          O KHUB oferece conexão de WhatsApp via API não-oficial (protocolo WhatsApp Web), sujeita a
+          bloqueio do número pelo WhatsApp/Meta a qualquer momento, fora do controle do KHUB. O uso desse
           canal é por sua conta e risco; recomendamos a Cloud API oficial da Meta para operações críticas.
         </p>
       </Secao>
 
-      <Secao titulo="5. Inteligência artificial (Nyro)">
+      <Secao titulo="5. Inteligência artificial (NICO)">
         <p>
-          A Nyro é assistida por modelos de linguagem de terceiros (Anthropic) e por uma base de
-          conhecimento própria (RAG). Respostas da Nyro podem conter imprecisões; a Nyro não substitui
+          A NICO é assistida por modelos de linguagem de terceiros (Anthropic) e por uma base de
+          conhecimento própria (RAG). Respostas da NICO podem conter imprecisões; a NICO não substitui
           aconselhamento médico, jurídico ou contábil profissional, e ações sensíveis (envio em massa,
           alteração de automação ativa, exclusão de dados) exigem aprovação humana explícita.
         </p>
@@ -74,7 +74,7 @@ export default function TermosPage() {
 
       <Secao titulo="8. Limitação de responsabilidade e rescisão">
         <p>
-          A plataforma é fornecida &ldquo;como está&rdquo;. Na extensão máxima permitida por lei, a Orvyn não
+          A plataforma é fornecida &ldquo;como está&rdquo;. Na extensão máxima permitida por lei, o KHUB não
           se responsabiliza por lucros cessantes, perda de dados por mau uso do Cliente, ou indisponibilidade
           de serviços de terceiros integrados. Podemos suspender contas que violem estes Termos, com aviso
           prévio sempre que razoavelmente possível.

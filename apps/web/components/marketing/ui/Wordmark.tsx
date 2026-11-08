@@ -10,9 +10,21 @@ import Image from 'next/image';
  * `height` é a altura real da marca.
  */
 const MARKS = {
+  khub: {
+    // Já recortado rente ao conteúdo (751×301) — sem margem pra remover.
+    src: '/khub-logo.png',
+    alt: 'KHUB',
+    natural: [751, 301] as const,
+    ratio: 751 / 301,
+    width: 100,
+    height: 100,
+    left: 0,
+    top: 0,
+  },
   orvyn: {
     src: '/lp-revenue/brand/orvyn-revenue-wordmark.png',
     alt: 'ORVYN Revenue OS',
+    natural: [2172, 724] as const,
     // caixa de tinta: x 370→1802, y 224→518 de 2172×724
     ratio: 1432 / 294,
     width: (2172 / 1432) * 100,
@@ -23,6 +35,7 @@ const MARKS = {
   nyro: {
     src: '/lp-revenue/brand/nyro-wordmark.png',
     alt: 'NYRO',
+    natural: [2172, 724] as const,
     // caixa de tinta: x 120→2076, y 182→502 de 2172×724
     ratio: 1956 / 320,
     width: (2172 / 1956) * 100,
@@ -30,10 +43,21 @@ const MARKS = {
     left: (-120 / 1956) * 100,
     top: (-182 / 320) * 100,
   },
+  nico: {
+    src: '/nico-logo.png',
+    alt: 'NICO',
+    natural: [2172, 724] as const,
+    // caixa de tinta: x 142→2070, y 58→708 de 2172×724
+    ratio: 1928 / 650,
+    width: (2172 / 1928) * 100,
+    height: (724 / 650) * 100,
+    left: (-142 / 1928) * 100,
+    top: (-58 / 650) * 100,
+  },
 } as const;
 
 export function Wordmark({
-  mark = 'orvyn',
+  mark = 'khub',
   height = 26,
   priority = false,
   className = '',
@@ -56,8 +80,8 @@ export function Wordmark({
       <Image
         src={m.src}
         alt={label ?? m.alt}
-        width={2172}
-        height={724}
+        width={m.natural[0]}
+        height={m.natural[1]}
         priority={priority}
         className="absolute"
         style={{

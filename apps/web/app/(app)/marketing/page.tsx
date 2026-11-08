@@ -138,20 +138,20 @@ export default function BibliotecaPage() {
         </div>
         <h1 className="relative mt-2 text-3xl font-extrabold tracking-tight text-white drop-shadow">Biblioteca</h1>
         <p className="relative mt-2 max-w-2xl text-sm text-white/85 sm:text-base">
-          Tudo que a Nyro usa para pensar e agir, em dois lugares: <strong className="text-white">automações prontas</strong> para instalar em um
+          Tudo que a NICO usa para pensar e agir, em dois lugares: <strong className="text-white">automações prontas</strong> para instalar em um
           clique e a <strong className="text-white">base de marketing</strong> — os frameworks que ela consulta ao raciocinar sobre a sua estratégia.
-          Em cada material, um clique pergunta à Nyro <em>como usar aquilo na sua empresa</em>.
+          Em cada material, um clique pergunta à NICO <em>como usar aquilo na sua empresa</em>.
         </p>
         <div className="relative mt-5 flex flex-wrap gap-2">
           <Link href="/marketing/ads" className="btn btn-primary"><Icon name="marketing" size={16} /> Gerenciador de Anúncios</Link>
-          <Link href="/nyro" className="btn inline-flex items-center gap-1.5 border border-white/25 bg-white/10 text-white backdrop-blur hover:bg-white/20"><Icon name="sparkles" size={16} /> Perguntar à Nyro</Link>
+          <Link href="/nyro" className="btn inline-flex items-center gap-1.5 border border-white/25 bg-white/10 text-white backdrop-blur hover:bg-white/20"><Icon name="sparkles" size={16} /> Perguntar à NICO</Link>
           <Link href="/automacoes" className="btn inline-flex items-center gap-1.5 border border-white/25 bg-white/10 text-white backdrop-blur hover:bg-white/20"><Icon name="sparkles" size={16} /> Minhas automações</Link>
         </div>
       </section>
 
       {/* ===================== DIVISÃO 1 · AUTOMAÇÃO ===================== */}
       <section className="space-y-4">
-        <Divisor icon="sparkles" titulo="Automação" sub="Fluxos prontos para instalar em um clique — a Nyro configura o resto." contagem={templates?.length ?? '…'} />
+        <Divisor icon="sparkles" titulo="Automação" sub="Fluxos prontos para instalar em um clique — a NICO configura o resto." contagem={templates?.length ?? '…'} />
         {!templates && !erroTpl && <p className="text-sm text-muted">Carregando os templates…</p>}
         {erroTpl && (
           <p className="rounded-xl bg-amber-500/10 px-4 py-2.5 text-sm text-amber-700 dark:text-amber-400">
@@ -183,8 +183,8 @@ export default function BibliotecaPage() {
 
       {/* ===================== DIVISÃO 2 · BASE DE MARKETING ===================== */}
       <section className="space-y-6">
-        <Divisor icon="marketing" titulo="Base de marketing" sub="A inteligência da Nyro — frameworks, playbooks e operação que ela recupera ao pensar." contagem={totalDocs || '…'} />
-        {!docs && !erroDocs && <p className="text-sm text-muted">Carregando a inteligência da Nyro…</p>}
+        <Divisor icon="marketing" titulo="Base de marketing" sub="A inteligência da NICO — frameworks, playbooks e operação que ela recupera ao pensar." contagem={totalDocs || '…'} />
+        {!docs && !erroDocs && <p className="text-sm text-muted">Carregando a inteligência da NICO…</p>}
         {erroDocs && (
           <p className="rounded-xl bg-amber-500/10 px-4 py-2.5 text-sm text-amber-700 dark:text-amber-400">
             Não consegui carregar a base. <button onClick={carregar} className="font-semibold underline">Tentar de novo</button>

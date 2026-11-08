@@ -14,10 +14,10 @@ import { GlassLight } from '@/components/shell/GlassLight';
 const sans = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
 
 export const metadata: Metadata = {
-  title: 'ORVYN Revenue OS',
+  title: 'KHUB',
   description:
     'Transforme leads em receita: CRM, atendimento, automação, inteligência artificial, follow-up, campanhas, agenda e analytics em uma única plataforma.',
-  icons: { icon: '/logo.png' },
+  icons: { icon: '/khub-mark.png' },
 };
 
 export const viewport: Viewport = {

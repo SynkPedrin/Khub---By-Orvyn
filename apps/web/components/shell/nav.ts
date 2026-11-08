@@ -1,13 +1,14 @@
 import type { IconName } from '../icons';
 
 /**
- * Navegação do ORVYN Revenue OS.
+ * Navegação do KHUB.
  *
- * PRIMARY é o menu do produto (10 itens, conforme a especificação visual).
- * SECONDARY são módulos herdados do ORVYN OS que continuam funcionando e
- * testados, mas saem da navegação primária para não diluir o foco em receita.
- * Eles seguem acessíveis por rota direta e por Configurações — ver decisão 3
- * em `docs/ORVYN_REVENUE_AUDIT.md`.
+ * PRIMARY é o menu do produto. SECONDARY são módulos herdados do ORVYN OS que
+ * continuam funcionando e testados, mas saem da navegação primária para não
+ * diluir o foco em receita — acessíveis só por rota direta hoje (nenhuma tela
+ * ainda lista SECONDARY_NAV; ver decisão 3 em `docs/ORVYN_REVENUE_AUDIT.md`).
+ * "Agentes de IA" é exceção deliberada: feature nova e central (ADR-0030),
+ * foi para o PRIMARY para não nascer invisível.
  */
 export interface NavItem {
   href: string;

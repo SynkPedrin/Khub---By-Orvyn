@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Sidebar } from '@/components/shell/Sidebar';
 import { Topbar } from '@/components/shell/Topbar';
-import { OrvynSignature } from '@/components/shell/OrvynMark';
+import { BrandSignature } from '@/components/shell/BrandMark';
 import { AmbientBackground } from '@/components/shell/AmbientBackground';
 import { PageTransition } from '@/components/shell/PageTransition';
 import { PersonalizationProvider } from '@/components/app/PersonalizationProvider';
@@ -61,8 +61,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <main id="conteudo" className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
-            <PageTransition>{children}</PageTransition>
-            <OrvynSignature className="border-t border-line" />
+            {/* Assinatura sempre no pé: em página curta não flutua no meio (ADR-0036). */}
+            <div className="flex min-h-full flex-col">
+              <div className="flex-1">
+                <PageTransition>{children}</PageTransition>
+              </div>
+              <BrandSignature className="border-t border-line" />
+            </div>
           </main>
         </div>
 

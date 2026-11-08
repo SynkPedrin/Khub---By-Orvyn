@@ -9,6 +9,7 @@ import { WhatsAppConnectModal } from '@/components/app/WhatsAppConnectModal';
 import { ApiError } from '@/lib/api-error';
 import { ads } from '@/lib/ads';
 import { settingsApi } from '@/lib/settings';
+import { whatsappApi, type ConexaoWhatsApp } from '@/lib/whatsapp';
 
 type Categoria = 'anuncios' | 'mensageria' | 'pagamentos' | 'produtividade' | 'ia';
 
@@ -56,11 +57,11 @@ const APPS: App[] = [
   // por OAuth: NÃO reaproveitar o fluxo `conectar()` genérico de redirect.
   { key: 'whatsapp', nome: 'WhatsApp Business', brand: 'whatsapp', categoria: 'mensageria', provider: 'evolution', estado: 'qr', desc: 'Atendimento e disparos via Evolution API — conexão por QR code.' },
   { key: 'messenger', nome: 'Messenger', brand: 'messenger', categoria: 'mensageria', provider: 'meta', estado: 'oauth', desc: 'Mensagens do Facebook no mesmo Inbox.' },
-  { key: 'anthropic', nome: 'Claude (Nyro)', brand: 'claude', categoria: 'ia', provider: 'anthropic', estado: 'nativa', desc: 'O motor da Nyro. Ligado por credencial no servidor — sem OAuth.' },
+  { key: 'anthropic', nome: 'Claude (NICO)', brand: 'claude', categoria: 'ia', provider: 'anthropic', estado: 'nativa', desc: 'O motor da NICO. Ligado por credencial no servidor — sem OAuth.' },
   { key: 'webhook', nome: 'Webhook / API', brand: 'webhook', categoria: 'produtividade', provider: 'webhook', estado: 'nativa', desc: 'Dispare fluxos de qualquer sistema com uma URL de entrada.' },
   { key: 'stripe', nome: 'Stripe', brand: 'stripe', categoria: 'pagamentos', provider: 'stripe', estado: 'planejado', desc: 'Cobranças, assinaturas e receita ligadas ao contato do CRM.' },
   { key: 'google_calendar', nome: 'Google Calendar', brand: 'google_calendar', categoria: 'produtividade', provider: 'google_calendar', estado: 'planejado', desc: 'Agendamentos da Agenda sincronizados nos dois sentidos.' },
-  { key: 'gmail', nome: 'Gmail', brand: 'gmail', categoria: 'produtividade', provider: 'gmail', estado: 'planejado', desc: 'Envie e receba e-mail do contato sem sair do Orvyn.' },
+  { key: 'gmail', nome: 'Gmail', brand: 'gmail', categoria: 'produtividade', provider: 'gmail', estado: 'planejado', desc: 'Envie e receba e-mail do contato sem sair do KHUB.' },
 ];
 
 export function IntegrationsMarketplace() {
@@ -70,8 +71,19 @@ export function IntegrationsMarketplace() {
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [whatsappAberto, setWhatsappAberto] = useState(false);
+  const [erroCarregar, setErroCarregar] = useState(false);
+  const [waStatus, setWaStatus] = useState<ConexaoWhatsApp | null>(null);
 
-  const recarregar = () => settingsApi.integrations().then(setRows).catch(() => setRows([]));
+  const recarregar = () => {
+    setErroCarregar(false);
+    settingsApi.integrations().then(setRows).catch(() => { setRows([]); setErroCarregar(true); });
+    // `/integrations` só cacheia o status do WhatsApp — ele é sincronizado
+    // apenas quando algo chama GET /integrations/whatsapp/status (ver
+    // whatsapp-connection.service.ts: "fonte da verdade é sempre a
+    // Evolution"). Sem perguntar aqui também, um número já conectado fora
+    // desta tela aparece como desconectado até alguém abrir o modal.
+    whatsappApi.status().then(setWaStatus).catch(() => setWaStatus(null));
+  };
   useEffect(() => { recarregar(); }, []);
 
   const conectado = (provider: string) => rows?.find((r) => r.provider === provider) ?? null;
@@ -110,12 +122,26 @@ export function IntegrationsMarketplace() {
 
       {gated && <ConfigRequired provider={gated.provider} missing={gated.missing} />}
       {msg && <p className="rounded-xl bg-amber-500/10 px-4 py-2.5 text-sm text-amber-700 dark:text-amber-400">{msg}</p>}
+      {erroCarregar && (
+        <p className="flex items-center gap-2 rounded-xl bg-danger/5 px-4 py-2.5 text-sm text-danger">
+          <Icon name="alert" size={15} /> Não consegui confirmar quais integrações estão conectadas para esta conta.
+          <button onClick={recarregar} className="ml-auto font-semibold underline">Tentar de novo</button>
+        </p>
+      )}
 
       {/* Grade de apps */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {lista.map((app) => {
           const conn = conectado(app.provider);
-          const on = conn?.status === 'connected';
+          // WhatsApp tem DOIS provedores possíveis por tenant — Evolution
+          // (QR, self-hosted) e Stevo API de gestão (vínculo de instância já
+          // pareada, ver stevo-api-vinculo.service.ts). Qual dos dois está
+          // ativo varia por cliente, então o card considera conectado se
+          // QUALQUER um dos dois estiver — nunca só o da Evolution.
+          const stevoConn = app.estado === 'qr' ? conectado('stevo_api') : null;
+          const on = app.estado === 'qr'
+            ? stevoConn?.status === 'connected' || waStatus?.estado === 'conectado'
+            : conn?.status === 'connected';
           return (
             <div key={app.key} className="card flex flex-col p-4">
               <div className="flex items-start gap-3">
@@ -125,7 +151,8 @@ export function IntegrationsMarketplace() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <p className="truncate font-bold text-fg">{app.nome}</p>
-                    {on && <Badge tone={conn!.health === 'ok' ? 'green' : 'amber'}>● {conn!.health}</Badge>}
+                    {on && app.estado === 'qr' && <Badge tone="green">● ok</Badge>}
+                    {on && app.estado !== 'qr' && conn && <Badge tone={conn.health === 'ok' ? 'green' : 'amber'}>● {conn.health}</Badge>}
                     {!on && app.estado === 'nativa' && <Badge tone="brand">nativa</Badge>}
                     {!on && app.estado === 'planejado' && <Badge tone="neutral">em breve</Badge>}
                   </div>
@@ -137,7 +164,11 @@ export function IntegrationsMarketplace() {
                 {on && app.estado === 'qr' ? (
                   <>
                     <span className="flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400"><Icon name="check" size={14} /> Conectado</span>
-                    {conn!.lastSyncAt && <span className="text-[11px] text-muted">· sync {new Date(conn!.lastSyncAt).toLocaleDateString('pt-BR')}</span>}
+                    {waStatus?.estado === 'conectado' && waStatus.numero ? (
+                      <span className="text-[11px] text-muted">· {waStatus.numero}</span>
+                    ) : stevoConn?.lastSyncAt ? (
+                      <span className="text-[11px] text-muted">· sync {new Date(stevoConn.lastSyncAt).toLocaleDateString('pt-BR')}</span>
+                    ) : null}
                     <button onClick={() => setWhatsappAberto(true)} className="ml-auto text-xs font-semibold text-muted hover:text-brand">Reconectar</button>
                   </>
                 ) : on ? (

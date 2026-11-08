@@ -123,7 +123,7 @@ export function FinalSequence() {
 
             {/* A sequência inteira existe no DOM para leitores de tela,
                 mesmo quando só uma frase está visível. */}
-            <p className="sr-only">Gerar demanda. Fazer o lead andar. Transformar em receita. ORVYN Revenue OS.</p>
+            <p className="sr-only">Gerar demanda. Fazer o lead andar. Transformar em receita. KHUB.</p>
 
             <div className="mt-[clamp(28px,4vh,56px)] flex gap-2" aria-hidden>
               {Array.from({ length: PASSOS }).map((_, i) => (

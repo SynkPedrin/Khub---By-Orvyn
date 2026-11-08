@@ -6,7 +6,7 @@ import { Wordmark } from '@/components/marketing/ui/Wordmark';
 import { SCREENS } from '@/lib/marketing/screens';
 
 /**
- * NYRO — apresentada pelo que ela produz dentro da tela de um lead real:
+ * NICO — apresentada pelo que ela produz dentro da tela de um lead real:
  * contexto lido, risco apontado, próxima ação sugerida. Sem cérebro, sem
  * robô, sem "IA" como enfeite: as três anotações apontam para regiões que
  * existem de fato na captura (`lead-detail-flat.png`).
@@ -47,9 +47,9 @@ export function Intelligence() {
         <div className="grid gap-[clamp(24px,3vw,64px)] lg:grid-cols-[1fr_minmax(240px,400px)] lg:items-end">
           <div>
             <Reveal className="mb-7 flex items-center gap-4">
-              <Wordmark mark="nyro" height={16} />
+              <Wordmark mark="nico" height={16} />
               <span className="h-px w-10 bg-[var(--lp-accent-line)]" aria-hidden />
-              <span className="lp-label">Camada de raciocínio da ORVYN</span>
+              <span className="lp-label">Camada de raciocínio da NICO</span>
             </Reveal>
             <h2 className="lp-h2 max-w-[13ch] text-[var(--lp-ink)]">
               <Reveal variant="clip" as="span" className="block">
@@ -65,7 +65,7 @@ export function Intelligence() {
           </div>
           <Reveal delay={0.2}>
             <p className="text-[15px] leading-[1.62] text-[var(--lp-ink-2)]">
-              A NYRO não é um chat colado num canto. Ela lê o que já está no sistema — conversa, negócio,
+              A NICO não é um chat colado num canto. Ela lê o que já está no sistema — conversa, negócio,
               campanha, tarefa — e devolve leitura dentro da mesma tela onde o time trabalha. Ação sensível
               passa por aprovação humana, sempre.
             </p>

@@ -2,24 +2,25 @@ import Image from 'next/image';
 import { cx } from '../ui';
 
 /**
- * Marca ORVYN Revenue OS — wordmark oficial (`/logo-revenue.png`), sem o
- * símbolo à parte.
+ * Marca KHUB — wordmark oficial (`/khub-logo.png`, lockup "K" + "HUB" + "by
+ * ORVYN ai"). Cores de marca fixas no próprio arquivo: funciona nos dois
+ * temas sem inversão.
  */
-export function OrvynMark({
+export function BrandMark({
   size = 'md',
   className,
 }: {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 }) {
-  const h = { sm: 20, md: 40, lg: 56 }[size];
-  const w = Math.round((h * 2172) / 724);
+  const h = { sm: 20, md: 34, lg: 48 }[size];
+  const w = Math.round((h * 751) / 301);
 
   return (
     <span className={cx('inline-flex items-center', className)}>
       <Image
-        src="/logo-revenue.png"
-        alt="ORVYN Revenue OS"
+        src="/khub-logo.png"
+        alt="KHUB"
         width={w}
         height={h}
         unoptimized
@@ -35,10 +36,10 @@ export function OrvynMark({
  * Assinatura do rodapé: marca à esquerda, mote à direita, separados por um
  * filete. Aparece uma vez por tela, discreta.
  */
-export function OrvynSignature({ className }: { className?: string }) {
+export function BrandSignature({ className }: { className?: string }) {
   return (
     <div className={cx('flex items-center justify-between gap-6 px-6 py-4', className)}>
-      <OrvynMark size="sm" />
+      <BrandMark size="sm" />
       <div className="hidden items-center gap-4 md:flex">
         <span className="h-px w-14 bg-line" aria-hidden />
         <span className="text-[10px] font-medium uppercase tracking-[0.28em] text-faint">

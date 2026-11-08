@@ -30,7 +30,7 @@ const CALLOUTS = [
     alinha: 'items-start text-left',
   },
   {
-    texto: 'Recomendações da NYRO sobre a operação real, com a ação a um clique de distância.',
+    texto: 'Recomendações da NICO sobre a operação real, com a ação a um clique de distância.',
     alinha: 'items-start text-left',
   },
 ] as const;
@@ -56,7 +56,7 @@ export function ProductMoment() {
           <Reveal delay={0.16}>
             <p className="text-[15px] leading-[1.62] text-[var(--lp-ink-2)]">
               Não é painel de vaidade. É a fila do dia: quem respondeu, quem travou, o que fecha esta semana e
-              o que a NYRO já marcou como risco.
+              o que a NICO já marcou como risco.
             </p>
           </Reveal>
         </div>

@@ -405,7 +405,7 @@ export const LEAD_TIMELINE: ItemTimeline[] = [
 export const LEAD_NEGOCIOS: Negocio[] = [
   {
     id: 'n1',
-    titulo: 'Implementação ORVYN Revenue OS',
+    titulo: 'Implementação KHUB',
     valor: 284_500,
     etapa: 'Negociação',
     etapaIndice: 2,
@@ -673,7 +673,7 @@ export const MENSAGENS: Mensagem[] = [
   {
     id: 'm1',
     de: 'lead',
-    texto: 'Olá! 👋\nVi o ORVYN no LinkedIn e achei muito interessante. Gostaria de saber mais sobre os planos e como funciona a implementação.',
+    texto: 'Olá! 👋\nVi o KHUB no LinkedIn e achei muito interessante. Gostaria de saber mais sobre os planos e como funciona a implementação.',
     quando: hojeAs(10, 2),
   },
   {
@@ -681,7 +681,7 @@ export const MENSAGENS: Mensagem[] = [
     de: 'equipe',
     autor: 'Lucas Mendes',
     texto:
-      'Olá, Mariana! Tudo bem?\n\nFico feliz pelo seu interesse no ORVYN! 🚀 Posso te enviar uma apresentação rápida com os planos e mostrar como ajudamos empresas como a Tech Solutions a aumentarem suas receitas?',
+      'Olá, Mariana! Tudo bem?\n\nFico feliz pelo seu interesse no KHUB! 🚀 Posso te enviar uma apresentação rápida com os planos e mostrar como ajudamos empresas como a Tech Solutions a aumentarem suas receitas?',
     quando: hojeAs(10, 4),
     lida: true,
   },
@@ -694,7 +694,7 @@ export const MENSAGENS: Mensagem[] = [
 ];
 
 export const SUGESTOES_IA_CONVERSA = [
-  { id: 's1', titulo: 'Responder com apresentação', descricao: 'Enviar o material institucional do ORVYN' },
+  { id: 's1', titulo: 'Responder com apresentação', descricao: 'Enviar o material institucional do KHUB' },
   { id: 's2', titulo: 'Destacar cases do setor', descricao: 'Mostrar cases de empresas SaaS e tecnologia' },
   { id: 's3', titulo: 'Agendar uma reunião', descricao: 'Sugerir um horário na agenda do time de vendas' },
 ];
@@ -725,7 +725,7 @@ export const CAMPANHAS: Campanha[] = [
     descricao:
       'Campanha multicanal para atrair startups de tecnologia no Brasil, com foco em decisores de produto e crescimento.',
     sequencia: [
-      { ordem: 1, canal: 'email', titulo: 'E-mail 1 — Apresentação', descricao: 'Apresenta o valor da ORVYN em 3 linhas.', dia: 1 },
+      { ordem: 1, canal: 'email', titulo: 'E-mail 1 — Apresentação', descricao: 'Apresenta o valor do KHUB em 3 linhas.', dia: 1 },
       { ordem: 2, canal: 'whatsapp', titulo: 'WhatsApp 1 — Contexto', descricao: 'Mensagem breve e personalizada.', dia: 3 },
       { ordem: 3, canal: 'email', titulo: 'Follow-up 2 — Case', descricao: 'Compartilha case relevante do setor.', dia: 7 },
       { ordem: 4, canal: 'linkedin', titulo: 'LinkedIn — Conexão', descricao: 'Solicita conexão com mensagem curta.', dia: 10 },
@@ -830,14 +830,14 @@ export const COMPROMISSOS: Compromisso[] = [
     tipo: 'demo',
     inicio: hojeAs(9, 0),
     fim: hojeAs(10, 0),
-    local: { tipo: 'meet', valor: 'meet.google.com/orvyn-novacorp' },
+    local: { tipo: 'meet', valor: 'meet.google.com/khub-novacorp' },
     participantes: [
-      { nome: 'Lucas Mendes', empresa: 'ORVYN', papel: 'Host' },
-      { nome: 'Mariana Silva', empresa: 'ORVYN' },
+      { nome: 'Lucas Mendes', empresa: 'KHUB', papel: 'Host' },
+      { nome: 'Mariana Silva', empresa: 'KHUB' },
       { nome: 'Carlos Ferreira', empresa: 'NovaCorp' },
       { nome: 'Juliana Costa', empresa: 'NovaCorp' },
     ],
-    descricao: 'Apresentar a solução ORVYN Revenue OS, entender os principais desafios e próximos passos.',
+    descricao: 'Apresentar a solução KHUB, entender os principais desafios e próximos passos.',
     tags: ['Demo', 'Qualificação', 'Alta prioridade'],
   },
   { id: 'ag4', titulo: 'Follow-up Ricardo Lima', tipo: 'followup', inicio: hojeAs(10, 30), fim: hojeAs(11, 0) },

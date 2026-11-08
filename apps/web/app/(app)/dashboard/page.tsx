@@ -237,7 +237,7 @@ function DashboardReal() {
 
         <section className="card flex flex-col">
           <div className="flex items-center justify-between gap-3 px-5 pt-5">
-            <h2 className="t-section">Insights da IA ORVYN</h2>
+            <h2 className="t-section">Insights da NICO</h2>
             <span className="pill pill-brand">Beta</span>
           </div>
           <div className="flex-1 p-5">
@@ -384,7 +384,7 @@ function PainelInsights() {
   return (
     <section className="card flex flex-col">
       <div className="flex items-center justify-between gap-3 px-5 pt-5">
-        <h2 className="t-section">Insights da IA ORVYN</h2>
+        <h2 className="t-section">Insights da NICO</h2>
         <span className="pill pill-brand">Beta</span>
       </div>
 

@@ -187,7 +187,7 @@ function PersonalizacaoTab() {
             <div className="flex flex-wrap gap-2">
               <input ref={logoRef} type="file" accept="image/*" className="hidden" onChange={(e) => receber('logo', e.target.files?.[0])} />
               <Button onClick={() => logoRef.current?.click()} disabled={ocupado === 'logo'}>{ocupado === 'logo' ? 'Processando…' : 'Enviar logo'}</Button>
-              {logo && <Button variant="ghost" onClick={() => update({ logo: '' })}>Padrão Orvyn</Button>}
+              {logo && <Button variant="ghost" onClick={() => update({ logo: '' })}>Padrão KHUB</Button>}
             </div>
           </div>
         </Card>
@@ -349,7 +349,7 @@ function ApiKeysTab() {
       <Card className="p-6">
         <h2 className="font-bold text-fg">Chaves de API</h2>
         <p className="mt-1 text-sm text-muted">
-          Crie uma chave de API para um sistema externo chamar o Orvyn no lugar do seu tenant. Cada chave acessa apenas esta empresa e as permissões selecionadas abaixo.
+          Crie uma chave de API para um sistema externo chamar o KHUB no lugar do seu tenant. Cada chave acessa apenas esta empresa e as permissões selecionadas abaixo.
         </p>
         <div className="mt-4 rounded-xl border border-line bg-surface2 p-3 text-xs">
           <p className="font-semibold text-fg">Como usar</p>

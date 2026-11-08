@@ -19,9 +19,9 @@ import { Footer } from '@/components/marketing/sections/Footer';
 import { RevenueSpine } from '@/components/marketing/ui/RevenueSpine';
 
 export const metadata: Metadata = {
-  title: 'ORVYN Revenue OS — Gerar lead é apenas o começo',
+  title: 'KHUB — Gerar lead é apenas o começo',
   description:
-    'Leads, conversas, pipeline, automação e inteligência no mesmo registro. O ORVYN Revenue OS opera o trecho entre o clique e a receita — onde o CRM tradicional para.',
+    'Leads, conversas, pipeline, automação e inteligência no mesmo registro. O KHUB opera o trecho entre o clique e a receita — onde o CRM tradicional para.',
 };
 
 /**

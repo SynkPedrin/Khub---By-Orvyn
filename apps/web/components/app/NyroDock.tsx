@@ -14,8 +14,10 @@ const SUGESTOES = [
 ];
 
 /**
- * Dock flutuante da Nyro. A lógica do chat mora em `useNyroChat` e o corpo em
+ * Dock flutuante da NICO. A lógica do chat mora em `useNyroChat` e o corpo em
  * `NyroMensagens` — os mesmos da página cheia (`/nyro`). Aqui é só o invólucro.
+ * (Nomes internos de arquivo/rota/API seguem "nyro" — ver lib/nyro.ts; só a
+ * marca exibida ao usuário virou NICO.)
  */
 export function NyroDock() {
   const [open, setOpen] = useState(false);
@@ -28,7 +30,7 @@ export function NyroDock() {
     <>
       <button
         onClick={() => setOpen((o) => !o)}
-        aria-label="Abrir a Nyro"
+        aria-label="Abrir a NICO"
         className="fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full text-white shadow-brand transition-transform hover:scale-105"
         style={{ background: 'linear-gradient(135deg, var(--brand-bright), var(--brand-deep))' }}
       >
@@ -39,12 +41,12 @@ export function NyroDock() {
         <div className="glass crystal-edge fixed bottom-24 right-5 z-40 flex max-h-[76vh] w-[380px] max-w-[92vw] animate-scale-in flex-col overflow-hidden rounded-3xl">
           <div className="flex items-center justify-between border-b border-line px-4 py-3">
             <div className="flex items-center gap-2.5">
-              <Image src="/logo-nyro.png" alt="Nyro IA" width={96} height={32} unoptimized className="h-6 w-auto object-contain" />
+              <Image src="/nico-logo.png" alt="NICO" width={96} height={32} unoptimized className="h-6 w-auto object-contain" />
               <div>
                 <p className="text-[11px]">
                   {status?.configurada === false
                     ? <span className="text-amber-600 dark:text-amber-400">● precisa de configuração</span>
-                    : <span className="text-emerald-600 dark:text-emerald-400">● online</span>}
+                    : <span className="text-lime-ink dark:text-lime">● online</span>}
                 </p>
               </div>
             </div>
@@ -65,7 +67,7 @@ export function NyroDock() {
                   value={texto}
                   onChange={(e) => setTexto(e.target.value)}
                   disabled={pensando}
-                  placeholder="Fale com a Nyro…"
+                  placeholder="Fale com a NICO…"
                   className="min-w-0 flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-muted disabled:opacity-60"
                 />
                 <button type="submit" disabled={!texto.trim() || pensando} aria-label="Enviar" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand text-white disabled:opacity-40">

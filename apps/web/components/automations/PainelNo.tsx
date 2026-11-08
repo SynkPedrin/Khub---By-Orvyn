@@ -119,7 +119,7 @@ export function PainelNo({ no, meta, onMudar, onExcluir, onFechar, outrosNos, ou
             </Field>
             <Field label="Salvar em"><Input value={cfg.salvarEm ?? 'ia'} onChange={(e) => set({ salvarEm: e.target.value })} placeholder="temperatura" /></Field>
             <p className="rounded-lg bg-brand/10 px-3 py-2 text-[11px] leading-snug text-brand-deep dark:text-brand-lilac">
-              Roda pela Nyro (precisa da chave Anthropic). Depois use <span className="font-mono">{'{{variaveis.' + (cfg.salvarEm || 'ia') + '}}'}</span> em mensagens e condições.
+              Roda pela NICO (precisa da chave Anthropic). Depois use <span className="font-mono">{'{{variaveis.' + (cfg.salvarEm || 'ia') + '}}'}</span> em mensagens e condições.
             </p>
           </>
         )}

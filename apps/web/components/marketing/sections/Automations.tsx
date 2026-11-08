@@ -14,7 +14,7 @@ import { SCREENS } from '@/lib/marketing/screens';
  *  condição e as duas saídas. Nada aqui é inventado para a LP. */
 const PASSOS = [
   { tipo: 'Gatilho', titulo: 'Entrada de lead', texto: 'Novo lead via WhatsApp — o fluxo começa sozinho, sem ninguém abrir o sistema.' },
-  { tipo: 'IA', titulo: 'Qualificação', texto: 'A NYRO lê perfil, interesse e urgência e devolve variáveis tipadas para o resto do fluxo.' },
+  { tipo: 'IA', titulo: 'Qualificação', texto: 'A NICO lê perfil, interesse e urgência e devolve variáveis tipadas para o resto do fluxo.' },
   { tipo: 'Controle', titulo: 'Espera', texto: 'Dois minutos. Tempo humano, não disparo instantâneo que denuncia robô.' },
   { tipo: 'Condição', titulo: 'Lead qualificado?', texto: 'Sim segue para mensagem e agendamento. Não entra em nutrição — e volta depois.', ramifica: true },
   { tipo: 'Ação', titulo: 'Follow-up e agenda', texto: 'Mensagem personalizada, reunião marcada, CRM atualizado. Tudo registrado no lead.' },
@@ -115,7 +115,7 @@ export function Automations() {
             </Reveal>
             <Reveal delay={0.1}>
               <p className="mt-5 max-w-[52ch] text-[13px] leading-[1.55] text-[var(--lp-ink-3)]">
-                Fluxo real publicado no construtor da ORVYN. Cada bloco roda com estado próprio, repetição
+                Fluxo real publicado no construtor do KHUB. Cada bloco roda com estado próprio, repetição
                 controlada e registro de execução.
               </p>
             </Reveal>

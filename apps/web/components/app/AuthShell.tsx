@@ -5,17 +5,17 @@ import { Icon } from '@/components/icons';
 
 const BENEFICIOS: Array<{ icon: 'zap' | 'sparkles' | 'chat'; texto: string }> = [
   { icon: 'zap', texto: 'Pipeline e automações prontas para operar' },
-  { icon: 'sparkles', texto: 'A IA ORVYN qualifica e prioriza seus leads' },
+  { icon: 'sparkles', texto: 'A NICO qualifica e prioriza seus leads' },
   { icon: 'chat', texto: 'WhatsApp e multicanais no mesmo lugar' },
 ];
 
 function LogoMark({ light = false }: { light?: boolean }) {
   return (
     <div className="flex items-center gap-2.5">
-      <Image src="/logo.png" alt="" width={34} height={34} unoptimized className="rounded-lg" priority />
+      <Image src="/khub-mark.png" alt="" width={34} height={34} unoptimized className="object-contain" priority />
       <span className="flex flex-col gap-0.5">
-        <span className={`text-[14px] font-bold leading-none tracking-[0.2em] ${light ? 'text-white' : 'text-fg'}`}>ORVYN</span>
-        <span className={`text-[9px] font-medium leading-none tracking-[0.26em] ${light ? 'text-white/75' : 'text-muted'}`}>Revenue OS</span>
+        <span className={`text-[14px] font-bold leading-none tracking-[0.2em] ${light ? 'text-white' : 'text-fg'}`}>KHUB</span>
+        <span className={`text-[9px] font-medium leading-none tracking-[0.26em] ${light ? 'text-white/75' : 'text-muted'}`}>by ORVYN ai</span>
       </span>
     </div>
   );
@@ -154,7 +154,7 @@ export function AuthShell({
               className="absolute flex h-9 w-9 items-center justify-center rounded-xl"
               style={{ right: 22, top: 22, background: 'rgba(123,46,255,.05)', border: '1px solid rgba(123,46,255,.08)' }}
             >
-              <Image src="/logo.png" alt="" width={20} height={20} unoptimized className="rounded-[5px] opacity-90" />
+              <Image src="/khub-mark.png" alt="" width={20} height={20} unoptimized className="object-contain opacity-90" />
             </div>
             {children}
           </div>

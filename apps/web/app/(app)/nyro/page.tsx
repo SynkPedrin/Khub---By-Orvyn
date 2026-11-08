@@ -48,10 +48,10 @@ export default function NyroPage() {
     <div className="mx-auto flex h-full max-w-3xl flex-col px-4">
       {vazio ? (
         <div className="flex flex-1 flex-col items-center justify-center pb-4 text-center">
-          <Image src="/logo-nyro.png" alt="Nyro IA" width={217} height={72} unoptimized className="h-14 w-auto object-contain" />
-          <h1 className="mt-5 text-3xl font-extrabold tracking-tight text-fg">{saudacao()}, {user?.name?.split(' ')[0] ?? 'Você'}</h1>
+          <Image src="/nico-logo.png" alt="NICO" width={217} height={72} unoptimized className="h-14 w-auto object-contain" />
+          <h1 className="mt-5 text-3xl font-semibold tracking-tight text-fg">{saudacao()}, {user?.name?.split(' ')[0] ?? 'Você'}</h1>
           <p className="mt-1.5 max-w-md text-sm text-muted">
-            Sou a <b className="text-brand">Nyro</b> — arquiteta do CRM, operadora de leads, estrategista de growth e consultora do seu nicho. Peça algo abaixo.
+            Sou a <b className="text-brand">NICO</b> — arquiteta do CRM, operadora de leads, estrategista de growth e consultora do seu nicho. Peça algo abaixo.
           </p>
           <div className="mt-6 w-full max-w-xl text-left">
             <NyroMensagens status={status} bolhas={bolhas} passos={passos} pensando={pensando} erro={erro} sugestoes={SUGESTOES} onSugestao={enviar} onDecidir={decidir} />
@@ -82,7 +82,7 @@ export default function NyroPage() {
               <Icon name="chevronRight" size={18} />
             </button>
           </div>
-          <p className="mt-2 text-center text-[11px] text-muted">A Nyro age pelo CRM com as suas permissões — ações sensíveis pedem sua aprovação.</p>
+          <p className="mt-2 text-center text-[11px] text-muted">A NICO age pelo CRM com as suas permissões — ações sensíveis pedem sua aprovação.</p>
         </form>
       )}
     </div>

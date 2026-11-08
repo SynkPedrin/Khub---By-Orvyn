@@ -82,13 +82,13 @@ export function LoginForm() {
         </div>
         <Button type="submit" className="btn-auth-primary w-full" disabled={loading}>
           {loading && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden />}
-          {loading ? 'Entrando…' : 'Entrar no Revenue OS'}
+          {loading ? 'Entrando…' : 'Entrar no KHUB'}
           {!loading && <Icon name="arrowRight" size={16} />}
         </Button>
       </form>
 
       <p className="mt-6 text-center text-sm text-muted">
-        Novo na ORVYN? <Link href="/signup" className="font-semibold text-brand hover:underline">Criar conta</Link>
+        Novo no KHUB? <Link href="/signup" className="font-semibold text-brand hover:underline">Criar conta</Link>
       </p>
     </div>
   );

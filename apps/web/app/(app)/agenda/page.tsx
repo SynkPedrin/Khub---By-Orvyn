@@ -512,7 +512,7 @@ function DetalheCompromisso({ compromisso, onFechar }: { compromisso: Compromiss
         <div className="rounded-md border border-brand-border bg-brand-softer p-3">
           <p className="flex items-center gap-1.5 text-[12.5px] font-semibold text-fg">
             <Icon name="ai" size={14} className="text-brand" />
-            Sugestão da IA ORVYN
+            Sugestão da NICO
           </p>
           <p className="mt-1 text-[12px] leading-relaxed text-muted">
             Prepare um case de uso do seu segmento. Empresas similares tiveram +32% em conversão.

@@ -90,7 +90,7 @@ export function PainelAdicionar({ catalogo, modo, onEscolher, onFechar }: Props)
         <div className="max-h-[52vh] overflow-y-auto p-2 scrollbar-thin">
           {grupos.length === 0 && (
             <p className="px-3 py-8 text-center text-sm text-muted">
-              Nada com “{q}”. O Orvyn hoje automatiza contato, negócios, WhatsApp, tarefas e webhooks.
+              Nada com “{q}”. O KHUB hoje automatiza contato, negócios, WhatsApp, tarefas e webhooks.
             </p>
           )}
           {grupos.map(([grupo, itens]) => (

@@ -6,7 +6,7 @@ import { LOGIN_URL, SIGNUP_URL } from '@/lib/marketing/env';
 const SECOES = [
   { href: '#fluxo', label: 'O fluxo' },
   { href: '#produto', label: 'Produto' },
-  { href: '#nyro', label: 'NYRO' },
+  { href: '#nyro', label: 'NICO' },
   { href: '#crm', label: 'CRM vs Revenue OS' },
 ];
 
@@ -16,7 +16,7 @@ export function Footer() {
     <footer className="border-t border-[var(--lp-rule)]">
       <Container className="flex flex-col gap-8 py-10 md:flex-row md:items-start md:justify-between">
         <div className="flex flex-col gap-4">
-          <Wordmark height={20} label="ORVYN Revenue OS" />
+          <Wordmark height={20} label="KHUB" />
           <p className="max-w-[34ch] text-[13px] leading-[1.55] text-[var(--lp-ink-3)]">
             Sistema para um crescimento real. Leads, conversas, pipeline, automação e inteligência no mesmo
             registro.
@@ -46,8 +46,8 @@ export function Footer() {
       </Container>
 
       <Container className="flex flex-col gap-2 border-t border-[var(--lp-rule-soft)] py-5 text-[12px] text-[var(--lp-ink-4)] sm:flex-row sm:items-center sm:justify-between">
-        <p>© {new Date().getFullYear()} ORVYN Revenue OS</p>
-        <p>NYRO — camada de automação e inteligência da ORVYN</p>
+        <p>© {new Date().getFullYear()} KHUB</p>
+        <p>NICO — camada de automação e inteligência da ORVYN</p>
       </Container>
     </footer>
   );

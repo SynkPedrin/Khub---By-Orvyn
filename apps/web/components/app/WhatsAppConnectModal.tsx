@@ -177,7 +177,7 @@ export function WhatsAppConnectModal({ onClose, onConnected }: { onClose: () => 
         </div>
 
         <p className="mt-4 text-center text-[11px] text-faint">
-          A conexão fica no servidor do ORVYN — nada de credencial no navegador.
+          A conexão fica no servidor do KHUB — nada de credencial no navegador.
         </p>
       </div>
     </div>

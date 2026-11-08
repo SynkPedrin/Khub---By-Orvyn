@@ -16,14 +16,14 @@ interface Props {
   onDecidir: (a: Aprovacao, aprovar: boolean) => void;
 }
 
-/** Corpo do chat da Nyro — o mesmo no dock e na página cheia. */
+/** Corpo do chat da NICO — o mesmo no dock e na página cheia. */
 export function NyroMensagens({ status, bolhas, passos, pensando, erro, sugestoes, onSugestao, onDecidir }: Props) {
   // Gating: sem a chave, dizemos o que falta E o que ela faria — nunca resposta simulada.
   if (status && !status.configurada) {
     return (
       <>
         <ConfigRequired provider="anthropic" missing={status.missing} />
-        <p className="pt-1 text-xs font-semibold text-fg">O que a Nyro faz quando conectada:</p>
+        <p className="pt-1 text-xs font-semibold text-fg">O que a NICO faz quando conectada:</p>
         <ul className="space-y-1">
           {status.capacidades.slice(0, 8).map((c) => (
             <li key={c.nome} className="flex items-start gap-1.5 text-[11px] leading-snug text-muted">
@@ -43,7 +43,7 @@ export function NyroMensagens({ status, bolhas, passos, pensando, erro, sugestoe
     <>
       {bolhas.length === 0 && (
         <div>
-          <p className="text-sm text-fg">O que você deseja que a Nyro faça?</p>
+          <p className="text-sm text-fg">O que você deseja que a NICO faça?</p>
           <div className="mt-3 grid gap-1.5 sm:grid-cols-2">
             {sugestoes.map((s) => (
               <button key={s} onClick={() => onSugestao(s)} className="flex items-center gap-2 rounded-xl border border-line px-3 py-2 text-left text-[13px] text-fg transition-colors hover:border-brand/50 hover:bg-brand/5">
@@ -67,7 +67,7 @@ export function NyroMensagens({ status, bolhas, passos, pensando, erro, sugestoe
               {!!b.fontes?.length && <p className="mt-1 text-[10px] text-muted">fontes: {[...new Set(b.fontes.map((f) => f.titulo))].join(' · ')}</p>}
               {b.aprovacoes?.map((a) => (
                 <div key={a.id} className="mt-2 rounded-xl border border-amber-400/40 bg-amber-400/10 p-2.5">
-                  <p className="text-[11px] font-semibold leading-snug text-amber-700 dark:text-amber-300">A Nyro quer {a.resumo}</p>
+                  <p className="text-[11px] font-semibold leading-snug text-amber-700 dark:text-amber-300">A NICO quer {a.resumo}</p>
                   <div className="mt-2 flex gap-2">
                     <button onClick={() => onDecidir(a, true)} className="btn btn-primary flex-1 !rounded-lg !px-2 !py-1 !text-[11px]">Aprovar</button>
                     <button onClick={() => onDecidir(a, false)} className="btn btn-ghost flex-1 !rounded-lg !px-2 !py-1 !text-[11px] text-muted">Agora não</button>
@@ -81,7 +81,7 @@ export function NyroMensagens({ status, bolhas, passos, pensando, erro, sugestoe
 
       {pensando && (
         <div className="rounded-2xl bg-surface2 px-3.5 py-2.5">
-          <p className="text-xs font-semibold text-fg">Nyro está trabalhando…</p>
+          <p className="text-xs font-semibold text-fg">NICO está trabalhando…</p>
           <div className="mt-1.5 space-y-1">
             {passos.map((p, i) => (
               <p key={i} className="flex items-start gap-1.5 text-[11px] text-muted">

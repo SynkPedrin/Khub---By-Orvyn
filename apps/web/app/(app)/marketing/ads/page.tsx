@@ -85,7 +85,7 @@ export default function AdsPage() {
         <Card className="border-dashed p-10 text-center">
           <div className="text-3xl">📣</div>
           <h2 className="mt-2 text-lg font-bold text-fg">Conecte suas contas de anúncios</h2>
-          <p className="mx-auto mt-1 max-w-md text-sm text-muted">Traga Meta (e em breve TikTok e Google) para a Nyro analisar CPL, ROAS e destacar o melhor criativo.</p>
+          <p className="mx-auto mt-1 max-w-md text-sm text-muted">Traga Meta (e em breve TikTok e Google) para a NICO analisar CPL, ROAS e destacar o melhor criativo.</p>
           <Button className="mt-4" onClick={connect}><Icon name="marketing" size={16} /> Conectar Meta Ads</Button>
         </Card>
       ) : (

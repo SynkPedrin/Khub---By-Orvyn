@@ -7,7 +7,7 @@ import { Badge, Button, Card, cx } from '@/components/ui';
 import { Icon } from '@/components/icons';
 import { blueprints, type Blueprint, type Sugestao } from '@/lib/blueprints';
 
-const NYRO_Q = 'Quero configurar meu Orvyn do zero. Me pergunte sobre meu nicho e monte meu funil, etapas e automações.';
+const NYRO_Q = 'Quero configurar meu KHUB do zero. Me pergunte sobre meu nicho e monte meu funil, etapas e automações.';
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -38,13 +38,13 @@ export default function OnboardingPage() {
         <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl text-white shadow-brand" style={{ background: 'linear-gradient(135deg, var(--brand-bright), var(--brand-deep))' }}>
           <Icon name="sparkles" size={26} />
         </span>
-        <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-fg">Vamos montar seu Orvyn</h1>
+        <h1 className="mt-4 text-3xl font-semibold tracking-tight text-fg">Vamos montar seu KHUB</h1>
         <p className="mx-auto mt-2 max-w-xl text-sm text-muted">
           Escolha o modelo do seu nicho — a gente cria o <strong>funil com as etapas certas</strong> e instala as
           <strong> automações prontas</strong>. Dá pra ajustar tudo depois.
         </p>
         <Link href={`/nyro?q=${encodeURIComponent(NYRO_Q)}`} className="btn btn-primary mt-4">
-          <Icon name="sparkles" size={16} /> Deixe a Nyro montar por mim
+          <Icon name="sparkles" size={16} /> Deixe a NICO montar por mim
         </Link>
       </header>
 

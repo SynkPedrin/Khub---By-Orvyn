@@ -49,7 +49,7 @@ export function Statement() {
             <p className="text-[15px] leading-[1.62] text-[var(--lp-ink-2)]">
               Mídia paga, formulário, indicação, direct. Tudo isso entrega a mesma coisa: um nome e um
               horário. O que vem depois — responder, qualificar, marcar, cobrar, fechar e medir — é onde a
-              receita é ganha ou perdida. É exatamente esse trecho que a ORVYN opera.
+              receita é ganha ou perdida. É exatamente esse trecho que o KHUB opera.
             </p>
           </Reveal>
         </div>

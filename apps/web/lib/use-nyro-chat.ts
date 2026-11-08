@@ -44,7 +44,7 @@ export function useNyroChat(ativo = true) {
     } catch (e) {
       const cr = e instanceof ApiError ? e.configRequired : null;
       if (cr) setStatus((s) => ({ configurada: false, missing: cr.missing, capacidades: s?.capacidades ?? [] }));
-      else setErro('Não consegui falar com a Nyro agora.');
+      else setErro('Não consegui falar com a NICO agora.');
     } finally {
       setPensando(false);
     }

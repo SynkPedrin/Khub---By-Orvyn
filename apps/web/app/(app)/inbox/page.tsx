@@ -204,7 +204,7 @@ export default function InboxPage() {
                       className="max-w-[72%] rounded-2xl px-3.5 py-2 text-sm shadow-sm"
                       style={mine ? { background: 'linear-gradient(135deg, var(--brand-bright), var(--brand))', color: '#fff', borderBottomRightRadius: 5 } : { background: 'var(--surface)', border: '1px solid var(--border)', borderBottomLeftRadius: 5 }}
                     >
-                      {m.de === 'nyro' && <p className="mb-0.5 text-[10px] font-bold opacity-80">✦ Nyro</p>}
+                      {m.de === 'nyro' && <p className="mb-0.5 text-[10px] font-bold opacity-80">✦ NICO</p>}
                       <span className="align-middle">{m.texto}</span>
                       <span className={`ml-2 whitespace-nowrap text-[10px] ${mine ? 'text-white/70' : 'text-muted'}`}>
                         {m.hora}{mine && <Tick status={m.status} />}

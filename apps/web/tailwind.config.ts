@@ -25,6 +25,13 @@ const config: Config = {
           softer: 'var(--brand-softer)',
           border: 'var(--brand-border)',
         },
+        // KHUB — acento secundário (atividade/IA da NICO), nunca botão geral
+        lime: {
+          DEFAULT: 'var(--khub-lime)',
+          soft: 'var(--khub-lime-soft)',
+          border: 'var(--khub-lime-border)',
+          ink: 'var(--khub-lime-ink)',
+        },
         // Superfícies
         bg: 'var(--base-2)',
         surface: 'var(--base-0)',

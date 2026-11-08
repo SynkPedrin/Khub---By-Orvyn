@@ -18,43 +18,43 @@ export type ProductScreen = {
 export const SCREENS = {
   dashboard: {
     src: '/lp-revenue/product/dashboard-flat.png',
-    alt: 'Dashboard do ORVYN Revenue OS: leads do dia, taxa de resposta, follow-ups pendentes, pipeline de vendas e recomendações da IA',
+    alt: 'Dashboard do KHUB: leads do dia, taxa de resposta, follow-ups pendentes, pipeline de vendas e recomendações da IA',
   },
   leads: {
     src: '/lp-revenue/product/leads-flat.png',
-    alt: 'Tela de Leads do ORVYN Revenue OS com origem por canal, score de qualificação e próxima ação de cada lead',
+    alt: 'Tela de Leads do KHUB com origem por canal, score de qualificação e próxima ação de cada lead',
   },
   leadDetail: {
     src: '/lp-revenue/product/lead-detail-flat.png',
-    alt: 'Detalhe de um lead no ORVYN Revenue OS: resumo do contato, timeline de interações por canal, negócios, tarefas e atribuição de campanha',
+    alt: 'Detalhe de um lead no KHUB: resumo do contato, timeline de interações por canal, negócios, tarefas e atribuição de campanha',
   },
   conversations: {
     src: '/lp-revenue/product/conversations-flat.png',
-    alt: 'Caixa de conversas do ORVYN Revenue OS com WhatsApp, Instagram, e-mail e site na mesma fila, com os dados do lead ao lado da conversa',
+    alt: 'Caixa de conversas do KHUB com WhatsApp, Instagram, e-mail e site na mesma fila, com os dados do lead ao lado da conversa',
   },
   pipeline: {
     src: '/lp-revenue/product/pipeline-flat.png',
-    alt: 'Pipeline de vendas do ORVYN Revenue OS em Kanban, com valor por etapa, ticket médio e ciclo médio de vendas',
+    alt: 'Pipeline de vendas do KHUB em Kanban, com valor por etapa, ticket médio e ciclo médio de vendas',
   },
   automations: {
     src: '/lp-revenue/product/automations-flat.png',
-    alt: 'Construtor de automações do ORVYN Revenue OS: gatilho de entrada de lead, bloco de IA de qualificação, espera, condição e follow-up',
+    alt: 'Construtor de automações do KHUB: gatilho de entrada de lead, bloco de IA de qualificação, espera, condição e follow-up',
   },
   campaigns: {
     src: '/lp-revenue/product/campaigns-flat.png',
-    alt: 'Tela de Campanhas do ORVYN Revenue OS com sequências multicanal, público, canais e atribuição de respostas e reuniões',
+    alt: 'Tela de Campanhas do KHUB com sequências multicanal, público, canais e atribuição de respostas e reuniões',
   },
   analytics: {
     src: '/lp-revenue/product/analytics-flat.png',
-    alt: 'Analytics do ORVYN Revenue OS: receita por canal, funil de conversão, tempo de resposta por equipe e meta versus realizado',
+    alt: 'Analytics do KHUB: receita por canal, funil de conversão, tempo de resposta por equipe e meta versus realizado',
   },
   agenda: {
     src: '/lp-revenue/product/agenda-flat.png',
-    alt: 'Agenda do ORVYN Revenue OS com reuniões e follow-ups conectados ao pipeline',
+    alt: 'Agenda do KHUB com reuniões e follow-ups conectados ao pipeline',
   },
   copilot: {
     src: '/lp-revenue/product/copilot-flat.png',
-    alt: 'Copiloto NYRO dentro do ORVYN Revenue OS respondendo sobre a operação comercial',
+    alt: 'Copiloto NICO dentro do KHUB respondendo sobre a operação comercial',
   },
 } as const satisfies Record<string, ProductScreen>;
 

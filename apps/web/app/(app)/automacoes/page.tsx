@@ -10,6 +10,7 @@ import { automations, type ItemDlq, type WorkflowResumo } from '@/lib/automation
 export default function AutomacoesPage() {
   const router = useRouter();
   const [rows, setRows] = useState<WorkflowResumo[] | null>(null);
+  const [erroCarregar, setErroCarregar] = useState(false);
   const [dlq, setDlq] = useState<ItemDlq[]>([]);
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({ nome: '', descricao: '' });
@@ -22,7 +23,8 @@ export default function AutomacoesPage() {
   const fecharAjuda = () => { setAjuda(false); localStorage.setItem('orvyn:auto-ajuda', 'off'); };
 
   const load = useCallback(() => {
-    automations.listar().then(setRows).catch(() => setRows([]));
+    setErroCarregar(false);
+    automations.listar().then(setRows).catch(() => { setRows([]); setErroCarregar(true); });
     automations.dlq().then(setDlq).catch(() => setDlq([]));
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -140,7 +142,17 @@ export default function AutomacoesPage() {
       )}
 
       {!rows && <p className="py-10 text-center text-sm text-muted">Carregando…</p>}
-      {rows && rows.length === 0 && (
+      {rows && erroCarregar && (
+        <Card className="border-danger/40 bg-danger/5 p-10 text-center">
+          <div className="text-3xl">⚠️</div>
+          <p className="mt-2 font-bold text-fg">Não consegui carregar as automações</p>
+          <p className="mx-auto mt-1 max-w-md text-sm text-muted">
+            A conta atual pode não ter permissão, ou o servidor não respondeu. Isto não é a mesma coisa que &ldquo;nenhuma automação ainda&rdquo; — tente de novo antes de assumir que a conta está vazia.
+          </p>
+          <Button className="mt-4" variant="ghost" onClick={load}><Icon name="refresh" size={16} /> Tentar de novo</Button>
+        </Card>
+      )}
+      {rows && !erroCarregar && rows.length === 0 && (
         <Card className="border-dashed p-10 text-center">
           <div className="text-3xl">⚡</div>
           <p className="mt-2 font-bold text-fg">Nenhuma automação ainda</p>
