@@ -43,8 +43,9 @@ export const PRIMARY_NAV: NavItem[] = [
   { href: '/automacoes', label: 'Automações', icon: 'zap', grupo: 'Crescimento' },
   { href: '/campanhas', label: 'Campanhas', icon: 'send', grupo: 'Crescimento' },
   { href: '/analytics', label: 'Analytics', icon: 'trend', grupo: 'Crescimento' },
-  { href: '/ia', label: 'IA', icon: 'ai', grupo: 'Inteligência' },
-  { href: '/agentes', label: 'Agentes de IA', icon: 'sparkles', grupo: 'Inteligência' },
+  // NICO = agente INTERNA (trabalha com a equipe); Agentes de IA = atendem CLIENTES no WhatsApp (ADR-0040).
+  { href: '/nyro', label: 'NICO', icon: 'sparkles', grupo: 'Inteligência' },
+  { href: '/agentes', label: 'Agentes de IA', icon: 'chat', grupo: 'Inteligência' },
   { href: '/configuracoes', label: 'Configurações', icon: 'settings', grupo: 'Conta' },
 ];
 
@@ -53,7 +54,7 @@ export const AGENCY_NAV: NavItem[] = [
   { href: '/agency', label: 'Visão geral', icon: 'grid', grupo: 'Agência' },
   { href: '/agency/clients', label: 'Clientes', icon: 'building', grupo: 'Agência' },
   { href: '/agency/equipe', label: 'Equipe', icon: 'users', grupo: 'Agência' },
-  { href: '/ia', label: 'IA', icon: 'ai', grupo: 'Inteligência' },
+  { href: '/nyro', label: 'NICO', icon: 'sparkles', grupo: 'Inteligência' },
   { href: '/agency/configuracoes', label: 'Configurações', icon: 'settings', grupo: 'Conta' },
 ];
 

@@ -9,6 +9,7 @@ import { AmbientBackground } from '@/components/shell/AmbientBackground';
 import { PageTransition } from '@/components/shell/PageTransition';
 import { PersonalizationProvider } from '@/components/app/PersonalizationProvider';
 import { CommandBar } from '@/components/app/CommandBar';
+import { NyroDock } from '@/components/app/NyroDock';
 import { Icon } from '@/components/icons';
 
 /**
@@ -95,6 +96,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         )}
 
         <CommandBar />
+        {/* NICO, a agente interna de marketing, à mão em qualquer tela (ADR-0040). */}
+        <NyroDock />
       </div>
     </PersonalizationProvider>
   );

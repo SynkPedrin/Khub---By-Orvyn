@@ -1,8 +1,10 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Icon, type IconName } from '@/components/icons';
 import { Avatar, cx } from '@/components/ui';
 import { PageShell, PageHeader } from '@/components/revenue/Page';
@@ -36,6 +38,13 @@ export default function IaPage() {
   const { user } = useAuth();
   const demo = modoDemo();
   const [aba, setAba] = useState<'conversar' | 'analises' | 'acoes' | 'automacoes' | 'config'>('conversar');
+  const router = useRouter();
+  // Modo real: a NICO de verdade mora em /nyro (ADR-0040); esta página só tinha
+  // estado vazio e abas sem conteúdo. Links antigos para /ia caem lá.
+  useEffect(() => {
+    if (!demo) router.replace('/nyro');
+  }, [demo, router]);
+  if (!demo) return null;
 
   return (
     <PageShell className="max-w-none">

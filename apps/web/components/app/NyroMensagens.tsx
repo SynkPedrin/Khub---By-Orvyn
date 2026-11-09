@@ -3,6 +3,7 @@
 import { Icon } from '../icons';
 import { ConfigRequired } from './ConfigRequired';
 import { AGENTE_NOME, type Aprovacao, type PassoNyro, type StatusNyro } from '@/lib/nyro';
+import { capacidadeHumana } from '../nico/Nico';
 import type { Bolha } from '@/lib/use-nyro-chat';
 
 interface Props {
@@ -25,15 +26,18 @@ export function NyroMensagens({ status, bolhas, passos, pensando, erro, sugestoe
         <ConfigRequired provider="anthropic" missing={status.missing} />
         <p className="pt-1 text-xs font-semibold text-fg">O que a NICO faz quando conectada:</p>
         <ul className="space-y-1">
-          {status.capacidades.slice(0, 8).map((c) => (
-            <li key={c.nome} className="flex items-start gap-1.5 text-[11px] leading-snug text-muted">
-              <Icon name="check" size={12} className="mt-0.5 shrink-0 text-brand" />
-              <span>
-                {c.descricao}
-                {c.precisaAprovacao && <span className="text-amber-600 dark:text-amber-400"> (pede sua confirmação)</span>}
-              </span>
-            </li>
-          ))}
+          {status.capacidades.slice(0, 8).map((c) => {
+            const h = capacidadeHumana(c);
+            return (
+              <li key={c.nome} className="flex items-start gap-1.5 text-[12px] leading-snug text-muted">
+                <Icon name="check" size={12} className="mt-0.5 shrink-0 text-lime-ink" />
+                <span>
+                  <span className="font-medium text-fg">{h.nome}</span>: {h.descricao}
+                  {c.precisaAprovacao && <span className="text-warning"> (pede sua confirmação)</span>}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       </>
     );
