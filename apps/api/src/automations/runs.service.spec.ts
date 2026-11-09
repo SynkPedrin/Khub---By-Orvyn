@@ -203,3 +203,44 @@ describe('RunsService (Sprint E — orquestração)', () => {
     expect(idDeJob('a'.repeat(300), 'b', '0').length).toBeLessThanOrEqual(200);
   });
 });
+
+describe('RunsService — resposta do contato no meio do fluxo (importação do GHL)', () => {
+  it('avisarResposta leva o TEXTO da resposta e marca a base da trava', async () => {
+    const atualizacoes: any[] = [];
+    const run = { id: 'r9', noAtual: 'esp', estado: { contato: { id: 'c1', nome: 'Ana', tags: [] }, aguardandoResposta: 'esp' }, workflow: { id: 'wf1', pararNoReply: false } };
+    const prisma = {
+      withTenant: jest.fn(async (_t: string, work: (tx: unknown) => Promise<unknown>) =>
+        work({ workflowRun: { findMany: jest.fn(async () => [run]), findUnique: jest.fn(async () => ({ ...run, generation: 1, scheduledAt: new Date() })), update: jest.fn(async ({ data }: any) => { atualizacoes.push(data); return data; }) } }),
+      ),
+    } as unknown as PrismaService;
+    const fila = { add: jest.fn(async () => undefined), getJob: jest.fn(async () => null) } as unknown as Queue;
+    const svc = new RunsService(prisma, executorQue({}), { publicar: jest.fn() } as unknown as DomainEventsService, fila);
+    await svc.avisarResposta(TENANT, 'c1', { id: 'm7', texto: 'Vi no Instagram' });
+    const estado = atualizacoes[0].estado;
+    expect(estado).toMatchObject({ respondeu: true, mensagem: { id: 'm7', texto: 'Vi no Instagram', de: 'contato' } });
+    expect(typeof estado.baseResposta).toBe('string');
+  });
+
+  it('depois da resposta consumida, a trava de envio conta a partir dela (boas-vindas pós-resposta não são canceladas)', async () => {
+    const a = ambiente({ estado: { contato: { id: 'c1', nome: 'Ana', tags: [] }, baseResposta: '2026-01-02T09:00:00.000Z' } });
+    const executor = executorQue({ saida: { ok: 1 } });
+    await new RunsService(a.prisma, executor, a.eventos, a.fila).processarPasso({ tenantId: TENANT, runId: 'run1', noId: 'sms' }, 1);
+    expect((executor.executar as jest.Mock).mock.calls[0][2].runStartedAt).toBe('2026-01-02T09:00:00.000Z');
+  });
+});
+
+describe('RunsService — duas mensagens rápidas do contato (importação do GHL)', () => {
+  it('a segunda mensagem NÃO sobrescreve a resposta que a condição ainda vai ler', async () => {
+    const atualizacoes: any[] = [];
+    const run = { id: 'r10', noAtual: 'esp', estado: { contato: { id: 'c1', nome: 'Ana', tags: [] }, aguardandoResposta: 'esp', respondeu: true, mensagem: { id: 'm1', texto: 'Instagram', de: 'contato' } }, workflow: { id: 'wf1', pararNoReply: false } };
+    const prisma = {
+      withTenant: jest.fn(async (_t: string, work: (tx: unknown) => Promise<unknown>) =>
+        work({ workflowRun: { findMany: jest.fn(async () => [run]), findUnique: jest.fn(async () => ({ ...run, generation: 1, scheduledAt: new Date() })), update: jest.fn(async ({ data }: any) => { atualizacoes.push(data); return data; }) } }),
+      ),
+    } as unknown as PrismaService;
+    const fila = { add: jest.fn(async () => undefined), getJob: jest.fn(async () => null) } as unknown as Queue;
+    const svc = new RunsService(prisma, executorQue({}), { publicar: jest.fn() } as unknown as DomainEventsService, fila);
+    await svc.avisarResposta(TENANT, 'c1', { id: 'm2', texto: 'Quero progressiva' });
+    expect(atualizacoes).toHaveLength(0);
+  });
+});

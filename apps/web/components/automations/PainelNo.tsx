@@ -174,6 +174,24 @@ export function PainelNo({ no, meta, onMudar, onExcluir, onFechar, outrosNos, ou
             </p>
           </>
         )}
+        {no.tipo === 'acao.notificar_equipe' && (
+          <>
+            <Field label="WhatsApp da equipe" hint="Com DDI e DDD, só números. Ex.: 5518999990000">
+              <Input value={cfg.telefone ?? ''} onChange={(e) => set({ telefone: e.target.value.replace(/[^\d+]/g, '') })} placeholder="5518999990000" inputMode="tel" />
+            </Field>
+            <Field label="Aviso" hint="Use {{contato.nome}} e {{contato.telefone}} para dizer de quem é o aviso.">
+              <textarea
+                className="input min-h-28 resize-y"
+                value={cfg.texto ?? ''}
+                onChange={(e) => set({ texto: e.target.value })}
+                placeholder={'+1 lead para atender\n\nNOME: {{contato.nome}}\nTELEFONE: {{contato.telefone}}'}
+              />
+            </Field>
+            <p className="rounded-lg bg-[var(--fill-4)] px-3 py-2 text-[11px] leading-snug text-muted">
+              Vai para o número da equipe, não para o contato. Sai pela mesma instância de WhatsApp da conta.
+            </p>
+          </>
+        )}
         {no.tipo === 'acao.enviar_email' && (
           <>
             <Field label="Assunto" hint="Aceita {{contato.nome}}.">

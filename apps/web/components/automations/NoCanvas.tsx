@@ -35,6 +35,7 @@ export const ICONE: Record<string, IconName> = {
   // ações
   'acao.enviar_sms': 'inbox',
   'acao.enviar_email': 'mail',
+  'acao.notificar_equipe': 'bell',
   'acao.ia': 'sparkles',
   'acao.definir_variavel': 'settings',
   'acao.formatar_texto': 'settings',

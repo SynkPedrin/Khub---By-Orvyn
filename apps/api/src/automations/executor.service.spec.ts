@@ -29,6 +29,7 @@ function ambiente(opts?: { dripCount?: number }) {
   } as unknown as CrmService;
   const mensagens = {
     send: jest.fn(async (t: string, conv: string, texto: string) => { chamadas.send.push({ t, conv, texto }); return { id: 'msg1', hora: '10:00', status: 'sent', erro: null, missing: [] }; }),
+    notificarNumero: jest.fn(async (_t: string, telefone: string, texto: string, chave: string) => { chamadas.send.push({ equipe: telefone, texto, chave }); return { status: 'sent', erro: null }; }),
   } as unknown as MessagesService;
   const tarefas = {
     create: jest.fn(async (t: string, _u: string, input: unknown) => { chamadas.task.push({ t, input }); return { id: 'task1' }; }),
@@ -284,5 +285,37 @@ describe('ExecutorService — ações', () => {
     for (const url of ['http://localhost:3333/v1/health', 'http://169.254.169.254/latest/meta-data/', 'http://10.0.0.5/admin', 'http://192.168.1.1/']) {
       await expect(svc.executar(TENANT, no('acao.webhook', { url }), CTX, GRAFO)).rejects.toThrow(/interno/);
     }
+  });
+});
+
+describe('ExecutorService — notificar equipe e saudação (importação do GHL)', () => {
+  const comChave: Contexto = { ...CTX, executionKey: 'run1:0:n1' };
+
+  it('avisa o número da EQUIPE (não o contato), com chave do passo e variáveis', async () => {
+    const { svc, mensagens } = ambiente();
+    const r = await svc.executar(TENANT, no('acao.notificar_equipe', { telefone: '+5518999990971', texto: 'O Lead {{contato.nome}} já é cliente\nTELEFONE: {{contato.telefone}}' }), comChave, GRAFO);
+    expect(r.saida).toMatchObject({ status: 'sent' });
+    expect(mensagens.notificarNumero).toHaveBeenCalledWith(TENANT, '5518999990971', 'O Lead Marina Alves já é cliente\nTELEFONE: +5511998124410', 'run1:0:n1:equipe');
+    expect(mensagens.send).not.toHaveBeenCalled();
+  });
+
+  it('sem canal ou bloqueado: falha explícita (aviso interno não some em silêncio)', async () => {
+    const { svc, mensagens } = ambiente();
+    (mensagens.notificarNumero as jest.Mock).mockResolvedValueOnce({ status: 'config_required', erro: null });
+    await expect(svc.executar(TENANT, no('acao.notificar_equipe', { telefone: '5518999990971', texto: 'oi' }), comChave, GRAFO)).rejects.toThrow('notificacao_equipe_config_required');
+  });
+
+  it('sem chave de execução recusa (não arrisca engolir avisos como repetidos)', async () => {
+    const { svc } = ambiente();
+    await expect(svc.executar(TENANT, no('acao.notificar_equipe', { telefone: '5518999990971', texto: 'oi' }), CTX, GRAFO)).rejects.toThrow('sem_chave');
+  });
+
+  it('{{contato.primeiroNome}}: primeira palavra capitalizada; nome-telefone vira vazio sem pontuação órfã', async () => {
+    const { svc, chamadas } = ambiente();
+    await svc.executar(TENANT, no('acao.enviar_sms', { texto: 'Oii, {{contato.primeiroNome}}! Bem-vinda' }), comChave, GRAFO);
+    expect((chamadas.send.at(-1) as { texto: string }).texto).toBe('Oii, Marina! Bem-vinda');
+    const semNome: Contexto = { ...comChave, contato: { ...CTX.contato!, nome: '5541999998888' } };
+    await svc.executar(TENANT, no('acao.enviar_sms', { texto: 'Oii, {{contato.primeiroNome}}! Bem-vinda' }), semNome, GRAFO);
+    expect((chamadas.send.at(-1) as { texto: string }).texto).toBe('Oii! Bem-vinda');
   });
 });

@@ -161,7 +161,10 @@ export class RunsService {
       return;
     }
 
-    const ctx: Contexto = { ...(run.estado as Contexto), executionKey: `${runId}:${run.generation}:${noId}`, runStartedAt: run.startedAt.toISOString() };
+    const estado = run.estado as Contexto;
+    // Base da trava "contato respondeu → não envia": o início do run, ou o
+    // momento em que o fluxo consumiu a última resposta (Esperar resposta).
+    const ctx: Contexto = { ...estado, executionKey: `${runId}:${run.generation}:${noId}`, runStartedAt: estado.baseResposta ?? run.startedAt.toISOString() };
     const t0 = Date.now();
     try {
       // Janela de envio: nó que fala com o contato fora do horário é adiado, não
@@ -318,7 +321,7 @@ export class RunsService {
    * Contato respondeu: acorda os runs que esperavam por ele (e, se o workflow
    * tem `pararNoReply`, encerra os demais). Chamado pelo worker de gatilhos.
    */
-  async avisarResposta(tenantId: string, contactId: string): Promise<void> {
+  async avisarResposta(tenantId: string, contactId: string, mensagem?: { id: string; texto: string }): Promise<void> {
     const esperando = await this.prisma.withTenant(tenantId, (tx) =>
       tx.workflowRun.findMany({
         where: { contactId, status: { in: ['rodando', 'esperando'] } },
@@ -335,7 +338,14 @@ export class RunsService {
         await this.prisma.withTenant(tenantId, (tx) =>
           tx.workflowRun.update({
             where: { id: run.id },
-            data: { estado: { ...ctx, respondeu: true } as unknown as Prisma.InputJsonValue, status: 'rodando', generation: { increment: 1 }, scheduledAt: new Date() },
+            // `mensagem`: o texto que o contato respondeu, para a condição seguinte.
+            // `baseResposta`: a resposta foi CONSUMIDA pelo fluxo; a trava "contato
+            // respondeu, cancela o envio" passa a contar só respostas posteriores
+            // (senão as boas-vindas pós-resposta seriam canceladas).
+            data: {
+              estado: { ...ctx, respondeu: true, ...(mensagem ? { mensagem: { ...mensagem, de: 'contato' } } : {}), baseResposta: new Date().toISOString() } as unknown as Prisma.InputJsonValue,
+              status: 'rodando', generation: { increment: 1 }, scheduledAt: new Date(),
+            },
           }),
         );
         await this.enfileirar(tenantId, run.id, run.noAtual!, 0, 'reply');

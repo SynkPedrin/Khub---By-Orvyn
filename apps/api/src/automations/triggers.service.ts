@@ -44,7 +44,8 @@ export class TriggersService {
     // já respondeu não deve receber o follow-up automático.
     if (tipo === 'gatilho.mensagem_recebida') {
       const contactId = await this.contatoDaConversa(job);
-      if (contactId) await this.runs.avisarResposta(job.tenantId, contactId);
+      // Leva o TEXTO da resposta: a condição seguinte ("resposta contém Google") precisa dele.
+      if (contactId) await this.runs.avisarResposta(job.tenantId, contactId, { id: String(job.dados.id ?? ''), texto: String(job.dados.texto ?? '') });
     }
 
     const ativos = await this.workflowsAtivos(job.tenantId, tipo);

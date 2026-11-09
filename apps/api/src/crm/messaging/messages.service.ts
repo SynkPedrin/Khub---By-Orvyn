@@ -62,6 +62,45 @@ export class MessagesService {
 
   /** Reserve before sending. An uncertain provider acceptance is NEVER retried. */
   async send(tenantId: string, conversationId: string, texto: string, idempotencyKey: string = randomUUID(), runStartedAt?: string, autor: AutorEnvio = { tipo: 'humano' }) {
+  /**
+   * Aviso para a EQUIPE num número de WhatsApp (nó "Notificar equipe"), sem
+   * criar contato nem conversa: um contato "equipe" sujaria o CRM e ainda
+   * dispararia os fluxos de "contato criado". Mesmas travas do `send`:
+   * instância Stevo do tenant, dev lock (fora de produção só STEVO_TEST_NUMBER)
+   * e idempotência — a chave é reservada em `webhook_events` ANTES do envio, então
+   * um retry nunca manda o aviso duas vezes.
+   */
+  async notificarNumero(tenantId: string, telefone: string, texto: string, idempotencyKey: string): Promise<{ status: string; erro: string | null }> {
+    const reserva = await this.prisma.withTenant(tenantId, async (tx) => {
+      const nova = await tx.$executeRaw`INSERT INTO webhook_events(tenant_id,provider,event_id,payload,processed_at)
+        VALUES(${tenantId}::uuid,'notificacao_equipe',${tenantId + ':' + idempotencyKey},'{}',now()) ON CONFLICT(provider,event_id) DO NOTHING`;
+      if (!nova) return null;
+      const stevoApi = await tx.integration.findFirst({ where: { tenantId, provider: 'stevo_api', status: { not: 'revoked' } }, select: { externalBusinessId: true, status: true } });
+      const providerNome: 'stevo_api' | 'evolution' | 'stevo' = stevoApi ? 'stevo_api' : this.provider().nome;
+      const integration = stevoApi?.status === 'connected' ? stevoApi : stevoApi ? null : await tx.integration.findFirst({ where: { tenantId, provider: providerNome, status: 'connected' }, select: { externalBusinessId: true } });
+      let status = 'sending';
+      if (!this.impl(providerNome).configured() || (process.env.NODE_ENV === 'production' && !integration?.externalBusinessId)) status = 'config_required';
+      if (status === 'sending' && stevoApi && stevoApi.status !== 'connected') status = 'canal_desconectado';
+      if (status === 'sending' && !this.emProducao() && !this.config.get('STEVO_TEST_NUMBER')) status = 'bloqueado_dev';
+      await tx.$executeRaw`INSERT INTO audit_logs(tenant_id,actor_type,actor_id,acao,entidade,entidade_id) VALUES(${tenantId}::uuid,'sistema','automacao','equipe.notificacao','webhook_event',${idempotencyKey})`;
+      return { status, providerNome, instance: integration?.externalBusinessId ?? undefined };
+    });
+    if (!reserva) return { status: 'sent', erro: null }; // já enviado antes (retry): não repete
+    if (reserva.status !== 'sending') return { status: reserva.status, erro: null };
+    try {
+      const destino = this.emProducao() ? telefone : this.config.get('STEVO_TEST_NUMBER')!;
+      await this.impl(reserva.providerNome).sendText(destino, texto, reserva.instance, idempotencyKey);
+      return { status: 'sent', erro: null };
+    } catch (error) {
+      const status = error instanceof DeliveryError ? (error.retryable ? 'pending' : error.uncertain ? 'unknown' : 'failed') : 'unknown';
+      if (status === 'pending') {
+        // Nada saiu: libera a chave para o retry tentar de novo.
+        await this.prisma.withTenant(tenantId, (tx) => tx.$executeRaw`DELETE FROM webhook_events WHERE provider='notificacao_equipe' AND event_id=${tenantId + ':' + idempotencyKey}`);
+      }
+      return { status, erro: error instanceof DeliveryError ? error.message : 'provider_acceptance_unknown' };
+    }
+  }
+
     let assumiu: EstadoAtendimento | null = null;
     const ctx = await this.prisma.withTenant(tenantId, async tx => {
       // $executeRaw: pg_advisory_xact_lock devolve `void`, que o Prisma não desserializa em $queryRaw (P2010).

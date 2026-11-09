@@ -30,6 +30,8 @@ export interface Contexto {
   respondeu?: boolean;
 }
 
+  /** ISO de quando o fluxo consumiu a última resposta (ver RunsService.avisarResposta). */
+  baseResposta?: string;
 export interface ResultadoNo {
   /** Próximo ramo a seguir (If/Else). Ausente = saída única. */
   ramo?: string;
@@ -98,6 +100,8 @@ export class ExecutorService {
         return this.enviarEmail(no, ctx);
       case 'acao.definir_variavel':
         return this.definirVariavel(no, ctx);
+      case 'acao.notificar_equipe':
+        return this.notificarEquipe(tenantId, no, ctx);
       case 'acao.formatar_texto':
         return this.formatarTexto(no, ctx);
       case 'acao.ia':
@@ -301,6 +305,13 @@ export class ExecutorService {
     if (r.status === 'cancelled') return { encerrar: true, saida: { status: r.status } };
     if (r.status !== 'sent') throw new UnrecoverableError(`message_delivery_${r.status}`);
 
+    // Primeiro nome para saudação ("Oii, Ana!"). Nome que é só telefone (contato
+    // criado pelo WhatsApp sem nome) vira vazio — melhor que "Olá, 5541999…!".
+    if (campo === 'contato.primeiroNome') {
+      const primeiro = (ctx.contato?.nome ?? '').trim().split(/\s+/)[0] ?? '';
+      if (!primeiro || /^[+\d()\s-]+$/.test(primeiro)) return '';
+      return primeiro.charAt(0).toUpperCase() + primeiro.slice(1).toLowerCase();
+    }
     // Gating (ADR-0008): sem credencial, a mensagem FICA GRAVADA e o passo é
     // registrado como pendente — não é erro do workflow, é credencial faltando.
     return {
@@ -519,9 +530,11 @@ export class ExecutorService {
 
   /** `Olá {{contato.nome}}` → valor do contexto. Placeholder sem valor vira ''. */
   private interpolar(texto: string, ctx: Contexto): string {
-    return texto.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_m, campo: string) => {
+    const r = texto.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_m, campo: string) => {
       const v = this.valorDoCampo(campo, ctx);
       return v === undefined || v === null ? '' : String(v);
     });
   }
 }
+    // Variável vazia não deixa pontuação órfã: "Oii, !" → "Oii!".
+    return r.replace(/,\s*([!?.])/g, '$1').replace(/[ \t]{2,}/g, ' ');

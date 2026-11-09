@@ -48,6 +48,7 @@ function resumir(tipo: string, cfg: Record<string, any>): string {
     case 'controle.drip': return cfg.porJanela ? `${cfg.porJanela} por ${cfg.janela ?? 'hora'}` : 'defina o lote';
     case 'controle.ir_para': return cfg.alvoNoId ? 'pula no fluxo' : 'escolha o destino';
     case 'acao.enviar_sms': return cfg.texto ? `"${String(cfg.texto).slice(0, 40)}…"` : 'escreva a mensagem';
+    case 'acao.notificar_equipe': return cfg.telefone ? `para ${String(cfg.telefone)}` : 'informe o WhatsApp da equipe';
     case 'acao.adicionar_tag': return cfg.tag ? `+ ${cfg.tag}` : 'defina a tag';
     case 'acao.remover_tag': return cfg.tag ? `− ${cfg.tag}` : 'defina a tag';
     case 'acao.atualizar_contato': return cfg.campo ? `${cfg.campo} = ${cfg.valor ?? ''}` : 'escolha o campo';

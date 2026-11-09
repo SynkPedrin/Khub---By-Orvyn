@@ -26,6 +26,7 @@ export const TIPOS_NO = [
   // Ações (10)
   'acao.enviar_sms',
   'acao.enviar_email',
+  'acao.notificar_equipe',
   'acao.adicionar_tag',
   'acao.remover_tag',
   'acao.atualizar_contato',
@@ -159,6 +160,16 @@ const configs: Record<TipoNo, z.ZodTypeAny> = {
   'acao.enviar_email': z.object({
     assunto: z.string().min(1).max(200),
     corpo: z.string().min(1).max(10000),
+  }),
+  /**
+   * Avisa a EQUIPE no WhatsApp (não o contato): ex. "+1 lead que pagou o sinal".
+   * Equivale à "Notificação interna" do GHL, que mandava SMS para o número da
+   * equipe. Mesmas travas do envio ao contato (instância do tenant, dev lock,
+   * idempotência) — ver MessagesService.notificarNumero.
+   */
+  'acao.notificar_equipe': z.object({
+    telefone: z.string().regex(/^\+?\d{10,15}$/, 'telefone com DDI e DDD, só dígitos'),
+    texto: z.string().min(1).max(1000),
   }),
   'acao.adicionar_tag': z.object({ tag: z.string().min(1).max(40) }),
   'acao.remover_tag': z.object({ tag: z.string().min(1).max(40) }),
@@ -305,6 +316,7 @@ export const CATALOGO: MetaNo[] = [
   // ---------------- Ações ----------------
   { tipo: 'acao.enviar_sms', categoria: 'acao', grupo: 'Comunicação', nome: 'Enviar SMS', descricao: 'Texto simples entregue no WhatsApp via STEVO (API não oficial): sem mídia nem template.', provider: 'stevo', busca: ['whatsapp', 'mensagem', 'texto', 'enviar'] },
   { tipo: 'acao.enviar_email', categoria: 'acao', grupo: 'Comunicação', nome: 'Enviar e-mail', descricao: 'E-mail para o contato pelo canal oficial (SMTP). Aceita {{contato.nome}} no assunto e no corpo.', provider: 'email', busca: ['email', 'e-mail', 'mail', 'mensagem', 'enviar'] },
+  { tipo: 'acao.notificar_equipe', categoria: 'acao', grupo: 'Comunicação', nome: 'Notificar equipe no WhatsApp', descricao: 'Manda um aviso para o número da equipe (não para o contato). Aceita {{contato.nome}} e {{contato.telefone}}.', provider: 'stevo', busca: ['notificação', 'notificacao', 'interna', 'equipe', 'aviso', 'alerta', 'whatsapp'] },
   { tipo: 'acao.adicionar_tag', categoria: 'acao', grupo: 'Contato', nome: 'Adicionar tag', descricao: 'Aplica uma tag ao contato.', busca: ['etiqueta', 'marcar'] },
   { tipo: 'acao.remover_tag', categoria: 'acao', grupo: 'Contato', nome: 'Remover tag', descricao: 'Tira a tag do contato.', busca: ['etiqueta', 'desmarcar'] },
   { tipo: 'acao.atualizar_contato', categoria: 'acao', grupo: 'Contato', nome: 'Atualizar contato', descricao: 'Grava um valor num campo do contato.', busca: ['campo', 'editar', 'campo customizado'] },
