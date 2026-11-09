@@ -83,6 +83,11 @@ Status: `aberto` · `em correção` · `corrigido` · `não reproduz`.
 - Severidade: S3 · Status: aberto
 - Reprodução: falhou 1 vez em 3 na suíte completa; passa isolado. Provável cálculo de `delay` a partir do relógio (diferença de ms sob carga).
 
+### BUG-026 — "Esperar resposta": resposta não chegava à condição; trava cancelava boas-vindas; resposta rápida se perdia; 2ª mensagem sobrescrevia a 1ª
+- Severidade: S1 (qualquer fluxo com "Esperar resposta" quebrava; o "Novo Lead" do GHL inviável) · Status: **corrigido** (importação GHL, 4 testes novos)
+- Reprodução: (1) a resposta acordava o run mas o TEXTO não entrava no contexto — a condição "resposta contém Google" caía sempre no ramo errado; (2) a trava "contato respondeu, cancela o envio" comparava com o início do run, então as boas-vindas pós-resposta eram canceladas; (3) resposta que chegava nos ms entre a mensagem anterior e a marca da espera se perdia e o follow-up ia para quem JÁ tinha respondido; (4) duas mensagens rápidas ("Vi no Instagram" + "Quero progressiva"): a 2ª sobrescrevia `mensagem` antes da condição ler a 1ª. Achado no teste ponta a ponta da automação importada.
+- Correção: `avisarResposta` leva o texto da resposta ao contexto e marca `baseResposta` (a trava passa a contar dali); 1ª passada do "Esperar resposta" reconhece resposta antecipada por `lastInboundAt >= baseResposta` e carrega o texto; run já acordado (`respondeu` ainda não consumido) não é sobrescrito por mensagem nova.
+
 ### BUG-015 — Overlay dos modais cobria só o `<main>` e os sheets de vidro não desfocavam
 - Severidade: S3
 - Status: **corrigido** (ADR-0029)

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { RealtimeEvent } from '@orvyn/types';
+import type { RealtimeEvent } from '@khub/types';
 import { PrismaService } from '../prisma/prisma.service';
 import { RunsService } from './runs.service';
 import { grafoSchema, validarConfig, type Grafo, type No, type TipoNo } from './catalogo';

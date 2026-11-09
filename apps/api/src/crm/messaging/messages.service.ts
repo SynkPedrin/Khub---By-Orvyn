@@ -12,9 +12,11 @@ import { StevoApiProvider } from './stevo-api.provider';
 
 /**
  * Autoria do envio. `humano` com `identityId` = alguém digitou no Inbox (e por
- * isso assume a conversa); sem `identityId` = automação/Nyro; `ia` = agente.
+ * isso assume a conversa) — persiste `enviado_por_id` pro Inbox mostrar quem;
+ * `ia` = agente; `automacao` = workflow disparou sem humano no meio (migration
+ * 036 — antes caía em `humano` genérico, indistinguível de atendente de verdade).
  */
-export type AutorEnvio = { tipo: 'humano'; identityId?: string } | { tipo: 'ia'; agentId: string };
+export type AutorEnvio = { tipo: 'humano'; identityId?: string } | { tipo: 'ia'; agentId: string } | { tipo: 'automacao'; workflowId: string };
 
 export interface InboundInput {
   tenantId: string;
@@ -60,8 +62,6 @@ export class MessagesService {
     return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   }
 
-  /** Reserve before sending. An uncertain provider acceptance is NEVER retried. */
-  async send(tenantId: string, conversationId: string, texto: string, idempotencyKey: string = randomUUID(), runStartedAt?: string, autor: AutorEnvio = { tipo: 'humano' }) {
   /**
    * Aviso para a EQUIPE num número de WhatsApp (nó "Notificar equipe"), sem
    * criar contato nem conversa: um contato "equipe" sujaria o CRM e ainda
@@ -101,6 +101,8 @@ export class MessagesService {
     }
   }
 
+  /** Reserve before sending. An uncertain provider acceptance is NEVER retried. */
+  async send(tenantId: string, conversationId: string, texto: string, idempotencyKey: string = randomUUID(), runStartedAt?: string, autor: AutorEnvio = { tipo: 'humano' }) {
     let assumiu: EstadoAtendimento | null = null;
     const ctx = await this.prisma.withTenant(tenantId, async tx => {
       // $executeRaw: pg_advisory_xact_lock devolve `void`, que o Prisma não desserializa em $queryRaw (P2010).
@@ -128,13 +130,15 @@ export class MessagesService {
       if (status==='sending' && !this.emProducao() && !this.config.get('STEVO_TEST_NUMBER')) status='bloqueado_dev';
       const hora=this.hora();
       const data={deliveryStatus:status,deliveryError:status==='bloqueado_dev'?'envio externo bloqueado fora de produção: defina STEVO_TEST_NUMBER':null};
-      const autoria = autor.tipo==='ia' ? {autorTipo:'ia',agentId:autor.agentId} : {autorTipo:'humano'};
+      const autoria = autor.tipo==='ia' ? {autorTipo:'ia',agentId:autor.agentId}
+        : autor.tipo==='automacao' ? {autorTipo:'automacao',workflowId:autor.workflowId}
+        : {autorTipo:'humano',enviadoPorId:autor.identityId};
       const msg=previous ? await tx.message.update({where:{id:previous.id,tenantId},data}) : await tx.message.create({data:{tenantId,conversationId,...autoria,corpo:texto,hora,idempotencyKey,...data}});
       await tx.conversation.update({where:{id:conversationId,tenantId},data:{ultimaPrevia:texto.slice(0,140),ultimaHora:hora,updatedAt:new Date()}});
       // Humano digitou no Inbox numa conversa da IA: ele assumiu (ADR-0030).
       if (autor.tipo==='humano' && autor.identityId) assumiu = await this.atendimento.aoHumanoEnviar(tx, tenantId, conversationId, autor.identityId);
-      const actorType = autor.tipo==='ia' ? 'nyro' : 'humano';
-      const actorId = autor.tipo==='ia' ? autor.agentId : autor.identityId ?? null;
+      const actorType = autor.tipo==='ia' ? 'nyro' : autor.tipo==='automacao' ? 'sistema' : 'humano';
+      const actorId = autor.tipo==='ia' ? autor.agentId : autor.tipo==='automacao' ? autor.workflowId : autor.identityId ?? null;
       await tx.$executeRaw`INSERT INTO audit_logs(tenant_id,actor_type,actor_id,acao,entidade,entidade_id) VALUES(${tenantId}::uuid,${actorType},${actorId},'message.reserve','message',${msg.id})`;
       return {msg,send:status==='sending',phone:contact?.telefone,instance:integration?.externalBusinessId ?? undefined,providerNome};
     });

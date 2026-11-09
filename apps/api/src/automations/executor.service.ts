@@ -3,7 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
 import { CrmService } from '../crm/crm.service';
-import { MessagesService } from '../crm/messaging/messages.service';
+import { MessagesService, type AutorEnvio } from '../crm/messaging/messages.service';
 import { TasksService } from '../crm/tasks.service';
 import { NotesService } from '../crm/notes.service';
 import { MailerService } from '../common/mailer.service';
@@ -15,6 +15,8 @@ import { validarConfig, type Grafo, type No, type Ramo, type Regra, type TipoNo 
 export interface Contexto {
   executionKey?: string;
   runStartedAt?: string;
+  /** Workflow que está rodando — persiste a origem da mensagem (migration 036). */
+  workflowId?: string;
   contato?: { id: string; nome: string; email: string | null; telefone: string | null; empresa: string | null; tag: string; tags: string[]; valor: number };
   negocio?: { id: string; titulo: string; valor: number; stageId: string; origem: string | null };
   mensagem?: { id: string; texto: string; de: string };
@@ -28,10 +30,10 @@ export interface Contexto {
   aguardandoResposta?: string | null;
   /** Marcado quando o contato responde enquanto o run espera. */
   respondeu?: boolean;
-}
-
   /** ISO de quando o fluxo consumiu a última resposta (ver RunsService.avisarResposta). */
   baseResposta?: string;
+}
+
 export interface ResultadoNo {
   /** Próximo ramo a seguir (If/Else). Ausente = saída única. */
   ramo?: string;
@@ -83,7 +85,7 @@ export class ExecutorService {
       case 'controle.esperar':
         return this.esperar(no);
       case 'controle.esperar_resposta':
-        return this.esperarResposta(no, ctx);
+        return this.esperarResposta(tenantId, no, ctx);
       case 'controle.encerrar':
         return { encerrar: true, saida: { motivo: (no.config as { motivo?: string }).motivo ?? 'fim do fluxo' } };
       case 'controle.condicao':
@@ -98,10 +100,10 @@ export class ExecutorService {
         return this.enviarSms(tenantId, no, ctx);
       case 'acao.enviar_email':
         return this.enviarEmail(no, ctx);
-      case 'acao.definir_variavel':
-        return this.definirVariavel(no, ctx);
       case 'acao.notificar_equipe':
         return this.notificarEquipe(tenantId, no, ctx);
+      case 'acao.definir_variavel':
+        return this.definirVariavel(no, ctx);
       case 'acao.formatar_texto':
         return this.formatarTexto(no, ctx);
       case 'acao.ia':
@@ -147,7 +149,7 @@ export class ExecutorService {
    *  2ª — se acordou porque o contato respondeu (a marca some), vai pelo ramo
    *       `resposta`; se acordou pelo prazo, vai por `timeout`.
    */
-  private esperarResposta(no: No, ctx: Contexto): ResultadoNo {
+  private async esperarResposta(tenantId: string, no: No, ctx: Contexto): Promise<ResultadoNo> {
     if (!ctx.contato) throw new Error('nó "esperar resposta" sem contato no contexto');
 
     if (ctx.respondeu) {
@@ -156,6 +158,31 @@ export class ExecutorService {
     if (ctx.aguardandoResposta === no.id) {
       // acordou pelo timeout e a marca ainda está lá: ninguém respondeu
       return { ramo: 'timeout', saida: { respondeu: false }, contexto: { aguardandoResposta: null } };
+    }
+
+    // Corrida real: o contato pode responder NO INTERVALO entre a mensagem do
+    // passo anterior e esta marca de espera (ms, mas acontece com resposta
+    // imediata). Sem esta checagem, a resposta se perdia e o fluxo mandava o
+    // follow-up para quem JÁ tinha respondido. Baseline = início do run ou o
+    // momento em que a resposta anterior foi consumida (baseResposta).
+    const base = ctx.runStartedAt ? new Date(ctx.runStartedAt) : null;
+    if (base) {
+      const antecipada = await this.prisma.withTenant(tenantId, async (tx) => {
+        const c = await tx.contact.findUnique({ where: { id: ctx.contato!.id, tenantId }, select: { lastInboundAt: true } });
+        if (!c?.lastInboundAt || c.lastInboundAt < base) return null;
+        const conv = await tx.conversation.findFirst({ where: { contactId: ctx.contato!.id, canal: 'WhatsApp' }, select: { id: true } });
+        const msg = conv
+          ? await tx.message.findFirst({ where: { conversationId: conv.id, tenantId, autorTipo: 'contato', createdAt: { gte: base } }, orderBy: { createdAt: 'desc' }, select: { id: true, corpo: true } })
+          : null;
+        return { mensagem: msg ? { id: msg.id, texto: msg.corpo, de: 'contato' } : undefined };
+      });
+      if (antecipada) {
+        return {
+          ramo: 'resposta',
+          saida: { respondeu: true, antecipada: true },
+          contexto: { aguardandoResposta: null, baseResposta: new Date().toISOString(), ...(antecipada.mensagem ? { mensagem: antecipada.mensagem } : {}) },
+        };
+      }
     }
 
     const { duracao, unidade } = no.config as { duracao: number; unidade: string };
@@ -278,6 +305,13 @@ export class ExecutorService {
 
   /** `contato.tags` / `negocio.valor` / `mensagem.texto` → valor do contexto. */
   private valorDoCampo(campo: string, ctx: Contexto): unknown {
+    // Primeiro nome para saudação ("Oii, Ana!"). Nome que é só telefone (contato
+    // criado pelo WhatsApp sem nome) vira vazio — melhor que "Olá, 5541999…!".
+    if (campo === 'contato.primeiroNome') {
+      const primeiro = (ctx.contato?.nome ?? '').trim().split(/\s+/)[0] ?? '';
+      if (!primeiro || /^[+\d()\s-]+$/.test(primeiro)) return '';
+      return primeiro.charAt(0).toUpperCase() + primeiro.slice(1).toLowerCase();
+    }
     return campo.split('.').reduce<unknown>((acc, parte) => {
       if (acc && typeof acc === 'object' && parte in (acc as object)) return (acc as Record<string, unknown>)[parte];
       return undefined;
@@ -299,25 +333,36 @@ export class ExecutorService {
 
     const corpo = this.interpolar(texto, ctx);
     const conversationId = await this.acharOuCriarConversa(tenantId, contato.id, contato.nome);
-    const r = await this.mensagens.send(tenantId, conversationId, corpo, ctx.executionKey, ctx.runStartedAt);
+    // Marca a mensagem como vinda DESTA automação (migration 036) — sem isto
+    // o Inbox mostrava um envio de workflow idêntico a um atendente digitando.
+    const autor: AutorEnvio = ctx.workflowId ? { tipo: 'automacao', workflowId: ctx.workflowId } : { tipo: 'humano' };
+    const r = await this.mensagens.send(tenantId, conversationId, corpo, ctx.executionKey, ctx.runStartedAt, autor);
 
     if (r.status === 'pending') throw new Error('messaging_provider_rate_limited');
     if (r.status === 'cancelled') return { encerrar: true, saida: { status: r.status } };
     if (r.status !== 'sent') throw new UnrecoverableError(`message_delivery_${r.status}`);
 
-    // Primeiro nome para saudação ("Oii, Ana!"). Nome que é só telefone (contato
-    // criado pelo WhatsApp sem nome) vira vazio — melhor que "Olá, 5541999…!".
-    if (campo === 'contato.primeiroNome') {
-      const primeiro = (ctx.contato?.nome ?? '').trim().split(/\s+/)[0] ?? '';
-      if (!primeiro || /^[+\d()\s-]+$/.test(primeiro)) return '';
-      return primeiro.charAt(0).toUpperCase() + primeiro.slice(1).toLowerCase();
-    }
     // Gating (ADR-0008): sem credencial, a mensagem FICA GRAVADA e o passo é
     // registrado como pendente — não é erro do workflow, é credencial faltando.
     return {
       saida: { messageId: r.id, status: r.status, missing: r.missing, texto: corpo },
       contexto: { passos: { ...(ctx.passos ?? {}), [no.id]: { status: r.status } } },
     };
+  }
+
+  /**
+   * Aviso no WhatsApp da EQUIPE (não do contato). Idempotente pela chave do
+   * passo: retry do BullMQ não repete o aviso. Sem canal/credencial, o passo
+   * falha de forma explícita — aviso interno perdido em silêncio é pior.
+   */
+  private async notificarEquipe(tenantId: string, no: No, ctx: Contexto): Promise<ResultadoNo> {
+    const { telefone, texto } = no.config as { telefone: string; texto: string };
+    if (!ctx.executionKey) throw new UnrecoverableError('notificacao_equipe_sem_chave_de_execucao');
+    const corpo = this.interpolar(texto, ctx);
+    const r = await this.mensagens.notificarNumero(tenantId, soDigitos(telefone), corpo, `${ctx.executionKey}:equipe`);
+    if (r.status === 'pending') throw new Error('messaging_provider_rate_limited');
+    if (r.status !== 'sent') throw new UnrecoverableError(`notificacao_equipe_${r.status}`);
+    return { saida: { status: r.status, texto: corpo } };
   }
 
   private async acharOuCriarConversa(tenantId: string, contactId: string, nome: string): Promise<string> {
@@ -508,7 +553,7 @@ export class ExecutorService {
     try {
       const res = await fetch(alvo, {
         method: metodo ?? 'POST',
-        headers: { 'content-type': 'application/json', 'user-agent': 'OrvynOS-Automations/1.0' },
+        headers: { 'content-type': 'application/json', 'user-agent': 'KHUB-Automations/1.0' },
         body: (metodo ?? 'POST') === 'GET' ? undefined : (corpo ? this.interpolar(corpo, ctx) : JSON.stringify({ contato: ctx.contato, negocio: ctx.negocio })),
         signal: controller.signal,
       });
@@ -534,7 +579,7 @@ export class ExecutorService {
       const v = this.valorDoCampo(campo, ctx);
       return v === undefined || v === null ? '' : String(v);
     });
-  }
-}
     // Variável vazia não deixa pontuação órfã: "Oii, !" → "Oii!".
     return r.replace(/,\s*([!?.])/g, '$1').replace(/[ \t]{2,}/g, ' ');
+  }
+}

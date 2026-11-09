@@ -70,12 +70,22 @@ describe('RunsService (Sprint E — orquestração)', () => {
   });
 
   it('espera de 1 dia vira delay na fila — nada de timer na memória', async () => {
-    const a = ambiente({ noAtual: 'wait' });
-    const svc = new RunsService(a.prisma, executorQue({ esperarMs: 86_400_000 }), a.eventos, a.fila);
-    await svc.processarPasso({ tenantId: TENANT, runId: 'run1', noId: 'wait' }, 1);
+    // Relógio congelado: `avancar` grava `scheduledAt = Date.now() + delay` e
+    // `enfileirar` recalcula `scheduledAt - Date.now()` logo em seguida — com
+    // relógio real, o trabalho assíncrono entre as duas chamadas introduz um
+    // desvio de alguns ms (comportamento correto para sobreviver a restart,
+    // mas não determinístico no teste).
+    jest.useFakeTimers({ now: new Date('2026-01-01T12:00:00Z') });
+    try {
+      const a = ambiente({ noAtual: 'wait' });
+      const svc = new RunsService(a.prisma, executorQue({ esperarMs: 86_400_000 }), a.eventos, a.fila);
+      await svc.processarPasso({ tenantId: TENANT, runId: 'run1', noId: 'wait' }, 1);
 
-    expect(a.enfileirados[0].opts).toMatchObject({ delay: 86_400_000 });
-    expect(a.run.status).toBe('esperando'); // o estado está no banco: sobrevive a restart
+      expect(a.enfileirados[0].opts).toMatchObject({ delay: 86_400_000 });
+      expect(a.run.status).toBe('esperando'); // o estado está no banco: sobrevive a restart
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('IDEMPOTÊNCIA: job reentregue para um nó que já passou é ignorado', async () => {

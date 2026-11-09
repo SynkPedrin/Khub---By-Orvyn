@@ -27,7 +27,7 @@ import { PainelConfig } from '@/components/automations/PainelConfig';
 import { automations, type ConfigWorkflow, type Grafo, type MetaNo, type NoGrafo, type Problema, type Ramo, type WorkflowResumo } from '@/lib/automations';
 import { ApiError } from '@/lib/api-error';
 
-const tiposNo = { orvyn: NoCanvas };
+const tiposNo = { khub: NoCanvas };
 const rid = () => Math.random().toString(36).slice(2, 9);
 
 /** Resumo mostrado no card do canvas — o usuário entende o fluxo sem abrir cada nó. */
@@ -140,7 +140,7 @@ function EditorInterno() {
     const m = cat.find((c) => c.tipo === n.tipo);
     return {
       id: n.id,
-      type: 'orvyn',
+      type: 'khub',
       position: n.posicao,
       data: {
         tipo: n.tipo,
@@ -194,7 +194,7 @@ function EditorInterno() {
   const onDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }, []);
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    const tipo = e.dataTransfer.getData('application/orvyn-no');
+    const tipo = e.dataTransfer.getData('application/khub-no');
     if (!tipo || !rf || !wrapper.current) return;
     const m = meta(tipo);
     if (!m) return;
@@ -215,7 +215,7 @@ function EditorInterno() {
 
     const pos = posicao ?? proximaPosicao(ligarDe);
     setNodes((ns) => [...ns, {
-      id: novoId, type: 'orvyn', position: pos,
+      id: novoId, type: 'khub', position: pos,
       data: { tipo, nome: m.nome, categoria: m.categoria, resumo: resumir(tipo, config), ramos: ramosDoNo(tipo, config, m), provider: m.provider },
     }]);
     if (ligarDe) {
@@ -431,7 +431,7 @@ function EditorInterno() {
                     <div
                       key={m.tipo}
                       draggable
-                      onDragStart={(e) => { e.dataTransfer.setData('application/orvyn-no', m.tipo); e.dataTransfer.effectAllowed = 'move'; }}
+                      onDragStart={(e) => { e.dataTransfer.setData('application/khub-no', m.tipo); e.dataTransfer.effectAllowed = 'move'; }}
                       title={m.descricao}
                       className="group flex cursor-grab items-center gap-2.5 rounded-xl border border-line/60 bg-surface/50 px-2.5 py-2 text-xs font-medium text-fg transition hover:border-brand/50 hover:bg-brand/5 active:cursor-grabbing"
                     >

@@ -164,7 +164,7 @@ export class RunsService {
     const estado = run.estado as Contexto;
     // Base da trava "contato respondeu → não envia": o início do run, ou o
     // momento em que o fluxo consumiu a última resposta (Esperar resposta).
-    const ctx: Contexto = { ...estado, executionKey: `${runId}:${run.generation}:${noId}`, runStartedAt: estado.baseResposta ?? run.startedAt.toISOString() };
+    const ctx: Contexto = { ...estado, executionKey: `${runId}:${run.generation}:${noId}`, runStartedAt: estado.baseResposta ?? run.startedAt.toISOString(), workflowId: run.workflowId };
     const t0 = Date.now();
     try {
       // Janela de envio: nó que fala com o contato fora do horário é adiado, não
@@ -332,7 +332,12 @@ export class RunsService {
     for (const run of esperando) {
       const ctx = run.estado as Contexto;
 
-      if (ctx.aguardandoResposta && ctx.aguardandoResposta === run.noAtual) {
+      // `!ctx.respondeu`: se uma resposta já acordou o run mas o passo ainda não
+      // executou, uma SEGUNDA mensagem rápida do contato não pode sobrescrever
+      // `mensagem` — a condição seguinte ("resposta contém Google") precisa ler
+      // a PRIMEIRA resposta. A segunda mensagem não se perde: o próximo "Esperar
+      // resposta" a reconhece pela checagem de resposta antecipada (lastInboundAt).
+      if (ctx.aguardandoResposta && ctx.aguardandoResposta === run.noAtual && !ctx.respondeu) {
         // marca a resposta e acorda o nó AGORA — o job do timeout que existir
         // será ignorado depois, porque o run já terá avançado (noAtual muda)
         await this.prisma.withTenant(tenantId, (tx) =>

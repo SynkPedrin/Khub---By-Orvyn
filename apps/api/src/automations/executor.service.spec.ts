@@ -20,7 +20,7 @@ const CTX: Contexto = {
 
 const GRAFO: Grafo = { nos: [{ id: 'n1', tipo: 'controle.esperar', posicao: { x: 0, y: 0 }, config: {} }], arestas: [] };
 
-function ambiente(opts?: { dripCount?: number }) {
+function ambiente(opts?: { dripCount?: number; lastInboundAt?: Date | null; ultimaMsg?: string }) {
   const chamadas: Record<string, unknown[]> = { updateContact: [], createDeal: [], moveDeal: [], send: [], task: [] };
   const crm = {
     updateContact: jest.fn(async (t: string, id: string, patch: unknown) => { chamadas.updateContact.push({ t, id, patch }); return { ok: true }; }),
@@ -38,6 +38,8 @@ function ambiente(opts?: { dripCount?: number }) {
     withTenant: jest.fn(async (_t: string, work: (tx: unknown) => Promise<unknown>) =>
       work({
         conversation: { findFirst: jest.fn(async () => ({ id: 'conv1' })), create: jest.fn(async () => ({ id: 'conv1' })) },
+        contact: { findUnique: jest.fn(async () => ({ lastInboundAt: opts?.lastInboundAt ?? null })) },
+        message: { findFirst: jest.fn(async () => (opts?.ultimaMsg ? { id: 'm9', corpo: opts.ultimaMsg } : null)) },
         // drip: o UPSERT devolve a nova contagem da janela (controlável no teste)
         $queryRaw: jest.fn(async () => [{ count: opts?.dripCount ?? 1 }]),
       }),
@@ -317,5 +319,24 @@ describe('ExecutorService — notificar equipe e saudação (importação do GHL
     const semNome: Contexto = { ...comChave, contato: { ...CTX.contato!, nome: '5541999998888' } };
     await svc.executar(TENANT, no('acao.enviar_sms', { texto: 'Oii, {{contato.primeiroNome}}! Bem-vinda' }), semNome, GRAFO);
     expect((chamadas.send.at(-1) as { texto: string }).texto).toBe('Oii! Bem-vinda');
+  });
+});
+
+describe('ExecutorService — resposta que chegou ANTES da espera marcar (corrida)', () => {
+  it('resposta posterior à baseline: ramo "resposta" já na 1ª passada, com o texto', async () => {
+    const { svc } = ambiente({ lastInboundAt: new Date('2026-01-01T12:00:10Z'), ultimaMsg: 'Vi no Google' });
+    const ctx: Contexto = { ...CTX, runStartedAt: '2026-01-01T12:00:00.000Z' };
+    const r = await svc.executar(TENANT, no('controle.esperar_resposta', { duracao: 2, unidade: 'horas' }), ctx, GRAFO);
+    expect(r.ramo).toBe('resposta');
+    expect(r.contexto?.mensagem).toMatchObject({ texto: 'Vi no Google', de: 'contato' });
+    expect(typeof (r.contexto as { baseResposta?: string })?.baseResposta).toBe('string');
+  });
+
+  it('sem resposta depois da baseline: comportamento de antes (marca a espera)', async () => {
+    const { svc } = ambiente({ lastInboundAt: new Date('2026-01-01T11:00:00Z') });
+    const ctx: Contexto = { ...CTX, runStartedAt: '2026-01-01T12:00:00.000Z' };
+    const r = await svc.executar(TENANT, no('controle.esperar_resposta', { duracao: 2, unidade: 'horas' }), ctx, GRAFO);
+    expect(r.ramo).toBeUndefined();
+    expect(r.esperarMs).toBe(7_200_000);
   });
 });
