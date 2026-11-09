@@ -24,6 +24,7 @@ import { NoCanvas, ICONE, ACENTO, type DadosNo } from '@/components/automations/
 import { PainelNo } from '@/components/automations/PainelNo';
 import { PainelAdicionar } from '@/components/automations/PainelAdicionar';
 import { PainelConfig } from '@/components/automations/PainelConfig';
+import { TestarAutomacao } from '@/components/automations/TestarAutomacao';
 import { automations, type ConfigWorkflow, type Grafo, type MetaNo, type NoGrafo, type Problema, type Ramo, type WorkflowResumo } from '@/lib/automations';
 import { ApiError } from '@/lib/api-error';
 
@@ -107,6 +108,7 @@ function EditorInterno() {
   const [rf, setRf] = useState<ReactFlowInstance | null>(null);
   const [adicionar, setAdicionar] = useState<'gatilho' | 'passo' | null>(null);
   const [mostrarConfig, setMostrarConfig] = useState(false);
+  const [testando, setTestando] = useState(false);
   const [config, setConfig] = useState<ConfigWorkflow | null>(null);
   const [webhookUrl, setWebhookUrl] = useState<string | null>(null);
   const [fluxos, setFluxos] = useState<WorkflowResumo[]>([]);
@@ -127,8 +129,14 @@ function EditorInterno() {
         setConfig(wf.config);
         setWebhookUrl(wf.webhookUrl);
         const g = wf.grafo;
+        // Configs ANTES de setNodes: o autosave dispara quando `nodes` muda e
+        // serializa configs.current. Ordem errada aqui apagava a config de
+        // todos os nós ao ABRIR o editor (bug que destruiu fluxos importados).
+        configs.current = {};
+        for (const n of g.nos) configs.current[n.id] = { config: n.config, rotulo: n.rotulo, aoFalhar: n.aoFalhar };
         setNodes(g.nos.map((n) => paraNode(n, cat)));
         setEdges(g.arestas.map((a) => paraEdge(a)));
+        pularSaveDaCarga.current = true;
         carregado.current = true;
       })
       .catch(() => setAviso('Não consegui carregar o workflow.'));
@@ -159,13 +167,7 @@ function EditorInterno() {
 
   // configs vivem fora do node.data (o canvas só mostra o resumo)
   const configs = useRef<Record<string, { config: Record<string, unknown>; rotulo?: string; aoFalhar?: 'parar' | 'seguir' }>>({});
-  useEffect(() => {
-    if (!carregado.current) return;
-    automations.obter(id).then((wf) => {
-      for (const n of wf.grafo.nos) configs.current[n.id] = { config: n.config, rotulo: n.rotulo, aoFalhar: n.aoFalhar };
-    }).catch(() => undefined);
-  }, [id]);
-
+  const pularSaveDaCarga = useRef(false);
   const montarGrafo = useCallback((): Grafo => ({
     nos: nodes.map((n) => ({
       id: n.id,
@@ -181,6 +183,10 @@ function EditorInterno() {
   // ---- autosave (rascunho; nunca toca na versão publicada) ----
   useEffect(() => {
     if (!carregado.current) return;
+    if (pularSaveDaCarga.current) {
+      pularSaveDaCarga.current = false;
+      return;
+    }
     setSalvando('salvando');
     const t = setTimeout(() => {
       automations.salvar(id, montarGrafo())
@@ -399,6 +405,14 @@ function EditorInterno() {
             >
               <Icon name="settings" size={17} />
             </button>
+            <button
+              type="button"
+              onClick={() => setTestando(true)}
+              className="btn btn-soft btn-sm"
+              title="Rodar o fluxo com um contato de teste, sem esperar o gatilho"
+            >
+              <Icon name="play" size={15} /> Testar
+            </button>
             <Button onClick={publicar} className="!px-3.5 text-sm"><Icon name="check" size={15} /> Publicar</Button>
             <Link href="/automacoes" className="grid h-8 w-8 place-items-center rounded-full text-muted transition-colors hover:bg-white/40 hover:text-fg dark:hover:bg-white/10" aria-label="Fechar editor"><Icon name="close" size={18} /></Link>
           </div>
@@ -532,6 +546,15 @@ function EditorInterno() {
               setWebhookUrl(r.url);
             }}
             onFechar={() => setMostrarConfig(false)}
+          />
+        )}
+
+        {/* Teste com contato real: o run aparece passo a passo no modal */}
+        {testando && (
+          <TestarAutomacao
+            workflowId={id}
+            rotulos={Object.fromEntries(nodes.map((n) => [n.id, configs.current[n.id]?.rotulo ?? n.data.nome]))}
+            onFechar={() => setTestando(false)}
           />
         )}
 
