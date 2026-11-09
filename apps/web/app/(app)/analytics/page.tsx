@@ -19,6 +19,7 @@ import {
 import { duracao, moeda, percentual } from '@/lib/format';
 import { modoDemo } from '@/lib/demo/flag';
 import { analytics, type AiUsage, type AutomacoesStats } from '@/lib/analytics';
+import { crm, type Overview } from '@/lib/crm';
 import {
   ANALYTICS_KPIS,
   FUNIL_CONVERSAO,
@@ -48,19 +49,22 @@ export default function AnalyticsPage() {
         title="Analytics e Relatórios"
         subtitle="Dados que impulsionam um crescimento previsível."
         actions={
-          <>
-            <SeloDemo />
-            <button type="button" className="btn">
-              <Icon name="calendar" size={15} />
-              Últimos 30 dias
-              <Icon name="chevronDown" size={14} />
-            </button>
-            <button type="button" className="btn">
-              <Icon name="filter" size={15} />
-              Todos os Canais
-              <Icon name="chevronDown" size={14} />
-            </button>
-          </>
+          // Período e canal ainda não filtram os dados reais: só aparecem no demo.
+          demo ? (
+            <>
+              <SeloDemo />
+              <button type="button" className="btn">
+                <Icon name="calendar" size={15} />
+                Últimos 30 dias
+                <Icon name="chevronDown" size={14} />
+              </button>
+              <button type="button" className="btn">
+                <Icon name="filter" size={15} />
+                Todos os Canais
+                <Icon name="chevronDown" size={14} />
+              </button>
+            </>
+          ) : undefined
         }
       />
 
@@ -82,6 +86,7 @@ export default function AnalyticsPage() {
 function AnalyticsReal() {
   const [ai, setAi] = useState<AiUsage | null>(null);
   const [auto, setAuto] = useState<AutomacoesStats | null>(null);
+  const [crmDados, setCrmDados] = useState<Overview | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(false);
 
@@ -89,11 +94,13 @@ function AnalyticsReal() {
     let vivo = true;
     setCarregando(true);
     setErro(false);
-    Promise.all([analytics.aiUsage(30), analytics.automacoes(30)])
-      .then(([a, w]) => {
+    // Comercial (CRM) + IA + automações. Antes só IA/automações: com CRM cheio a tela dizia "sem dados".
+    Promise.all([analytics.aiUsage(30), analytics.automacoes(30), crm.overview()])
+      .then(([a, w, o]) => {
         if (!vivo) return;
         setAi(a);
         setAuto(w);
+        setCrmDados(o);
       })
       .catch(() => {
         if (vivo) setErro(true);
@@ -134,11 +141,47 @@ function AnalyticsReal() {
     );
   }
 
-  const semDado = (ai?.execucoes ?? 0) === 0 && (auto?.total ?? 0) === 0;
+  const temCrm = !!crmDados && (crmDados.kpis.contatos > 0 || crmDados.kpis.negocios > 0 || crmDados.kpis.ganho > 0);
+  const semDado = !temCrm && (ai?.execucoes ?? 0) === 0 && (auto?.total ?? 0) === 0;
   if (semDado) return <AnalyticsVazio />;
+  const receita = crmDados?.receitaMensal ?? [];
 
   return (
     <>
+      {crmDados && temCrm && (
+        <>
+          <h2 className="t-section mb-3">Comercial</h2>
+          <KpiGrid cols={4}>
+            <KpiCard label="Contatos" compacto value={crmDados.kpis.contatos.toLocaleString('pt-BR')} icon="users" />
+            <KpiCard label="Negócios abertos" compacto value={crmDados.kpis.negocios.toLocaleString('pt-BR')} icon="briefcase" />
+            <KpiCard label="Valor em aberto" compacto value={moeda(crmDados.kpis.valorFunil)} icon="dollar" tom="success" />
+            <KpiCard
+              label="Conversão"
+              compacto
+              value={crmDados.kpis.conversaoBase ? percentual(crmDados.kpis.conversao, 0, true) : '-'}
+              icon="target"
+              comparacao={crmDados.kpis.conversaoBase === 'fechados' ? 'ganhos sobre fechados' : crmDados.kpis.conversaoBase === 'etapa_final' ? 'na etapa final, sem fechamentos' : undefined}
+            />
+          </KpiGrid>
+          <div className="mb-6 grid gap-4 lg:grid-cols-2">
+            <Section title="Receita fechada" info="Negócios ganhos por mês, últimos 6 meses">
+              {receita.some((m) => m.valor > 0) ? (
+                <AreaReceita dados={receita.map((m) => ({ rotulo: new Date(`${m.mes}-15T12:00:00`).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''), valor: m.valor }))} />
+              ) : (
+                <p className="py-6 text-center text-sm text-muted">Ainda sem negócios ganhos nos últimos 6 meses.</p>
+              )}
+            </Section>
+            <Section title={crmDados.funilNome ? `Negócios abertos por etapa · ${crmDados.funilNome}` : 'Negócios abertos por etapa'} info="Quantidade em cada etapa do funil principal">
+              {crmDados.funil.length > 0 ? (
+                <BarrasHorizontais dados={crmDados.funil.map((f) => ({ rotulo: f.nome, valor: f.total }))} formatar={(n) => n.toLocaleString('pt-BR')} />
+              ) : (
+                <p className="py-6 text-center text-sm text-muted">Nenhum funil configurado.</p>
+              )}
+            </Section>
+          </div>
+          <h2 className="t-section mb-3">Operação e IA</h2>
+        </>
+      )}
       <KpiGrid cols={4}>
         <KpiCard label="Custo de IA (30d)" compacto value={moeda(ai?.custoUsd ?? 0, true)} icon="ai" tom="brand" />
         <KpiCard label="Execuções de IA" compacto value={(ai?.execucoes ?? 0).toLocaleString('pt-BR')} icon="sparkles" />
@@ -176,7 +219,7 @@ function AnalyticsReal() {
       <div className="card mt-4 p-5">
         <p className="flex items-start gap-2 text-[13px] text-muted">
           <Icon name="info" size={15} className="mt-0.5 shrink-0 text-faint" />
-          Receita por canal, CAC, ROI, funil de conversão e comparecimento ainda não têm cálculo definido no produto -
+          Receita por canal, CAC, ROI e comparecimento ainda não têm cálculo definido no produto, então
           preferimos não mostrar em vez de estimar. Assim que essas fórmulas existirem, aparecem aqui.
         </p>
       </div>

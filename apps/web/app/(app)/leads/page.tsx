@@ -16,6 +16,7 @@ import { crm, type Contato } from '@/lib/crm';
 import { KPIS_LEADS, LEADS, TOTAL_LEADS } from '@/lib/demo/dataset';
 import type { Lead } from '@/lib/revenue/types';
 import { PainelLead } from './PainelLead';
+import { NovoLeadModal } from '@/components/crm/NovoLeadModal';
 
 /**
  * LEADS — listagem
@@ -29,6 +30,11 @@ import { PainelLead } from './PainelLead';
  */
 export default function LeadsPage() {
   const demo = modoDemo();
+  // Estado levantado: o botão do cabeçalho e o do estado vazio abrem o mesmo
+  // modal, e a lista real recarrega quando `versao` muda.
+  const [novoAberto, setNovoAberto] = useState(false);
+  const [versao, setVersao] = useState(0);
+  const abrirNovo = () => setNovoAberto(true);
 
   return (
     <PageShell>
@@ -39,7 +45,7 @@ export default function LeadsPage() {
         actions={
           <>
             <SeloDemo />
-            <button type="button" className="btn btn-primary">
+            <button type="button" className="btn btn-primary" onClick={demo ? undefined : abrirNovo}>
               <Icon name="plus" size={16} />
               Novo Lead
             </button>
@@ -47,7 +53,17 @@ export default function LeadsPage() {
         }
       />
 
-      {demo ? <LeadsComDados /> : <LeadsReal />}
+      {demo ? <LeadsComDados /> : <LeadsReal versao={versao} onNovo={abrirNovo} />}
+
+      {!demo && novoAberto && (
+        <NovoLeadModal
+          onClose={() => setNovoAberto(false)}
+          onCreated={() => {
+            setNovoAberto(false);
+            setVersao((v) => v + 1);
+          }}
+        />
+      )}
     </PageShell>
   );
 }
@@ -346,7 +362,7 @@ function Paginacao({ mostrando, total }: { mostrando: number; total: number }) {
  * score/canal/status ricos do modelo de demo — `Contato` real não tem esses
  * campos hoje, então a tabela mostra só o que existe de verdade.
  */
-function LeadsReal() {
+function LeadsReal({ versao, onNovo }: { versao: number; onNovo: () => void }) {
   const [pagina, setPagina] = useState<{ items: Contato[]; nextCursor: string | null } | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(false);
@@ -359,7 +375,7 @@ function LeadsReal() {
       .then(setPagina)
       .catch(() => setErro(true))
       .finally(() => setCarregando(false));
-  }, []);
+  }, [versao]);
 
   const carregarMais = () => {
     if (!pagina?.nextCursor) return;
@@ -386,7 +402,7 @@ function LeadsReal() {
     );
   }
 
-  if (!pagina || pagina.items.length === 0) return <LeadsVazio />;
+  if (!pagina || pagina.items.length === 0) return <LeadsVazio onNovo={onNovo} />;
 
   return (
     <div className="card overflow-hidden">
@@ -430,7 +446,7 @@ function LeadsReal() {
   );
 }
 
-function LeadsVazio() {
+function LeadsVazio({ onNovo }: { onNovo: () => void }) {
   return (
     <div className="card">
       <EmptyState
@@ -439,7 +455,7 @@ function LeadsVazio() {
         description="Conecte um canal de entrada (WhatsApp, formulário, anúncios) ou cadastre um lead manualmente para começar."
         action={
           <div className="flex flex-wrap justify-center gap-2">
-            <button type="button" className="btn btn-primary btn-sm">
+            <button type="button" className="btn btn-primary btn-sm" onClick={onNovo}>
               <Icon name="plus" size={15} />
               Novo Lead
             </button>

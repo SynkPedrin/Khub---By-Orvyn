@@ -130,7 +130,7 @@ function DashboardReal() {
           label="Taxa de Conversão"
           value={percentual(overview.kpis.conversao, 0, true)}
           icon="chart"
-          comparacao="última etapa do funil / total de negócios"
+          comparacao={overview.kpis.conversaoBase === 'fechados' ? 'ganhos sobre negócios fechados' : overview.kpis.conversaoBase === 'etapa_final' ? 'abertos na etapa final (sem fechamentos ainda)' : 'sem negócios para calcular'}
         />
       </KpiGrid>
 
@@ -154,12 +154,21 @@ function DashboardReal() {
           )}
         </Section>
 
-        <Section title="Crescimento de Receita">
-          <EmptyState
-            icon="chart"
-            title="Ainda sem série histórica"
-            description="A evolução de receita precisa de negócios fechados ao longo do tempo para traçar a curva. Volte aqui quando tiver os primeiros fechamentos."
-          />
+        <Section title="Crescimento de Receita" info="Negócios ganhos por mês, últimos 6 meses">
+          {(overview.receitaMensal ?? []).some((m) => m.valor > 0) ? (
+            <AreaReceita
+              dados={(overview.receitaMensal ?? []).map((m) => ({
+                rotulo: new Date(`${m.mes}-15T12:00:00`).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''),
+                valor: m.valor,
+              }))}
+            />
+          ) : (
+            <EmptyState
+              icon="chart"
+              title="Ainda sem vendas fechadas"
+              description="Marque negócios como ganhos no pipeline e a curva de receita aparece aqui, mês a mês."
+            />
+          )}
         </Section>
       </div>
 

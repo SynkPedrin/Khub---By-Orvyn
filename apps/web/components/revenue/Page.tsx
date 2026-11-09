@@ -22,7 +22,6 @@ export function PageShell({ children, className }: { children: ReactNode; classN
 export function PageHeader({
   title,
   subtitle,
-  quote,
   actions,
   icon,
   className,
@@ -44,20 +43,9 @@ export function PageHeader({
         </div>
       </div>
 
-      {(quote || actions) && (
-        <div className="relative flex shrink-0 items-center gap-5">
-          {quote && (
-            <div className="hidden text-right xl:block">
-              <p className="whitespace-pre-line text-[13.5px] italic leading-relaxed text-muted">{quote}</p>
-              <div className="mt-1.5 flex items-center justify-end gap-3">
-                <span className="h-px w-8 bg-line" aria-hidden />
-                <span className="text-[10px] font-medium tracking-[0.28em] text-faint">KHUB</span>
-              </div>
-            </div>
-          )}
-          {actions && <div className="flex items-center gap-2">{actions}</div>}
-        </div>
-      )}
+      {/* Frase de efeito (`quote`) não é mais exibida (ADR-0039): decoração de
+          site de marketing dentro do sistema; o prop fica por compatibilidade. */}
+      {actions && <div className="relative flex shrink-0 items-center gap-2">{actions}</div>}
     </div>
   );
 }

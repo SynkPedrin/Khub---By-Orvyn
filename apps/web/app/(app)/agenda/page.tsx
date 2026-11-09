@@ -7,6 +7,7 @@ import { Avatar, cx } from '@/components/ui';
 import { PageShell, PageHeader } from '@/components/revenue/Page';
 import { SeloDemo } from '@/components/revenue/SeloDemo';
 import { EmptyState } from '@/components/revenue/States';
+import { AgendaReal } from '@/components/agenda/AgendaReal';
 import { hora } from '@/lib/format';
 import { modoDemo } from '@/lib/demo/flag';
 import { COMPROMISSOS, EQUIPE, TAREFAS_AGENDA } from '@/lib/demo/dataset';
@@ -35,7 +36,7 @@ export default function AgendaPage() {
         actions={<SeloDemo />}
       />
 
-      {demo ? <Calendario /> : <AgendaVazia />}
+      {demo ? <Calendario /> : <AgendaReal />}
     </PageShell>
   );
 }
@@ -522,30 +523,6 @@ function DetalheCompromisso({ compromisso, onFechar }: { compromisso: Compromiss
           </Link>
         </div>
       </div>
-    </div>
-  );
-}
-
-function AgendaVazia() {
-  return (
-    <div className="card">
-      <EmptyState
-        icon="calendar"
-        title="Sua agenda está vazia"
-        description="Reuniões, demos, calls e follow-ups aparecem aqui. Conecte o Google ou Microsoft Calendar para sincronizar o que já está agendado."
-        action={
-          <div className="flex flex-wrap justify-center gap-2">
-            <button type="button" className="btn btn-primary btn-sm">
-              <Icon name="plus" size={15} />
-              Nova reunião
-            </button>
-            <Link href="/configuracoes?aba=integracoes" className="btn btn-sm">
-              <Icon name="link" size={15} />
-              Conectar calendário
-            </Link>
-          </div>
-        }
-      />
     </div>
   );
 }

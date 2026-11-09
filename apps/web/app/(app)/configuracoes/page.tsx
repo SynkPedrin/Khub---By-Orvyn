@@ -169,7 +169,7 @@ function PersonalizacaoTab() {
             <p className="truncate text-lg font-semibold text-fg">Sua marca, do seu jeito</p>
             <p className="text-sm text-muted">Prévia ao vivo, muda conforme você escolhe.</p>
           </div>
-          <button className="btn btn-primary ml-auto hidden text-sm sm:inline-flex">Ação</button>
+          <span aria-hidden className="btn btn-primary pointer-events-none ml-auto hidden text-sm sm:inline-flex">Botão de exemplo</span>
         </div>
       </Card>
 

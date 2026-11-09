@@ -62,6 +62,18 @@ Status: `aberto` · `em correção` · `corrigido` · `não reproduz`.
 - Severidade: S2 · Status: **corrigido**
 - Correção: rotas exigem sessão validada na API (5 testes); `urlSegura()` redige `/hooks/:chave`, `/hooks/evolution/:token` e `?token=` em log, Sentry e corpo de erro (5 testes). Pendente (produto): `/conhecimento` e ⌘K ainda mostram o vault da Orvyn a qualquer usuário logado — trocar pela base RAG do tenant.
 
+### BUG-023 — Conversas e Agenda vazias no modo real (dados existiam)
+- Severidade: S1 · Status: **corrigido** (ADR-0039)
+- Reprodução: menu Conversas e Agenda fora do modo demo → sempre o estado vazio, com 405 conversas importadas / compromissos no banco. O inbox real existia em `/inbox`, fora do menu.
+
+### BUG-024 — KPIs do funil errados (fechados contados como abertos; funis misturados)
+- Severidade: S1 · Status: **corrigido** (ADR-0039, `crm/funil.ts` + 6 testes)
+- Reprodução: tenant com negócios ganhos/perdidos ou com 2 funis → "Negócios abertos" = total, "Valor em pipeline" soma perdidos, Kanban mistura etapas dos dois funis, conversão = última etapa / total.
+
+### BUG-025 — Lista de conversas carregava todas as mensagens a cada evento; não lidas nunca zeravam
+- Severidade: S2 · Status: **corrigido** (ADR-0039)
+- Reprodução: 405 conversas / 6.572 mensagens → payload de megabytes a cada mensagem nova ou a cada 5 s sem socket; abrir a conversa não baixava o contador.
+
 ### BUG-022 — Base de conhecimento de cliente nunca indexava (RLS)
 - Severidade: S1 (IA sem base própria) · Status: **corrigido** (db/033)
 - Reprodução: `POST /v1/rag/documents` de qualquer tenant → documento não gravava (`rag_documents_write` exige `app.current_tenant_id`, o serviço gravava fora do `withTenant`); e mesmo com documento, todo chunk falhava com 42501 — `rag_chunks` só tinha policy de LEITURA. Achado na importação do GHL (0 documentos de tenant existiam no banco).

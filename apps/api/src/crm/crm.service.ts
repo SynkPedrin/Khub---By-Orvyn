@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { DomainEventsService } from '../events/domain-events.service';
+import { ABERTO, escolherFunil, receitaMensal, resumirFunil, type NegocioRef } from './funil';
 
 const num = (d: Prisma.Decimal | number | null | undefined): number => (d == null ? 0 : Number(d));
 const brl = (v: number): string => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
@@ -92,34 +93,42 @@ export class CrmService {
     private readonly eventos: DomainEventsService,
   ) {}
 
+  /** Funis, etapas e negócios do tenant no formato das regras de `funil.ts`. */
+  private async baseFunil(tx: Prisma.TransactionClient) {
+    const [funis, etapas, deals] = await Promise.all([
+      tx.pipeline.findMany({ orderBy: { createdAt: 'asc' }, select: { id: true, nome: true } }),
+      tx.stage.findMany({ orderBy: { ordem: 'asc' }, select: { id: true, pipelineId: true, nome: true, cor: true, ordem: true } }),
+      tx.deal.findMany({ include: { contact: true }, orderBy: { createdAt: 'asc' } }),
+    ]);
+    const negocios: NegocioRef[] = deals.map((d) => ({ id: d.id, pipelineId: d.pipelineId, stageId: d.stageId, status: d.status, valor: num(d.valor), atualizadoEm: d.updatedAt }));
+    return { funis, etapas, deals, negocios };
+  }
+
   async overview(tenantId: string) {
     return this.prisma.withTenant(tenantId, async (tx) => {
-      const [stages, deals, contactsCount, atividades, contatosRecentes] = await Promise.all([
-        tx.stage.findMany({ orderBy: { ordem: 'asc' } }),
-        tx.deal.findMany({ include: { contact: true } }),
+      const [{ funis, etapas, negocios }, contactsCount, atividades, contatosRecentes] = await Promise.all([
+        this.baseFunil(tx),
         tx.contact.count(),
         tx.activity.findMany({ orderBy: { createdAt: 'desc' }, take: 6 }),
         tx.contact.findMany({ orderBy: { createdAt: 'desc' }, take: 5 }),
       ]);
-
-      const valorFunil = deals.reduce((s, d) => s + num(d.valor), 0);
-      const ultima = stages[stages.length - 1];
-      const ganho = deals.filter((d) => d.stageId === ultima?.id).reduce((s, d) => s + num(d.valor), 0);
-
-      const funil = stages.map((s) => {
-        const ds = deals.filter((d) => d.stageId === s.id);
-        return { id: s.id, nome: s.nome, cor: s.cor, total: ds.length, valor: ds.reduce((a, d) => a + num(d.valor), 0) };
-      });
+      const funil = escolherFunil(funis, negocios);
+      const r = funil ? resumirFunil(funil.id, etapas, negocios) : null;
 
       return {
         kpis: {
           contatos: contactsCount,
-          negocios: deals.length,
-          valorFunil,
-          ganho,
-          conversao: deals.length ? Math.round((funil[funil.length - 1]?.total / deals.length) * 100) : 0,
+          // Só ABERTOS do funil principal (antes: todos os negócios, inclusive ganhos e perdidos).
+          negocios: r?.abertos ?? 0,
+          valorFunil: r?.valorAberto ?? 0,
+          ganho: r?.valorGanho ?? 0,
+          conversao: r?.conversao ?? 0,
+          conversaoBase: r?.conversaoBase ?? null,
         },
-        funil,
+        funilNome: funil?.nome ?? null,
+        funil: r?.etapas ?? [],
+        // Receita fechada (todos os funis) por mês — base do gráfico de crescimento.
+        receitaMensal: receitaMensal(negocios, new Date()),
         atividades: atividades.map((a) => ({ actor: a.actor, acao: a.acao, tone: a.tone, createdAt: a.createdAt.toISOString() })),
         contatosRecentes: contatosRecentes.map((c) => ({ id: c.id, nome: c.nome, tag: c.tag, valor: num(c.valorEstimado) })),
       };
@@ -433,22 +442,32 @@ export class CrmService {
     return { id: c.id };
   }
 
-  async pipeline(tenantId: string) {
+  /**
+   * Quadro de UM funil (o pedido ou o principal) com os negócios ABERTOS.
+   * Ganhos/perdidos saem do quadro (antes apareciam como em andamento) e
+   * etapas de outros funis não se misturam. `pipelines` alimenta o seletor.
+   */
+  async pipeline(tenantId: string, pipelineId?: string) {
     return this.prisma.withTenant(tenantId, async (tx) => {
-      const [stages, deals] = await Promise.all([
-        tx.stage.findMany({ orderBy: { ordem: 'asc' } }),
-        tx.deal.findMany({ include: { contact: true }, orderBy: { createdAt: 'asc' } }),
-      ]);
+      const { funis, etapas, deals, negocios } = await this.baseFunil(tx);
+      const funil = escolherFunil(funis, negocios, pipelineId);
+      const abertosPorFunil = new Map<string, number>();
+      for (const n of negocios) if (n.status === ABERTO) abertosPorFunil.set(n.pipelineId, (abertosPorFunil.get(n.pipelineId) ?? 0) + 1);
       return {
-        stages: stages.map((s) => ({
-          id: s.id, nome: s.nome, cor: s.cor,
-          deals: deals
-            .filter((d) => d.stageId === s.id)
-            .map((d) => ({ id: d.id, titulo: d.titulo, contato: d.contact?.nome ?? '—', valor: num(d.valor), origem: d.origem ?? '' })),
-        })),
+        pipelineId: funil?.id ?? null,
+        pipelines: funis.map((f) => ({ id: f.id, nome: f.nome, abertos: abertosPorFunil.get(f.id) ?? 0 })),
+        stages: etapas
+          .filter((e) => e.pipelineId === funil?.id)
+          .map((s) => ({
+            id: s.id, nome: s.nome, cor: s.cor,
+            deals: deals
+              .filter((d) => d.stageId === s.id && d.status === ABERTO)
+              .map((d) => ({ id: d.id, titulo: d.titulo, contato: d.contact?.nome ?? '-', valor: num(d.valor), origem: d.origem ?? '' })),
+          })),
       };
     });
   }
+
 
   async createDeal(tenantId: string, input: CreateDealInput) {
     const r = await this.prisma.withTenant(tenantId, async (tx) => {
@@ -569,17 +588,50 @@ export class CrmService {
     });
   }
 
+  /**
+   * Lista LEVE de conversas (sem mensagens). Antes vinham todas as conversas
+   * com TODAS as mensagens a cada sincronização: com 405 conversas e 6.572
+   * mensagens (cliente real) a tela recarregava megabytes a cada evento.
+   * As mensagens de uma conversa saem de `mensagensDaConversa`.
+   */
   async listConversations(tenantId: string) {
     return this.prisma.withTenant(tenantId, async (tx) => {
       const rows = await tx.conversation.findMany({
         orderBy: { updatedAt: 'desc' },
-        include: { messages: { orderBy: { createdAt: 'asc' } } },
+        include: { contact: { select: { id: true, telefone: true, email: true } } },
       });
       return rows.map((c) => ({
         id: c.id, nome: c.nome, canal: c.canal, ultimaPrevia: c.ultimaPrevia, naoLidas: c.naoLidas, ultimaHora: c.ultimaHora,
         atendimento: c.atendimento, agentId: c.agentId, assigneeId: c.assigneeId, handoffMotivo: c.handoffMotivo,
-        mensagens: c.messages.map((m) => ({ id: m.id, de: m.autorTipo, texto: m.corpo, hora: m.hora, status: m.deliveryStatus, agentId: m.agentId })),
+        atualizadaEm: c.updatedAt.toISOString(),
+        contato: c.contact ? { id: c.contact.id, telefone: c.contact.telefone, email: c.contact.email } : null,
+        mensagens: [] as { id: string; de: string; texto: string; hora: string | null; status: string; agentId: string | null }[],
       }));
     });
   }
+
+  /** As `limite` mensagens mais recentes de UMA conversa, em ordem cronológica. */
+  async mensagensDaConversa(tenantId: string, id: string, limite = 300) {
+    return this.prisma.withTenant(tenantId, async (tx) => {
+      const conv = await tx.conversation.findFirst({ where: { id }, select: { id: true } });
+      if (!conv) throw new NotFoundException('conversa não encontrada');
+      const [total, recentes] = await Promise.all([
+        tx.message.count({ where: { conversationId: id } }),
+        tx.message.findMany({ where: { conversationId: id }, orderBy: { createdAt: 'desc' }, take: limite }),
+      ]);
+      return {
+        id, total,
+        mensagens: recentes.reverse().map((m) => ({ id: m.id, de: m.autorTipo, texto: m.corpo, hora: m.hora, status: m.deliveryStatus, agentId: m.agentId, criadaEm: m.createdAt.toISOString() })),
+      };
+    });
+  }
+
+  /** Abrir a conversa zera as não lidas (antes o contador nunca baixava). */
+  async marcarConversaLida(tenantId: string, id: string) {
+    return this.prisma.withTenant(tenantId, async (tx) => {
+      const r = await tx.conversation.updateMany({ where: { id, naoLidas: { gt: 0 } }, data: { naoLidas: 0 } });
+      return { ok: true, atualizada: r.count > 0 };
+    });
+  }
+
 }

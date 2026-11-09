@@ -45,7 +45,15 @@ export function AreaReceita({
   const { pontos, area, max, ticks } = useMemo(() => {
     if (!dados.length) return { pontos: '', area: '', max: 0, ticks: [] as number[] };
     const maxValor = Math.max(...dados.map((d) => d.valor));
-    const teto = Math.ceil(maxValor / 100_000) * 100_000 || maxValor * 1.1;
+    // Teto "redondo" proporcional ao maior valor (1, 2, 2,5, 5 ou 10 × 10^n).
+    // Antes arredondava sempre para múltiplos de R$ 100 mil: com vendas de
+    // poucos mil reais a curva ficava rente ao chão.
+    const teto = (() => {
+      if (maxValor <= 0) return 1;
+      const base = 10 ** Math.floor(Math.log10(maxValor));
+      const passo = [1, 2, 2.5, 5, 10].find((m) => m * base >= maxValor * 1.08) ?? 10;
+      return passo * base;
+    })();
     const passoX = 100 / Math.max(1, dados.length - 1);
     const coords = dados.map((d, i) => [i * passoX, 100 - (d.valor / teto) * 100] as const);
     return {

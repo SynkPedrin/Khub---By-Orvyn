@@ -16,12 +16,19 @@ export function brl(v: number): string {
 const req = clienteApi('/api/crm/');
 
 export interface Overview {
-  kpis: { contatos: number; negocios: number; valorFunil: number; ganho: number; conversao: number };
+  /** `negocios`/`valorFunil` = só ABERTOS do funil principal; `conversaoBase` diz de onde veio a taxa. */
+  kpis: { contatos: number; negocios: number; valorFunil: number; ganho: number; conversao: number; conversaoBase?: 'fechados' | 'etapa_final' | null };
+  funilNome?: string | null;
   funil: { id: string; nome: string; cor: string; total: number; valor: number }[];
+  /** Receita fechada por mês (AAAA-MM), últimos 6 meses com zeros. */
+  receitaMensal?: { mes: string; valor: number }[];
   atividades: { actor: string; acao: string; tone: string; createdAt: string }[];
   contatosRecentes: { id: string; nome: string; tag: string; valor: number }[];
 }
 export interface PipelineData {
+  /** Funil exibido e a lista de funis (seletor quando houver mais de um). */
+  pipelineId?: string | null;
+  pipelines?: { id: string; nome: string; abertos: number }[];
   stages: { id: string; nome: string; cor: string; deals: { id: string; titulo: string; contato: string; valor: number; origem: string }[] }[];
 }
 export interface Contato {
@@ -73,8 +80,12 @@ export interface Conversa {
   agentId: string | null;
   assigneeId: string | null;
   handoffMotivo: string | null;
+  /** ISO da última atividade (a lista é leve: as mensagens vêm de `crm.mensagens`). */
+  atualizadaEm?: string;
+  contato?: { id: string; telefone: string | null; email: string | null } | null;
   mensagens: { id: string; de: string; texto: string; hora: string | null; agentId?: string | null }[];
 }
+export interface MensagemConversa { id: string; de: string; texto: string; hora: string | null; status?: string; agentId?: string | null; criadaEm?: string }
 export interface EstadoAtendimento { id: string; atendimento: Atendimento; agentId: string | null; assigneeId: string | null; handoffMotivo: string | null }
 export interface Atendente { identityId: string; nome: string; email: string; role: string; abertas: number }
 
@@ -98,7 +109,7 @@ export interface SearchResult {
 export const crm = {
   overview: () => req<Overview>('overview'),
   search: (q: string) => req<SearchResult[]>(`search?q=${encodeURIComponent(q)}`),
-  pipeline: () => req<PipelineData>('pipeline'),
+  pipeline: (pipelineId?: string) => req<PipelineData>(`pipeline${pipelineId ? `?pipelineId=${encodeURIComponent(pipelineId)}` : ''}`),
 
   // ---- Contatos ----
   contacts: (opts: { q?: string; cursor?: string; limit?: number } = {}) => {
@@ -145,6 +156,9 @@ export const crm = {
   atendentes: () => req<Atendente[]>('atendentes'),
   mudarAtendimento: (id: string, body: { acao: 'assumir' | 'devolver_ia' | 'atribuir'; agentId?: string; assigneeId?: string }) =>
     req<EstadoAtendimento>(`conversations/${id}/atendimento`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+  /** Mensagens de UMA conversa (as 300 mais recentes) + total. */
+  mensagens: (conversationId: string) => req<{ id: string; total: number; mensagens: MensagemConversa[] }>(`conversations/${conversationId}/messages`),
+  marcarLida: (conversationId: string) => req<{ ok: boolean }>(`conversations/${conversationId}/lida`, { method: 'POST' }),
   sendMessage: (conversationId: string, texto: string, key: string = crypto.randomUUID()) =>
     req<SendResult>(`conversations/${conversationId}/messages`, { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': key }, body: JSON.stringify({ texto }) }),
 };

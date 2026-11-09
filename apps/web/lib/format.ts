@@ -31,7 +31,8 @@ export function moedaCurta(valor: number | null | undefined): string {
   if (valor == null || !Number.isFinite(valor)) return '-';
   const abs = Math.abs(valor);
   if (abs >= 1_000_000) return `R$ ${(valor / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}M`;
-  if (abs >= 1_000) return `R$ ${(valor / 1_000).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}K`;
+  // 1 casa abaixo de 10 mil: 2.500 vira "R$ 2,5K" (antes "R$ 3K", número errado no eixo do gráfico).
+  if (abs >= 1_000) return `R$ ${(valor / 1_000).toLocaleString('pt-BR', { maximumFractionDigits: abs < 10_000 ? 1 : 0 })}K`;
   return moeda(valor);
 }
 

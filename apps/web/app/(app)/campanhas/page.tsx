@@ -450,13 +450,13 @@ function CampanhasVazio() {
     <div className="card">
       <EmptyState
         icon="send"
-        title="Nenhuma campanha criada"
-        description="Campanhas organizam sequências de contato multicanal com a sua base. Crie a primeira para montar uma cadência de e-mail, WhatsApp e LinkedIn."
+        title="Campanhas ainda não estão disponíveis"
+        description="Enquanto isso, cadências de contato (WhatsApp, e-mail, esperas e follow-ups) são montadas em Automações, já funcionando."
         action={
-          <button type="button" className="btn btn-primary btn-sm">
-            <Icon name="plus" size={15} />
-            Nova campanha
-          </button>
+          <Link href="/automacoes" className="btn btn-primary btn-sm">
+            <Icon name="zap" size={15} />
+            Ir para Automações
+          </Link>
         }
       />
     </div>

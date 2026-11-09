@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@/components/icons';
 import { Avatar, cx } from '@/components/ui';
 import { PageShell, PageHeader, KpiGrid } from '@/components/revenue/Page';
@@ -14,6 +14,8 @@ import { modoDemo } from '@/lib/demo/flag';
 import { crm, type PipelineData } from '@/lib/crm';
 import { NEGOCIO_DETALHE, NEGOCIO_PROXIMOS_PASSOS, PIPELINE_ETAPAS, PIPELINE_KPIS } from '@/lib/demo/dataset';
 import type { CardNegocio, EtapaPipeline } from '@/lib/revenue/types';
+import { DealDrawer } from '@/components/app/DealDrawer';
+import { NovaOportunidadeModal } from '@/components/crm/NovaOportunidadeModal';
 
 /**
  * PIPELINE — Kanban de oportunidades.
@@ -27,6 +29,9 @@ import type { CardNegocio, EtapaPipeline } from '@/lib/revenue/types';
  */
 export default function PipelinePage() {
   const demo = modoDemo();
+  // Levantado para o botão do cabeçalho; o modal vive em `PipelineReal`,
+  // que conhece as etapas reais e recarrega o quadro depois de criar.
+  const [novaAberta, setNovaAberta] = useState(false);
 
   return (
     <PageShell>
@@ -34,10 +39,24 @@ export default function PipelinePage() {
         title="Pipeline de Vendas"
         subtitle="Visualize e gerencie todas as suas oportunidades em um só lugar."
         quote={'"Mais pipeline. Mais previsibilidade.\nMais receita."'}
-        actions={<SeloDemo />}
+        actions={
+          <>
+            <SeloDemo />
+            {!demo && (
+              <button type="button" className="btn btn-primary" onClick={() => setNovaAberta(true)}>
+                <Icon name="plus" size={16} />
+                Nova oportunidade
+              </button>
+            )}
+          </>
+        }
       />
 
-      {demo ? <Quadro /> : <PipelineReal />}
+      {demo ? (
+        <Quadro />
+      ) : (
+        <PipelineReal novaAberta={novaAberta} onAbrirNova={() => setNovaAberta(true)} onFecharNova={() => setNovaAberta(false)} />
+      )}
     </PageShell>
   );
 }
@@ -55,24 +74,71 @@ export default function PipelinePage() {
  * campos hoje — mostrar menos e honesto vale mais que replicar a riqueza
  * visual do demo com dado inventado.
  */
-function PipelineReal() {
+function PipelineReal({
+  novaAberta,
+  onAbrirNova,
+  onFecharNova,
+}: {
+  novaAberta: boolean;
+  onAbrirNova: () => void;
+  onFecharNova: () => void;
+}) {
   const [dados, setDados] = useState<PipelineData | null>(null);
+  const [abertoId, setAbertoId] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(false);
   const [arrastando, setArrastando] = useState<string | null>(null);
   const [alvo, setAlvo] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
 
+  // Funil exibido: vazio = o principal escolhido pela API (o com mais abertos).
+  const [funilId, setFunilId] = useState<string | undefined>(undefined);
+  const funilRef = useRef<string | undefined>(undefined);
+  funilRef.current = funilId;
+
   const carregar = useCallback(() => {
     setCarregando(true);
     setErro(false);
-    crm.pipeline()
+    crm.pipeline(funilRef.current)
       .then(setDados)
       .catch(() => setErro(true))
       .finally(() => setCarregando(false));
   }, []);
 
-  useEffect(carregar, [carregar]);
+  useEffect(carregar, [carregar, funilId]);
+
+  /**
+   * Recarga sem esqueleto: usada depois de editar no drawer ou criar uma
+   * oportunidade, para o quadro não piscar e o drawer aberto não desmontar.
+   */
+  const recarregar = useCallback(() => {
+    crm.pipeline(funilRef.current)
+      .then((d) => {
+        setDados(d);
+        setErro(false);
+      })
+      .catch(() => setAviso('Não foi possível atualizar o quadro. Recarregue a página.'));
+  }, []);
+
+  const etapas = useMemo(() => (dados?.stages ?? []).map((s) => ({ id: s.id, nome: s.nome, cor: s.cor })), [dados]);
+  const fecharDrawer = useCallback(() => setAbertoId(null), []);
+
+  const sobreposicoes = (
+    <>
+      {abertoId && <DealDrawer dealId={abertoId} stages={etapas} onClose={fecharDrawer} onChanged={recarregar} />}
+      {novaAberta && (
+        <NovaOportunidadeModal
+          stages={etapas}
+          onClose={onFecharNova}
+          onCreated={() => {
+            onFecharNova();
+            setAviso('Oportunidade criada.');
+            recarregar();
+          }}
+        />
+      )}
+    </>
+  );
 
   const mover = useCallback(
     async (dealId: string, destinoId: string) => {
@@ -103,7 +169,7 @@ function PipelineReal() {
 
   if (carregando) {
     return (
-      <div className="flex gap-3 overflow-x-auto pb-3">
+      <div className="flex gap-3 overflow-x-auto pb-3" aria-busy="true">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="w-72 shrink-0 rounded-xl border border-line bg-surface p-3">
             <div className="h-4 w-24 animate-pulse rounded bg-surface3" />
@@ -136,13 +202,36 @@ function PipelineReal() {
   }
 
   const totalDeals = dados?.stages.reduce((s, e) => s + e.deals.length, 0) ?? 0;
-  if (!dados || totalDeals === 0) return <PipelineVazio />;
+  if (!dados || totalDeals === 0) {
+    return (
+      <>
+        <PipelineVazio onNova={onAbrirNova} />
+        {sobreposicoes}
+      </>
+    );
+  }
 
   const valorTotal = dados.stages.reduce((s, e) => s + e.deals.reduce((a, d) => a + d.valor, 0), 0);
   const ticketMedio = totalDeals > 0 ? valorTotal / totalDeals : 0;
 
+  const funis = dados.pipelines ?? [];
   return (
     <>
+      {/* Mais de um funil (ex.: o padrão + um importado): troca o quadro em vez de misturar etapas. */}
+      {funis.length > 1 && (
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <label htmlFor="funil" className="text-[13px] font-medium text-muted">
+            Funil
+          </label>
+          <select id="funil" className="select w-auto min-w-[220px]" value={dados.pipelineId ?? ''} onChange={(e) => setFunilId(e.target.value)}>
+            {funis.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.nome} ({f.abertos} {f.abertos === 1 ? 'aberto' : 'abertos'})
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <KpiGrid>
         <KpiCard label="Valor em Pipeline" value={moeda(valorTotal)} icon="dollar" />
         <KpiCard label="Oportunidades" value={numero(totalDeals)} icon="briefcase" />
@@ -184,9 +273,20 @@ function PipelineReal() {
                 <div
                   key={deal.id}
                   draggable
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Abrir oportunidade ${deal.titulo}`}
                   onDragStart={() => setArrastando(deal.id)}
                   onDragEnd={() => { setArrastando(null); setAlvo(null); }}
-                  className="cursor-grab rounded-lg border border-line bg-surface2 p-2.5 active:cursor-grabbing"
+                  // Arrastar (HTML5 DnD) não dispara click: o clique simples abre o detalhe.
+                  onClick={() => setAbertoId(deal.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setAbertoId(deal.id);
+                    }
+                  }}
+                  className="cursor-pointer rounded-lg border border-line bg-surface2 p-2.5 transition-colors hover:bg-surface3 focus-visible:border-brand active:cursor-grabbing"
                 >
                   <p className="truncate text-[13px] font-semibold text-fg">{deal.titulo}</p>
                   <p className="truncate text-xs text-muted">{deal.contato}</p>
@@ -201,6 +301,8 @@ function PipelineReal() {
           </div>
         ))}
       </div>
+
+      {sobreposicoes}
     </>
   );
 }
@@ -721,7 +823,7 @@ function Detalhe({
   );
 }
 
-function PipelineVazio() {
+function PipelineVazio({ onNova }: { onNova: () => void }) {
   return (
     <div className="card">
       <EmptyState
@@ -730,7 +832,7 @@ function PipelineVazio() {
         description="Crie um funil com suas etapas de venda e comece a mover oportunidades. As métricas de conversão e ciclo aparecem automaticamente."
         action={
           <div className="flex flex-wrap justify-center gap-2">
-            <button type="button" className="btn btn-primary btn-sm">
+            <button type="button" className="btn btn-primary btn-sm" onClick={onNova}>
               <Icon name="plus" size={15} />
               Nova oportunidade
             </button>

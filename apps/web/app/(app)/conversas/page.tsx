@@ -8,6 +8,7 @@ import { PageShell, PageHeader } from '@/components/revenue/Page';
 import { SeloDemo } from '@/components/revenue/SeloDemo';
 import { Quando } from '@/components/revenue/Quando';
 import { EmptyState } from '@/components/revenue/States';
+import { InboxAtendimento } from '@/components/inbox/InboxAtendimento';
 import { CanalBadge, canalRotulo } from '@/components/revenue/lead-ui';
 import { hora, telefone as fmtTelefone } from '@/lib/format';
 import { modoDemo } from '@/lib/demo/flag';
@@ -35,17 +36,20 @@ export default function ConversasPage() {
         subtitle="Centralize todas as suas conversas em um só lugar."
         quote={'"Mais conversas. Mais oportunidades.\nMais receita."'}
         actions={
-          <>
-            <SeloDemo />
-            <button type="button" className="btn btn-primary">
-              <Icon name="plus" size={16} />
-              Nova conversa
-            </button>
-          </>
+          demo ? (
+            <>
+              <SeloDemo />
+              <button type="button" className="btn btn-primary">
+                <Icon name="plus" size={16} />
+                Nova conversa
+              </button>
+            </>
+          ) : undefined
         }
       />
 
-      {demo ? <Inbox /> : <ConversasVazio />}
+      {/* Real: inbox ligado à API (antes: sempre "Nenhuma conversa ainda" fora do demo). */}
+      {demo ? <Inbox /> : <InboxAtendimento />}
     </PageShell>
   );
 }
@@ -562,23 +566,5 @@ function ItemFiltro({
         {typeof contagem === 'number' && <span className="shrink-0 tabular text-[11.5px] text-muted">{contagem}</span>}
       </button>
     </li>
-  );
-}
-
-function ConversasVazio() {
-  return (
-    <div className="card">
-      <EmptyState
-        icon="chat"
-        title="Nenhuma conversa ainda"
-        description="Conecte o WhatsApp para começar a receber e responder mensagens aqui. Instagram, e-mail e webchat entram em seguida, a arquitetura de canais já está pronta para eles."
-        action={
-          <Link href="/configuracoes?aba=whatsapp" className="btn btn-primary btn-sm">
-            <Icon name="whatsapp" size={15} />
-            Conectar WhatsApp
-          </Link>
-        }
-      />
-    </div>
   );
 }

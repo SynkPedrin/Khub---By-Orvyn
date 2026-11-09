@@ -113,8 +113,9 @@ export class CrmController {
   }
 
   @Get('pipeline')
-  pipeline(@TenantId() tenantId: string) {
-    return this.crm.pipeline(tenantId);
+  pipeline(@TenantId() tenantId: string, @Query('pipelineId') pipelineId?: string) {
+    if (pipelineId && !/^[0-9a-f-]{36}$/i.test(pipelineId)) throw new BadRequestException('pipelineId inválido');
+    return this.crm.pipeline(tenantId, pipelineId);
   }
 
   @Post('deals')
@@ -145,6 +146,18 @@ export class CrmController {
   @Get('conversations')
   conversations(@TenantId() tenantId: string) {
     return this.crm.listConversations(tenantId);
+  }
+
+  @Get('conversations/:id/messages')
+  conversationMessages(@TenantId() tenantId: string, @Param('id', ParseUUIDPipe) id: string) {
+    return this.crm.mensagensDaConversa(tenantId, id);
+  }
+
+  /** Marcar como lida não é ação de negócio — não polui a auditoria. */
+  @SkipAudit()
+  @Post('conversations/:id/lida')
+  conversationRead(@TenantId() tenantId: string, @Param('id', ParseUUIDPipe) id: string) {
+    return this.crm.marcarConversaLida(tenantId, id);
   }
 
   /** MessagesService já audita o envio com o id da mensagem — sem linha genérica. */

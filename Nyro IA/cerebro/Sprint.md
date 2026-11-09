@@ -4,6 +4,12 @@
 
 ---
 
+## ✅ SPRINT KHUB-REAL — Auditoria de designer e o modo real funcionando  *(CONCLUÍDA — 2026-11-09)*
+> Pedido: "encontre todas as falhas de frontend que deixam o front quebrando e feio". Decisão: [[Arquitetura|ADR-0039]]. Bugs: [[Bugs|BUG-023, 024, 025]].
+- Auditoria logada no QA com volume real (152 contatos, 60 conversas/1.297 mensagens, 62 negócios, agenda, tarefas), desktop 1440 e celular 390, + varredura de botões sem ação (74).
+- Entregue: inbox real em Conversas, Agenda real, Novo Lead, Nova oportunidade, card do Pipeline abre o negócio, seletor de funil, KPIs e conversão corretos, gráfico de receita real, Analytics comercial, botões mortos do modo real ligados ou removidos, frase de efeito fora do cabeçalho.
+- **Pendências reais:** central de notificações e redefinição de senha por e-mail não existem; módulo de Campanhas não existe (aponta para Automações); filtros de período/canal do Analytics; edição de compromisso (sem endpoint); API de dev (:3333) parada até aplicar a migração 034 (da sessão de Agentes) no banco de dev.
+
 ## ✅ SPRINT KHUB-UI — Redesign premium do front real  *(CONCLUÍDA — 2026-11-08)*
 > Brief "KHUB — Premium Product Redesign". Decisão em [[Arquitetura|ADR-0036]] (revisa 0033/0034/0035).
 
