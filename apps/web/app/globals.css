@@ -1,0 +1,2445 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =====================================================================
+   KHUB REVENUE OS — DESIGN SYSTEM · LIQUID GLASS (ADR-0029)
+   =====================================================================
+   Linguagem de material baseada no Liquid Glass das Human Interface
+   Guidelines da Apple (developer.apple.com/design), traduzida para web.
+
+   Três regras mandam em tudo:
+
+   1. CAMADAS. Vidro é a camada de navegação e controle que flutua sobre
+      o conteúdo: sidebar, topbar, menus, sheets, paleta de comandos,
+      botões. O conteúdo (cards, tabelas, Kanban) usa material espesso,
+      quase sólido, porque legibilidade vem antes de efeito. Nunca vidro
+      sobre vidro: o que fica dentro de um vidro usa preenchimento
+      (`--fill-*`, `.lg-well`), não outro vidro.
+   2. CONCENTRICIDADE. Raio interno = raio externo − padding. Controles
+      são cápsulas; contêineres seguem a escala `--r-*`
+      (sidebar 28 − padding 12 = item 16).
+   3. LUZ, NÃO COR. O vidro ganha forma pelo aro de luz direcional, pelo
+      brilho especular e pela sombra, nunca por tint colorido. Tint de
+      marca só em ação primária e estado selecionado.
+
+   Acessibilidade faz parte do material: Reduzir transparência deixa
+   tudo opaco, Aumentar contraste troca o aro por borda sólida, Reduzir
+   movimento desliga springs (ver §ACESSIBILIDADE).
+
+   Os nomes de classe antigos (.glass, .glass-floating, .card,
+   .card-crystal, .btn, .input, .frost) foram mantidos e re-vestidos: as
+   chamadas existentes herdam o material novo sem reescrita.
+   ===================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* ---------- COLOR: base (grouped backgrounds) ---------- */
+  --white: #ffffff;
+  /* Paleta KHUB (ADR-0036): branco domina; off-white levemente violeta. */
+  --base-0: #ffffff;
+  --base-1: #fbfafe;
+  --base-2: #f8f8fc;
+  --base-3: #f4f3f9;
+
+  /* ---------- COLOR: label ----------
+     Valores opacos (não o rgba de secondaryLabel da Apple) para manter
+     WCAG AA sobre vidro: --text-2 dá 4.9:1 em branco. */
+  --text: #171526;
+  --text-2: #6b6980; /* #77758A do brief escurecido 1 passo: 4.5:1 sobre #F8F8FC (AA) */
+  --text-3: #6e6c82; /* Q1.7: 4.6:1 sobre #F4F3F9, 5.1:1 sobre branco (antes #8a889c, 3.4:1) */
+
+  /* ---------- COLOR: separator ---------- */
+  --border: rgba(91, 75, 130, 0.22);
+  --border-strong: rgba(91, 75, 130, 0.34);
+
+  /* ---------- COLOR: fill ----------
+     Os quatro níveis de systemFill: cinza translúcido que funciona sobre
+     qualquer superfície, inclusive dentro do vidro. 1 = mais forte. */
+  --fill-1: rgba(120, 120, 128, 0.2);
+  --fill-2: rgba(120, 120, 128, 0.16);
+  --fill-3: rgba(118, 118, 128, 0.12);
+  --fill-4: rgba(116, 116, 128, 0.07);
+
+  /* ---------- COLOR: marca (tint do app) ---------- */
+  --brand: #792eff;
+  --brand-2: #963eff;
+  --brand-highlight: #b28aff;
+  --brand-soft: #f0e8ff;
+  --brand-softer: #f8f4ff;
+  --brand-border: #e2d4ff;
+  --brand-deep: #5f1fd6;
+
+  /* ---------- COLOR: KHUB — acento secundário (NICO/IA) ----------
+     Verde-limão da marca KHUB. Só para destaque de atividade/inteligência
+     (dock da NICO, indicadores "pensando", chrome star) — nunca cor de
+     botão geral nem fundo dominante (ver globals.css §LIQUID GLASS). */
+  --khub-lime: #a7f044;
+  --khub-lime-2: #c7ff79;
+  --khub-lime-soft: #f0f9e6;
+  --khub-lime-border: #d9f2b8;
+  --khub-lime-ink: #3d6b00;
+
+  /* ---------- LUZ & ACABAMENTO KHUB (ADR-0036, revisa 0033) ----------
+     Roxo = assinatura de inteligência: ação principal, foco e estado ativo.
+     Verde = assinatura de crescimento: indicador do item ativo e sinais de
+     resultado — nunca os dois no mesmo elemento, nunca em toda borda.
+     Superfícies ganham acabamento por BORDA FINA NEUTRA + reflexo branco
+     interno + sombra suave, não por cor. */
+  --lime: var(--khub-lime);
+  --lime-edge: #8fd42a;              /* verde do brief um passo mais escuro: visível sobre branco */
+  --edge: rgba(91, 75, 130, 0.22);   /* borda padrão de superfície */
+  --edge-hover: rgba(91, 75, 130, 0.34);
+  --edge-glass: rgba(255, 255, 255, 0.85); /* aro luminoso do vidro */
+  /* Aliases do ADR-0033 mantidos (componentes antigos): agora neutros. */
+  --edge-lime: var(--edge);
+  --edge-lime-strong: var(--edge-hover);
+  --glow-purple: color-mix(in srgb, var(--brand) 26%, transparent);
+  --glow: 0 0 0 0 transparent;       /* desligado: brilho não é padrão de superfície */
+  --glow-lg: 0 10px 28px -12px color-mix(in srgb, var(--brand) 30%, transparent);
+  --light-leak: color-mix(in srgb, var(--brand) 7%, transparent);
+  --lime-leak: color-mix(in srgb, var(--lime) 8%, transparent);
+  --sh-surface: 0 1px 2px rgba(40, 25, 80, 0.05), 0 4px 14px -6px rgba(40, 25, 80, 0.08), 0 16px 44px -16px rgba(76, 29, 149, 0.2);
+  --sh-surface-hover: 0 2px 4px rgba(40, 25, 80, 0.06), 0 20px 52px -14px rgba(76, 29, 149, 0.3);
+  --hl-inset: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+
+  /* ---------- COLOR: semânticas (system colors, variante acessível) ---------- */
+  --success: #248a3d;
+  --success-soft: #eaf6ed;
+  --success-border: #cbe9d3;
+  --warning: #c93400;
+  --warning-soft: #fdf1ea;
+  --warning-border: #f7d9c7;
+  --danger: #d70015;
+  --danger-soft: #fdedee;
+  --danger-border: #f8d0d3;
+  --info: #0066cc;
+  --info-soft: #ebf3fd;
+  --info-border: #cfe1f8;
+
+  /* ---------- COLOR: séries categóricas de gráfico ----------
+     Ordem FIXA — a 5ª série vira "Outros" ou small multiples, nunca um hue
+     gerado. Validada com o verificador de daltonismo/contraste: todos os
+     seis checks PASS em light. Não alterar sem re-rodar a validação. */
+  --cat-1: #6c2bff;
+  --cat-2: #b45309;
+  --cat-3: #0284c7;
+  --cat-4: #047857;
+
+  /* ---------- COLOR: canais (usados em badges/gráficos) ---------- */
+  --ch-whatsapp: #25d366;
+  --ch-instagram: #e1306c;
+  --ch-email: #6c2bff;
+  --ch-linkedin: #0a66c2;
+  --ch-site: #5f6175;
+
+  /* ---------- RADIUS (concêntrico) ---------- */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+  --r-2xl: 28px;
+  --r-full: 999px;
+
+  /* ---------- SPACING (grid 4pt) ---------- */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+  --s-12: 48px;
+
+  /* ---------- SHADOW (difusas, neutras, em camadas) ---------- */
+  /* Sombras suaves e realistas (ADR-0036): tinta índigo profunda em baixa
+     opacidade — profundidade sem "sujar" o branco nem virar brilho. */
+  --sh-xs: 0 1px 2px rgba(40, 25, 80, 0.04);
+  --sh-sm: 0 1px 2px rgba(40, 25, 80, 0.04), 0 4px 14px -4px rgba(40, 25, 80, 0.06);
+  --sh-md: 0 2px 6px rgba(40, 25, 80, 0.04), 0 10px 28px -8px rgba(40, 25, 80, 0.09);
+  --sh-lg: 0 4px 12px rgba(40, 25, 80, 0.05), 0 20px 48px -12px rgba(40, 25, 80, 0.12);
+  --sh-pop: 0 8px 24px rgba(40, 25, 80, 0.08), 0 32px 80px -12px rgba(40, 25, 80, 0.16);
+
+  /* ---------- LIQUID GLASS ----------
+     regular  → navegação e controles (sidebar, topbar, toolbars)
+     clear    → sobre mídia rica (imagem/vídeo de fundo); precisa de dim
+     dense    → sheets e paletas com conteúdo denso (legibilidade)
+     popover  → menus e popovers sobre conteúdo
+     control  → botões de vidro sobre conteúdo (sem blur: área pequena)
+
+     O aro é LUZ DIRECIONAL em box-shadow inset (topo mais forte, base
+     fraca, brilho interno que imita a lente na borda). Sem pseudo-
+     elemento: não rola junto com conteúdo e não exige `position`. */
+  --lg-fill: rgba(255, 255, 255, 0.72);
+  --lg-fill-clear: rgba(255, 255, 255, 0.2);
+  --lg-fill-dense: rgba(251, 251, 253, 0.84);
+  --lg-fill-popover: rgba(255, 255, 255, 0.86);
+  --lg-fill-control: rgba(255, 255, 255, 0.72);
+  --lg-fill-control-hover: rgba(255, 255, 255, 0.94);
+  --lg-blur: 24px;
+  --lg-saturate: 145%;
+  --lg-brightness: 1.04;
+  --lg-edge: rgba(91, 75, 130, 0.2);
+  --lg-edge-soft: rgba(91, 75, 130, 0.14);
+  --lg-highlight:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.85),
+    inset 1px 0 0 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.25),
+    inset -1px 0 0 0 rgba(255, 255, 255, 0.2),
+    inset 0 0 20px 0 rgba(255, 255, 255, 0.22);
+  --lg-highlight-control:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.9),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.5);
+  --lg-shadow: 0 1px 2px rgba(40, 25, 80, 0.05), 0 18px 48px -18px rgba(76, 29, 149, 0.24);
+  --lg-shadow-control: 0 1px 2px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --lg-specular: rgba(255, 255, 255, 0.7);
+  --lg-dim: rgba(23, 21, 38, 0.24);
+
+  /* Material de CONTEÚDO (thick material): cards, tabelas, Kanban. */
+  /* ADR-0036: conteúdo quase sólido (legibilidade); o vidro fica no shell e nos StatCards. */
+  --mat-thick: rgba(255, 255, 255, 0.9);
+  --mat-blur: 16px;
+
+  /* Campos de formulário e segmented control */
+  --field-bg: rgba(255, 255, 255, 0.78);
+  --field-border: rgba(0, 0, 0, 0.1);
+  --seg-thumb: #ffffff;
+
+  /* Aliases do material anterior (não usar em código novo) */
+  --glass-crystal: var(--lg-fill);
+  --glass-floating: var(--lg-fill);
+  --glass-dense: var(--mat-thick);
+  --glass-accent: color-mix(in srgb, var(--brand) 12%, transparent);
+  --glass-border: var(--lg-edge);
+  --glass-border-subtle: var(--lg-edge-soft);
+  --glass-shadow: var(--lg-shadow);
+  --glass-blur-sm: 12px;
+  --glass-blur-md: 20px;
+  --glass-blur-lg: var(--lg-blur);
+  --radius-floating: var(--r-2xl);
+
+  /* ---------- MOTION ----------
+     Curva padrão da Apple para transições e uma "spring" com leve
+     overshoot para press/hover e entrada de sheets. */
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  --dur-slow: 320ms;
+  --dur-page: 320ms;
+  --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.36, 0.64, 1);
+
+  /* ---------- Z-INDEX ---------- */
+  --z-base: 0;
+  --z-sticky: 20;
+  --z-sidebar: 30;
+  --z-topbar: 40;
+  --z-dropdown: 50;
+  --z-drawer: 60;
+  --z-modal: 70;
+  --z-toast: 80;
+
+  /* ---------- FOCUS ---------- */
+  --ring: color-mix(in srgb, var(--brand) 26%, transparent);
+
+  /* ---------- LAYOUT ---------- */
+  --sidebar-w: 236px;
+  --topbar-h: 64px;
+
+  /* ---------- LP marketing ("/") — paleta do brand book ----------
+     Mesma marca do produto (--brand = #6c2bff), fixada aqui na variante
+     clara de marketing (#7B2EFF) usada também nas telas de auth
+     (AuthShell/.btn-auth-primary já usam este hex literal — aqui vira
+     token para não duplicar o valor de novo). */
+  --offwhite: #f8f6f2;
+  --ink: #151219;
+  --amethyst: #7b2eff;
+  --amethyst-deep: #5a20d9;
+  --amethyst-glow: #a855f7;
+  --amethyst-highlight: #c084fc;
+  --amethyst-soft: #f4efff;
+  --amethyst-softer: #faf7ff;
+  --amethyst-border: #e4d8ff;
+
+  /* ---------- Aliases de compatibilidade (código legado) ---------- */
+  --bg: var(--base-2);
+  --surface: var(--base-0);
+  --surface-2: var(--base-1);
+  --surface-3: var(--base-3);
+  --muted: var(--text-2);
+  --brand-bright: var(--brand-2);
+  --lilac: var(--brand-2);
+  --radius: var(--r-xl);
+  --radius-sm: var(--r-lg);
+  --radius-xs: var(--r-md);
+  --font-apple: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue';
+  --font-display: var(--font-sans), var(--font-apple), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ---------------------------------------------------------------------
+   DARK MODE — opt-in, nunca a identidade principal.
+   Preto profundo com superfícies elevadas em cinza de sistema; o vidro
+   escurece e o aro de luz fica bem mais contido.
+   --------------------------------------------------------------------- */
+:root[data-theme='dark'],
+.dark {
+  color-scheme: dark;
+
+  --base-0: #1c1c1e;
+  --base-1: #111113;
+  --base-2: #0a0a0c;
+  --base-3: #2c2c2e;
+  --text: #f5f5f7;
+  --text-2: #a1a1a6;
+  --text-3: #98989d; /* Q1.7: 4.85:1 sobre #2C2C2E, 5.9:1 sobre #1C1C1E */
+  --border: #2c2c2e;
+  --border-strong: #3a3a3c;
+  --fill-1: rgba(120, 120, 128, 0.36);
+  --fill-2: rgba(120, 120, 128, 0.32);
+  --fill-3: rgba(118, 118, 128, 0.24);
+  --fill-4: rgba(118, 118, 128, 0.16);
+  --brand: #963eff;
+  --brand-2: #b28aff;
+  --brand-soft: #1f1733;
+  --brand-softer: #17121f;
+  --brand-border: #33264f;
+  --khub-lime: #a7f044;
+  --khub-lime-soft: #26300a;
+  --khub-lime-border: #3d4d12;
+  --khub-lime-ink: #e8ffb0;
+  /* ADR-0036 no escuro: borda clara fina, verde e roxo só como sinal. */
+  --lime-edge: #a7f044;
+  --edge: rgba(255, 255, 255, 0.08);
+  --edge-hover: rgba(255, 255, 255, 0.16);
+  --edge-glass: rgba(255, 255, 255, 0.1);
+  --glow-purple: color-mix(in srgb, var(--brand) 40%, transparent);
+  --glow-lg: 0 10px 30px -12px color-mix(in srgb, var(--brand) 45%, transparent);
+  --light-leak: color-mix(in srgb, var(--brand) 12%, transparent);
+  --lime-leak: transparent;
+  --sh-surface: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 32px rgba(0, 0, 0, 0.35);
+  --sh-surface-hover: 0 2px 4px rgba(0, 0, 0, 0.35), 0 14px 40px rgba(0, 0, 0, 0.45);
+  --hl-inset: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --success: #30d158;
+  --success-soft: #0f2417;
+  --success-border: #1b3f27;
+  --warning: #ff9f0a;
+  --warning-soft: #2a1c08;
+  --warning-border: #4a3110;
+  --danger: #ff453a;
+  --danger-soft: #2c1211;
+  --danger-border: #4d1f1c;
+  --info: #0a84ff;
+  --info-soft: #0b1d33;
+  --info-border: #133559;
+  --sh-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --sh-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --sh-md: 0 4px 12px rgba(0, 0, 0, 0.45);
+  --sh-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
+  --sh-pop: 0 16px 48px rgba(0, 0, 0, 0.65);
+
+  --lg-fill: rgba(30, 30, 32, 0.52);
+  --lg-fill-clear: rgba(30, 30, 32, 0.18);
+  --lg-fill-dense: rgba(28, 28, 30, 0.86);
+  --lg-fill-popover: rgba(36, 36, 38, 0.88);
+  --lg-fill-control: rgba(58, 58, 60, 0.55);
+  --lg-fill-control-hover: rgba(72, 72, 74, 0.7);
+  --lg-brightness: 1;
+  --lg-edge: rgba(255, 255, 255, 0.08);
+  --lg-edge-soft: rgba(255, 255, 255, 0.06);
+  --lg-highlight:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.14),
+    inset 1px 0 0 0 rgba(255, 255, 255, 0.05),
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.04),
+    inset -1px 0 0 0 rgba(255, 255, 255, 0.03),
+    inset 0 0 20px 0 rgba(255, 255, 255, 0.03);
+  --lg-highlight-control: inset 0 1px 0 0 rgba(255, 255, 255, 0.12);
+  --lg-shadow: 0 1px 1px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35), 0 24px 64px rgba(0, 0, 0, 0.35);
+  --lg-shadow-control: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --lg-specular: rgba(255, 255, 255, 0.14);
+  --lg-dim: rgba(0, 0, 0, 0.5);
+  --mat-thick: rgba(26, 24, 34, 0.88);
+  --field-bg: rgba(118, 118, 128, 0.16);
+  --field-border: rgba(255, 255, 255, 0.1);
+  --seg-thumb: #636366;
+  --ring: color-mix(in srgb, var(--brand) 40%, transparent);
+
+  /* Séries categóricas do dark: passos PRÓPRIOS, não a inversão dos claros.
+     A banda de luminosidade do dark é mais estreita (L 0.48–0.67) e os
+     valores do light reprovam nela. Validados: seis checks PASS. */
+  --cat-1: #8b5cf6;
+  --cat-2: #d97706;
+  --cat-3: #0284c7;
+  --cat-4: #0fa97b;
+}
+
+/* =====================================================================
+   RESET / BASE
+   ===================================================================== */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+}
+
+html {
+  background-color: var(--base-2);
+}
+
+body {
+  background-color: var(--base-2);
+  color: var(--text);
+  /* SF Pro em Mac/iOS (o próprio sistema da Apple); Inter no resto. */
+  /* ADR-0036: Inter primeiro (prioridade 1 do brief, já carregada via next/font). */
+  font-family: var(--font-sans), var(--font-apple), ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--brand) 22%, transparent);
+}
+
+/* =====================================================================
+   TIPOGRAFIA
+   Hierarquia da Apple: Large Title pesado, títulos em semibold, corpo
+   neutro, legenda discreta. Tracking negativo só nos tamanhos grandes.
+   ===================================================================== */
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  color: var(--text);
+  font-weight: 650;
+  letter-spacing: -0.017em;
+}
+
+h1 {
+  font-size: 30px;
+  line-height: 1.15;
+  font-weight: 650;
+  letter-spacing: -0.022em;
+}
+h2 {
+  font-size: 20px;
+  line-height: 1.25;
+}
+h3 {
+  font-size: 16px;
+  line-height: 1.3;
+  letter-spacing: -0.012em;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Escala tipográfica utilitária */
+.t-display {
+  font-size: 30px;
+  font-weight: 650;
+  letter-spacing: -0.022em;
+  line-height: 1.15;
+}
+.t-title {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.017em;
+}
+.t-section {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+}
+.t-body {
+  font-size: 14px;
+  font-weight: 400;
+}
+.t-label {
+  font-size: 13px;
+  font-weight: 500;
+}
+.t-caption {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-2);
+}
+.t-micro {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--text-2);
+}
+/* Número de KPI: o elemento com mais peso visual da tela */
+.t-kpi {
+  font-size: 30px;
+  font-weight: 650;
+  letter-spacing: -0.026em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.text-muted {
+  color: var(--text-2);
+}
+
+/* =====================================================================
+   FOCUS / ACESSIBILIDADE
+   ===================================================================== */
+
+/* Em `@layer base` para `outline-none`/`focus-visible:*` do Tailwind
+   poderem sobrescrever (ex.: o campo da paleta ⌘K, cujo contexto de foco
+   é o próprio sheet). Sem `border-radius` aqui: o outline já acompanha o
+   raio do elemento, e forçar um raio deformava as cápsulas ao focar. */
+@layer base {
+  :focus-visible {
+    outline: 3px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Foco por teclado apenas: o mouse não desenha anel */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Pular para o conteúdo — primeiro tab-stop da página */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 8px;
+  z-index: var(--z-toast);
+  padding: 10px 16px;
+  border-radius: var(--r-full);
+  background: var(--brand);
+  color: #fff;
+  font-weight: 600;
+}
+.skip-link:focus {
+  left: 8px;
+}
+
+/* =====================================================================
+   LP MARKETING ("/") — utilitárias portadas de `LP REVENUE/site`.
+   Escopadas por nome (prefixo/sufixo próprio quando colide com algo já
+   usado no resto do produto) para não interferir no app autenticado.
+   ===================================================================== */
+.container-px {
+  padding-left: clamp(20px, 5vw, 96px);
+  padding-right: clamp(20px, 5vw, 96px);
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+.dot-grid {
+  background-image: radial-gradient(rgba(21, 18, 25, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* =====================================================================
+   CAMADA DE COMPONENTES
+   =====================================================================
+   Tudo daqui para baixo vive em `@layer components` para que as
+   utilitárias do Tailwind SEMPRE vençam. Sem a layer, `.select{width:100%}`
+   derrota `w-auto` (mesma especificidade, e este arquivo vem depois das
+   utilities) — foi exatamente o que quebrou a barra de ferramentas de Leads
+   em três linhas. Dentro da layer, `class="select w-auto"` faz o esperado.
+   Nenhuma classe de material define `position` (BUG-013).
+   ===================================================================== */
+
+@layer components {
+  /* =====================================================================
+     SUPERFÍCIES DE CONTEÚDO (thick material)
+     ===================================================================== */
+
+  .card {
+    min-width: 0;
+    /* Material espesso: `.card` é a superfície universal (Section/
+       PageShell), inclusive por trás de tabelas e Kanban densos. Quase
+       sólido — conteúdo é protagonista, não o efeito.
+       Sprint Q1.7 (ADR-0036 "nada de borda limão em toda superfície"):
+       superfície neutra quase opaca, borda `--border` fina, sombra suave.
+       SEM papel de parede e SEM backdrop-filter dentro do card: o desfoque
+       fica só no shell, popovers e modais. Limão só como acento (foco,
+       item ativo, sucesso). */
+    background: var(--mat-thick);
+    border: 1px solid var(--border);
+    border-radius: var(--r-xl);
+    box-shadow:
+      var(--hl-inset),
+      0 1px 2px rgba(40, 25, 80, 0.04),
+      0 8px 24px -16px rgba(40, 25, 80, 0.14);
+    transition:
+      box-shadow var(--dur) var(--ease),
+      border-color var(--dur) var(--ease),
+      transform var(--dur) var(--ease);
+  }
+  .card:hover {
+    border-color: var(--border-strong);
+    box-shadow:
+      var(--hl-inset),
+      0 1px 2px rgba(40, 25, 80, 0.05),
+      0 12px 32px -18px rgba(40, 25, 80, 0.2);
+  }
+  .card:hover { border-color: var(--edge-hover); }
+
+  /* StatCard / GlassCard — indicadores e cards de destaque (Dashboard,
+     Agency Home). Vidro de verdade: pouco texto, número grande. Reflexo
+     roxo quase imperceptível no canto e um traço de luz no topo. */
+  .card-crystal {
+    position: relative;
+    isolation: isolate;
+    border: 1px solid var(--edge);
+    border-radius: var(--r-xl);
+    box-shadow: var(--sh-surface);
+    transition:
+      border-color var(--dur) var(--ease),
+      box-shadow var(--dur) var(--ease);
+  }
+  .card-crystal:hover {
+    border-color: var(--edge-hover);
+    box-shadow: var(--sh-surface-hover);
+  }
+  /* Traço de luz no topo (a borda "pega" a luz de cima). */
+  .card-crystal::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent 10%, rgba(255, 255, 255, 0.95) 50%, transparent 90%) top / 100% 1px no-repeat;
+  }
+  .card-crystal::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background:
+      radial-gradient(320px circle at var(--lg-x, 50%) var(--lg-y, -40%), color-mix(in srgb, var(--brand) var(--spot), transparent), transparent 46%),
+      radial-gradient(90% 120% at 0% 0%, var(--light-leak), transparent 60%),
+      var(--mat-thick);
+    transition: --spot var(--dur-slow) var(--ease);
+    /* Q1.7: sem backdrop-filter (só shell, popovers e modais desfocam). */
+    box-shadow: var(--lg-highlight);
+  }
+
+  /* =====================================================================
+     LIQUID GLASS — camada de navegação e controle
+     ===================================================================== */
+
+  /* Regular — superfícies do SHELL (sidebar, topbar, hero cards).
+     O material mora num ::before, não no elemento: um elemento com
+     backdrop-filter vira "backdrop root" e nenhum descendente consegue
+     desfocar o que está atrás dele (o menu da conta, dentro da topbar,
+     mostrava a página nítida por baixo). Com o vidro no pseudo, o
+     elemento fica livre e os popovers filhos desfocam a página.
+     Só para superfícies que NÃO rolam: o ::before rolaria junto. */
+  .lg,
+  .glass-floating {
+    position: relative;
+    isolation: isolate;
+    border: 1px solid var(--lg-edge);
+    box-shadow: var(--lg-shadow);
+  }
+  .lg::before,
+  .glass-floating::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background: var(--lg-surface, var(--lg-fill));
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate)) brightness(var(--lg-brightness));
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate)) brightness(var(--lg-brightness));
+    box-shadow: var(--lg-highlight);
+  }
+
+  /* `.glass` (legado): mesmo material, aplicado direto — é usado em
+     barras que podem rolar (nav de Configurações no mobile). */
+  .glass {
+    background: var(--lg-surface, var(--lg-fill));
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate)) brightness(var(--lg-brightness));
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate)) brightness(var(--lg-brightness));
+    border: 1px solid var(--lg-edge);
+    box-shadow: var(--lg-highlight), var(--lg-shadow);
+  }
+
+  /* Variantes: trocam só o preenchimento (vale para .lg e .glass). */
+  .lg-clear {
+    --lg-surface: var(--lg-fill-clear);
+  }
+  .lg-dense {
+    --lg-surface: var(--lg-fill-dense);
+  }
+  .lg-tinted {
+    --lg-surface: color-mix(in srgb, var(--brand) 16%, var(--lg-fill));
+  }
+
+  /* Preenchimento DENTRO de um vidro (nunca vidro sobre vidro). */
+  .lg-well {
+    background: var(--fill-4);
+    border-radius: var(--r-lg);
+    box-shadow: inset 0 0 0 1px var(--lg-edge-soft);
+  }
+
+  /* Popover / menu sobre conteúdo. `.frost` é o alias legado. */
+  .lg-popover,
+  .frost {
+    background: var(--lg-fill-popover);
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    border: 1px solid var(--lg-edge);
+    border-radius: var(--r-lg);
+    box-shadow: var(--lg-highlight), var(--sh-pop);
+  }
+
+  .lg-menu-item {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--r-md);
+    color: var(--text-2);
+    font-size: 13.5px;
+    font-weight: 500;
+    text-align: left;
+    transition:
+      background var(--dur-fast) var(--ease),
+      color var(--dur-fast) var(--ease);
+  }
+  .lg-menu-item:hover {
+    background: var(--fill-3);
+    color: var(--text);
+  }
+
+  /* Sheet: modal, drawer, paleta de comandos. Sobe com spring. */
+  .lg-sheet {
+    background: var(--lg-fill-dense);
+    -webkit-backdrop-filter: blur(32px) saturate(var(--lg-saturate));
+    backdrop-filter: blur(32px) saturate(var(--lg-saturate));
+    border: 1px solid var(--edge-glass);
+    border-radius: var(--r-2xl);
+    box-shadow: 0 0 0 1px var(--lg-edge-soft), var(--lg-highlight), var(--sh-pop);
+  }
+
+  /* Sheet lateral (inspector): flutua com margem, não cola na borda. */
+  .lg-sheet-side {
+    margin: 8px;
+    height: calc(100% - 16px);
+  }
+
+  /* Camada de escurecimento atrás de sheets. A Apple escurece, não borra.
+     Anima a COR, nunca `opacity`: ancestral com opacidade animada vira
+     backdrop root e o sheet de vidro perde o desfoque. */
+  .lg-backdrop {
+    /* `!important`: o overlay costuma nascer dentro de um `space-y-*`, que
+       injetaria margem e deixaria uma faixa sem escurecer no topo. */
+    margin: 0 !important;
+    background-color: var(--lg-dim);
+    /* ADR-0036: desfoque leve atrás do modal (o próprio backdrop desfoca; o
+       sheet é irmão, não descendente — continua com o vidro dele). */
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    animation: lg-dim-in var(--dur) var(--ease) backwards;
+  }
+
+  @keyframes lg-dim-in {
+    from {
+      background-color: transparent;
+    }
+  }
+
+  /* Brilho especular que segue o ponteiro (ver components/shell/GlassLight).
+     Fica ATRÁS do texto: o elemento isola o próprio stacking context e o
+     brilho entra com z-index -1, acima do fundo e abaixo do conteúdo. */
+  .lg-interactive {
+    position: relative;
+    isolation: isolate;
+  }
+  .lg-interactive::after,
+  .btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background: radial-gradient(
+      90px circle at var(--lg-x, 50%) var(--lg-y, -30%),
+      var(--lg-specular),
+      transparent 70%
+    );
+    opacity: 0;
+    transition: opacity var(--dur-slow) var(--ease);
+  }
+  .lg-interactive:hover::after,
+  .btn:hover:not(:disabled)::after {
+    opacity: 1;
+  }
+
+  /* Seleção / estado ativo: tint de marca discreto, nunca decorativo. */
+  .glass-accent {
+    background: color-mix(in srgb, var(--brand) 14%, transparent);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--brand) 22%, transparent),
+      0 8px 20px -10px color-mix(in srgb, var(--brand) 50%, transparent);
+  }
+
+  /* =====================================================================
+     BACKGROUND GLOBAL (ADR-0037, rev. 2026-11-09) — o papel de parede saiu
+     do fundo (e, no Q1.7, também dos cards). O ambiente agora é só ILUMINAÇÃO: feixes
+     roxo/lima sobre o off-white, estáveis (não animam). Montado uma vez em
+     app/(app)/layout.tsx.
+     ===================================================================== */
+  .ambient-bg {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-base);
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse 74% 64% at 6% 0%, rgba(121, 46, 255, 0.055), transparent 62%),
+      radial-gradient(ellipse 56% 46% at 94% 2%, rgba(150, 62, 255, 0.035), transparent 60%),
+      radial-gradient(ellipse 56% 50% at 98% 94%, rgba(167, 240, 68, 0.035), transparent 62%),
+      radial-gradient(ellipse 46% 42% at 0% 100%, rgba(121, 46, 255, 0.025), transparent 60%),
+      linear-gradient(180deg, var(--base-1), var(--base-2)),
+      var(--base-2);
+  }
+
+  /* Dark: mesma superfície neutra, borda clara fina (Q1.7). */
+  :root[data-theme='dark'] .card,
+  .dark .card {
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  :root[data-theme='dark'] .ambient-bg,
+  .dark .ambient-bg {
+    background:
+      radial-gradient(ellipse 70% 60% at 6% 0%, rgba(121, 46, 255, 0.2), transparent 62%),
+      radial-gradient(ellipse 60% 55% at 98% 94%, rgba(167, 240, 68, 0.1), transparent 62%),
+      var(--base-2);
+  }
+
+
+  /* =====================================================================
+     FLOATING NAVIGATION — sidebar/topbar flutuantes sobre o ambient.
+     Raio 28 com padding 12 ⇒ itens com raio 16 (concêntrico).
+     ===================================================================== */
+  .nav-floating {
+    border-radius: var(--r-2xl);
+  }
+
+  /* Aro mais nítido que o `.glass-floating` padrão: sidebar/topbar
+     flutuam sobre o ambient colorido (roxo+limão), onde o aro de 6%
+     de opacidade some de vista. Especificidade de duas classes vence
+     `.lg, .glass-floating` independente da ordem no arquivo. */
+  .glass-floating.nav-floating {
+    /* ADR-0036 (rev.): aro branco luminoso + contorno neutro nítido +
+       sombra com luz roxa da marca — o shell flutua de verdade. */
+    border-color: var(--edge-glass);
+    box-shadow:
+      0 0 0 1px var(--lg-edge-soft),
+      0 24px 60px -28px rgba(76, 29, 149, 0.35),
+      var(--lg-shadow);
+  }
+
+  .nav-floating-item {
+    position: relative;
+    border-radius: var(--r-lg);
+  }
+
+  /* Item ativo da sidebar: o indicador (glass-accent animado) ganha barra
+     limão à esquerda e brilho roxo — o "onde estou" fica inconfundível. */
+  .nav-floating-item > .glass-accent::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 22%;
+    bottom: 22%;
+    width: 3px;
+    border-radius: var(--r-full);
+    background: var(--lime-edge);
+  }
+  /* A barra limão já vem do indicador animado; aqui só cor/peso (sem a
+     barra inset de `.nav-item` ativo, que duplicaria). */
+  .nav-floating-item.nav-item[aria-current='page'] {
+    color: var(--brand);
+    font-weight: 600;
+    box-shadow: none;
+  }
+
+  /* Sidebar com contorno definido: o aro luminoso padrão do vidro some
+     sobre o ambient roxo/limão. Aqui a borda é neutra e nítida, com filete
+     de luz interno em cima e um toque de marca só na sombra. */
+  .glass-floating.nav-floating.sidebar-shell {
+    /* Q1.7: contorno neutro; o limão fica só no item ativo. */
+    border-color: var(--edge-hover);
+    box-shadow:
+      0 0 0 1px var(--lg-edge-soft),
+      var(--hl-inset),
+      0 20px 48px -24px rgba(76, 29, 149, 0.4),
+      var(--lg-shadow);
+  }
+
+  /* Divisórias internas da sidebar: marca / grupos / rodapé. */
+  .sidebar-hairline {
+    border-color: var(--border);
+  }
+
+  /* =====================================================================
+     ORBE DA NICO — viva: a forma respira e muda como uma gosma, a estrela
+     balança dentro e o brilho pulsa junto. O bloco global de
+     prefers-reduced-motion já zera as durações.
+     ===================================================================== */
+  @keyframes nico-blob {
+    0%,
+    100% {
+      border-radius: 58% 42% 55% 45% / 48% 55% 45% 52%;
+      transform: scale(1) rotate(0deg);
+    }
+    25% {
+      border-radius: 45% 55% 48% 52% / 55% 45% 58% 42%;
+      transform: scale(1.035) rotate(1.5deg);
+    }
+    50% {
+      border-radius: 55% 45% 42% 58% / 45% 52% 48% 55%;
+      transform: scale(0.985) rotate(-1deg);
+    }
+    75% {
+      border-radius: 48% 52% 58% 42% / 52% 45% 55% 48%;
+      transform: scale(1.02) rotate(1deg);
+    }
+  }
+  @keyframes nico-star-sway {
+    0%,
+    100% {
+      transform: rotate(-4deg) scale(1) translate(0, 0);
+    }
+    33% {
+      transform: rotate(3.5deg) scale(1.07) translate(2%, -2.5%);
+    }
+    66% {
+      transform: rotate(-2.5deg) scale(0.96) translate(-2%, 1.5%);
+    }
+  }
+  @keyframes nico-glow {
+    0%,
+    100% {
+      opacity: 0.55;
+      transform: scale(0.96);
+    }
+    50% {
+      opacity: 0.95;
+      transform: scale(1.12);
+    }
+  }
+  .nico-orbe {
+    animation: nico-blob 9s ease-in-out infinite;
+  }
+  .nico-orbe-estrela {
+    animation: nico-star-sway 7s ease-in-out infinite;
+  }
+  .nico-orbe-halo {
+    animation: nico-glow 5s ease-in-out infinite;
+  }
+
+  .card-flat {
+    background: var(--base-0);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+  }
+
+  .card-inset {
+    background: var(--fill-4);
+    border: 1px solid var(--lg-edge-soft);
+    border-radius: var(--r-lg);
+  }
+
+  /* Cabeçalho padrão de card: título à esquerda, ação à direita */
+  .card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s-3);
+    padding: var(--s-5) var(--s-5) 0;
+  }
+
+  .card-body {
+    padding: var(--s-5);
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    border: 0;
+    margin: 0;
+  }
+
+  /* =====================================================================
+     BOTÕES — cápsulas
+     .btn          → glass button (vidro claro sobre o conteúdo)
+     .btn-primary  → glass prominent (tint da marca + luz)
+     .btn-ai       → prominent grafite (ações de IA)
+     .btn-soft     → tinted (preenchimento de marca)
+     .btn-ghost    → plain
+     .btn-danger   → destrutivo
+     Press: encolhe com spring, como os controles do sistema.
+     ===================================================================== */
+
+  .btn {
+    position: relative;
+    isolation: isolate;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 38px;
+    padding: 0 16px;
+    border-radius: var(--r-full);
+    border: 1px solid var(--lg-edge);
+    background: var(--lg-fill-control);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 560;
+    line-height: 1;
+    letter-spacing: -0.006em;
+    white-space: nowrap;
+    cursor: pointer;
+    box-shadow: var(--lg-highlight-control), var(--lg-shadow-control);
+    transition:
+      transform var(--dur-slow) var(--ease-spring),
+      background var(--dur) var(--ease),
+      border-color var(--dur) var(--ease),
+      color var(--dur) var(--ease),
+      box-shadow var(--dur) var(--ease),
+      filter var(--dur) var(--ease);
+  }
+
+  .btn:hover:not(:disabled) {
+    background: var(--lg-fill-control-hover);
+    box-shadow: var(--lg-highlight-control), var(--sh-md);
+  }
+
+  .btn:active:not(:disabled) {
+    transform: scale(0.97);
+    transition-duration: var(--dur-fast);
+  }
+
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* ADR-0036: roxo da marca com volume sutil (degradê vertical curto) e
+     sombra leve — a única ação com cor forte na tela. Sem halo, sem brilho. */
+  .btn-primary {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--brand) 88%, #fff) 0%, var(--brand) 60%, color-mix(in srgb, var(--brand) 94%, #000) 100%);
+    border-color: color-mix(in srgb, var(--brand-deep) 40%, transparent);
+    color: #fff;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.28),
+      0 1px 2px rgba(40, 25, 80, 0.12),
+      0 8px 24px -6px color-mix(in srgb, var(--brand) 55%, transparent);
+    --lg-specular: rgba(255, 255, 255, 0.3);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--brand) 88%, #fff) 0%, var(--brand) 60%, color-mix(in srgb, var(--brand) 94%, #000) 100%);
+    filter: brightness(1.05);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.3),
+      0 1px 2px rgba(40, 25, 80, 0.12),
+      0 8px 20px -6px color-mix(in srgb, var(--brand) 45%, transparent);
+  }
+
+  /* Ação de IA: grafite, para se distinguir do roxo de ação comum */
+  .btn-ai {
+    background: linear-gradient(180deg, #3a3a3c 0%, #1d1d1f 100%);
+    border-color: transparent;
+    color: #fff;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.16),
+      0 1px 2px rgba(0, 0, 0, 0.2),
+      0 4px 14px rgba(0, 0, 0, 0.14);
+    --lg-specular: rgba(255, 255, 255, 0.22);
+  }
+  .btn-ai:hover:not(:disabled) {
+    background: linear-gradient(180deg, #48484a 0%, #242426 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.18),
+      0 1px 2px rgba(0, 0, 0, 0.2),
+      0 8px 22px rgba(0, 0, 0, 0.18);
+  }
+  :root[data-theme='dark'] .btn-ai,
+  .dark .btn-ai {
+    background: linear-gradient(180deg, #f5f5f7 0%, #d1d1d6 100%);
+    color: #1d1d1f;
+  }
+
+  .btn-soft {
+    background: color-mix(in srgb, var(--brand) 12%, transparent);
+    border-color: transparent;
+    color: var(--brand);
+    box-shadow: none;
+  }
+  .btn-soft:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--brand) 18%, transparent);
+    box-shadow: none;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--text-2);
+    box-shadow: none;
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--fill-3);
+    color: var(--text);
+    box-shadow: none;
+  }
+
+  .btn-danger {
+    background: color-mix(in srgb, var(--danger) 11%, transparent);
+    border-color: transparent;
+    color: var(--danger);
+    box-shadow: none;
+  }
+  .btn-danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--danger) 17%, transparent);
+    box-shadow: none;
+  }
+
+  .btn-sm {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  .btn-lg {
+    height: 44px;
+    padding: 0 22px;
+    font-size: 15px;
+  }
+
+  .btn-icon {
+    width: 38px;
+    padding: 0;
+  }
+  .btn-icon.btn-sm {
+    width: 32px;
+  }
+  .btn-icon.btn-lg {
+    width: 44px;
+  }
+
+  /* =====================================================================
+     FORMULÁRIOS
+     ===================================================================== */
+
+  .input,
+  .select,
+  .textarea {
+    width: 100%;
+    height: 38px;
+    padding: 0 12px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--field-border);
+    background: var(--field-bg);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
+    box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.02);
+    transition:
+      border-color var(--dur) var(--ease),
+      background var(--dur) var(--ease),
+      box-shadow var(--dur) var(--ease);
+  }
+
+  .textarea {
+    height: auto;
+    min-height: 88px;
+    padding: 10px 12px;
+    line-height: 1.55;
+    resize: vertical;
+  }
+
+  /* Campo de busca: cápsula, como o search field do sistema.
+     `:where()` zera a especificidade do atributo: sem isso a regra vencia
+     `pl-9` das telas com ícone dentro do campo (ícone sobre o texto). */
+  .input:where([type='search']) {
+    border-radius: var(--r-full);
+  }
+
+  .input::placeholder,
+  .textarea::placeholder {
+    color: var(--text-3);
+  }
+
+  .input:hover,
+  .select:hover,
+  .textarea:hover {
+    border-color: var(--border-strong);
+  }
+
+  /* ADR-0036: foco roxo (borda + anel). */
+  .input:focus,
+  .select:focus,
+  .textarea:focus {
+    outline: none;
+    border-color: color-mix(in srgb, var(--brand) 65%, transparent);
+    background: var(--base-0);
+    box-shadow: 0 0 0 4px var(--ring);
+  }
+
+  .input:disabled,
+  .select:disabled,
+  .textarea:disabled {
+    background: var(--fill-4);
+    color: var(--text-3);
+    cursor: not-allowed;
+  }
+
+  .select {
+    appearance: none;
+    padding-right: 32px;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2386868B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 15 5 5 5-5'/%3E%3Cpath d='m7 9 5-5 5 5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    cursor: pointer;
+  }
+
+  /* Gatilho de busca (topbar): search field em cápsula com fill */
+  .search-field {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 38px;
+    padding: 0 8px 0 14px;
+    border-radius: var(--r-full);
+    background: var(--fill-3);
+    color: var(--text-3);
+    transition: background var(--dur) var(--ease);
+  }
+  .search-field:hover {
+    background: var(--fill-2);
+  }
+
+  /* Campo com rótulo flutuante acima — padrão dos filtros nos mockups */
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .field > label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-2);
+  }
+
+  .checkbox {
+    width: 16px;
+    height: 16px;
+    border-radius: 5px;
+    border: 1.5px solid var(--border-strong);
+    accent-color: var(--brand);
+    cursor: pointer;
+  }
+
+  /* =====================================================================
+     PILLS / BADGES / TAGS — cápsulas
+     ===================================================================== */
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 24px;
+    padding: 0 9px;
+    border-radius: var(--r-full);
+    background: var(--fill-3);
+    color: var(--text-2);
+    font-size: 12px;
+    font-weight: 560;
+    white-space: nowrap;
+    border: 1px solid transparent;
+  }
+
+  .pill-brand {
+    background: var(--brand-soft);
+    color: var(--brand);
+    border-color: var(--brand-border);
+  }
+  .pill-success {
+    background: var(--success-soft);
+    color: var(--success);
+    border-color: var(--success-border);
+  }
+  .pill-warning {
+    background: var(--warning-soft);
+    color: var(--warning);
+    border-color: var(--warning-border);
+  }
+  .pill-danger {
+    background: var(--danger-soft);
+    color: var(--danger);
+    border-color: var(--danger-border);
+  }
+  .pill-info {
+    background: var(--info-soft);
+    color: var(--info);
+    border-color: var(--info-border);
+  }
+
+  /* Tag editável (perfil do lead, conversas) */
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 26px;
+    padding: 0 11px;
+    border-radius: var(--r-full);
+    background: var(--brand-soft);
+    color: var(--brand);
+    font-size: 12px;
+    font-weight: 560;
+  }
+
+  /* Delta de KPI: ↑ verde, ↓ vermelho — sempre com o número */
+  .delta {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 12px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+  }
+  .delta-up {
+    color: var(--success);
+  }
+  .delta-down {
+    color: var(--danger);
+  }
+
+  /* Quadrado de ícone tintado dos KPIs (squircle, como ícone de sistema) */
+  .icon-tile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    border-radius: var(--r-md);
+    /* ADR-0036: squircle tintado discreto com reflexo branco no topo. */
+    background: var(--brand-soft);
+    color: var(--brand);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.6),
+      inset 0 0 0 1px color-mix(in srgb, var(--brand) 14%, transparent),
+      0 6px 16px -8px color-mix(in srgb, var(--brand) 40%, transparent);
+  }
+  .icon-tile-success {
+    background: var(--success-soft);
+    color: var(--success);
+  }
+  .icon-tile-warning {
+    background: var(--warning-soft);
+    color: var(--warning);
+  }
+  .icon-tile-danger {
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+  .icon-tile-info {
+    background: var(--info-soft);
+    color: var(--info);
+  }
+  .icon-tile-neutral {
+    background: var(--base-3);
+    color: var(--text-2);
+  }
+
+  /* =====================================================================
+     TABELAS — estilo lista: cabeçalho discreto, separadores finos
+     ===================================================================== */
+
+  .tbl {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 14px;
+  }
+
+  .tbl thead th {
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-2);
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border);
+    background: transparent;
+  }
+
+  .tbl tbody td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+
+  .tbl tbody tr {
+    transition: background var(--dur-fast) var(--ease);
+  }
+
+  .tbl tbody tr:hover {
+    background: color-mix(in srgb, var(--brand) 3%, transparent);
+  }
+
+  .tbl tbody tr[data-selected='true'] {
+    background: color-mix(in srgb, var(--brand) 7%, transparent);
+  }
+
+  .tbl tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  /* =====================================================================
+     NAVEGAÇÃO / ABAS
+     ===================================================================== */
+
+  /* Aba sublinhada (perfil do lead, painéis laterais) */
+  .tab {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 11px 2px;
+    font-size: 14px;
+    font-weight: 560;
+    color: var(--text-2);
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    background: none;
+    border-top: 0;
+    border-left: 0;
+    border-right: 0;
+    transition:
+      color var(--dur) var(--ease),
+      border-color var(--dur) var(--ease);
+  }
+  .tab:hover {
+    color: var(--text);
+  }
+  .tab[aria-selected='true'] {
+    color: var(--brand);
+    border-bottom-color: var(--brand);
+  }
+
+  /* Aba em pílula (filtros de status: Todas / Ativas / Pausadas) */
+  .seg {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 14px;
+    border-radius: var(--r-full);
+    font-size: 13px;
+    font-weight: 560;
+    color: var(--text-2);
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+    transition:
+      background var(--dur) var(--ease),
+      color var(--dur) var(--ease),
+      box-shadow var(--dur) var(--ease);
+  }
+  .seg:hover {
+    color: var(--text);
+    background: var(--fill-4);
+  }
+  .seg[aria-selected='true'] {
+    background: color-mix(in srgb, var(--brand) 12%, transparent);
+    color: var(--brand);
+  }
+
+  /* Segmented control (Dia/Semana/Mês, 7D/30D/3M/12M): trilho de fill e
+     "thumb" claro com sombra, como o UISegmentedControl. */
+  .segbar {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    border-radius: var(--r-full);
+    background: var(--fill-3);
+  }
+  .segbar > .seg {
+    height: 28px;
+    padding: 0 12px;
+    border-radius: var(--r-full);
+    font-size: 12.5px;
+  }
+  .segbar > .seg:hover {
+    background: transparent;
+  }
+  .segbar > .seg[aria-selected='true'] {
+    background: var(--seg-thumb);
+    color: var(--text);
+    box-shadow:
+      0 1px 2px rgba(40, 25, 80, 0.08),
+      0 3px 8px rgba(40, 25, 80, 0.06),
+      inset 0 0 0 1px var(--lg-edge-soft);
+  }
+  /* No escuro o thumb é cinza (#636366): texto roxo ficava ilegível. */
+  :root[data-theme='dark'] .segbar > .seg[aria-selected='true'],
+  .dark .segbar > .seg[aria-selected='true'] {
+    color: var(--text);
+  }
+
+  /* Item da sidebar */
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    height: 40px;
+    padding: 0 12px;
+    border-radius: var(--r-lg);
+    color: var(--text-2);
+    font-size: 14px;
+    font-weight: 500;
+    transition:
+      background var(--dur) var(--ease),
+      color var(--dur) var(--ease);
+  }
+  .nav-item:hover {
+    background: var(--fill-4);
+    color: var(--text);
+  }
+  .nav-item[aria-current='page'] {
+    background: color-mix(in srgb, var(--brand) 9%, transparent);
+    color: var(--brand);
+    font-weight: 600;
+    box-shadow: inset 3px 0 0 var(--lime-edge);
+  }
+
+  /* =====================================================================
+     SCROLLBAR — fina, como overlay scroller
+     ===================================================================== */
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--fill-1) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: var(--fill-1);
+    border-radius: var(--r-full);
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: var(--text-3);
+    background-clip: content-box;
+  }
+
+  /* =====================================================================
+     ESTADOS (loading / empty / error)
+     Nunca deixar a interface quebrada em silêncio.
+     ===================================================================== */
+
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--fill-3);
+    border-radius: var(--r-sm);
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+    animation: shimmer 1.4s infinite;
+  }
+  :root[data-theme='dark'] .skeleton::after,
+  .dark .skeleton::after {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
+  }
+
+  @keyframes shimmer {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
+  .state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 48px 24px;
+    text-align: center;
+  }
+
+  /* =====================================================================
+     ANIMAÇÃO — as utilitárias `animate-*` do tailwind.config usam estes
+     mesmos keyframes; aqui ficam as versões de classe.
+     ===================================================================== */
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .animate-fade-in {
+    animation: fade-in var(--dur-slow) var(--ease-out) both;
+  }
+  .animate-scale-in {
+    animation: scale-in var(--dur-slow) var(--ease-spring) both;
+  }
+
+  /* =====================================================================
+     PROSA (respostas da IA, notas, markdown)
+     ===================================================================== */
+
+  .prose-khub {
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--text);
+  }
+  .prose-khub > * + * {
+    margin-top: 12px;
+  }
+  .prose-khub h1,
+  .prose-khub h2,
+  .prose-khub h3 {
+    margin-top: 20px;
+    font-size: 15px;
+    font-weight: 650;
+  }
+  .prose-khub ul,
+  .prose-khub ol {
+    padding-left: 20px;
+  }
+  .prose-khub li + li {
+    margin-top: 4px;
+  }
+  .prose-khub code {
+    padding: 2px 5px;
+    border-radius: 6px;
+    background: var(--fill-3);
+    font-size: 12.5px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .prose-khub pre {
+    padding: 12px 14px;
+    border-radius: var(--r-md);
+    background: var(--fill-4);
+    overflow-x: auto;
+  }
+  .prose-khub pre code {
+    padding: 0;
+    background: none;
+  }
+  .prose-khub a {
+    color: var(--brand);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .prose-khub table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .prose-khub th,
+  .prose-khub td {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    text-align: left;
+  }
+  .prose-khub th {
+    background: var(--fill-4);
+    font-weight: 600;
+  }
+
+  /* =====================================================================
+     §ACESSIBILIDADE — o material responde às preferências do sistema.
+     ===================================================================== */
+
+  /* Reduzir transparência: tudo opaco, sem blur. */
+  @media (prefers-reduced-transparency: reduce) {
+    .lg::before,
+    .glass,
+    .glass-floating::before,
+    .card,
+    .card-crystal::before,
+    .lg-popover,
+    .frost,
+    .lg-sheet {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
+
+  /* Aumentar contraste: aro de luz vira borda sólida legível. */
+  @media (prefers-contrast: more) {
+    .lg,
+    .glass,
+    .glass-floating,
+    .card,
+    .card-crystal,
+    .lg-popover,
+    .frost,
+    .lg-sheet,
+    .btn,
+    .input,
+    .select,
+    .textarea {
+      border-color: var(--border-strong);
+    }
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --lg-fill: #f8f8fa;
+    --lg-fill-clear: #f8f8fa;
+    --lg-fill-dense: #ffffff;
+    --lg-fill-popover: #ffffff;
+    --lg-fill-control: #ffffff;
+    --mat-thick: #ffffff;
+    --field-bg: #ffffff;
+  }
+  :root[data-theme='dark'],
+  .dark {
+    --lg-fill: #1c1c1e;
+    --lg-fill-clear: #1c1c1e;
+    --lg-fill-dense: #1c1c1e;
+    --lg-fill-popover: #2c2c2e;
+    --lg-fill-control: #3a3a3c;
+    --mat-thick: #1c1c1e;
+    --field-bg: #2c2c2e;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --text-2: #3a3a3c;
+    --text-3: #636366;
+    --border-strong: #8e8e93;
+    --lg-edge: rgba(0, 0, 0, 0.32);
+  }
+  :root[data-theme='dark'],
+  .dark {
+    --text-2: #d1d1d6;
+    --text-3: #aeaeb2;
+    --border-strong: #8e8e93;
+    --lg-edge: rgba(255, 255, 255, 0.36);
+  }
+}
+
+/* Navegador sem backdrop-filter: vidro vira superfície quase opaca. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --lg-fill: rgba(250, 250, 252, 0.96);
+    --lg-fill-dense: #ffffff;
+    --lg-fill-popover: #ffffff;
+    --mat-thick: #ffffff;
+  }
+  :root[data-theme='dark'],
+  .dark {
+    --lg-fill: rgba(28, 28, 30, 0.97);
+    --lg-fill-dense: #1c1c1e;
+    --lg-fill-popover: #2c2c2e;
+    --mat-thick: #1c1c1e;
+  }
+}
+
+/* =====================================================================
+   COMPATIBILIDADE — classes do KHUB OS anterior.
+   `.glass`, `.glass-floating` e `.frost` agora SÃO Liquid Glass (camada
+   acima). As demais seguem neutralizadas. NÃO usar em código novo.
+   ===================================================================== */
+
+.crystal-edge,
+.crystal-island,
+.crystal-logo,
+.liquid-chrome,
+.brand-mesh,
+.fluid {
+  /* neutralizado — o material vem de .glass/.lg */
+}
+
+.crystal-island::before,
+.crystal-logo::before {
+  content: none;
+}
+
+/* Antes: fundo de estúdio com 4 gradientes radiais. Agora: o ambient. */
+.studio-bg {
+  display: none;
+}
+
+.studio-preview {
+  background: var(--base-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+}
+
+.depth-hover {
+  transition: background var(--dur) var(--ease);
+}
+.depth-hover:hover {
+  background: var(--fill-4);
+}
+
+.brand-gradient {
+  background: var(--brand);
+  color: #fff;
+}
+
+
+/* =====================================================================
+   AUTH — superfície off-white premium, escopada a login/cadastro.
+   ---------------------------------------------------------------------
+   O painel direito do AuthShell NÃO tem vídeo atrás (ver componente):
+   fundo sólido #F8F6F2 + este card claro translúcido por cima. Nomes
+   escopados (`.auth-card`) de propósito — não usar fora do AuthShell.
+   ===================================================================== */
+.auth-card {
+  position: relative;
+  border-radius: var(--r-2xl);
+  padding: 34px 34px 30px;
+  background: rgba(255, 255, 255, 0.68);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  /* Mesmo aro de luz do Liquid Glass do app (ver --lg-highlight). */
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.95),
+    inset 0 0 24px 0 rgba(255, 255, 255, 0.3),
+    0 24px 70px rgba(20, 10, 40, 0.08),
+    0 4px 18px rgba(20, 10, 40, 0.04),
+    0 0 80px rgba(123, 46, 255, 0.06);
+  color: #151219;
+}
+
+.auth-card .input,
+.auth-card .select {
+  height: 48px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+  border-color: #ddd9e1;
+  color: #17141a;
+}
+.auth-card .input::placeholder {
+  color: #a29da9;
+}
+.auth-card .input:hover,
+.auth-card .select:hover {
+  border-color: #c9c2d1;
+}
+.auth-card .input:focus,
+.auth-card .select:focus {
+  border-color: rgba(123, 46, 255, 0.6);
+  box-shadow: 0 0 0 3px rgba(123, 46, 255, 0.08);
+  background: #fff;
+}
+
+/* Foco ametista controlado + validação só depois que o usuário digitou
+   (nunca vermelho num campo obrigatório ainda vazio, recém-aberto). */
+.auth-card .input:not(:placeholder-shown):invalid {
+  border-color: #dc2626;
+}
+.auth-card .input:not(:placeholder-shown):invalid:focus {
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.14);
+}
+
+/* Autofill do navegador herdando a superfície clara do card, não o
+   amarelo padrão do navegador. */
+.auth-card .input:-webkit-autofill,
+.auth-card .input:-webkit-autofill:hover,
+.auth-card .input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #17141a;
+  -webkit-box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.92) inset;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+.auth-card .btn-ghost {
+  height: 44px;
+  border-radius: var(--r-full);
+  border: 1px solid #e7e3e9;
+  background: rgba(255, 255, 255, 0.62);
+  color: #242128;
+  transition:
+    background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
+}
+.auth-card .btn-ghost:hover:not(:disabled) {
+  background: #fff;
+  border-color: rgba(123, 46, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+/* CTA principal do auth: gradiente + glow ametista, elevação no hover,
+   leve encolhimento no press — classe própria, sem alterar `.btn-primary`
+   global (usado em ~200 lugares no resto do produto). */
+.btn-auth-primary {
+  height: 48px;
+  border-radius: var(--r-full);
+  background: linear-gradient(135deg, #7b2eff, #6922e8);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(123, 46, 255, 0.22);
+  transition:
+    transform var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
+}
+.btn-auth-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 30px rgba(123, 46, 255, 0.28);
+}
+.btn-auth-primary:active:not(:disabled) {
+  transform: translateY(0) scale(0.99);
+}
+
+/* ---------------------------------------------------------------------
+   Fora de `@layer` de propósito: precisa vencer as utilitárias do
+   Tailwind (`.text-brand`, usada em LoginForm/SignupForm para o link
+   "Esqueci a senha"/"Criar conta" e o acento do título) para bater o hex
+   exato pedido — `.text-fg`/`.text-muted`/`.bg-line` já resolvem certo
+   sozinhas agora que o card voltou a ser claro (usam os tokens padrão do
+   tema, que já são pensados pra superfície branca).
+   --------------------------------------------------------------------- */
+.auth-card .text-brand {
+  color: #7b2eff;
+}
+.auth-card .text-brand:hover {
+  color: #6922e8;
+}
+
+@keyframes auth-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-auth-in {
+  animation: auth-card-in 450ms cubic-bezier(0.2, 0, 0.2, 1) both;
+}
+
+/* =====================================================================
+   LP REVENUE OS ("/") — SISTEMA EDITORIAL (v2)
+   =====================================================================
+   Bloco ADITIVO: não remove nem redefine nenhum token usado pelo app
+   autenticado. Tudo aqui é prefixado `--lp-*` / `.lp-*` e só é consumido
+   por `app/(marketing)/*` e `components/marketing/*`.
+
+   Direção: página editorial em off-white, tipografia monumental com
+   tracking negativo (mesma família Inter do produto), ametista como
+   ACENTO — linha, estado ativo, uma palavra da headline — nunca fundo.
+   Uma única seção (Pipeline) rompe para graphite.
+   ===================================================================== */
+
+:root {
+  /* Superfícies e tinta */
+  --lp-bg: #f8f6f2;
+  --lp-bg-warm: #f2efe8;
+  --lp-ink: #151219;
+  --lp-ink-2: rgba(21, 18, 25, 0.62);
+  --lp-ink-3: rgba(21, 18, 25, 0.4);
+  --lp-ink-4: rgba(21, 18, 25, 0.24);
+  --lp-rule: rgba(21, 18, 25, 0.13);
+  --lp-rule-soft: rgba(21, 18, 25, 0.07);
+
+  /* Acento */
+  --lp-accent: #7b2eff;
+  --lp-accent-deep: #5a20d9;
+  --lp-accent-wash: rgba(123, 46, 255, 0.08);
+  --lp-accent-line: rgba(123, 46, 255, 0.34);
+
+  /* Ruptura dark (Pipeline) */
+  --lp-graphite: #151219;
+  --lp-graphite-2: #1c1822;
+  --lp-on-dark: #f8f6f2;
+  --lp-on-dark-2: rgba(248, 246, 242, 0.6);
+  --lp-on-dark-3: rgba(248, 246, 242, 0.34);
+  --lp-rule-dark: rgba(248, 246, 242, 0.14);
+
+  /* Layout */
+  --lp-gutter: clamp(20px, 5.2vw, 88px);
+  --lp-max: 1560px;
+  --lp-spine-x: clamp(14px, 2.8vw, 46px);
+  --lp-spine-track: rgba(21, 18, 25, 0.1);
+
+  /* Motion */
+  --lp-ease: cubic-bezier(0.22, 0.61, 0.24, 1);
+  --lp-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ---------- Layout ---------- */
+.lp-container {
+  width: 100%;
+  max-width: var(--lp-max);
+  margin-inline: auto;
+  padding-inline: var(--lp-gutter);
+}
+
+/* Sangra para fora do container pela direita, mantendo a margem esquerda. */
+.lp-bleed-r {
+  margin-right: calc(var(--lp-gutter) * -1);
+}
+@media (min-width: 1024px) {
+  .lp-bleed-r {
+    margin-right: calc((100vw - min(100vw, var(--lp-max))) / -2 - var(--lp-gutter));
+  }
+}
+
+/* ---------- Tipografia ---------- */
+.lp-display {
+  font-size: clamp(54px, 8.2vw, 118px);
+  line-height: 0.88;
+  letter-spacing: -0.05em;
+  font-weight: 600;
+  text-wrap: balance;
+}
+.lp-h2 {
+  font-size: clamp(36px, 5.4vw, 82px);
+  line-height: 0.94;
+  letter-spacing: -0.046em;
+  font-weight: 600;
+}
+.lp-h3 {
+  font-size: clamp(26px, 3vw, 46px);
+  line-height: 1.02;
+  letter-spacing: -0.036em;
+  font-weight: 600;
+}
+.lp-h4 {
+  font-size: clamp(18px, 1.5vw, 23px);
+  line-height: 1.22;
+  letter-spacing: -0.022em;
+  font-weight: 600;
+}
+.lp-body {
+  font-size: clamp(16px, 1.1vw, 19px);
+  line-height: 1.58;
+  letter-spacing: -0.003em;
+  color: var(--lp-ink-2);
+  max-width: 620px;
+}
+.lp-body-sm {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--lp-ink-2);
+  max-width: 520px;
+}
+.lp-label {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--lp-ink-3);
+}
+.lp-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* ---------- Ações ---------- */
+.lp-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 54px;
+  padding-inline: 28px;
+  border-radius: 6px;
+  background: var(--lp-ink);
+  color: var(--lp-bg);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  white-space: nowrap;
+  transition:
+    background 220ms var(--lp-ease),
+    transform 220ms var(--lp-ease);
+}
+.lp-cta:hover {
+  background: var(--lp-accent);
+  transform: translateY(-1px);
+}
+.lp-cta:active {
+  transform: translateY(0);
+}
+
+.lp-cta-quiet {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 54px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  color: var(--lp-ink);
+  box-shadow: inset 0 -1px 0 0 var(--lp-rule);
+  transition:
+    box-shadow 220ms var(--lp-ease),
+    color 220ms var(--lp-ease);
+}
+.lp-cta-quiet:hover {
+  color: var(--lp-accent);
+  box-shadow: inset 0 -1px 0 0 var(--lp-accent);
+}
+
+.lp-cta-invert {
+  background: var(--lp-on-dark);
+  color: var(--lp-graphite);
+}
+.lp-cta-invert:hover {
+  background: #fff;
+  color: var(--lp-accent-deep);
+}
+
+/* ---------- Moldura de screenshot real ---------- */
+.lp-shot {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #fff;
+  aspect-ratio: 1397 / 1014;
+  isolation: isolate;
+  box-shadow:
+    0 1px 1px rgba(21, 18, 25, 0.04),
+    0 3px 8px rgba(21, 18, 25, 0.04),
+    0 22px 44px -22px rgba(21, 18, 25, 0.2),
+    0 70px 120px -60px rgba(21, 18, 25, 0.26);
+}
+.lp-shot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid rgba(21, 18, 25, 0.1);
+  pointer-events: none;
+  z-index: 2;
+}
+.lp-shot-dark::after {
+  border-color: rgba(248, 246, 242, 0.16);
+}
+.lp-shot-dark {
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.3),
+    0 40px 90px -30px rgba(0, 0, 0, 0.6);
+}
+.lp-shot-img {
+  position: absolute;
+  max-width: none;
+  width: 103.6521%;
+  height: 107.1006%;
+  left: -1.7896%;
+  top: -2.3669%;
+}
+
+/* ---------- Spine ---------- */
+.lp-spine-rail {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: var(--lp-spine-x);
+  width: 1px;
+  z-index: 5;
+  pointer-events: none;
+  background: var(--lp-spine-track);
+  transition: background 500ms var(--lp-ease);
+}
+
+/* ---------- Grão editorial: rompe o "flat vetorial" de LP gerada ---------- */
+.lp-grain::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.4;
+  background-image: radial-gradient(rgba(21, 18, 25, 0.055) 0.5px, transparent 0.5px);
+  background-size: 3px 3px;
+}
+
+/* ---------- Anotações finas sobre screenshot ---------- */
+.lp-annot {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  background: rgba(248, 246, 242, 0.92);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--lp-rule);
+  border-left: 1px solid var(--lp-accent);
+  border-radius: 4px;
+  padding: 10px 14px;
+  max-width: 260px;
+}
+
+/* Nenhuma animação de entrada quando o usuário pede menos movimento —
+   o bloco global já zera durações; aqui garantimos estado final visível. */
+@media (prefers-reduced-motion: reduce) {
+  .lp-shot {
+    box-shadow:
+      0 1px 2px rgba(21, 18, 25, 0.05),
+      0 20px 40px -24px rgba(21, 18, 25, 0.18);
+  }
+}
+
+/* Enquadramento por viewport dentro da moldura de produto.
+   Numa tela de 390px, uma captura de 1397px de largura renderiza o texto
+   da interface a ~4px: ilegível. `--lp-zoom-*` aproxima a região que
+   importa no mobile SEM gerar outro arquivo e sem redesenhar a tela — é
+   a mesma captura, só enquadrada mais perto. */
+.lp-shot-frame {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  transform: scale(var(--lp-zoom, 1));
+  transform-origin: var(--lp-zoom-x, 50%) var(--lp-zoom-y, 50%);
+}
+@media (max-width: 767px) {
+  .lp-shot-frame {
+    transform: scale(var(--lp-zoom-m, var(--lp-zoom, 1)));
+    transform-origin: var(--lp-zoom-mx, var(--lp-zoom-x, 50%)) var(--lp-zoom-my, var(--lp-zoom-y, 50%));
+  }
+}
+/* Troca de operação: cobre a sessão anterior até a nova ser confirmada. */
+.operation-content { transition: filter .45s ease, opacity .45s ease; }
+.operation-content-blurred { filter: blur(18px); opacity: .18; pointer-events: none; }
+.operation-transition { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; background: linear-gradient(120deg,rgba(248,248,252,.86),rgba(248,248,252,.6)),url('/khub-fundo.jpg') center/cover; backdrop-filter: blur(24px); animation: operation-enter .5s ease both; }
+.operation-transition-glow { position:absolute; width:360px; height:360px; border-radius:50%; background:#963eff; filter:blur(120px); opacity:.12; }
+.operation-progress { width:160px; height:3px; border-radius:9px; overflow:hidden; background:rgba(91,75,130,.14); }
+.operation-progress::after { content:''; display:block; height:100%; width:40%; border-radius:9px; background:#792eff; animation: operation-progress 1.4s ease-in-out infinite; }
+@keyframes operation-enter { from { opacity:0; } to { opacity:1; } }
+@keyframes operation-progress { 0% { transform:translateX(-100%); } 100% { transform:translateX(350%); } }
+@media(prefers-reduced-motion:reduce) { .operation-content,.operation-transition { transition:none;animation:none; } .operation-progress::after { animation:none;width:100%; } }
+
+/* =====================================================================
+   MOVIMENTO & ESTADOS (ADR-0036 — substitui a camada do ADR-0034)
+   Vida sem virar demonstração: entrada curta, elevação de 1–2px, foco
+   claro, carregamento legível. Nada flutua, gira ou pulsa sem motivo; o
+   fundo é estável. "Reduzir movimento" zera tudo (regra global acima) e o
+   contador do KPI conta uma única vez.
+   ===================================================================== */
+
+/* Intensidade do reflexo que segue o ponteiro (GlassLight) nos StatCards.
+   Registrada para poder transicionar dentro do gradiente. */
+@property --spot {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 0%;
+}
+
+@layer components {
+  /* Entrada de conteúdo: fade + 6px, escalonado no máximo 200ms. `backwards`
+     larga o transform no fim — o hover do framer-motion continua valendo. */
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+  #conteudo :is(.card, .card-crystal) {
+    animation: rise-in 0.3s var(--ease-out) backwards;
+  }
+  #conteudo :is(.card, .card-crystal):nth-child(2) { animation-delay: 40ms; }
+  #conteudo :is(.card, .card-crystal):nth-child(3) { animation-delay: 80ms; }
+  #conteudo :is(.card, .card-crystal):nth-child(4) { animation-delay: 120ms; }
+  #conteudo :is(.card, .card-crystal):nth-child(5) { animation-delay: 160ms; }
+  #conteudo :is(.card, .card-crystal):nth-child(n + 6) { animation-delay: 200ms; }
+
+  /* Reflexo sutil que acompanha o ponteiro — só nos StatCards de vidro. */
+  @media (hover: hover) and (pointer: fine) {
+    .card-crystal:hover::before {
+      --spot: 6%;
+    }
+  }
+
+  /* Topbar ganha profundidade quando o conteúdo rola por baixo (Topbar.tsx). */
+  .glass-floating.nav-floating {
+    transition: box-shadow var(--dur) var(--ease);
+  }
+  .glass-floating.nav-floating[data-rolou='true'] {
+    box-shadow: 0 0 0 1px var(--edge), var(--sh-md);
+  }
+
+  /* Ícones do menu respondem ao hover com um deslocamento mínimo. */
+  .nav-item svg {
+    /* Ícone legível por si só (quase tinta), não um cinza apagado. */
+    color: color-mix(in srgb, var(--text) 80%, var(--brand));
+    transition:
+      transform var(--dur) var(--ease),
+      color var(--dur) var(--ease),
+      filter var(--dur) var(--ease);
+  }
+  .nav-item:hover svg {
+    transform: translateX(1px);
+    color: var(--brand-deep);
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--lime-edge) 65%, transparent));
+  }
+  .nav-item[aria-current='page'] svg {
+    color: var(--brand);
+    filter: drop-shadow(0 0 7px color-mix(in srgb, var(--lime-edge) 75%, transparent));
+  }
+
+  /* Carregando: neutro com leve tom de marca. */
+  .skeleton {
+    background: color-mix(in srgb, var(--brand) 5%, var(--fill-3));
+  }
+
+  /* Estado vazio: ícone num halo estático (sem flutuar). */
+  .state .icon-tile {
+    box-shadow:
+      var(--hl-inset),
+      0 0 0 6px color-mix(in srgb, var(--brand) 5%, transparent);
+  }
+
+  .scrollbar-thin {
+    scrollbar-color: color-mix(in srgb, var(--brand) 22%, transparent) transparent;
+  }
+}
+
+/* Foco por teclado: anel roxo (base, para o Tailwind poder sobrepor). */
+@layer base {
+  :focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--brand) 70%, transparent);
+    outline-offset: 2px;
+  }
+}
+
+/* Login: mesma linguagem do produto — vidro claro, aro luminoso, sombra suave. */
+.auth-card {
+  border-color: rgba(255, 255, 255, 0.9);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.95),
+    0 0 0 1px rgba(91, 75, 130, 0.08),
+    0 24px 64px rgba(40, 25, 80, 0.08),
+    0 4px 16px rgba(40, 25, 80, 0.04);
+}
+
+/* Rótulo de grupo da sidebar (ADR-0036): hierarquia sem peso visual. */
+@layer components {
+  .nav-grupo {
+    padding: 0 12px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+}
+
+/* Faixas que rolam na horizontal (Kanban): a borda direita esmaece em vez
+   de cortar seco — sinaliza que há mais conteúdo (ADR-0036). */
+@layer components {
+  .scroll-fade-x {
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
+  }
+}
+
+/* Celular (ADR-0036): número de KPI cabe em 2 colunas. */
+@media (max-width: 639px) {
+  .t-kpi {
+    font-size: 22px;
+  }
+}
+
+/* Operação: hierarquia estável, bordas nítidas e leitura de dados prolongada. */
+@layer components {
+  .analytics-toolbar { @apply flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3; }
+  .page-shell { overflow-wrap: anywhere; }
+  #conteudo .card-crystal { border-radius: var(--r-lg); box-shadow: var(--hl-inset), var(--sh-xs); }
+  #conteudo .card-crystal::before { background: var(--mat-thick); backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none; }
+  #conteudo .card-crystal:hover { box-shadow: var(--sh-sm); }
+  #conteudo .tbl thead th { background: var(--base-2); font-weight: 600; }
+  #conteudo .tbl tbody tr:hover { background: var(--brand-softer); }
+  .nav-item:hover svg, .nav-item[aria-current='page'] svg { filter: none; }
+}
+@media (max-width: 639px) {
+  #conteudo .card-crystal { padding: 14px; }
+  #conteudo .card-crystal .t-kpi, #conteudo .card-crystal .tabular { overflow-wrap: anywhere; }
+}

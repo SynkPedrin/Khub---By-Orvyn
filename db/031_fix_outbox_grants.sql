@@ -1,0 +1,12 @@
+-- 031_fix_outbox_grants.sql — achado da auditoria de produção: `outbox_events`
+-- (criada em 022_production_foundation.sql) nunca recebeu GRANT pra
+-- `orvyn_service`, diferente de toda outra tabela do projeto. Migrations já
+-- aplicadas são imutáveis (ver db/README.md) — correção vai em migration
+-- nova, nunca editando a 022 retroativamente.
+--
+-- Sintoma real: `db/002_isolation_test.sql` falha no SEED com "permission
+-- denied for table outbox_events" sempre que um trigger de domínio
+-- (orvyn_domain_outbox()) dispara durante um INSERT feito como
+-- orvyn_service — e qualquer job/script futuro rodando como orvyn_service
+-- (backfill, seed, migração de dado) bateria no mesmo erro.
+GRANT SELECT, INSERT, UPDATE, DELETE ON outbox_events TO orvyn_service;

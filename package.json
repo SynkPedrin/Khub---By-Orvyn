@@ -1,0 +1,19 @@
+{
+  "name": "khub",
+  "version": "0.0.1",
+  "private": true,
+  "description": "KHUB — CRM vertical configurado por IA (monorepo).",
+  "packageManager": "pnpm@9.12.3",
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint"
+  },
+  "devDependencies": {
+    "turbo": "^2.1.0"
+  }
+}

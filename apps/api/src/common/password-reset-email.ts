@@ -1,0 +1,11 @@
+const esc = (value: string) => value.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+
+/** E-mail de redefinição de senha (mesma identidade visual do convite). */
+export function passwordResetEmail(url: string, webUrl: string, minutos: number) {
+  const link = esc(url), base = esc(webUrl.replace(/\/$/, ''));
+  return {
+    subject: 'Redefinir sua senha · KHUB Revenue OS',
+    text: `Recebemos um pedido para redefinir a senha da sua conta no KHUB Revenue OS.\nCrie uma nova senha: ${url}\nO link vale por ${minutos} minutos e só pode ser usado uma vez. Se não foi você, ignore este e-mail: sua senha continua a mesma.`,
+    html: `<!doctype html><html lang="pt-BR"><body style="margin:0;background:#f5f3fa;font-family:Arial,sans-serif;color:#242032"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:40px 16px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:auto;background:white;border-radius:24px;overflow:hidden"><tr><td style="padding:36px;background:#351065 url('${base}/Background-login.png') center/cover"><img src="${base}/logo-revenue.png" alt="KHUB Revenue OS" width="160" style="background:white;padding:12px;border-radius:12px"/><h1 style="color:white;font-size:26px;margin:32px 0 0">Vamos criar uma nova senha.</h1></td></tr><tr><td style="padding:36px"><p style="line-height:1.7;color:#686078">Recebemos um pedido para redefinir a senha da sua conta. Clique no botão abaixo para escolher uma nova senha.</p><p style="margin:32px 0"><a href="${link}" style="display:inline-block;background:#7b2eff;color:white;padding:16px 26px;text-decoration:none;border-radius:12px;font-weight:bold">Criar nova senha</a></p><p style="font-size:13px;color:#797184;line-height:1.7">O link vale por ${minutos} minutos e só pode ser usado uma vez. Ao redefinir, todas as sessões abertas são encerradas. Se não foi você, ignore este e-mail: sua senha continua a mesma.</p><p style="font-size:12px;word-break:break-all;color:#797184">${link}</p></td></tr></table><p style="text-align:center;font-size:11px;color:#92879e">KHUB Revenue OS · Sistemas para um crescimento real</p></td></tr></table></body></html>`,
+  };
+}

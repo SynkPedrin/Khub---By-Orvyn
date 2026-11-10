@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  NODE_VERSION: 20.20.2
+  PNPM_VERSION: 9.12.3
+
+jobs:
+  # 1) Qualidade: lint + typecheck + testes unitários + build de produção.
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: "${{ env.PNPM_VERSION }}" }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "${{ env.NODE_VERSION }}"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Prisma generate
+        run: pnpm --filter @khub/api exec prisma generate
+      - name: Lint
+        run: pnpm --filter @khub/web lint
+      - name: Typecheck (API + Web)
+        run: |
+          pnpm --filter @khub/api exec tsc --noEmit -p tsconfig.json
+          pnpm --filter @khub/web exec tsc --noEmit -p tsconfig.json
+      - name: Testes (API)
+        run: pnpm --filter @khub/api exec jest --ci --silent
+      - name: Testes (Web)
+        run: pnpm --filter @khub/web exec vitest run
+      - name: Build (API + Web)
+        run: pnpm build
+
+  # 2) Gate de isolamento RLS — Postgres real. Vazamento cross-tenant => falha.
+  isolation:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: orvyn
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    env:
+      ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/orvyn
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: "${{ env.PNPM_VERSION }}" }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "${{ env.NODE_VERSION }}"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @khub/api exec prisma generate
+      - name: Instalar psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Aplicar migrações (ordem numérica, sem os arquivos de teste)
+        run: |
+          for f in $(ls db/*.sql | grep -viE 'isolation|_test' | sort); do
+            echo "▶ $f"
+            psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
+          done
+      - name: Teste de isolamento do RAG/auth (db/002)
+        run: psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/002_isolation_test.sql
+      - name: Teste de isolamento api_keys + tags
+        working-directory: apps/api
+        run: node scripts/test-isolation-api-keys.mjs

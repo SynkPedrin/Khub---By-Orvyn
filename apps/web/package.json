@@ -1,0 +1,41 @@
+{
+  "name": "@khub/web",
+  "version": "0.0.1",
+  "private": true,
+  "description": "KHUB — front-end Next.js com o cérebro Obsidian atuando como backend.",
+  "scripts": {
+    "dev": "next dev -p 3210",
+    "build": "next build",
+    "start": "next start -p 3210",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@khub/types": "workspace:^",
+    "framer-motion": "^11.11.17",
+    "jose": "^5.9.6",
+    "next": "14.2.35",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-markdown": "9.0.1",
+    "reactflow": "^11.11.4",
+    "remark-gfm": "4.0.0",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "10.4.0",
+    "@testing-library/react": "16.0.1",
+    "@types/node": "20.14.15",
+    "@types/react": "18.3.5",
+    "@types/react-dom": "18.3.0",
+    "autoprefixer": "10.4.20",
+    "eslint": "8.57.0",
+    "eslint-config-next": "14.2.35",
+    "jsdom": "25.0.1",
+    "postcss": "8.4.41",
+    "tailwindcss": "3.4.10",
+    "typescript": "5.5.4",
+    "vitest": "2.1.9"
+  }
+}
