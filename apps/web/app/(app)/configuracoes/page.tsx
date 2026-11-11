@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Avatar, Badge, Button, Card, Field, Input, cx } from '@/components/ui';
 import { Icon, type IconName } from '@/components/icons';
-import { settingsApi, type AuditRow, type Business, type Member, type Invite, type Profile, type Tag, type ApiKey, type ApiKeyCreated } from '@/lib/settings';
+import { settingsApi, type AuditRow, type Business, type Profile, type Tag, type ApiKey, type ApiKeyCreated } from '@/lib/settings';
 import { useRef } from 'react';
 import { ACCENTS, otimizarImagem } from '@/lib/personalization';
 import { usePersonalization } from '@/components/app/PersonalizationProvider';
@@ -12,10 +12,14 @@ import { ApiError } from '@/lib/api-error';
 import { useLocale } from '@/lib/locale';
 import { useAuth } from '@/lib/auth';
 import { AccountPreferencesForm } from '@/components/app/AccountPreferencesForm';
-import { EmailDeliveryStatus, type EmailStatus } from '@/components/app/EmailDeliveryStatus';
 import { TagsTab } from '@/components/settings/TagsTab';
+import { CamposPersonalizadosTab } from '@/components/settings/CamposPersonalizadosTab';
+import { MotivosPerdaTab } from '@/components/settings/MotivosPerdaTab';
+import { SkeletonLines, SkeletonRows } from '@/components/kit';
+import { EncerrarSessoes } from '@/components/app/EquipeAcoes';
+import { EquipeConvites } from '@/components/app/EquipeConvites';
 
-type Tab = 'perfil' | 'personalizacao' | 'empresa' | 'equipe' | 'integracoes' | 'tags' | 'chaves' | 'auditoria';
+type Tab = 'perfil' | 'personalizacao' | 'empresa' | 'equipe' | 'integracoes' | 'tags' | 'campos' | 'motivos' | 'chaves' | 'auditoria';
 const TABS: { key: Tab; label: string; icon: IconName; grupo: 'Conta' | 'Avançado' }[] = [
   { key: 'perfil', label: 'Meu perfil', icon: 'user', grupo: 'Conta' },
   { key: 'personalizacao', label: 'Personalização', icon: 'sparkles', grupo: 'Conta' },
@@ -23,12 +27,13 @@ const TABS: { key: Tab; label: string; icon: IconName; grupo: 'Conta' | 'Avança
   { key: 'equipe', label: 'Equipe & permissões', icon: 'contacts', grupo: 'Conta' },
   { key: 'integracoes', label: 'Integrações', icon: 'marketing', grupo: 'Avançado' },
   { key: 'tags', label: 'Tags', icon: 'sparkles', grupo: 'Avançado' },
+  { key: 'campos', label: 'Campos personalizados', icon: 'list', grupo: 'Avançado' },
+  { key: 'motivos', label: 'Motivos de perda', icon: 'target', grupo: 'Avançado' },
   { key: 'chaves', label: 'Chaves de API', icon: 'settings', grupo: 'Avançado' },
   { key: 'auditoria', label: 'Auditoria', icon: 'knowledge', grupo: 'Avançado' },
 ];
 const GRUPOS = ['Conta', 'Avançado'] as const;
 const IDIOMAS = ['pt-BR', 'en-US', 'es-ES'];
-const ROLES = ['owner', 'admin', 'member', 'viewer'];
 
 function Saved({ on }: { on: boolean }) {
   return on ? <span className="ml-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400">✓ salvo</span> : null;
@@ -43,7 +48,7 @@ export default function ConfiguracoesPage() {
     // Aceita `?tab=` e o legado `?aba=` (links antigos do app usam `aba`), com apelidos.
     const sp = new URLSearchParams(window.location.search);
     const bruto = sp.get('tab') ?? sp.get('aba');
-    const APELIDOS: Record<string, string> = { ia: 'integracoes' };
+    const APELIDOS: Record<string, string> = { ia: 'integracoes', 'campos-personalizados': 'campos', 'motivos-perda': 'motivos' };
     const q = (bruto ? APELIDOS[bruto] ?? bruto : null) as Tab | null;
     if (q && TABS.some((t) => t.key === q)) setTab(q);
   }, []);
@@ -91,12 +96,14 @@ export default function ConfiguracoesPage() {
             <Icon name={atual.icon} size={16} className="text-brand" />
             <h2 className="font-bold text-fg">{atual.label}</h2>
           </div>
-          {tab === 'perfil' && <PerfilTab />}
+          {tab === 'perfil' && <div className="space-y-5"><PerfilTab /><EncerrarSessoes /></div>}
           {tab === 'personalizacao' && <PersonalizacaoTab />}
           {tab === 'empresa' && <EmpresaTab />}
-          {tab === 'equipe' && <EquipeTab />}
+          {tab === 'equipe' && <EquipeConvites />}
           {tab === 'integracoes' && <IntegrationsMarketplace />}
           {tab === 'tags' && <TagsTab />}
+          {tab === 'campos' && <CamposPersonalizadosTab />}
+          {tab === 'motivos' && <MotivosPerdaTab />}
           {tab === 'chaves' && <ApiKeysTab />}
           {tab === 'auditoria' && <AuditoriaTab />}
         </div>
@@ -114,7 +121,7 @@ function PerfilTab() {
   const [saved, setSaved] = useState(false);
   useEffect(() => { settingsApi.profile().then(setP).catch(() => undefined); }, []);
   const save = async () => { if (!p) return; setBusy(true);setErro('');try{await settingsApi.updateProfile({ nome: p.nome, idioma: p.idioma }); reload();await refreshMe();setSaved(true);}catch(e){setErro(e instanceof Error?e.message:'Não foi possível salvar.');}finally{setBusy(false);} };
-  if (!p) return <Card className="p-6 text-sm text-muted">Carregando…</Card>;
+  if (!p) return <Card className="p-6"><SkeletonLines lines={4} label="Carregando perfil" /></Card>;
   return (
     <Card className="p-6">
       <div className="mb-5 flex items-center gap-3">
@@ -233,10 +240,10 @@ function PersonalizacaoTab() {
       {/* Tema */}
       <Card className="p-6">
         <h2 className="font-bold text-fg">Tema</h2>
-        <p className="text-xs text-muted">O fundo se adapta ao claro e ao escuro.</p>
+        <p className="text-xs text-muted">Escuro é o padrão. No claro, o sistema fica branco e a iluminação vira roxa.</p>
         <div className="mt-4 flex gap-2">
-          {(['light', 'dark', 'system'] as const).map((t) => (
-            <button key={t} onClick={() => update({ theme: t })} className={cx('rounded-xl border px-4 py-2 text-sm', (prefs.theme ?? 'system') === t ? 'border-brand bg-brand/10 font-bold text-brand' : 'border-line text-fg hover:bg-surface2')}>
+          {(['dark', 'light', 'system'] as const).map((t) => (
+            <button key={t} onClick={() => update({ theme: t })} aria-pressed={(prefs.theme ?? 'dark') === t} className={cx('rounded-xl border px-4 py-2 text-sm', (prefs.theme ?? 'dark') === t ? 'border-brand bg-brand/10 font-bold text-brand' : 'border-line text-fg hover:bg-surface2')}>
               {t === 'light' ? 'Claro' : t === 'dark' ? 'Escuro' : 'Sistema'}
             </button>
           ))}
@@ -249,82 +256,11 @@ function PersonalizacaoTab() {
 function EmpresaTab() {
  const [b,setB]=useState<Business|null>(null);const [error,setError]=useState('');const {refreshMe}=useAuth();
  useEffect(()=>{settingsApi.business().then(setB).catch(e=>setError(e.message));},[]);
- if(error)return <p role="alert" className="text-red-600">{error}</p>;
- if(!b)return <p>Carregando configurações…</p>;
+ if(error)return <p role="alert" className="text-danger">{error}</p>;
+ if(!b)return <Card className="p-6"><SkeletonLines lines={5} label="Carregando dados da empresa" /></Card>;
  return <AccountPreferencesForm name={b.nome} preferences={{...b.settings,phone:b.telefone??'',website:b.website??'',address:b.endereco??'',locale:b.idioma}} onSave={async(nome,p)=>{await settingsApi.updateBusiness({nome,telefone:p.phone??'',website:p.website??'',endereco:p.address??'',idioma:p.locale??'pt-BR',settings:p});await refreshMe();}}/>;
 }
 
-function EquipeTab() {
-  const [busy,setBusy]=useState(false);
-  const [emailStatus,setEmailStatus]=useState<EmailStatus|null>(null);
-  useEffect(()=>{settingsApi.emailStatus().then(setEmailStatus).catch(()=>{});},[]);
-  const [data, setData] = useState<{ members: Member[]; invites: Invite[] } | null>(null);
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState('member');
-  const [link, setLink] = useState('');
-  const [msg, setMsg] = useState('');
-  const load = () => settingsApi.members().then(setData).catch(e=>setMsg(e.message));
-  useEffect(() => { load(); }, []);
-
-  const invite = async () => {
-    if (!email) return;
-    setBusy(true);setMsg('');setLink('');
-    try { const r = await settingsApi.invite(email, role);
-    setLink(r.acceptUrl);
-    setMsg(r.emailSent ? 'Convite enviado por e-mail.' : r.erro ?? 'Convite criado. Defina o remetente no Resend para enviar por e-mail ou compartilhe o link.');
-    setEmail(''); load();
-    }catch(e){setMsg(e instanceof Error?e.message:'Não foi possível criar o convite.');}finally{setBusy(false);}
-  };
-
-  return (
-    <div className="space-y-5">
-      <Card className="p-6">
-        <h2 className="mb-3 font-bold text-fg">Convidar usuário</h2><div className="mb-4"><EmailDeliveryStatus status={emailStatus}/></div>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[220px] flex-1"><Field label="E-mail"><Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="pessoa@empresa.com" /></Field></div>
-          <Field label="Papel"><select className="input" value={role} onChange={(e) => setRole(e.target.value)}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select></Field>
-          <Button onClick={invite} disabled={busy||!email.trim()}><Icon name="plus" size={16} /> Convidar</Button>
-        </div>
-        {msg && <p className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">{msg}</p>}
-        {link && (
-          <div className="mt-2 flex items-center gap-2 rounded-lg border border-line bg-surface2 px-3 py-2 text-xs">
-            <span className="min-w-0 flex-1 truncate text-muted">{link}</span>
-            <button onClick={() => navigator.clipboard?.writeText(link)} className="font-semibold text-brand">Copiar</button>
-          </div>
-        )}
-      </Card>
-
-      <Card className="overflow-hidden p-0">
-        <div className="border-b border-line px-5 py-3"><h2 className="font-bold text-fg">Membros</h2></div>
-        <table className="w-full text-sm">
-          <tbody>
-            {data?.members.map((m) => (
-              <tr key={m.identityId} className="border-b border-line last:border-0">
-                <td className="px-5 py-3"><div className="flex items-center gap-3"><Avatar name={m.nome ?? m.email} size={34} /><div><p className="font-semibold text-fg">{m.nome ?? '-'}</p><p className="text-xs text-muted">{m.email}</p></div></div></td>
-                <td className="px-5 py-3 text-right">
-                  <select className="input w-32" value={m.role} onChange={async (e) => { try{await settingsApi.changeRole(m.identityId, e.target.value); load();}catch(e){setMsg(e instanceof Error?e.message:'Não foi possível alterar.');} }}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select>
-                </td>
-              </tr>
-            ))}
-            {!data && <tr><td className="px-5 py-6 text-sm text-muted">Carregando…</td></tr>}
-          </tbody>
-        </table>
-      </Card>
-
-      {(data?.invites.length ?? 0) > 0 && (
-        <Card className="overflow-hidden p-0">
-          <div className="border-b border-line px-5 py-3"><h2 className="font-bold text-fg">Convites pendentes</h2></div>
-          {data?.invites.map((i) => (
-            <div key={i.id} className="flex items-center justify-between border-b border-line px-5 py-3 last:border-0 text-sm">
-              <div><p className="font-semibold text-fg">{i.email}</p><p className="text-xs text-muted">papel {i.role} · expira {new Date(i.expiresAt).toLocaleDateString('pt-BR')}</p></div>
-              <button onClick={async () => { try{await settingsApi.revokeInvite(i.id); load();}catch(e){setMsg(e instanceof Error?e.message:'Não foi possível revogar.');} }} className="text-xs font-semibold text-red-600 dark:text-red-400">Revogar</button>
-            </div>
-          ))}
-        </Card>
-      )}
-    </div>
-  );
-}
 
 function ApiKeysTab() {
   const [erro,setErro]=useState('');
@@ -396,7 +332,7 @@ function ApiKeysTab() {
             </div>
           ))}
           {keys && keys.length === 0 && <p className="px-5 py-8 text-center text-sm text-muted">Nenhuma chave ainda.</p>}
-          {!keys && <p className="px-5 py-8 text-center text-sm text-muted">Carregando…</p>}
+          {!keys && <SkeletonRows rows={2} label="Carregando chaves" />}
         </div>
       </Card>
     </div>
@@ -421,7 +357,7 @@ function AuditoriaTab() {
               </tr>
             ))}
             {rows && rows.length === 0 && <tr><td className="px-5 py-8 text-center text-sm text-muted">Sem registros ainda.</td></tr>}
-            {!rows && <tr><td className="px-5 py-8 text-center text-sm text-muted">Carregando…</td></tr>}
+            {!rows && <tr><td className="p-0"><SkeletonRows rows={4} label="Carregando auditoria" /></td></tr>}
           </tbody>
         </table>
       </div>

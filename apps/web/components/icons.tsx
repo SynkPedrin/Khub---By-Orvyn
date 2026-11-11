@@ -6,7 +6,7 @@ type IconName =
   | 'logout' | 'plus' | 'check' | 'chevronDown' | 'chevronRight' | 'dots'
   | 'arrowUp' | 'arrowDown' | 'mail' | 'lock' | 'user' | 'google' | 'github'
   | 'menu' | 'close' | 'phone' | 'trend' | 'filter' | 'sun' | 'moon'
-  // KHUB Revenue OS
+  // KHUB
   | 'home' | 'leads' | 'chat' | 'zap' | 'send' | 'chart' | 'ai'
   | 'flame' | 'clock' | 'dollar' | 'target' | 'briefcase' | 'link'
   | 'mapPin' | 'edit' | 'trash' | 'external' | 'download' | 'upload'
@@ -14,7 +14,9 @@ type IconName =
   | 'star' | 'alert' | 'info' | 'paperclip' | 'video' | 'refresh'
   | 'eye' | 'eyeOff' | 'tag' | 'file' | 'note' | 'funnel' | 'users' | 'building'
   | 'globe' | 'linkedin' | 'whatsapp' | 'instagram' | 'check2' | 'minus'
-  | 'expand' | 'command' | 'crown' | 'trophy' | 'shield' | 'bolt';
+  | 'expand' | 'command' | 'crown' | 'trophy' | 'shield' | 'bolt'
+  // Editor de automações (Q3.3)
+  | 'undo' | 'redo' | 'copy' | 'layout' | 'history' | 'folder';
 
 const P = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
 
@@ -51,7 +53,7 @@ const PATHS: Record<IconName, React.ReactNode> = {
   phone: <path d="M6 3h3l1.5 5-2 1.5a11 11 0 0 0 5 5l1.5-2 5 1.5v3a2 2 0 0 1-2 2A16 16 0 0 1 4 5a2 2 0 0 1 2-2Z" {...P} />,
   trend: <path d="M3 16l5-5 4 4 8-8M15 7h5v5" {...P} />,
   filter: <path d="M4 5h16l-6 7v6l-4-2v-4Z" {...P} />,
-  // ---------------- KHUB Revenue OS ----------------
+  // ---------------- KHUB ----------------
   home: <><path d="M4 10.5 12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19z" {...P} /><path d="M9.5 20.5v-6h5v6" {...P} /></>,
   leads: <><circle cx="9" cy="8" r="3.2" {...P} /><path d="M3.5 19.5a5.5 5.5 0 0 1 11 0" {...P} /><path d="M16 6.2a3 3 0 0 1 0 5.6M18 19.5a5.3 5.3 0 0 0-2.3-4.3" {...P} /></>,
   chat: <><path d="M20.5 11.6c0 4-3.8 7.2-8.5 7.2a9.7 9.7 0 0 1-2.8-.4L4 20.5l1.4-3.7a6.8 6.8 0 0 1-2-4.7 7.6 7.6 0 0 1 2.4-5.4A9.2 9.2 0 0 1 12 4.4c4.7 0 8.5 3.2 8.5 7.2Z" {...P} /></>,
@@ -103,6 +105,12 @@ const PATHS: Record<IconName, React.ReactNode> = {
   trophy: <><path d="M8 4h8v5.5a4 4 0 0 1-8 0z" {...P} /><path d="M8 5.5H5.2v1.8A3 3 0 0 0 8 10.2M16 5.5h2.8v1.8a3 3 0 0 1-2.8 2.9" {...P} /><path d="M12 13.5v3.2M8.8 20.3h6.4" {...P} /><path d="M9.6 16.7h4.8l.8 3.6H8.8z" {...P} /></>,
   shield: <><path d="M12 3.2 5 6v5.6c0 4.2 2.9 7.8 7 9.2 4.1-1.4 7-5 7-9.2V6z" {...P} /><path d="m9.2 12 2 2 3.6-3.8" {...P} /></>,
   bolt: <path d="M13.5 3 5 13.5h6L10.5 21 19 10.5h-6z" {...P} />,
+  undo: <><path d="M8.5 5 4 9.5 8.5 14" {...P} /><path d="M4 9.5h10a6 6 0 0 1 0 12h-3" {...P} /></>,
+  redo: <><path d="M15.5 5 20 9.5 15.5 14" {...P} /><path d="M20 9.5H10a6 6 0 0 0 0 12h3" {...P} /></>,
+  copy: <><rect x="8.5" y="8.5" width="12" height="12" rx="2" {...P} /><path d="M15.5 8.5V5.5a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3" {...P} /></>,
+  layout: <><rect x="8.5" y="3" width="7" height="5" rx="1.4" {...P} /><rect x="3" y="16" width="7" height="5" rx="1.4" {...P} /><rect x="14" y="16" width="7" height="5" rx="1.4" {...P} /><path d="M12 8v4M6.5 16v-2a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v2" {...P} /></>,
+  history: <><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6" {...P} /><path d="M3.5 4v4h4" {...P} /><path d="M12 7.5V12l3 2" {...P} /></>,
+  folder: <path d="M3.5 7a2 2 0 0 1 2-2h4l2 2.2h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" {...P} />,
 };
 
 export function Icon({ name, size = 20, ...rest }: { name: IconName; size?: number } & SVGProps<SVGSVGElement>) {

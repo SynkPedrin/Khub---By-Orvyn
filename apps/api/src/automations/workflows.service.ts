@@ -4,8 +4,11 @@ import { randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
 import { RunsService } from './runs.service';
-import { CATALOGO, RAMOS_ESPERAR_RESPOSTA, ehGatilho, grafoSchema, validarConfig, type Grafo, type No, type TipoNo } from './catalogo';
+import { CATALOGO, ehGatilho, grafoSchema, noRamificado, ramosFixosDoNo, validarConfig, type Grafo, type No, type TipoNo } from './catalogo';
 import type { Contexto } from './executor.service';
+import { sincronizarAgendas } from './agendador.service';
+import { contatoDoRegistro } from './contexto';
+import { validarReferencias } from './validacao-referencias';
 
 export interface ProblemaGrafo {
   noId?: string;
@@ -32,7 +35,9 @@ export interface ConfigWorkflow {
  * `ramos is not iterable` estourando 500 na validação/publicação.
  */
 function ramosDoNo(no: No): { id: string; rotulo?: string }[] {
-  if (no.tipo === 'controle.esperar_resposta') return [...RAMOS_ESPERAR_RESPOSTA];
+  const fixos = ramosFixosDoNo(no);
+  if (fixos) return [...fixos];
+  if (no.tipo === 'controle.esperar_ate') return []; // modos data/campo: saída única
   const bruto = (no.config as { ramos?: unknown }).ramos;
   if (!Array.isArray(bruto)) return [];
   return bruto
@@ -40,11 +45,11 @@ function ramosDoNo(no: No): { id: string; rotulo?: string }[] {
     .map((r) => ({ id: r.id, rotulo: typeof r.rotulo === 'string' && r.rotulo.trim() ? r.rotulo : undefined }));
 }
 
-const NOS_RAMIFICADOS = new Set<string>(['controle.condicao', 'controle.split', 'controle.esperar_resposta']);
 const NOME_RAMIFICADO: Record<string, string> = {
   'controle.condicao': 'Condição',
   'controle.split': 'Dividir (A/B)',
   'controle.esperar_resposta': 'Esperar resposta',
+  'controle.esperar_ate': 'Esperar até',
 };
 
 /**
@@ -72,16 +77,23 @@ export class WorkflowsService {
     return this.prisma.withTenant(tenantId, async (tx) => {
       const wfs = await tx.workflow.findMany({
         orderBy: { updatedAt: 'desc' },
-        include: { versaoAtiva: { select: { versao: true, publicadoEm: true } }, _count: { select: { runs: true } } },
+        include: {
+          versaoAtiva: { select: { versao: true, publicadoEm: true, grafo: true } },
+          // rascunho mais recente: fluxo nunca publicado também mostra o que faz
+          versoes: { orderBy: { versao: 'desc' }, take: 1, select: { grafo: true } },
+          _count: { select: { runs: true } },
+        },
       });
       // contagem de falhas por workflow, para a lista não mentir "tudo bem"
       const falhas = await tx.workflowRun.groupBy({ by: ['workflowId'], where: { status: 'falhou' }, _count: { _all: true } });
       const mapaFalhas = new Map(falhas.map((f) => [f.workflowId, f._count._all]));
       return wfs.map((w) => ({
-        id: w.id, nome: w.nome, descricao: w.descricao, tags: w.tags, status: w.status,
+        id: w.id, nome: w.nome, descricao: w.descricao, tags: w.tags, pasta: w.pasta, status: w.status,
         versaoAtiva: w.versaoAtiva?.versao ?? null, publicadoEm: w.versaoAtiva?.publicadoEm ?? null,
         execucoes: w._count.runs, falhas: mapaFalhas.get(w.id) ?? 0,
         updatedAt: w.updatedAt,
+        // Tipos de nó na ordem do grafo (sem repetir): a lista desenha a cadeia de logos.
+        tipos: tiposDoGrafo(w.versaoAtiva?.grafo ?? w.versoes[0]?.grafo),
       }));
     });
   }
@@ -99,7 +111,7 @@ export class WorkflowsService {
       });
       const base = rascunho ?? w.versaoAtiva;
       return {
-        id: w.id, nome: w.nome, descricao: w.descricao, tags: w.tags, status: w.status,
+        id: w.id, nome: w.nome, descricao: w.descricao, tags: w.tags, pasta: w.pasta, status: w.status,
         versaoAtivaId: w.versaoAtivaId, versaoAtiva: w.versaoAtiva?.versao ?? null,
         rascunhoId: rascunho?.id ?? null,
         temRascunho: !!rascunho,
@@ -210,9 +222,11 @@ export class WorkflowsService {
     });
   }
 
-  async renomear(tenantId: string, id: string, dto: { nome?: string; descricao?: string; tags?: string[] }) {
+  async renomear(tenantId: string, id: string, dto: { nome?: string; descricao?: string; tags?: string[]; pasta?: string | null }) {
+    // pasta: undefined = não mexe; null/"" = tira da pasta (db/058)
+    const pasta = dto.pasta === undefined ? undefined : dto.pasta?.trim() || null;
     return this.prisma.withTenant(tenantId, async (tx) => {
-      const r = await tx.workflow.updateMany({ where: { id }, data: { nome: dto.nome ?? undefined, descricao: dto.descricao ?? undefined, tags: dto.tags ?? undefined, updatedAt: new Date() } });
+      const r = await tx.workflow.updateMany({ where: { id }, data: { nome: dto.nome ?? undefined, descricao: dto.descricao ?? undefined, tags: dto.tags ?? undefined, pasta, updatedAt: new Date() } });
       if (!r.count) throw new NotFoundException('workflow inexistente');
       return { ok: true };
     });
@@ -277,7 +291,7 @@ export class WorkflowsService {
       // Ramificações (Q1.5): cada saída nomeada precisa levar a algum nó — para
       // terminar o caminho de propósito, ligue-a a "Encerrar". Ramo solto é o
       // contato sumindo do fluxo sem ninguém ter decidido isso.
-      if (NOS_RAMIFICADOS.has(no.tipo)) {
+      if (noRamificado(no)) {
         const nomeNo = no.rotulo ?? NOME_RAMIFICADO[no.tipo];
         const ramos = ramosDoNo(no);
         const idsRamos = new Set(ramos.map((r) => r.id));
@@ -310,12 +324,16 @@ export class WorkflowsService {
 
       const grafo = grafoSchema.parse(rascunho.grafo);
       const problemas = this.validar(grafo);
+      // Q3.1/Q3.2: referências que só o banco confirma (membro, campo, fluxo, etapa)
+      if (!problemas.length) problemas.push(...await validarReferencias(tx, tenantId, grafo));
       if (problemas.length) {
         throw new BadRequestException({ title: 'workflow inválido', problemas });
       }
 
       await tx.workflowVersion.update({ where: { id: rascunho.id }, data: { publicadoEm: new Date(), publicadoPor: identityId } });
       await tx.workflow.update({ where: { id }, data: { versaoAtivaId: rascunho.id, status: 'ativo', updatedAt: new Date() } });
+      // Gatilhos por tempo (db/057): a agenda segue a versão ativa
+      await sincronizarAgendas(tx, tenantId, id);
       await tx.$executeRaw`INSERT INTO audit_logs (tenant_id, actor_type, actor_id, acao, entidade, entidade_id, payload)
         VALUES (${tenantId}::uuid, 'humano', ${identityId}, 'workflow.publish', 'workflow', ${id}, ${JSON.stringify({ versao: rascunho.versao })}::jsonb)`;
       return { ok: true, versao: rascunho.versao };
@@ -328,6 +346,7 @@ export class WorkflowsService {
       const v = await tx.workflowVersion.findFirst({ where: { id: versionId, workflowId: id, publicadoEm: { not: null } }, select: { id: true, versao: true } });
       if (!v) throw new NotFoundException('versão publicada inexistente');
       await tx.workflow.update({ where: { id }, data: { versaoAtivaId: v.id, status: 'ativo', updatedAt: new Date() } });
+      await sincronizarAgendas(tx, tenantId, id);
       await tx.$executeRaw`INSERT INTO audit_logs (tenant_id, actor_type, actor_id, acao, entidade, entidade_id, payload)
         VALUES (${tenantId}::uuid, 'humano', ${identityId}, 'workflow.rollback', 'workflow', ${id}, ${JSON.stringify({ versao: v.versao })}::jsonb)`;
       return { ok: true, versao: v.versao };
@@ -340,6 +359,8 @@ export class WorkflowsService {
       if (!w) throw new NotFoundException('workflow inexistente');
       if (status === 'ativo' && !w.versaoAtivaId) throw new BadRequestException('publique o workflow antes de ativar');
       await tx.workflow.update({ where: { id }, data: { status, updatedAt: new Date() } });
+      // pausar remove o agendamento; reativar recalcula a próxima janela
+      await sincronizarAgendas(tx, tenantId, id);
       await tx.$executeRaw`INSERT INTO audit_logs (tenant_id, actor_type, actor_id, acao, entidade, entidade_id)
         VALUES (${tenantId}::uuid, 'humano', ${identityId}, ${`workflow.${status}`}, 'workflow', ${id})`;
       return { ok: true };
@@ -374,12 +395,7 @@ export class WorkflowsService {
     const grafo = grafoSchema.parse(dados.versao.grafo);
     const gatilho = grafo.nos.find((n) => ehGatilho(n.tipo));
     if (!gatilho) throw new BadRequestException('workflow sem gatilho');
-    const ctx: Contexto = {
-      contato: {
-        id: dados.contato.id, nome: dados.contato.nome, email: dados.contato.email, telefone: dados.contato.telefone,
-        empresa: dados.contato.empresa, tag: dados.contato.tag, tags: dados.contato.tags, valor: Number(dados.contato.valorEstimado ?? 0),
-      },
-    };
+    const ctx: Contexto = { contato: contatoDoRegistro(dados.contato) };
     const dia = new Date().toISOString().slice(0, 10);
     const r = await this.runs.iniciar({
       tenantId, workflowId: id, versionId: dados.versao.id, gatilho: `agente:${origem.agentNome}`.slice(0, 120),
@@ -391,8 +407,10 @@ export class WorkflowsService {
 
   /**
    * Teste com contato real do tenant (PRD §7.2), sem esperar o gatilho.
-   * A run é marcada `teste: true` — as ações acontecem de verdade, então a UI
-   * avisa. Sem isso, "testar" seria simulação, e simulação mente.
+   * A run é marcada `teste: true` e o contexto também: o motor entrega as
+   * mensagens de verdade, mas só no número de teste (`AUTOMATION_TEST_PHONE`),
+   * com os dados reais do contato; o resto (CRM, webhook, e-mail, encadear)
+   * é simulado com o que SERIA feito. Teste nunca afeta a operação.
    */
   async testar(tenantId: string, id: string, contactId: string) {
     const dados = await this.prisma.withTenant(tenantId, async (tx) => {
@@ -410,15 +428,11 @@ export class WorkflowsService {
 
     const grafo = grafoSchema.parse(dados.versao.grafo);
     const problemas = this.validar(grafo);
+    if (!problemas.length) problemas.push(...await this.prisma.withTenant(tenantId, (tx) => validarReferencias(tx, tenantId, grafo)));
     if (problemas.length) throw new BadRequestException({ title: 'workflow inválido', problemas });
 
     const gatilho = grafo.nos.find((n) => ehGatilho(n.tipo))!;
-    const ctx: Contexto = {
-      contato: {
-        id: dados.contato.id, nome: dados.contato.nome, email: dados.contato.email, telefone: dados.contato.telefone,
-        empresa: dados.contato.empresa, tag: dados.contato.tag, tags: dados.contato.tags, valor: Number(dados.contato.valorEstimado ?? 0),
-      },
-    };
+    const ctx: Contexto = { contato: contatoDoRegistro(dados.contato), teste: true };
     const r = await this.runs.iniciar({
       tenantId, workflowId: id, versionId: dados.versao.id, gatilho: `${gatilho.tipo} (teste)`,
       grafo, noInicial: gatilho.id, contexto: ctx, teste: true,
@@ -429,4 +443,13 @@ export class WorkflowsService {
     });
     return { ...r, versao: dados.versao.versao, rascunho: dados.doRascunho };
   }
+}
+
+/** Tipos de nó do grafo, gatilho primeiro, sem repetir (para a lista de fluxos). */
+function tiposDoGrafo(grafo: unknown): string[] {
+  const nos = (grafo as { nos?: { tipo?: unknown }[] } | null)?.nos;
+  if (!Array.isArray(nos)) return [];
+  const tipos = nos.map((n) => String(n?.tipo ?? '')).filter(Boolean);
+  const ordenados = [...tipos.filter((t) => t.startsWith('gatilho.')), ...tipos.filter((t) => !t.startsWith('gatilho.'))];
+  return Array.from(new Set(ordenados));
 }

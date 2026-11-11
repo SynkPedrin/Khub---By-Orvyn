@@ -9,6 +9,7 @@ import { KpiCard } from '@/components/revenue/Kpi';
 import { KpiGrid } from '@/components/revenue/Page';
 import { agentesApi, dataHora, inteiro, ROTULO_INTENCAO, ROTULO_STATUS_RUN, usd, type AgenteResumo, type StatusAgente } from '@/lib/agents';
 import { Abas, Confirmar, Erro, Esqueleto, Modal, Painel, StatusAgentePill, Vazio, useAcao, useCarga } from '@/components/agents/kit';
+import { AgenteShowcase } from '@/components/agents/AgenteShowcase';
 
 type Filtro = 'todos' | StatusAgente;
 
@@ -66,7 +67,7 @@ export default function AgentesPage() {
           <h1 className="t-display">Agentes de IA</h1>
           <p className="mt-1.5 text-[15px] text-muted">Especialistas que atendem no WhatsApp, consultam a base, atualizam o CRM e fazem follow-up com contexto.</p>
         </div>
-        <div className="flex max-w-full flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2">
           <div className="segbar" role="tablist" aria-label="Período">
             {[7, 30, 90].map((n) => <button key={n} role="tab" aria-selected={dias === n} className="seg" onClick={() => setDias(n)}>{n} dias</button>)}
           </div>
@@ -84,19 +85,14 @@ export default function AgentesPage() {
 
       {painel.erro ? <Erro texto={painel.erro} tentar={painel.recarregar} /> : (
         <>
+          <AgenteShowcase />
           <KpiGrid cols={6}>
             <KpiCard compacto loading={!d} label="Agentes" value={d ? inteiro(d.agentes.total) : ''} icon="ai" comparacao={d ? `${d.agentes.ativos} ativos · ${d.agentes.pausados} pausados` : undefined} />
-            <KpiCard compacto loading={!d} label="Em treinamento" value={d ? inteiro(d.agentes.emTreinamento) : ''} icon="knowledge" tom="info" comparacao={d ? `${d.documentosProcessando} doc. indexando` : undefined} />
             <KpiCard compacto loading={!d} label="Conversas atendidas" value={d ? inteiro(d.conversasAtendidas) : ''} icon="chat" />
-            <KpiCard compacto loading={!d} label="Mensagens enviadas" value={d ? inteiro(d.mensagensEnviadas) : ''} icon="send" />
             <KpiCard compacto loading={!d} label="Leads qualificados" value={d ? inteiro(d.leadsQualificados) : ''} icon="target" tom="success" />
-            <KpiCard compacto loading={!d} label="Oportunidades recuperadas" value={d ? inteiro(d.oportunidadesRecuperadas) : ''} icon="refresh" tom="success" comparacao={d ? `${d.followupsEnviados} follow-ups` : undefined} />
             <KpiCard compacto loading={!d} label="Agendamentos" value={d ? inteiro(d.agendamentos) : ''} icon="calendar" />
             <KpiCard compacto loading={!d} label="Conversões" value={d ? inteiro(d.conversoes) : ''} icon="trophy" tom="success" />
-            <KpiCard compacto loading={!d} label="Transferência humana" value={d ? `${d.taxaTransferencia}%` : ''} icon="users" tom={d && d.taxaTransferencia > 40 ? 'warning' : 'neutral'} />
-            <KpiCard compacto loading={!d} label="Tokens" value={d ? inteiro(d.tokens) : ''} icon="bolt" tom="neutral" />
-            <KpiCard compacto loading={!d} label="Custo estimado" value={d ? usd(d.custoUsd) : ''} icon="dollar" tom="neutral" />
-            <KpiCard compacto loading={!d} label="Aprovações pendentes" value={d ? inteiro(d.aprovacoesPendentes) : ''} icon="shield" tom={d && d.aprovacoesPendentes ? 'warning' : 'neutral'} />
+            <KpiCard compacto loading={!d} label="Aprovações pendentes" value={d ? inteiro(d.aprovacoesPendentes) : ''} icon="shield" tom={d && d.aprovacoesPendentes ? 'warning' : 'neutral'} comparacao={d ? `${usd(d.custoUsd)} em IA` : undefined} />
           </KpiGrid>
         </>
       )}

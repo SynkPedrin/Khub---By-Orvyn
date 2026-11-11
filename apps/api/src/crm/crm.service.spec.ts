@@ -112,7 +112,8 @@ describe('CrmService.listContacts (D1 — paginação por cursor)', () => {
     const svc = crm(fakePrisma(contatosFake(26), captura));
     const p1 = await svc.listContacts(TENANT, { q: 'mar', limit: 25 });
     await svc.listContacts(TENANT, { q: 'mar', limit: 25, cursor: p1.nextCursor! });
-    expect(JSON.stringify(captura[1].where)).toContain('mar'); // filtro de busca preservado
+    // filtro de busca preservado (desde a Q2.2 o `where` é `{ AND: [...] }` do filtro único)
+    expect(JSON.stringify(captura[1].where)).toContain('"OR"');
     expect(captura[1].cursor).toBeDefined();   // + cursor
   });
 });

@@ -71,8 +71,10 @@ const config: Config = {
         },
       },
       fontFamily: {
-        // Inter (next/font) em todas as plataformas; SF Pro só como reserva — ADR-0036.
+        // Manrope (next/font/local) em todas as plataformas; SF Pro só como reserva (ADR-0043).
         sans: ['var(--font-sans)', '-apple-system', 'BlinkMacSystemFont', '"SF Pro Text"', 'ui-sans-serif', 'system-ui', 'Segoe UI', 'Roboto', 'sans-serif'],
+        // Instrument Serif itálica: acento editorial da identidade Kroma, nunca texto corrido.
+        serif: ['var(--font-serif)', 'ui-serif', 'Georgia', 'serif'],
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       fontSize: {

@@ -6,6 +6,7 @@ import { Button, Card, Field, Input } from '@/components/ui';
 import { useDialogFocus } from '@/lib/use-dialog-focus';
 import { Icon } from '@/components/icons';
 import { crm, type Contato, type Tarefa } from '@/lib/crm';
+import { SkeletonRows } from '@/components/kit';
 
 type Filtro = 'abertas' | 'hoje' | 'atrasadas' | 'concluidas' | 'todas';
 const FILTROS: { key: Filtro; label: string }[] = [
@@ -86,7 +87,7 @@ export default function TarefasPage() {
 
       {erro && <p role="alert" className="text-sm text-danger">{erro}</p>}
       <Card className="p-2">
-        {!rows && <p className="py-10 text-center text-sm text-muted">Carregando…</p>}
+        {!rows && <SkeletonRows rows={5} label="Carregando tarefas" />}
         {rows && rows.length === 0 && (
           <p className="py-10 text-center text-sm text-muted">
             {filtro === 'atrasadas' ? 'Nada atrasado. ' : filtro === 'concluidas' ? 'Nada concluído ainda.' : 'Nada pendente aqui.'}

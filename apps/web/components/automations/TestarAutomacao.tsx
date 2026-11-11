@@ -38,9 +38,9 @@ function rotuloPasso(tipo: string): string {
 
 /**
  * Teste da automação com um contato real (POST /workflows/:id/testar): o run
- * é marcado como teste e aparece aqui passo a passo. Avisos honestos: ações
- * acontecem de verdade (tag, oportunidade) e, fora de produção, mensagens só
- * saem para o número de teste (trava de dev do MessagesService).
+ * é marcado como teste e aparece aqui passo a passo. O motor nunca toca a
+ * operação num teste: mensagens só no número de teste (AUTOMATION_TEST_PHONE),
+ * CRM/e-mail/webhook simulados com o que SERIA feito (ExecutorService.emTeste).
  */
 export function TestarAutomacao({ workflowId, rotulos, onFechar }: { workflowId: string; rotulos: Record<string, string>; onFechar: () => void }) {
   const [busca, setBusca] = useState('');
@@ -185,8 +185,8 @@ export function TestarAutomacao({ workflowId, rotulos, onFechar }: { workflowId:
             {!buscando && semResultado && !contato && <p className="text-[12px] text-muted">Nenhum contato encontrado. Confira se você está na operação certa.</p>}
 
             <div className="rounded-xl bg-[var(--fill-4)] p-3 text-[12.5px] leading-relaxed text-muted">
-              <p>· Tags, oportunidade e tarefas do fluxo são criadas de verdade para este contato. Prefira um contato de teste.</p>
-              <p className="mt-1">· Neste ambiente, as mensagens não vão para o contato: saem apenas para o número de teste da equipe.</p>
+              <p>· O teste usa os dados reais deste contato, mas <b className="text-fg">não mexe na operação</b>: nada muda no CRM, nenhum e-mail ou webhook sai e nenhuma outra automação dispara.</p>
+              <p className="mt-1">· As mensagens de WhatsApp saem de verdade, só que apenas para o número de teste. Esperas são puladas.</p>
             </div>
 
             {erro && <p className="text-[13px] text-danger">{erro}</p>}
@@ -245,6 +245,7 @@ export function TestarAutomacao({ workflowId, rotulos, onFechar }: { workflowId:
                       {rotulos[s.noId] ?? rotuloPasso(s.tipo)}
                       <span className="ml-1.5 text-[11px] font-normal text-muted">{rotuloPasso(s.tipo)}</span>
                     </p>
+                    {typeof s.saida?.descricao === 'string' && <p className="mt-0.5 text-[12px] text-faint">{String(s.saida.descricao)}</p>}
                     {typeof s.saida?.texto === 'string' && <p className="mt-0.5 whitespace-pre-line text-[12px] text-muted">{String(s.saida.texto).slice(0, 180)}</p>}
                     {s.erro && <p className="mt-0.5 text-[12px] text-danger">{s.erro}</p>}
                   </div>

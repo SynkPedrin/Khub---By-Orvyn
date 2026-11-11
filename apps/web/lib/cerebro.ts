@@ -45,7 +45,7 @@ export function resolveCerebroDir(): string {
 const CEREBRO_DIR = resolveCerebroDir();
 
 /**
- * Escopo de visibilidade (BUG-028). O vault tem duas naturezas:
+ * Escopo de visibilidade (BUG-030). O vault tem duas naturezas:
  *  - `RAG/conhecimento/**` é a base de conhecimento de produto (Biblioteca,
  *    frameworks de marketing e operação) e pode ser lida por qualquer usuário
  *    logado de qualquer cliente;

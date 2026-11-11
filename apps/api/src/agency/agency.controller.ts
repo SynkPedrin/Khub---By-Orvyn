@@ -1,5 +1,5 @@
-import { Body, Controller, Delete, Get, Headers, Param, ParseUUIDPipe, Post } from '@nestjs/common';
-import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { Body, Controller, Delete, Get, Headers, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
+import { IsArray, IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 import { CurrentUser, type AuthUser } from '../auth/decorators';
 import { SkipAudit } from '../common/audit.interceptor';
 import { AgencyService } from './agency.service';
@@ -7,6 +7,12 @@ import { AgencyService } from './agency.service';
 class CriarClienteDto {
   @IsString() @MinLength(2) @MaxLength(120) nome!: string;
   @IsOptional() @IsString() @MaxLength(80) nicho?: string;
+}
+
+class AtualizarMembroDto {
+  @IsOptional() @IsIn(['admin', 'member', 'viewer']) role?: 'admin' | 'member' | 'viewer';
+  /** [] = sem restrição (acesso global a todas as subcontas). */
+  @IsOptional() @IsArray() @IsUUID('4', { each: true }) clientIds?: string[];
 }
 
 /**
@@ -39,6 +45,12 @@ export class AgencyController {
   @Get('members')
   listarMembros(@CurrentUser() user: AuthUser) {
     return this.agency.listarMembros(user.identityId);
+  }
+
+  /** Edita papel e/ou acesso a subcontas do membro (visibilidade por usuário, estilo GHL). */
+  @Patch('members/:id')
+  atualizarMembro(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: AtualizarMembroDto) {
+    return this.agency.atualizarMembro(user.identityId, id, dto);
   }
 
   /** Remove o membro da agência e os acessos dele aos clientes (SEC-01). */

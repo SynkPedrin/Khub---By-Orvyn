@@ -53,6 +53,9 @@ const schema = z.object({
   STEVO_WEBHOOK_TOKEN: z.string().optional(),
   STEVO_FALLBACK_TENANT_ID: z.string().optional(), // dev: roteia entrada quando não há integração mapeada
   STEVO_TEST_NUMBER: z.string().optional(), // dev: manda toda saída para este número
+  // Número que recebe TODA mensagem de execução de teste de automação (Testar e
+  // modo simples da NICO). Vale também em produção: teste nunca fala com contato real.
+  AUTOMATION_TEST_PHONE: z.string().optional(),
   // Stevo — API de GESTÃO (https://openapi.stevo.chat/v1): instâncias, envio,
   // webhooks de conta assinados. Chave de conta `stevo_sk_…` (sem restrição de
   // instância, exigida para webhook de conta). Nunca vai ao browser.
@@ -100,6 +103,10 @@ const schema = z.object({
   RATE_LIMIT_WINDOW_SEC: z.coerce.number().int().positive().default(60),
   RATE_LIMIT_TENANT_MAX: z.coerce.number().int().positive().default(600), // req/janela por tenant
   RATE_LIMIT_IP_MAX: z.coerce.number().int().positive().default(120),     // req/janela por IP (rotas públicas)
+  // Segredo compartilhado com o web (Next): só com ele a API confia no IP do
+  // visitante repassado pelo proxy das páginas públicas /f e /b (rate limit
+  // por IP real). Sem ele, vale o IP do socket (o do servidor web).
+  KHUB_PROXY_SECRET: z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), z.string().min(16, 'KHUB_PROXY_SECRET deve ter pelo menos 16 caracteres').optional()),
 
   // Observabilidade — só falta plugar o DSN para o Sentry entrar (pacote à parte).
   SENTRY_DSN: z.string().optional(),

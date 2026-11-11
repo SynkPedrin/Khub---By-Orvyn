@@ -8,6 +8,7 @@ import type { WorkflowsService } from '../automations/workflows.service';
 import type { RetrievalService } from '../rag/retrieval.service';
 import type { MarketplaceService } from '../marketplace/marketplace.service';
 import type { BlueprintService } from '../blueprints/blueprint.service';
+import type { NicoAnalisesService } from './analises.service';
 
 const CTX: ContextoNyro = { tenantId: '11111111-1111-1111-1111-111111111111', identityId: 'id-1', nicho: 'clinica', subespecialidade: null };
 const UUID = '22222222-2222-2222-2222-222222222222';
@@ -24,7 +25,7 @@ function amb() {
   const blueprints = { aplicar: jest.fn(async () => ({ jaAplicado: false, blueprint: 'saude.odontologia', funil: { id: 'pl1' }, automacoes: [] })) } as unknown as BlueprintService;
   const prisma = { withTenant: jest.fn(async (_t: string, w: (tx: unknown) => unknown) => w({ $executeRaw: jest.fn() })) } as unknown as PrismaService;
   const vazio = {} as never;
-  const svc = new ToolExecutorService(prisma, crm, vazio as MessagesService, vazio as TasksService, vazio as NotesService, vazio as WorkflowsService, vazio as RetrievalService, marketplace, blueprints);
+  const svc = new ToolExecutorService(prisma, crm, vazio as MessagesService, vazio as TasksService, vazio as NotesService, vazio as WorkflowsService, vazio as RetrievalService, marketplace, blueprints, vazio as NicoAnalisesService);
   return { svc, crm, marketplace, blueprints };
 }
 

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { cx } from '../ui';
 
 /**
- * Moldura padrão de página do Revenue OS.
+ * Moldura padrão de página do KHUB.
  *
  * Toda tela do produto usa este container: mesma gutter lateral, mesmo
  * ritmo vertical. Sem ele, cada página inventa o próprio espaçamento e o

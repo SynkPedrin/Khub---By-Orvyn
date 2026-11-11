@@ -37,7 +37,7 @@ describe('TriggersService.filtroBate', () => {
   });
 });
 
-describe('BUG-027 — "Contato criado" com filtro de origem', () => {
+describe('BUG-029 — "Contato criado" com filtro de origem', () => {
   it('normaliza: caixa, acento, espaço e hífen não importam', () => {
     expect(normalizarTermo('Meta Ads')).toBe('metaads');
     expect(normalizarTermo('meta-ads')).toBe('metaads');
@@ -97,7 +97,7 @@ describe('Q1.2 — "Mensagem recebida" filtra pelo canal da conversa', () => {
         contact: { findUnique: jest.fn(async () => ({ id: 'c1', nome: 'Ana', email: null, telefone: null, empresa: null, tag: 'Lead', tags: [], valorEstimado: 0 })) },
       };
       const prisma = { withTenant: jest.fn(async (_t: string, work: (t: unknown) => Promise<unknown>) => work(tx)) } as unknown as PrismaService;
-      const runs = { iniciar: jest.fn(async () => ({ runId: 'r1' })), avisarResposta: jest.fn(async () => undefined) } as unknown as RunsService;
+      const runs = { iniciar: jest.fn(async () => ({ runId: 'r1' })), avisarResposta: jest.fn(async () => undefined), avisarEvento: jest.fn(async () => undefined) } as unknown as RunsService;
       return { svc: new TriggersService(prisma, runs), runs };
     };
     const job = { tenantId: 't', evento: 'message.created' as const, dados: { id: 'm1', conversationId: 'conv1', de: 'contato', texto: 'oi' }, dedupeKey: 'e1' };
@@ -109,5 +109,83 @@ describe('Q1.2 — "Mensagem recebida" filtra pelo canal da conversa', () => {
     const whats = ambiente('WhatsApp');
     await whats.svc.processar(job);
     expect(whats.runs.iniciar).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Gatilhos de agenda (Q2.4 / RV-05.2): appointment.* do outbox da migration 054.
+// ---------------------------------------------------------------------------
+describe('TriggersService · gatilhos de agenda', () => {
+  const AG = {
+    id: 'ag1', titulo: 'Consulta inicial', inicio: new Date('2026-11-15T17:30:00Z'), fim: new Date('2026-11-15T18:30:00Z'),
+    local: 'Rua das Flores, 10', tipo: 'reuniao', status: 'agendado', responsavelId: 'u1', contactId: 'c1',
+  };
+  const grafoDe = (tipo: string, config: Record<string, unknown> = {}) => ({
+    nos: [{ id: 'g', tipo, posicao: { x: 0, y: 0 }, config }, { id: 'a', tipo: 'acao.adicionar_tag', posicao: { x: 1, y: 0 }, config: { tag: 'x' } }],
+    arestas: [{ id: 'e', de: 'g', para: 'a' }],
+  });
+  const ambiente = (grafo: unknown, compromisso: typeof AG | null = AG, timezone?: string) => {
+    const tx = {
+      workflow: { findMany: jest.fn(async () => [{ id: 'w1', versaoAtivaId: 'v1', versaoAtiva: { id: 'v1', grafo } }]) },
+      agendaCompromisso: { findUnique: jest.fn(async () => compromisso) },
+      tenant: { findUnique: jest.fn(async () => ({ settings: timezone ? { timezone } : {} })) },
+      contact: { findUnique: jest.fn(async () => ({ id: 'c1', nome: 'Ana', email: null, telefone: '5511999990000', empresa: null, tag: 'Lead', tags: [], valorEstimado: 0 })) },
+    };
+    const prisma = { withTenant: jest.fn(async (_t: string, work: (t: unknown) => Promise<unknown>) => work(tx)) } as unknown as PrismaService;
+    const runs = { iniciar: jest.fn(async () => ({ runId: 'r1' })), avisarResposta: jest.fn(async () => undefined), avisarEvento: jest.fn(async () => undefined) } as unknown as RunsService;
+    return { svc: new TriggersService(prisma, runs), runs, tx };
+  };
+  const job = (evento: string, dados: Record<string, unknown> = {}) =>
+    ({ tenantId: 't', evento, dados: { id: 'ag1', contactId: 'c1', responsavelId: 'u1', tipo: 'reuniao', status: 'agendado', ...dados }, dedupeKey: 'ev1' }) as never;
+
+  it.each([
+    ['appointment.created', 'gatilho.agendamento_criado'],
+    ['appointment.confirmed', 'gatilho.agendamento_confirmado'],
+    ['appointment.no_show', 'gatilho.faltou'],
+    ['appointment.cancelled', 'gatilho.agendamento_cancelado'],
+    ['appointment.reminder_due', 'gatilho.lembrete_agendamento'],
+  ])('%s abre o fluxo com gatilho %s', async (evento, tipo) => {
+    const { svc: s, runs } = ambiente(grafoDe(tipo));
+    await s.processar(job(evento));
+    expect(runs.iniciar).toHaveBeenCalledWith(expect.objectContaining({ gatilho: tipo, dedupeKey: 'ev1:g' }));
+  });
+
+  it('evento de agenda não aciona gatilho de outro tipo', async () => {
+    const { svc: s, runs } = ambiente(grafoDe('gatilho.faltou'));
+    await s.processar(job('appointment.confirmed'));
+    expect(runs.iniciar).not.toHaveBeenCalled();
+  });
+
+  it('contexto expõe agendamento.data/hora/titulo/local no fuso da conta', async () => {
+    const { svc: s, runs } = ambiente(grafoDe('gatilho.agendamento_criado'), AG, 'America/Sao_Paulo');
+    await s.processar(job('appointment.created'));
+    const ctx = (runs.iniciar as jest.Mock).mock.calls[0][0].contexto;
+    expect(ctx.agendamento).toEqual(expect.objectContaining({ titulo: 'Consulta inicial', data: '15/11/2026', hora: '14:30', horaFim: '15:30', local: 'Rua das Flores, 10' }));
+    expect(ctx.contato).toEqual(expect.objectContaining({ id: 'c1', nome: 'Ana' }));
+  });
+
+  it('fuso inválido na conta cai no padrão (São Paulo) em vez de quebrar', async () => {
+    const { svc: s, runs } = ambiente(grafoDe('gatilho.agendamento_criado'), AG, 'Marte/Olympus');
+    await s.processar(job('appointment.created'));
+    expect((runs.iniciar as jest.Mock).mock.calls[0][0].contexto.agendamento.hora).toBe('14:30');
+  });
+
+  it('compromisso apagado ou sem contato não abre run', async () => {
+    const apagado = ambiente(grafoDe('gatilho.agendamento_criado'), null);
+    await apagado.svc.processar(job('appointment.created'));
+    expect(apagado.runs.iniciar).not.toHaveBeenCalled();
+
+    const semContato = ambiente(grafoDe('gatilho.agendamento_criado'), { ...AG, contactId: null as unknown as string });
+    await semContato.svc.processar(job('appointment.created', { contactId: null }));
+    expect(semContato.runs.iniciar).not.toHaveBeenCalled();
+  });
+
+  it('filtro por tipo e por responsável: vazio casa qualquer; configurado casa só o igual', () => {
+    expect(bate('gatilho.agendamento_criado', {}, { tipo: 'demo', responsavelId: 'u2' })).toBe(true);
+    expect(bate('gatilho.agendamento_criado', { tipo: 'demo' }, { tipo: 'demo' })).toBe(true);
+    expect(bate('gatilho.agendamento_criado', { tipo: 'demo' }, { tipo: 'call' })).toBe(false);
+    expect(bate('gatilho.faltou', { responsavelId: 'u1' }, { responsavelId: 'u1' })).toBe(true);
+    expect(bate('gatilho.faltou', { responsavelId: 'u1' }, { responsavelId: 'u2' })).toBe(false);
+    expect(bate('gatilho.lembrete_agendamento', { tipo: 'visita', responsavelId: 'u1' }, { tipo: 'visita', responsavelId: null })).toBe(false);
   });
 });

@@ -7,6 +7,7 @@ import { BlueprintModule } from '../blueprints/blueprint.module';
 import { NyroController } from './nyro.controller';
 import { NyroService } from './nyro.service';
 import { ToolExecutorService } from './tool-executor.service';
+import { NicoAnalisesService } from './analises.service';
 
 /**
  * Nyro IA (Sprint F).
@@ -18,7 +19,8 @@ import { ToolExecutorService } from './tool-executor.service';
 @Module({
   imports: [CrmModule, RagModule, AutomationsModule, MarketplaceModule, BlueprintModule],
   controllers: [NyroController],
-  providers: [NyroService, ToolExecutorService],
-  exports: [NyroService],
+  providers: [NyroService, ToolExecutorService, NicoAnalisesService],
+  exports: [NyroService, NicoAnalisesService],
+
 })
 export class NyroModule {}

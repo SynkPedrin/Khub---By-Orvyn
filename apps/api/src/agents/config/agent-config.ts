@@ -377,7 +377,10 @@ export const PERFIS_PERSONALIDADE: Record<string, { nome: string; valores: Omit<
 };
 
 const DESCRITORES: Record<DimensaoPersonalidade, [string, string, string]> = {
-  formalidade: ['linguagem informal, coloquial', 'linguagem cordial e neutra', 'linguagem formal, trate por "o senhor"/"a senhora"'],
+  // "o senhor/a senhora" é decisão do TOM (formal), não da faixa alta: com tom
+  // cordial + formalidade 70 o prompt mandava as duas coisas e o agente soava
+  // como central de atendimento.
+  formalidade: ['linguagem informal, coloquial', 'linguagem cordial e neutra', 'linguagem polida e respeitosa, sem gírias nem abreviações'],
   proximidade: ['mantenha distância profissional', 'seja próximo sem intimidade', 'seja caloroso e próximo, como alguém de confiança'],
   empatia: ['foque nos fatos', 'reconheça o sentimento do contato quando houver', 'acolha emoções explicitamente antes de seguir'],
   objetividade: ['pode contextualizar com calma', 'vá ao ponto com algum contexto', 'seja direto: responda primeiro, detalhe só se pedirem'],

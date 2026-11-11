@@ -5,6 +5,8 @@ import { permissionFor, hasPermission } from '../auth/permissions.guard';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { Prisma } from '@prisma/client';
 import type { AuthUser } from '../auth/decorators';
+import { CrmService } from './crm.service';
+import { filtroDaQuery } from './contatos-filtro';
 
 const def = (chave: string, tipo: string, extra: Partial<DefCampo> = {}): DefCampo => ({
   chave, rotulo: chave.toUpperCase(), tipo, opcoes: [], obrigatorio: false, arquivadoEm: null, ...extra,
@@ -194,7 +196,7 @@ function fakePrisma(rows: Row[], uso = 0) {
     },
     contact: {
       findUnique: jest.fn(async () => ({ id: 'c1', camposCustom: { cpf: '1', lead_origem: 'Meta' } })),
-      update: jest.fn(async () => ({})),
+      update: jest.fn(async (_args: { where: { id: string }; data: Record<string, unknown> }) => ({})),
     },
     $queryRaw: jest.fn(async () => [{ n: BigInt(uso) }]),
   };
@@ -262,7 +264,7 @@ describe('CustomFieldsService', () => {
     const { prisma, tx } = fakePrisma(DEFS.map((d, i) => linha(`id${i}`, d, i)));
     const r = await new CustomFieldsService(prisma).atualizarCamposContato(T, 'c1', { vip: 'true', cpf: '1' });
     expect(r).toEqual({ ok: true, alterados: ['vip'] });
-    expect(tx.contact.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ camposCustom: { cpf: '1', lead_origem: 'Meta', vip: true } }) }));
+    expect(tx.contact.update.mock.calls[0][0]).toMatchObject({ data: { camposCustom: { cpf: '1', lead_origem: 'Meta', vip: true } } });
     await expect(new CustomFieldsService(prisma).atualizarCamposContato(T, 'c1', { idade: 'x' })).rejects.toBeInstanceOf(BadRequestException);
   });
 });
@@ -280,5 +282,33 @@ describe('PermissionsGuard: definições só owner/admin escrevem', () => {
   it('chave de API nunca escreve definição', () => {
     const api = { role: 'api', scopes: ['*'], tenantId: T, identityId: 'i' } as unknown as AuthUser;
     expect(hasPermission(api, permissionFor('crm', 'custom-fields', 'POST'))).toBe(false);
+  });
+});
+
+describe('CrmService.listContacts com cf_* (filtro pelo tipo da definição)', () => {
+  function svc(captura: { where?: unknown }[]) {
+    const tx = {
+      customFieldDef: { findMany: jest.fn(async () => DEFS) },
+      contact: { findMany: jest.fn(async (a: { where?: unknown }) => { captura.push(a); return []; }), findUnique: jest.fn(async () => null) },
+      $queryRaw: jest.fn(async () => []),
+    };
+    const prisma = { withTenant: jest.fn(async (_t: string, w: (t: unknown) => Promise<unknown>) => w(tx)) } as unknown as PrismaService;
+    return new CrmService(prisma, { publicar: () => undefined } as never, { revalidarSeVencido: () => undefined } as never);
+  }
+
+  it('cf_idade_min=18&cf_vip=true&cf_interesses=laser vira filtro JSON tipado no WHERE', async () => {
+    const captura: { where?: unknown }[] = [];
+    await svc(captura).listContacts(T, { filtro: filtroDaQuery({ cf_idade_min: '18', cf_vip: 'true', cf_interesses: 'laser', limit: '10' }) });
+    expect(captura[0].where).toEqual({
+      AND: [
+        { camposCustom: { path: ['idade'], gte: 18 } },
+        { camposCustom: { path: ['vip'], equals: true } },
+        { camposCustom: { path: ['interesses'], array_contains: ['Laser'] } },
+      ],
+    });
+  });
+
+  it('valor fora do tipo devolve 400 com a lista de campos (não lista vazia)', async () => {
+    await expect(svc([]).listContacts(T, { filtro: filtroDaQuery({ cf_idade: 'muitos' }) })).rejects.toBeInstanceOf(BadRequestException);
   });
 });

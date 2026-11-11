@@ -34,10 +34,15 @@ export interface CompromissoInput {
   tipo?: TipoAgenda;
   /** Membro da equipe dono do horário. Ausente = quem criou (humano) ou agenda geral (IA). */
   responsavelId?: string | null;
+  /** Status inicial: `confirmado` quando a página pública confirma automaticamente (Q4.2). */
+  status?: 'agendado' | 'confirmado';
 }
 
 /** Edição parcial (arrastar, redimensionar, reagendar, editar campos). */
-export type CompromissoPatch = Partial<CompromissoInput>;
+export type CompromissoPatch = Partial<Omit<CompromissoInput, 'status'>>;
+
+/** Quem está agindo: humano da equipe, agente de IA ou o sistema (página pública de agendamento). */
+export type AtorAgenda = 'humano' | 'nyro' | 'sistema';
 
 export interface FiltroAgenda {
   de?: string;
@@ -70,6 +75,13 @@ export class AgendaService {
     return this.prisma.withTenant(tenantId, (tx) => tx.agendaCompromisso.findMany({ where, orderBy: { inicio: 'asc' } }));
   }
 
+  /** Um compromisso pelo id (página pública de gerenciamento da reserva, Q4.2). */
+  async obter(tenantId: string, id: string) {
+    const c = await this.prisma.withTenant(tenantId, (tx) => tx.agendaCompromisso.findFirst({ where: { id } }));
+    if (!c) throw new NotFoundException('compromisso inexistente');
+    return c;
+  }
+
   /**
    * Choque de horário entre compromissos ATIVOS. Escopo por responsável: dois
    * membros diferentes podem ter reunião no mesmo horário; a agenda geral
@@ -90,6 +102,17 @@ export class AgendaService {
     return !!conflito;
   }
 
+  /**
+   * Serializa a checagem de choque + escrita por tenant (Q4.2). Sem isto, duas
+   * reservas simultâneas no mesmo horário (página pública, dois atendentes)
+   * passavam ambas pelo `choca` antes de qualquer uma gravar. Lock de
+   * transação: solta sozinho no commit/rollback. `$executeRaw` de propósito
+   * (`$queryRaw` de `void` quebra no Prisma, ver messages.service.spec).
+   */
+  private async travarAgenda(tx: Prisma.TransactionClient, tenantId: string): Promise<void> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`agenda:${tenantId}`}, 0))`;
+  }
+
   /** O responsável precisa ser membro do tenant (identities são globais). */
   private async validarResponsavel(tx: Prisma.TransactionClient, tenantId: string, responsavelId: string | null | undefined): Promise<void> {
     if (!responsavelId) return;
@@ -105,20 +128,26 @@ export class AgendaService {
     return { inicio, fim };
   }
 
-  /** `actorType: 'nyro'` = agendado por um agente de IA (identityId = id do agente). */
-  async criar(tenantId: string, identityId: string, dto: CompromissoInput, actorType: 'humano' | 'nyro' = 'humano') {
+  /**
+   * `actorType: 'nyro'` = agendado por um agente de IA (identityId = id do agente).
+   * `actorType: 'sistema'` = página pública de agendamento (identityId = id do contato).
+   */
+  async criar(tenantId: string, identityId: string, dto: CompromissoInput, actorType: AtorAgenda = 'humano') {
     const { inicio, fim } = this.datas(dto.inicio, dto.fim);
     const titulo = dto.titulo.trim();
     if (!titulo) throw new BadRequestException('informe o título');
+    if (dto.status !== undefined && dto.status !== 'agendado' && dto.status !== 'confirmado') throw new BadRequestException('status inicial inválido');
     // Humano sem responsável explícito = o próprio. IA sem responsável = agenda geral.
     const responsavelId = dto.responsavelId !== undefined ? dto.responsavelId : actorType === 'humano' ? identityId : null;
     return this.prisma.withTenant(tenantId, async (tx) => {
       await this.validarResponsavel(tx, tenantId, responsavelId);
+      await this.travarAgenda(tx, tenantId);
       if (await this.choca(tx, inicio, fim, responsavelId)) throw new ConflictException('já existe um compromisso nesse horário');
       const c = await tx.agendaCompromisso.create({
         data: {
           tenantId, titulo, inicio, fim, contactId: dto.contactId ?? null, local: dto.local ?? null, notas: dto.notas ?? null,
           tipo: dto.tipo ?? 'reuniao', responsavelId, createdBy: actorType === 'humano' ? identityId : null,
+          ...(dto.status ? { status: dto.status } : {}),
         },
       });
       await audit(tx, tenantId, identityId, 'compromisso.criado', c.id, actorType);
@@ -130,7 +159,7 @@ export class AgendaService {
    * Edição parcial: arrastar (inicio+fim), redimensionar (fim), reagendar,
    * trocar responsável/tipo/campos. Choque de horário → 409 (a UI desfaz).
    */
-  async atualizar(tenantId: string, identityId: string, id: string, patch: CompromissoPatch) {
+  async atualizar(tenantId: string, identityId: string, id: string, patch: CompromissoPatch, actorType: AtorAgenda = 'humano') {
     return this.prisma.withTenant(tenantId, async (tx) => {
       const atual = await tx.agendaCompromisso.findFirst({ where: { id } });
       if (!atual) throw new NotFoundException('compromisso inexistente');
@@ -138,6 +167,7 @@ export class AgendaService {
       const responsavelId = patch.responsavelId !== undefined ? patch.responsavelId : atual.responsavelId;
       if (patch.responsavelId !== undefined) await this.validarResponsavel(tx, tenantId, responsavelId);
       const mudouHorario = +inicio !== +atual.inicio || +fim !== +atual.fim || responsavelId !== atual.responsavelId;
+      if (mudouHorario && ATIVOS.includes(atual.status)) await this.travarAgenda(tx, tenantId);
       if (mudouHorario && ATIVOS.includes(atual.status) && (await this.choca(tx, inicio, fim, responsavelId, id))) {
         throw new ConflictException('já existe um compromisso nesse horário');
       }
@@ -154,12 +184,12 @@ export class AgendaService {
           ...(patch.notas !== undefined ? { notas: patch.notas } : {}),
         },
       });
-      await audit(tx, tenantId, identityId, +inicio !== +atual.inicio ? 'compromisso.reagendado' : 'compromisso.editado', id);
+      await audit(tx, tenantId, identityId, +inicio !== +atual.inicio ? 'compromisso.reagendado' : 'compromisso.editado', id, actorType);
       return c;
     });
   }
 
-  async atualizarStatus(tenantId: string, identityId: string, id: string, status: string) {
+  async atualizarStatus(tenantId: string, identityId: string, id: string, status: string, actorType: AtorAgenda = 'humano') {
     if (!(STATUS_AGENDA as readonly string[]).includes(status)) throw new BadRequestException('status inválido');
     return this.prisma.withTenant(tenantId, async (tx) => {
       const atual = await tx.agendaCompromisso.findFirst({ where: { id }, select: { id: true, status: true, inicio: true, fim: true, responsavelId: true } });
@@ -172,7 +202,7 @@ export class AgendaService {
       // Timestamps (confirmado_em, faltou_em...) e o evento de outbox saem dos
       // triggers da migration 054, para valer em qualquer caminho de escrita.
       const c = await tx.agendaCompromisso.update({ where: { id }, data: { status } });
-      await audit(tx, tenantId, identityId, `compromisso.${status}`, id);
+      await audit(tx, tenantId, identityId, `compromisso.${status}`, id, actorType);
       return c;
     });
   }
@@ -192,7 +222,7 @@ export class AgendaService {
          AND status = 'agendado'
          AND contact_id IS NOT NULL
          AND inicio > now()
-         AND inicio <= now() + make_interval(hours => ${JANELA_LEMBRETE_H})
+         AND inicio <= now() + ${`${JANELA_LEMBRETE_H} hours`}::interval
          AND created_at <= now() - interval '30 minutes'`);
   }
 

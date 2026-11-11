@@ -6,6 +6,8 @@ import { Icon } from '../icons';
 import { Avatar, cx } from '../ui';
 import { useAuth } from '@/lib/auth';
 import { useAgency } from '@/components/agency/AgencyProvider';
+import { NotificationsBell } from '@/components/app/NotificationsBell';
+import { usePersonalization } from '@/components/app/PersonalizationProvider';
 
 /**
  * Topbar global: busca à esquerda, notificações e conta à direita.
@@ -45,10 +47,43 @@ export function Topbar({ onMobileMenu }: { onMobileMenu?: () => void }) {
       <SearchTrigger />
 
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
-        <NotificationsButton />
+        <ThemeToggle />
+        <NotificationsBell />
         <AccountMenu />
       </div>
     </header>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Tema claro/escuro                                                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Atalho do tema: alterna claro ↔ escuro e grava em `users.prefs` (mesma
+ * preferência de Configurações › Tema). Lê o tema efetivo do documento,
+ * que já vem certo do script anti-flash do layout raiz.
+ */
+function ThemeToggle() {
+  const { prefs, update } = usePersonalization();
+  const [claro, setClaro] = useState(false);
+  useEffect(() => {
+    setClaro(document.documentElement.getAttribute('data-theme') === 'light');
+  }, [prefs.theme]);
+
+  return (
+    <button
+      type="button"
+      className="btn btn-ghost btn-icon"
+      onClick={() => {
+        update({ theme: claro ? 'dark' : 'light' });
+        setClaro(!claro);
+      }}
+      aria-label={claro ? 'Mudar para o tema escuro' : 'Mudar para o tema claro'}
+      title={claro ? 'Tema escuro' : 'Tema claro'}
+    >
+      <Icon name={claro ? 'moon' : 'sun'} size={19} />
+    </button>
   );
 }
 
@@ -93,48 +128,7 @@ function SearchTrigger() {
 /* Notificações                                                        */
 /* ------------------------------------------------------------------ */
 
-function NotificationsButton() {
-  // Ainda não existe fonte de notificações no backend. O botão não finge
-  // atividade (sem badge) e não fica sem ação: abre um aviso honesto.
-  const [aberto, setAberto] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!aberto) return;
-    const fora = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setAberto(false);
-    };
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setAberto(false);
-    document.addEventListener('mousedown', fora);
-    document.addEventListener('keydown', esc);
-    return () => {
-      document.removeEventListener('mousedown', fora);
-      document.removeEventListener('keydown', esc);
-    };
-  }, [aberto]);
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        className="btn btn-ghost btn-icon"
-        aria-label="Notificações"
-        aria-haspopup="dialog"
-        aria-expanded={aberto}
-        onClick={() => setAberto((v) => !v)}
-      >
-        <Icon name="bell" size={19} />
-      </button>
-      {aberto && (
-        <div role="dialog" aria-label="Notificações" className="lg-popover absolute right-0 top-[calc(100%+8px)] z-dropdown w-72 animate-scale-in p-4">
-          <p className="text-[13.5px] font-semibold text-fg">Notificações</p>
-          <p className="mt-1 text-[13px] leading-snug text-muted">
-            A central de notificações ainda não está disponível. Conversas novas aparecem com contador no menu Conversas.
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
+// Central de notificações (Q2.6): `components/app/NotificationsBell.tsx`.
 
 /* ------------------------------------------------------------------ */
 /* Conta / workspace                                                   */

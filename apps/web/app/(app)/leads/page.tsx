@@ -1,22 +1,22 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Icon } from '@/components/icons';
 import { Avatar, cx } from '@/components/ui';
 import { PageShell, PageHeader, KpiGrid } from '@/components/revenue/Page';
 import { KpiCard } from '@/components/revenue/Kpi';
 import { SeloDemo } from '@/components/revenue/SeloDemo';
 import { Quando } from '@/components/revenue/Quando';
-import { EmptyState, SkeletonRows, ErrorState } from '@/components/revenue/States';
+import { EmptyState } from '@/components/revenue/States';
 import { CanalBadge, ScoreBadge, StatusBadge, canalRotulo, statusRotulo } from '@/components/revenue/lead-ui';
-import { moeda, numero } from '@/lib/format';
+import { numero } from '@/lib/format';
 import { modoDemo } from '@/lib/demo/flag';
-import { crm, type Contato } from '@/lib/crm';
 import { KPIS_LEADS, LEADS, TOTAL_LEADS } from '@/lib/demo/dataset';
 import type { Lead } from '@/lib/revenue/types';
 import { PainelLead } from './PainelLead';
 import { NovoLeadModal } from '@/components/crm/NovoLeadModal';
+import { ListaLeads } from '@/components/crm/leads/ListaLeads';
 
 /**
  * LEADS — listagem
@@ -53,7 +53,7 @@ export default function LeadsPage() {
         }
       />
 
-      {demo ? <LeadsComDados /> : <LeadsReal versao={versao} onNovo={abrirNovo} />}
+      {demo ? <LeadsComDados /> : <ListaLeads versao={versao} vazio={<LeadsVazio onNovo={abrirNovo} />} />}
 
       {!demo && novoAberto && (
         <NovoLeadModal
@@ -352,97 +352,6 @@ function Paginacao({ mostrando, total }: { mostrando: number; total: number }) {
         </select>
       </div>
     </nav>
-  );
-}
-
-/**
- * Leads REAL — mesmo achado sistêmico das outras telas: `{demo ? X : Vazio}`
- * nunca tinha caminho de dado real. `crm.contacts()` (cursor, já testado
- * desde o Sprint D1) só não era chamado daqui. Enxuto de propósito: sem
- * score/canal/status ricos do modelo de demo — `Contato` real não tem esses
- * campos hoje, então a tabela mostra só o que existe de verdade.
- */
-function LeadsReal({ versao, onNovo }: { versao: number; onNovo: () => void }) {
-  const [pagina, setPagina] = useState<{ items: Contato[]; nextCursor: string | null } | null>(null);
-  const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState(false);
-  const [carregandoMais, setCarregandoMais] = useState(false);
-
-  useEffect(() => {
-    setCarregando(true);
-    setErro(false);
-    crm.contacts()
-      .then(setPagina)
-      .catch(() => setErro(true))
-      .finally(() => setCarregando(false));
-  }, [versao]);
-
-  const carregarMais = () => {
-    if (!pagina?.nextCursor) return;
-    setCarregandoMais(true);
-    crm.contacts({ cursor: pagina.nextCursor })
-      .then((p) => setPagina((atual) => (atual ? { items: [...atual.items, ...p.items], nextCursor: p.nextCursor } : p)))
-      .catch(() => setErro(true))
-      .finally(() => setCarregandoMais(false));
-  };
-
-  if (carregando) {
-    return (
-      <div className="card">
-        <SkeletonRows rows={8} />
-      </div>
-    );
-  }
-
-  if (erro) {
-    return (
-      <div className="card">
-        <ErrorState onRetry={() => window.location.reload()} />
-      </div>
-    );
-  }
-
-  if (!pagina || pagina.items.length === 0) return <LeadsVazio onNovo={onNovo} />;
-
-  return (
-    <div className="card overflow-hidden">
-      <table className="w-full text-sm">
-        <thead className="border-b border-line bg-surface2 text-left text-[11.5px] uppercase tracking-wide text-muted">
-          <tr>
-            <th className="px-4 py-2.5 font-medium">Nome</th>
-            <th className="px-4 py-2.5 font-medium">Status</th>
-            <th className="px-4 py-2.5 font-medium">Contato</th>
-            <th className="px-4 py-2.5 font-medium">Empresa</th>
-            <th className="px-4 py-2.5 text-right font-medium">Valor</th>
-            <th className="px-4 py-2.5 font-medium">Última interação</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-line">
-          {pagina.items.map((c) => (
-            <tr key={c.id} className="hover:bg-surface2">
-              <td className="px-4 py-2.5">
-                <Link href={`/contatos/${c.id}`} className="flex items-center gap-2.5 font-medium text-fg hover:text-brand">
-                  <Avatar name={c.nome} size={26} />
-                  {c.nome}
-                </Link>
-              </td>
-              <td className="px-4 py-2.5"><span className="pill">{c.tag}</span></td>
-              <td className="px-4 py-2.5 text-muted">{c.telefone ?? c.email ?? '-'}</td>
-              <td className="px-4 py-2.5 text-muted">{c.empresa ?? '-'}</td>
-              <td className="px-4 py-2.5 text-right font-semibold text-fg">{c.valor > 0 ? moeda(c.valor) : '-'}</td>
-              <td className="px-4 py-2.5 text-muted">{c.ultimoContatoAt ? <Quando data={c.ultimoContatoAt} /> : '-'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {pagina.nextCursor && (
-        <div className="border-t border-line p-3 text-center">
-          <button type="button" className="btn btn-sm" onClick={carregarMais} disabled={carregandoMais}>
-            {carregandoMais ? 'Carregando…' : 'Carregar mais'}
-          </button>
-        </div>
-      )}
-    </div>
   );
 }
 

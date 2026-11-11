@@ -7,11 +7,17 @@ import { AvatarContato } from './AvatarContato';
 import { Icon } from '@/components/icons';
 import { EmptyState, ErrorState } from '@/components/revenue/States';
 import { ConfigRequired } from '@/components/app/ConfigRequired';
-import { crm, type Conversa, type MensagemConversa } from '@/lib/crm';
+import { crm, type Atendente, type Conversa } from '@/lib/crm';
 import { settingsApi } from '@/lib/settings';
 import { useAuth } from '@/lib/auth';
 import { ApiError } from '@/lib/api-error';
 import { useRealtime } from '@/lib/realtime';
+import { Menu, useToast, type MenuEntry } from '@/components/kit';
+import { corpoDaMidia, inbox, lerBase64, tipoDoArquivo, type ContextoConversa, type ItemThread } from '@/lib/inbox';
+import { Composer } from './Composer';
+import { AnexoBolha } from './AnexoBolha';
+import { PainelContexto } from './PainelContexto';
+import { NovaConversaModal } from './NovaConversaModal';
 
 /**
  * Inbox de atendimento REAL (ADR-0039) — substitui a tela que só existia no
@@ -20,8 +26,9 @@ import { useRealtime } from '@/lib/realtime';
  * e troca de atendimento IA ↔ humano.
  */
 
-type Filtro = 'todas' | 'nao_lidas' | 'ia' | 'humano';
-type Msg = MensagemConversa & { local?: 'enviando' | 'falhou' };
+type Filtro = 'todas' | 'nao_lidas' | 'minhas' | 'ia' | 'humano';
+type Msg = ItemThread & { local?: 'enviando' | 'falhou' };
+const PREF_PAINEL = 'khub:inbox:painel';
 
 const STATUS_SAIDA: Record<string, { rotulo: string; tom: string }> = {
   enviando: { rotulo: 'Enviando…', tom: 'text-muted' },
@@ -31,6 +38,8 @@ const STATUS_SAIDA: Record<string, { rotulo: string; tom: string }> = {
   canal_desconectado: { rotulo: 'WhatsApp desconectado', tom: 'text-warning' },
   sending: { rotulo: 'Enviando…', tom: 'text-muted' },
   unknown: { rotulo: 'Entrega não confirmada', tom: 'text-warning' },
+  config_required: { rotulo: 'Não enviada: falta configurar', tom: 'text-warning' },
+  midia_nao_suportada: { rotulo: 'Este canal não envia arquivos', tom: 'text-warning' },
 };
 
 const diaDe = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' }) : '');
@@ -72,7 +81,7 @@ function CorpoMensagem({ texto }: { texto: string }) {
  * está conectado, o CTA não pode sugerir "conectar de novo" — o que falta é
  * a primeira mensagem chegar.
  */
-function InboxVazio() {
+function InboxVazio({ onNova }: { onNova: () => void }) {
   const [conectado, setConectado] = useState<boolean | null>(null);
   useEffect(() => {
     settingsApi
@@ -94,7 +103,11 @@ function InboxVazio() {
             : 'Quando um cliente escrever no WhatsApp conectado, a conversa aparece aqui na hora.'
         }
         action={
-          conectado ? undefined : (
+          conectado ? (
+            <button type="button" className="btn btn-primary btn-sm" onClick={onNova}>
+              <Icon name="plus" size={15} /> Iniciar conversa
+            </button>
+          ) : (
             <Link href="/configuracoes?aba=integracoes" className="btn btn-primary btn-sm">
               <Icon name="whatsapp" size={15} /> Conectar WhatsApp
             </Link>
@@ -115,11 +128,16 @@ export function InboxAtendimento() {
   const [erroThread, setErroThread] = useState(false);
   const [busca, setBusca] = useState('');
   const [filtro, setFiltro] = useState<Filtro>('todas');
-  const [texto, setTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [aviso, setAviso] = useState('');
   const [gated, setGated] = useState<{ provider: string; missing: string[] } | null>(null);
   const [trocando, setTrocando] = useState(false);
+  const toast = useToast();
+  const [atendentes, setAtendentes] = useState<Atendente[]>([]);
+  const [contexto, setContexto] = useState<ContextoConversa | null>(null);
+  const [versaoContexto, setVersaoContexto] = useState(0);
+  const [painel, setPainel] = useState(true);
+  const [novaConversa, setNovaConversa] = useState(false);
   const fimRef = useRef<HTMLDivElement>(null);
   const selRef = useRef<string | null>(null);
   const threadRef = useRef<Msg[] | null>(null);
@@ -147,8 +165,9 @@ export function InboxAtendimento() {
       setThread(null);
       setErroThread(false);
       setAviso('');
+      setContexto(null);
       try {
-        const r = await crm.mensagens(id);
+        const r = await inbox.thread(id);
         if (selRef.current !== id) return;
         setThread(r.mensagens);
         setTotal(r.total);
@@ -174,18 +193,29 @@ export function InboxAtendimento() {
     });
   }, [carregarLista, abrir]);
 
+  // Notificação clicada com o Inbox já aberto (`khub:abrir` do sino): abre a conversa do link.
+  useEffect(() => {
+    const ouvir = (e: Event) => {
+      const url = (e as CustomEvent<string>).detail;
+      const id = typeof url === 'string' ? new URL(url, window.location.origin).searchParams.get('c') : null;
+      if (id && id !== selRef.current) void carregarLista().then(() => abrir(id));
+    };
+    window.addEventListener('khub:abrir', ouvir);
+    return () => window.removeEventListener('khub:abrir', ouvir);
+  }, [carregarLista, abrir]);
+
   /** Evento chegou (socket) ou polling: atualiza a lista e, se a conversa aberta mudou, as mensagens dela. */
-  const sincronizar = useCallback(async () => {
+  const sincronizar = useCallback(async (forcar = false) => {
     const cs = await carregarLista();
     const id = selRef.current;
     if (!cs || !id) return;
     const conv = cs.find((c) => c.id === id);
-    const mudou = conv && conv.atualizadaEm !== versaoRef.current[id];
+    const mudou = conv && (forcar || conv.atualizadaEm !== versaoRef.current[id]);
     for (const c of cs) versaoRef.current[c.id] = c.atualizadaEm;
     if (!mudou) return;
-    let r: { total: number; mensagens: MensagemConversa[] };
+    let r: { total: number; mensagens: ItemThread[] };
     try {
-      r = await crm.mensagens(id);
+      r = await inbox.thread(id);
     } catch {
       return;
     }
@@ -220,7 +250,30 @@ export function InboxAtendimento() {
   const { conectado } = useRealtime({
     'message.created': () => void sincronizar(),
     'conversation.updated': () => void sincronizar(),
+    // Nota interna não mexe em `updated_at` da conversa (não sobe na lista): força a releitura.
+    'conversation.note_created': (d) => {
+      if (d.conversationId === selRef.current) void sincronizar(true);
+    },
   });
+
+  // Atendentes (atribuir e @menção) e preferência do painel lateral.
+  useEffect(() => {
+    crm.atendentes().then(setAtendentes).catch(() => setAtendentes([]));
+    try {
+      if (window.localStorage.getItem(PREF_PAINEL) === '0') setPainel(false);
+    } catch {
+      /* armazenamento bloqueado: painel aberto por padrão */
+    }
+  }, []);
+  const alternarPainel = () =>
+    setPainel((v) => {
+      try {
+        window.localStorage.setItem(PREF_PAINEL, v ? '0' : '1');
+      } catch {
+        /* sem persistência: só nesta sessão */
+      }
+      return !v;
+    });
   useEffect(() => {
     if (conectado) return;
     const t = setInterval(() => void sincronizar(), 6000);
@@ -233,17 +286,18 @@ export function InboxAtendimento() {
     const q = busca.trim().toLowerCase();
     return (convs ?? []).filter((c) => {
       if (filtro === 'nao_lidas' && !c.naoLidas) return false;
+      if (filtro === 'minhas' && (!user?.identityId || c.assigneeId !== user.identityId)) return false;
       if (filtro === 'ia' && c.atendimento !== 'ia') return false;
       if (filtro === 'humano' && c.atendimento !== 'humano') return false;
       if (!q) return true;
       return c.nome.toLowerCase().includes(q) || (c.ultimaPrevia ?? '').toLowerCase().includes(q) || (c.contato?.telefone ?? '').includes(q);
     });
-  }, [convs, busca, filtro]);
+  }, [convs, busca, filtro, user?.identityId]);
 
   const naoLidasTotal = (convs ?? []).filter((c) => c.naoLidas > 0).length;
 
-  const enviar = async () => {
-    const t = texto.trim();
+  const enviar = async (digitado: string) => {
+    const t = digitado.trim();
     if (!t || !conversa || enviando) return;
     setEnviando(true);
     setAviso('');
@@ -251,13 +305,12 @@ export function InboxAtendimento() {
     const tmp = `tmp-${Date.now()}`;
     setThread((p) => [...(p ?? []), { id: tmp, de: 'humano', texto: t, hora, criadaEm: new Date().toISOString(), local: 'enviando', enviadoPorNome: user?.name ?? null }]);
     setConvs((cs) => cs?.map((c) => (c.id === conversa.id ? { ...c, ultimaPrevia: t, ultimaHora: hora } : c)) ?? cs);
-    setTexto('');
     descer();
     try {
       const r = await crm.sendMessage(conversa.id, t);
       setThread((p) => p?.map((m) => (m.id === tmp ? { ...m, id: r.id ?? m.id, local: undefined, status: r.status === 'sent' ? 'delivered' : r.status } : m)) ?? p);
       setGated(null);
-      if (r.status === 'config_required') setGated({ provider: 'stevo', missing: r.missing ?? [] });
+      if (r.status === 'config_required') setGated({ provider: (r as { provider?: string }).provider ?? 'stevo', missing: r.missing ?? [] });
       else if (r.status === 'sem_telefone') setAviso('Este contato não tem telefone cadastrado. A mensagem foi registrada, mas não saiu.');
       else if (r.status === 'failed') setAviso(`O WhatsApp recusou a mensagem${r.erro ? ` (${r.erro})` : ''}. Tente de novo.`);
     } catch (e) {
@@ -267,6 +320,68 @@ export function InboxAtendimento() {
       else setAviso('Não consegui enviar. Verifique a conexão e tente de novo.');
     } finally {
       setEnviando(false);
+    }
+  };
+
+  /** Anexo (Q2.5): otimista com o mesmo corpo que o servidor grava, reconciliado pelo id. */
+  const enviarMidia = async (arquivo: File, legenda: string) => {
+    if (!conversa || enviando) return;
+    setEnviando(true);
+    setAviso('');
+    const tipo = tipoDoArquivo(arquivo.type);
+    const corpo = corpoDaMidia(tipo, arquivo.name, legenda);
+    const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const tmp = `tmp-${Date.now()}`;
+    const anexoLocal = { tipo, mime: arquivo.type, nome: arquivo.name, tamanho: arquivo.size, legenda: legenda || undefined, url: null };
+    setThread((p) => [...(p ?? []), { id: tmp, de: 'humano', texto: corpo, hora, criadaEm: new Date().toISOString(), local: 'enviando', enviadoPorNome: user?.name ?? null, anexo: anexoLocal }]);
+    descer();
+    try {
+      const base64 = await lerBase64(arquivo);
+      const r = await inbox.enviarMidia(conversa.id, { tipo, mime: arquivo.type || 'application/octet-stream', nome: arquivo.name, base64, legenda: legenda || undefined });
+      setThread((p) => p?.map((m) => (m.id === tmp ? { ...m, id: r.id, local: undefined, status: r.status === 'sent' ? 'delivered' : r.status, anexo: r.anexo } : m)) ?? p);
+      setGated(r.status === 'config_required' ? { provider: r.provider ?? 'storage', missing: r.missing } : null);
+      if (r.status === 'sem_telefone') setAviso('Este contato não tem telefone cadastrado. O arquivo foi registrado, mas não saiu.');
+      else if (r.status === 'failed') setAviso(`O WhatsApp recusou o arquivo${r.erro ? ` (${r.erro})` : ''}. Tente de novo.`);
+      else if (r.status === 'midia_nao_suportada') setAviso('O canal conectado não envia arquivos. Conecte o WhatsApp pela Stevo ou Evolution.');
+    } catch (e) {
+      setThread((p) => p?.filter((m) => m.id !== tmp) ?? p);
+      const cr = e instanceof ApiError ? e.configRequired : null;
+      if (cr) setGated(cr);
+      else toast.error('Não consegui enviar o arquivo', { description: e instanceof ApiError && e.message ? e.message : 'Verifique a conexão e tente de novo.' });
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  /** Nota interna (Q2.5): só equipe, nunca vai ao provedor. */
+  const criarNota = async (corpo: string, mencoes: string[]) => {
+    if (!conversa || enviando) return;
+    setEnviando(true);
+    try {
+      const n = await inbox.criarNota(conversa.id, corpo, mencoes);
+      setThread((p) => (p && !p.some((m) => m.id === n.id) ? [...p, n] : p));
+      setTotal((t) => t + 1);
+      descer();
+      if (mencoes.length) toast.success(mencoes.length > 1 ? `Nota salva. ${mencoes.length} pessoas avisadas` : 'Nota salva e menção avisada');
+    } catch (e) {
+      toast.error('Não consegui salvar a nota', { description: e instanceof ApiError && e.message ? e.message : undefined });
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  const atribuir = async (assigneeId: string) => {
+    if (!conversa || trocando) return;
+    setTrocando(true);
+    try {
+      const r = await crm.mudarAtendimento(conversa.id, { acao: 'atribuir', assigneeId });
+      setConvs((cs) => cs?.map((c) => (c.id === conversa.id ? { ...c, atendimento: r.atendimento, agentId: r.agentId, assigneeId: r.assigneeId, handoffMotivo: r.handoffMotivo } : c)) ?? cs);
+      setVersaoContexto((v) => v + 1);
+      toast.success(`Conversa atribuída a ${atendentes.find((a) => a.identityId === assigneeId)?.nome ?? 'membro'}`);
+    } catch (e) {
+      toast.error('Não consegui atribuir', { description: e instanceof ApiError && e.message ? e.message : undefined });
+    } finally {
+      setTrocando(false);
     }
   };
 
@@ -291,8 +406,26 @@ export function InboxAtendimento() {
     );
   }
 
+  const modalNova = (
+    <NovaConversaModal
+      open={novaConversa}
+      onClose={() => setNovaConversa(false)}
+      onAberta={(id) => {
+        void carregarLista().then((cs) => {
+          for (const c of cs ?? []) versaoRef.current[c.id] = c.atualizadaEm;
+          void abrir(id);
+        });
+      }}
+    />
+  );
+
   if (convs && convs.length === 0) {
-    return <InboxVazio />;
+    return (
+      <>
+        <InboxVazio onNova={() => setNovaConversa(true)} />
+        {modalNova}
+      </>
+    );
   }
 
   // Agrupa mensagens por dia para os separadores.
@@ -313,14 +446,19 @@ export function InboxAtendimento() {
             <p className="t-section">
               {convs ? `${convs.length} conversas` : 'Conversas'}
             </p>
-            {naoLidasTotal > 0 && <span className="pill pill-brand">{naoLidasTotal} não lidas</span>}
+            <span className="flex items-center gap-2">
+              {naoLidasTotal > 0 && <span className="pill pill-brand">{naoLidasTotal} não lidas</span>}
+              <button type="button" className="btn btn-soft btn-sm" onClick={() => setNovaConversa(true)}>
+                <Icon name="plus" size={14} /> Nova
+              </button>
+            </span>
           </div>
           <div className="relative">
             <Icon name="search" size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
             <input type="search" className="input w-full pl-9" placeholder="Buscar nome, telefone ou mensagem" value={busca} onChange={(e) => setBusca(e.target.value)} aria-label="Buscar conversas" />
           </div>
           <div className="segbar w-full" role="tablist" aria-label="Filtrar conversas">
-            {([['todas', 'Todas'], ['nao_lidas', 'Não lidas'], ['ia', 'IA'], ['humano', 'Equipe']] as [Filtro, string][]).map(([v, r]) => (
+            {([['todas', 'Todas'], ['minhas', 'Minhas'], ['nao_lidas', 'Não lidas'], ['ia', 'IA'], ['humano', 'Equipe']] as [Filtro, string][]).map(([v, r]) => (
               <button key={v} type="button" role="tab" aria-selected={filtro === v} className="seg flex-1 whitespace-nowrap px-2" onClick={() => setFiltro(v)}>
                 {r}
               </button>
@@ -385,7 +523,8 @@ export function InboxAtendimento() {
             <EmptyState icon="chat" title="Selecione uma conversa" description="Escolha um contato à esquerda para ver o histórico e responder." />
           </div>
         ) : (
-          <>
+          <div className="flex min-h-0 flex-1">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <header className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3 lg:px-5">
               <button type="button" className="btn btn-ghost btn-icon btn-sm lg:hidden" onClick={() => setSel(null)} aria-label="Voltar para a lista">
                 <Icon name="arrowLeft" size={18} />
@@ -415,8 +554,49 @@ export function InboxAtendimento() {
                     </button>
                   )
                 )}
+                <Menu
+                  label="Atribuir conversa"
+                  disabled={trocando || atendentes.length === 0}
+                  triggerClassName="btn btn-ghost btn-sm"
+                  menuClassName="w-64"
+                  trigger={
+                    <>
+                      <Icon name="user" size={14} />
+                      <span className="hidden max-w-[9rem] truncate sm:inline">
+                        {conversa.assigneeId ? atendentes.find((a) => a.identityId === conversa.assigneeId)?.nome ?? 'Responsável' : 'Atribuir'}
+                      </span>
+                    </>
+                  }
+                  items={[
+                    { type: 'label', id: 'rotulo', label: 'Atribuir a' } as MenuEntry,
+                    ...atendentes.map(
+                      (a): MenuEntry => ({
+                        id: a.identityId,
+                        label: (
+                          <span className="flex w-full items-center justify-between gap-2">
+                            <span className="truncate">{a.identityId === user?.identityId ? `${a.nome} (você)` : a.nome}</span>
+                            <span className="shrink-0 text-xs text-muted tabular">{a.abertas} abertas</span>
+                          </span>
+                        ),
+                        textValue: a.nome,
+                        icon: a.identityId === conversa.assigneeId ? 'check' : 'user',
+                        disabled: a.identityId === conversa.assigneeId,
+                        onSelect: () => void atribuir(a.identityId),
+                      }),
+                    ),
+                  ]}
+                />
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-icon btn-sm hidden xl:inline-flex"
+                  aria-label={painel ? 'Recolher painel do contato' : 'Mostrar painel do contato'}
+                  aria-pressed={painel}
+                  onClick={alternarPainel}
+                >
+                  <Icon name="layout" size={16} />
+                </button>
                 {conversa.contato?.id && (
-                  <Link href={`/contatos/${conversa.contato.id}`} className="btn btn-ghost btn-sm">
+                  <Link href={`/contatos/${conversa.contato.id}`} className="btn btn-ghost btn-sm xl:hidden">
                     Ver contato
                   </Link>
                 )}
@@ -448,6 +628,20 @@ export function InboxAtendimento() {
                     </div>
                   )}
                   {g.itens.map((m) => {
+                    if (m.de === 'nota') {
+                      // Nota interna: centralizada, tom amarelado, nunca parece mensagem ao cliente.
+                      return (
+                        <div key={m.id} className="flex justify-center py-1">
+                          <div className="w-full max-w-[86%] rounded-2xl border border-warning-border bg-warning-soft px-3.5 py-2 text-sm text-fg sm:max-w-[72%]">
+                            <p className="mb-0.5 flex items-center gap-1 text-xs font-semibold text-warning">
+                              <Icon name="lock" size={11} /> Nota interna{m.enviadoPorNome ? ` de ${m.enviadoPorNome}` : ''}
+                            </p>
+                            <span className="block whitespace-pre-wrap break-words">{m.texto}</span>
+                            <p className="mt-1 text-right text-xs text-muted tabular">{m.hora ?? ''}</p>
+                          </div>
+                        </div>
+                      );
+                    }
                     const minha = m.de !== 'contato';
                     const ia = m.de === 'ia' || m.de === 'nyro';
                     const automacao = m.de === 'automacao';
@@ -477,7 +671,14 @@ export function InboxAtendimento() {
                               <Icon name="users" size={11} /> {m.enviadoPorNome ?? 'Equipe'}
                             </p>
                           )}
-                          <CorpoMensagem texto={m.texto} />
+                          {m.anexo ? (
+                            <>
+                              <AnexoBolha anexo={m.anexo} claro={minha && !ia && !automacao} />
+                              {m.anexo.legenda && <span className="block whitespace-pre-wrap break-words">{m.anexo.legenda}</span>}
+                            </>
+                          ) : (
+                            <CorpoMensagem texto={m.texto} />
+                          )}
                           <p className={cx('mt-1 text-right text-[10.5px] tabular', minha && !ia && !automacao ? 'text-white/75' : 'text-muted')}>
                             {m.hora ?? ''}
                           </p>
@@ -486,10 +687,10 @@ export function InboxAtendimento() {
                       </div>
                     );
                   })}
-                  {g.itens.some((m) => m.de !== 'contato' && (m.local || (m.status && STATUS_SAIDA[m.status]))) && (
+                  {g.itens.some((m) => m.de !== 'contato' && m.de !== 'nota' && (m.local || (m.status && STATUS_SAIDA[m.status]))) && (
                     <div className="flex justify-end">
                       {(() => {
-                        const ult = [...g.itens].reverse().find((m) => m.de !== 'contato');
+                        const ult = [...g.itens].reverse().find((m) => m.de !== 'contato' && m.de !== 'nota');
                         const st = ult?.local ? STATUS_SAIDA[ult.local] : ult?.status ? STATUS_SAIDA[ult.status] : undefined;
                         return st ? <span className={cx('text-[11.5px]', st.tom)}>{st.rotulo}</span> : null;
                       })()}
@@ -500,48 +701,45 @@ export function InboxAtendimento() {
               <div ref={fimRef} />
             </div>
 
-            <form
-              className="border-t border-line p-3 lg:p-4"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void enviar();
+            <Composer
+              key={conversa.id}
+              iaRespondendo={conversa.atendimento === 'ia'}
+              atendentes={atendentes}
+              meuId={user?.identityId}
+              ocupado={enviando}
+              dados={{
+                contato: contexto?.contato ?? { nome: conversa.nome, telefone: conversa.contato?.telefone ?? null, email: conversa.contato?.email ?? null },
+                atendente: { nome: user?.name ?? null },
+                negocio: contexto?.negocios[0] ?? null,
               }}
-            >
-              {gated && (
-                <div className="mb-3">
-                  <ConfigRequired provider={gated.provider} missing={gated.missing} />
-                </div>
-              )}
-              {aviso && (
-                <p role="alert" className="mb-2 text-[12.5px] text-warning">
-                  {aviso}
-                </p>
-              )}
-              <div className="flex items-end gap-2">
-                <textarea
-                  className="textarea max-h-40 min-h-[44px] flex-1 resize-none"
-                  rows={1}
-                  placeholder={conversa.atendimento === 'ia' ? 'A IA está respondendo. Escrever aqui assume a conversa.' : 'Escreva uma mensagem'}
-                  value={texto}
-                  onChange={(e) => setTexto(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      void enviar();
-                    }
-                  }}
-                  aria-label="Mensagem"
-                />
-                <button type="submit" className="btn btn-primary h-11 px-4" disabled={!texto.trim() || enviando} aria-label="Enviar mensagem">
-                  <Icon name="send" size={17} />
-                  <span className="hidden sm:inline">Enviar</span>
-                </button>
-              </div>
-              <p className="mt-1.5 text-[11.5px] text-muted">Enter envia · Shift + Enter quebra a linha</p>
-            </form>
-          </>
+              topo={
+                <>
+                  {gated && (
+                    <div className="mb-3">
+                      <ConfigRequired provider={gated.provider} missing={gated.missing} />
+                    </div>
+                  )}
+                  {aviso && (
+                    <p role="alert" className="mb-2 text-sm text-warning">
+                      {aviso}
+                    </p>
+                  )}
+                </>
+              }
+              onTexto={enviar}
+              onMidia={enviarMidia}
+              onNota={criarNota}
+            />
+          </div>
+          {painel && (
+            <aside className="hidden w-80 shrink-0 flex-col border-l border-line xl:flex" aria-label="Contexto do contato">
+              <PainelContexto conversationId={conversa.id} versao={versaoContexto} onContexto={setContexto} />
+            </aside>
+          )}
+          </div>
         )}
       </section>
+      {modalNova}
     </div>
   );
 }

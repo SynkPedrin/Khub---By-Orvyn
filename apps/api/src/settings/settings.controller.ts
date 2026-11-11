@@ -21,6 +21,15 @@ class UpdateBusinessDto {
 class InviteDto {
   @IsEmail() email!: string;
   @IsOptional() @IsIn(['owner', 'admin', 'manager', 'member', 'viewer']) role?: string;
+  /** Personalização (ADR-0042): nome de quem recebe, recado e WhatsApp dele. */
+  @IsOptional() @IsString() @MaxLength(120) nome?: string;
+  @IsOptional() @IsString() @MaxLength(600) mensagem?: string;
+  @IsOptional() @IsString() @MaxLength(30) telefone?: string;
+}
+class ResendInviteDto {
+  @IsOptional() @IsString() @MaxLength(120) nome?: string;
+  @IsOptional() @IsString() @MaxLength(600) mensagem?: string;
+  @IsOptional() @IsString() @MaxLength(30) telefone?: string;
 }
 class RoleDto {
   @IsIn(['owner', 'admin', 'manager', 'member', 'viewer']) role!: string;
@@ -60,7 +69,13 @@ export class SettingsController {
   }
   @Post('invites')
   invite(@TenantId() t: string, @CurrentUser() u: AuthUser, @Body() dto: InviteDto) {
-    return this.settings.createInvite(t, u.identityId, dto.email, dto.role ?? 'member');
+    return this.settings.createInvite(t, u.identityId, dto.email, dto.role ?? 'member', { nome: dto.nome, mensagem: dto.mensagem, telefone: dto.telefone });
+  }
+  /** Novo link (o anterior deixa de valer) + reenvio do e-mail + texto de WhatsApp. */
+  @Post('invites/:id/resend')
+  @HttpCode(200)
+  resendInvite(@TenantId() t: string, @CurrentUser() u: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: ResendInviteDto) {
+    return this.settings.resendInvite(t, u.identityId, id, dto);
   }
   @Delete('invites/:id')
   revoke(@TenantId() t: string, @CurrentUser() u: AuthUser, @Param('id') id: string) {
@@ -97,5 +112,12 @@ export class SettingsController {
   @HttpCode(200)
   readNotifications(@TenantId() t: string, @CurrentUser() u: AuthUser) {
     return this.settings.markNotificationsRead(t, u.identityId);
+  }
+  /** Ler uma notificação não é ação de negócio — sem linha de auditoria. */
+  @SkipAudit()
+  @Post('notifications/:id/read')
+  @HttpCode(200)
+  readNotification(@TenantId() t: string, @CurrentUser() u: AuthUser, @Param('id') id: string) {
+    return this.settings.markNotificationRead(t, u.identityId, id);
   }
 }

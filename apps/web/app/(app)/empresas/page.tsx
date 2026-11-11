@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { SkeletonCards } from '@/components/kit';
 import { useRouter } from 'next/navigation';
 import { Button, Card, Field, Input } from '@/components/ui';
 import { useDialogFocus } from '@/lib/use-dialog-focus';
@@ -87,7 +88,7 @@ export default function EmpresasPage() {
           <p className="text-sm text-muted">{q ? `Nenhuma empresa para “${q}”.` : 'Nenhuma empresa cadastrada. Agrupe seus contatos por conta.'}</p>
         </Card>
       )}
-      {!rows && <p className="py-10 text-center text-sm text-muted">Carregando…</p>}
+      {!rows && <SkeletonCards count={6} className="lg:grid-cols-3 xl:grid-cols-3" cardClassName="h-28" label="Carregando empresas" />}
 
       {modal && (
         <div className="lg-backdrop fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setModal(false)}>

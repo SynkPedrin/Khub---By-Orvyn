@@ -1,6 +1,7 @@
 node_modules
 **/node_modules
-**/.next*
+**/.next
 **/dist
-.git
-**/.env*
+_backup-completo-antes-do-reset
+_front-antes-de-reverter
+*.log

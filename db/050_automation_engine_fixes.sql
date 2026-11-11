@@ -2,7 +2,7 @@
 -- 050_automation_engine_fixes.sql — Sprint Q1 (bugs do motor de automações)
 --
 -- Contexto:
---  1. BUG-027 (Q1.1) — o gatilho "Contato criado" com filtro de origem nunca
+--  1. BUG-029 (Q1.1) — o gatilho "Contato criado" com filtro de origem nunca
 --     batia: a função de outbox montava `origem` só a partir de
 --     `campos_custom->>'origem'`, mas o cadastro manual grava a coluna
 --     `contacts.origem` e o lead de anúncio grava `campos_custom.lead_origem`.

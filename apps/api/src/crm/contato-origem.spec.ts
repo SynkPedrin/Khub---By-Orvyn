@@ -17,7 +17,7 @@ function ambiente() {
   return { svc, criados };
 }
 
-describe('CrmService.createContact — BUG-027 (origem do cadastro manual)', () => {
+describe('CrmService.createContact — BUG-029 (origem do cadastro manual)', () => {
   it('grava a origem informada na coluna `contacts.origem`', async () => {
     const a = ambiente();
     await a.svc.createContact(TENANT, { nome: 'Ana', origem: ' Indicação ' });

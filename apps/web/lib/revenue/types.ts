@@ -1,5 +1,5 @@
 /**
- * Tipos de visualização do Revenue OS.
+ * Tipos de visualização do KHUB.
  *
  * São os contratos que as TELAS consomem — deliberadamente separados dos
  * tipos de transporte de `lib/crm.ts`. Assim uma mudança no formato da API

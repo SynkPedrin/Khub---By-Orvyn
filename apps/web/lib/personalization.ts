@@ -73,6 +73,18 @@ function carregarImagem(src: string): Promise<HTMLImageElement> {
   });
 }
 
+/** Chave do cache local do tema (lida pelo script anti-flash do layout raiz). */
+export const THEME_CACHE_KEY = 'khub-theme';
+
+/** Tema efetivo: escuro por padrão; "system" segue o SO. */
+export function resolverTema(theme: Prefs['theme']): 'light' | 'dark' {
+  if (theme === 'light') return 'light';
+  if (theme === 'system' && typeof window !== 'undefined') {
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+  return 'dark';
+}
+
 /** Aplica cor de destaque, fundo e tema nas CSS vars do documento. */
 export function applyPrefs(prefs: Prefs | undefined) {
   if (typeof document === 'undefined') return;
@@ -90,8 +102,16 @@ export function applyPrefs(prefs: Prefs | undefined) {
     root.style.setProperty('--bg-dark', bg.dark);
     root.setAttribute('data-bg', bg.key);
   }
-  if (prefs?.theme === 'light' || prefs?.theme === 'dark') root.setAttribute('data-theme', prefs.theme);
-  else if (prefs?.theme === 'system') root.removeAttribute('data-theme');
+  // Tema: escuro é o padrão; "Sistema" resolve pelo SO (o CSS só conhece
+  // `light` e `dark`). Guarda cópia local só para pintar certo antes das
+  // prefs chegarem da API (script em app/layout.tsx) — a fonte é `users.prefs`.
+  const tema = resolverTema(prefs?.theme);
+  root.setAttribute('data-theme', tema);
+  try {
+    localStorage.setItem(THEME_CACHE_KEY, prefs?.theme ?? 'dark');
+  } catch {
+    /* modo privado: só perde o pré-pintar */
+  }
 
   // Plano de fundo próprio: quando presente, o `.studio-bg` mostra a imagem
   // (com um leve scrim para leitura). Vazio = volta ao estúdio.

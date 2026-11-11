@@ -1,6 +1,6 @@
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
-import type { Job } from 'bullmq';
+import { DelayedError, type Job } from 'bullmq';
 import { RunsService, FILA_PASSOS, type PassoJob } from './runs.service';
 import { TriggersService } from './triggers.service';
 import { FILA_GATILHOS, type GatilhoJob } from '../events/domain-events.service';
@@ -14,8 +14,15 @@ export class PassosProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<PassoJob>): Promise<void> {
-    await this.runs.processarPasso(job.data, job.attemptsMade + 1);
+  async process(job: Job<PassoJob>, token?: string): Promise<void> {
+    const r = await this.runs.processarPasso(job.data, job.attemptsMade + 1);
+    // Job chegou antes do `scheduledAt`: volta para a fila atrasada pelo tempo
+    // que falta (mesmo job, mesmo jobId), nunca é descartado. DelayedError diz
+    // ao BullMQ que não é falha nem conclusão — não conta tentativa nem vai à DLQ.
+    if (r?.adiantadoMs && r.adiantadoMs > 0) {
+      await job.moveToDelayed(Date.now() + r.adiantadoMs, token);
+      throw new DelayedError();
+    }
   }
 
   /** Última tentativa falhou → dead-letter (PRD §7.2), com o run marcado. */

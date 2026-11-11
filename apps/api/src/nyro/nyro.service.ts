@@ -24,7 +24,28 @@ export interface RespostaNyro {
 }
 
 /** Teto de idas ao modelo por turno: sem isto, tool em loop vira conta infinita. */
-const MAX_VOLTAS = 5;
+const MAX_VOLTAS = 8;
+
+/**
+ * Provedor/modelos da NICO (ADR-0044). Com NICO_PROVEDOR=anthropic ela usa o
+ * Claude mesmo que os agentes de WhatsApp estejam no Ollama (AI_PROVIDER):
+ * analista interna precisa de raciocínio forte e rapidez. Padrão: segue o
+ * provedor geral (decisão de custo do dono da conta).
+ */
+const provedorNico = (): 'anthropic' | 'padrao' => (process.env.NICO_PROVEDOR === 'anthropic' ? 'anthropic' : 'padrao');
+const modeloNico = () => (provedorNico() === 'anthropic' ? process.env.NICO_MODELO || 'claude-opus-5-5' : MODELO_AGENTE);
+const modeloRoteador = () => (provedorNico() === 'anthropic' ? process.env.NICO_MODELO_ROTEADOR || 'claude-haiku-5-5' : MODELO_ROTEADOR);
+
+/**
+ * Roteamento sem modelo quando a intenção é óbvia: economiza uma ida ao modelo
+ * (no Ollama local, segundos). Só cai no roteador LLM quando ambíguo.
+ */
+export function rotaPorPalavras(texto: string): Agente | null {
+  const t = texto.toLowerCase();
+  if (/campanh|an[uú]ncio|tr[aá]fego|\bcpl\b|\broas\b|\bctr\b|\bcpc\b|\bcpm\b|biblioteca de an|benchmark|concorrent|relat[oó]rio|rotina|toda (segunda|ter[cç]a|quarta|quinta|sexta|semana|manh[aã])|conte[uú]do|post|reels|criativo|estrat[eé]gia|receita|faturamento|ticket|ltv|\bcac\b|margem|funil|convers[aã]o/.test(t)) return 'growth';
+  if (/prompt|agente|automa[cç]|fluxo|workflow|erro na|n[aã]o (est[aá] )?funciona|configur|cri(e|ar) (um|uma|o|a) (funil|etapa)|instal/.test(t)) return 'configuracao';
+  return null;
+}
 
 /**
  * Orquestrador da Nyro (PRD §5.1 · ADR-0014).
@@ -103,14 +124,21 @@ export class NyroService {
 
   /** Roteador: Haiku, uma palavra. Falhou? cai em `conversas` (o mais genérico). */
   private async rotear(ctx: ContextoNyro, texto: string, passos: PassoNyro[]): Promise<Agente> {
+    const direto = rotaPorPalavras(texto);
+    if (direto) {
+      passos.push({ tipo: 'roteou', rotulo: `${AGENTES[direto].nome} assumiu`, detalhe: AGENTES[direto].quando });
+      return direto;
+    }
     const t0 = Date.now();
     try {
       const r = await this.llm.conversar({
-        modelo: MODELO_ROTEADOR,
+        modelo: modeloRoteador(),
+        provedor: provedorNico(),
         system: PROMPT_ROTEADOR,
         mensagens: [{ role: 'user', content: texto }],
         maxTokens: 10,
         temperatura: 0,
+        effort: 'low',
       });
       await this.registrarUso(ctx.tenantId, null, 'roteador', r, Date.now() - t0);
       const escolha = r.texto.trim().toLowerCase().replace(/[^a-z]/g, '') as Agente;
@@ -144,7 +172,7 @@ export class NyroService {
 
     for (let volta = 0; volta < MAX_VOLTAS; volta++) {
       const t0 = Date.now();
-      const r = await this.llm.conversar({ modelo: MODELO_AGENTE, system, mensagens, tools });
+      const r = await this.llm.conversar({ modelo: modeloNico(), provedor: provedorNico(), system, mensagens, tools, effort: 'medium', maxTokens: 16000, fallbackRecusa: true, timeoutMs: 120_000 });
       await this.registrarUso(ctx.tenantId, conversationId, agente, r, Date.now() - t0);
       if (r.texto) texto = r.texto;
 
@@ -350,7 +378,7 @@ export class NyroService {
         },
       });
       await tx.nyroConversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } });
-    });
+    }, { timeout: 20_000 }); // máquina carregada: 5 s padrão estourava numa simples inserção
   }
 
   private async registrarGuardrail(ctx: ContextoNyro, regra: string, trecho: string) {

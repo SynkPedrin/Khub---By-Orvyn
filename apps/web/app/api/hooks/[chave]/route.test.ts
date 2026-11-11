@@ -19,8 +19,8 @@ const enviado = (f: ReturnType<typeof apiResponde>) => {
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe('proxy público: deduplicação e entrega confiável', () => {
-  it('sem chave: preserva deduplicação por conteúdo da API', async () => {
+describe('proxy público do webhook de workflow (W5: Idempotency-Key opcional, assinatura repassada)', () => {
+  it('sem Idempotency-Key do remetente: encaminha SEM inventar chave (W5: a API deduplica pelo conteúdo em 10 min)', async () => {
     const f = apiResponde();
     const r = await chamada();
     const { url, headers } = enviado(f);
@@ -35,12 +35,18 @@ describe('proxy público: deduplicação e entrega confiável', () => {
     expect(enviado(f).headers['idempotency-key']).toBe('pedido-991');
   });
 
-  it('retries sem chave preservam o mesmo corpo e deixam a API deduplicar', async () => {
+  it('W5: repassa X-KHUB-Signature e o corpo byte a byte (o HMAC é sobre ele)', async () => {
     const f = apiResponde();
-    await chamada(); await chamada();
-    const [a, b] = f.mock.calls.map((c) => ((c as unknown as [string, RequestInit])[1].headers as Record<string, string>)['idempotency-key']);
-    expect(a).toBeUndefined();
-    expect(b).toBeUndefined();
+    await chamada({ headers: { 'x-khub-signature': 'sha256=' + 'a'.repeat(64) } });
+    const { init, headers } = enviado(f);
+    expect(headers['x-khub-signature']).toBe('sha256=' + 'a'.repeat(64));
+    expect(init.body).toBe('{"nome":"Ana"}');
+  });
+
+  it('repassa o 401 da API quando a assinatura não confere', async () => {
+    apiResponde(401, { title: 'assinatura X-KHUB-Signature ausente ou inválida' });
+    const r = await chamada({ headers: { 'x-khub-signature': 'sha256=errada' } });
+    expect(r.status).toBe(401);
   });
 
   it('preserva chave longa para a API validar sem criar colisões', async () => {

@@ -7,7 +7,7 @@ import { Avatar, cx } from '@/components/ui';
 import { PageShell, PageHeader } from '@/components/revenue/Page';
 import { SeloDemo } from '@/components/revenue/SeloDemo';
 import { EmptyState } from '@/components/revenue/States';
-import { AgendaReal } from '@/components/agenda/AgendaReal';
+import { AgendaCalendario } from '@/components/agenda/AgendaCalendario';
 import { hora } from '@/lib/format';
 import { modoDemo } from '@/lib/demo/flag';
 import { COMPROMISSOS, EQUIPE, TAREFAS_AGENDA } from '@/lib/demo/dataset';
@@ -36,7 +36,7 @@ export default function AgendaPage() {
         actions={<SeloDemo />}
       />
 
-      {demo ? <Calendario /> : <AgendaReal />}
+      {demo ? <Calendario /> : <AgendaCalendario />}
     </PageShell>
   );
 }

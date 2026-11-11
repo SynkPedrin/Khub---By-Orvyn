@@ -11,28 +11,59 @@ import { clienteApi } from './session-fetch';
  */
 const req = clienteApi('/api/v1/agenda/');
 
+export type StatusAgenda = 'agendado' | 'confirmado' | 'concluido' | 'cancelado' | 'faltou';
+export type TipoAgenda = 'reuniao' | 'call' | 'demo' | 'visita' | 'followup' | 'outro';
+
 export interface Compromisso {
   id: string;
   contactId: string | null;
   titulo: string;
   inicio: string;
   fim: string;
-  status: 'agendado' | 'confirmado' | 'concluido' | 'cancelado' | 'nao_compareceu';
+  /** Migration 054: `nao_compareceu` virou `faltou`. */
+  status: StatusAgenda;
+  tipo: TipoAgenda;
+  /** Membro dono do horário; `null` = agenda geral (ex.: marcado pela IA). */
+  responsavelId: string | null;
   local: string | null;
   notas: string | null;
   googleEventId: string | null;
+  confirmadoEm: string | null;
+  faltouEm: string | null;
+  lembreteEnviadoEm: string | null;
 }
 
+export interface NovoCompromisso {
+  titulo: string;
+  inicio: string;
+  fim: string;
+  contactId?: string;
+  local?: string;
+  notas?: string;
+  tipo?: TipoAgenda;
+  responsavelId?: string | null;
+}
+
+/** PATCH parcial (arrastar, redimensionar, reagendar). `null` limpa o campo. */
+export type PatchCompromisso = Partial<Omit<NovoCompromisso, 'contactId' | 'local' | 'notas'>> & {
+  contactId?: string | null;
+  local?: string | null;
+  notas?: string | null;
+};
+
 export const agenda = {
-  compromissos: (range?: { de?: string; ate?: string }) => {
+  compromissos: (filtro?: { de?: string; ate?: string; responsavelId?: string; status?: StatusAgenda[] }) => {
     const qs = new URLSearchParams();
-    if (range?.de) qs.set('de', range.de);
-    if (range?.ate) qs.set('ate', range.ate);
+    if (filtro?.de) qs.set('de', filtro.de);
+    if (filtro?.ate) qs.set('ate', filtro.ate);
+    if (filtro?.responsavelId) qs.set('responsavelId', filtro.responsavelId);
+    if (filtro?.status?.length) qs.set('status', filtro.status.join(','));
     return req<Compromisso[]>(`compromissos${qs.toString() ? `?${qs}` : ''}`);
   },
-  horarios: (data: string, duracao = 60) => req<{ inicio: string; fim: string }[]>(`horarios?data=${data}&duracao=${duracao}`),
-  criar: (d: { titulo: string; inicio: string; fim: string; contactId?: string; local?: string; notas?: string }) =>
-    req<Compromisso>('compromissos', { method: 'POST', body: JSON.stringify(d) }),
+  horarios: (data: string, duracao = 60, responsavelId?: string | null) =>
+    req<{ inicio: string; fim: string }[]>(`horarios?data=${data}&duracao=${duracao}${responsavelId ? `&responsavelId=${responsavelId}` : ''}`),
+  criar: (d: NovoCompromisso) => req<Compromisso>('compromissos', { method: 'POST', body: JSON.stringify(d) }),
+  atualizar: (id: string, d: PatchCompromisso) => req<Compromisso>(`compromissos/${id}`, { method: 'PATCH', body: JSON.stringify(d) }),
   status: (id: string, status: Compromisso['status']) =>
     req<Compromisso>(`compromissos/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) }),
   sincronizar: (id: string) => req<{ googleEventId: string }>(`compromissos/${id}/sincronizar`, { method: 'POST' }),

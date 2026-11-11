@@ -20,6 +20,9 @@ class LoginDto {
 class RefreshDto {
   @IsString() refresh!: string;
 }
+class PreviewInviteDto {
+  @IsString() @MinLength(10) @MaxLength(200) token!: string;
+}
 class AcceptInviteDto {
   @IsString() @MinLength(10) token!: string;
   @IsOptional() @IsString() @MaxLength(160) nome?: string;
@@ -94,6 +97,14 @@ export class AuthController {
   async logout(@Body() dto: RefreshDto) {
     await this.auth.logout(dto.refresh);
     return { ok: true };
+  }
+
+  /** Dados do convite para a tela de aceite (público; token no corpo, nunca na URL de log). */
+  @Public()
+  @Post('invites/preview')
+  @HttpCode(200)
+  previewInvite(@Body() dto: PreviewInviteDto) {
+    return this.auth.previewInvite(dto.token);
   }
 
   /** Aceite de convite — público (o token do link é a credencial). */

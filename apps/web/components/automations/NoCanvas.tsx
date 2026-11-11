@@ -3,7 +3,8 @@
 import { memo } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
 import { Icon, type IconName } from '@/components/icons';
-import type { Ramo } from '@/lib/automations';
+import type { EstatisticaNo, Ramo } from '@/lib/automations';
+import { SeloNo } from './marcas';
 
 export interface DadosNo {
   tipo: string;
@@ -13,6 +14,12 @@ export interface DadosNo {
   ramos?: Ramo[];
   problema?: string;
   provider?: string;
+  /** Contagem do período escolhido na barra (Q3.3). Ausente = estatística desligada. */
+  stats?: EstatisticaNo;
+  /** Config do nó: escolhe a logo real (canal, origem). */
+  config?: Record<string, unknown>;
+  /** O que o nó faz, em uma frase (catálogo) — aparece quando ainda não há resumo. */
+  descricao?: string;
 }
 
 export const ICONE: Record<string, IconName> = {
@@ -24,6 +31,11 @@ export const ICONE: Record<string, IconName> = {
   'gatilho.mensagem_recebida': 'inbox',
   'gatilho.tag_adicionada': 'sparkles',
   'gatilho.webhook': 'marketing',
+  'gatilho.agendamento_criado': 'calendar',
+  'gatilho.agendamento_confirmado': 'check',
+  'gatilho.faltou': 'alert',
+  'gatilho.agendamento_cancelado': 'close',
+  'gatilho.lembrete_agendamento': 'bell',
   // controle
   'controle.esperar': 'calendar',
   'controle.esperar_resposta': 'inbox',
@@ -50,80 +62,87 @@ export const ICONE: Record<string, IconName> = {
   'acao.webhook': 'marketing',
 };
 
-// Gatilho verde · controle roxo · ação azul — só como acento (o corpo é roxo/glow).
-export const ACENTO: Record<string, string> = { gatilho: '#10B981', controle: '#7B2EFF', acao: '#3B82F6' };
+// Gatilho verde · controle roxo · ação azul, só como acento (o corpo é o card).
+// Tokens semânticos do tema (ADR-0036): seguem claro/escuro sem cor literal.
+export const ACENTO: Record<string, string> = { gatilho: 'var(--success)', controle: 'var(--brand)', acao: 'var(--info)' };
 
-/** Nó do canvas. Gatilho não recebe conexão; condição tem uma saída por ramo. */
+const HANDLE = '!h-2.5 !w-2.5 !border-2 !border-surface !bg-brand';
+
+/**
+ * Nó do canvas, fluxo de cima para baixo (Q3.3): entrada no topo, saída
+ * embaixo. Gatilho não recebe conexão; nó ramificado tem uma saída por ramo,
+ * lado a lado na base do card, na ordem em que os ramos foram declarados.
+ */
 export const NoCanvas = memo(({ data, selected }: NodeProps<DadosNo>) => {
   const ehGatilho = data.categoria === 'gatilho';
   const ramos = data.ramos ?? [];
   const acento = ACENTO[data.categoria] ?? 'var(--brand)';
+  const s = data.stats;
+
+  const categoria = data.categoria === 'gatilho' ? 'Quando' : data.categoria === 'controle' ? 'Fluxo' : 'Faz';
+  const oQueFaz = data.resumo || data.descricao || '';
 
   return (
     <div
-      className="w-60 rounded-2xl border bg-surface transition-shadow"
+      className="w-60 rounded-[18px] border bg-surface transition-shadow"
+      title={data.descricao}
       style={{
-        borderColor: data.problema ? '#ef4444' : selected ? 'var(--brand)' : 'color-mix(in srgb, var(--brand) 28%, var(--border))',
+        borderColor: data.problema ? 'var(--danger)' : selected ? 'var(--brand)' : 'var(--border)',
         boxShadow: data.problema
-          ? '0 0 0 1px #ef4444, 0 8px 26px -12px rgba(239,68,68,.5)'
+          ? '0 0 0 1px var(--danger), 0 8px 26px -12px color-mix(in srgb, var(--danger) 50%, transparent)'
           : selected
-            ? '0 0 0 1px var(--brand), 0 12px 34px -10px var(--glow)'
-            : '0 8px 26px -14px var(--glow), inset 0 1px 0 rgba(255,255,255,.4)',
+            ? '0 0 0 1px var(--brand), 0 12px 32px -12px color-mix(in srgb, var(--brand) 45%, transparent)'
+            : 'var(--sh-sm)',
       }}
     >
-      {!ehGatilho && <Handle type="target" position={Position.Left} className="!h-2.5 !w-2.5 !border-2 !border-surface !bg-brand" />}
+      {!ehGatilho && <Handle type="target" position={Position.Top} className={HANDLE} />}
 
-      <div className="flex items-start gap-2.5 p-3">
-        <span
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl"
-          style={{
-            color: acento,
-            background: `color-mix(in srgb, ${acento} 14%, transparent)`,
-            boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${acento} 34%, transparent), 0 0 16px -4px color-mix(in srgb, ${acento} 60%, transparent)`,
-          }}
-        >
-          <Icon name={ICONE[data.tipo] ?? 'sparkles'} size={16} />
-        </span>
+      <div className="flex items-start gap-3 p-3">
+        <SeloNo tipo={data.tipo} config={data.config} icone={ICONE[data.tipo] ?? 'sparkles'} acento={acento} tamanho={38} />
         <div className="min-w-0 flex-1">
-          <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: acento }}>
-            {data.categoria === 'gatilho' ? 'Gatilho' : data.categoria === 'controle' ? 'Controle' : 'Ação'}
+          <span className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wider text-faint">
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: acento }} aria-hidden />
+            {categoria}
           </span>
-          <p className="truncate text-sm font-bold leading-tight text-fg">{data.nome}</p>
-          <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted">{data.resumo}</p>
+          <p className="truncate text-sm font-semibold leading-tight text-fg">{data.nome}</p>
+          {oQueFaz && (
+            <p className={`mt-1 line-clamp-2 text-2xs leading-snug ${data.resumo ? 'text-muted' : 'text-faint'}`}>{oQueFaz}</p>
+          )}
         </div>
       </div>
 
       {data.problema && (
-        <p className="border-t border-red-500/30 bg-red-500/10 px-3 py-1.5 text-[10px] font-medium text-red-600 dark:text-red-400">
+        <p className="border-t border-danger-border bg-danger-soft px-3 py-1.5 text-2xs font-medium text-danger">
           {data.problema}
         </p>
       )}
 
-      {data.provider && (
-        <p className="border-t border-line px-3 py-1 text-[10px] text-muted">
-          entrega via <span className="font-semibold">{data.provider}</span>
-        </p>
+      {s && (
+        <div className="flex items-center gap-3 border-t border-line px-3 py-1.5 text-2xs tabular" aria-label={`${s.concluidos} concluídos, ${s.esperando} esperando, ${s.erros} com erro`}>
+          <span className="inline-flex items-center gap-1 text-success" title="Passaram por aqui com sucesso no período">
+            <Icon name="check" size={12} /> {s.concluidos}
+          </span>
+          <span className="inline-flex items-center gap-1 text-muted" title="Parados neste passo agora">
+            <Icon name="clock" size={12} /> {s.esperando}
+          </span>
+          <span className={`inline-flex items-center gap-1 ${s.erros ? 'text-danger' : 'text-muted'}`} title="Falharam neste passo no período">
+            <Icon name="alert" size={12} /> {s.erros}
+          </span>
+        </div>
       )}
 
-      {/* Condição: uma saída por ramo, rotulada */}
+      {/* Nó ramificado: uma saída por ramo, rotulada, lado a lado na base */}
       {ramos.length > 0 ? (
-        <div className="border-t border-line">
+        <div className="flex border-t border-line">
           {ramos.map((r, i) => (
-            <div key={r.id} className="relative flex items-center justify-between px-3 py-1.5 text-[11px]">
-              <span className="truncate text-fg">{r.rotulo || `Ramo ${i + 1}`}</span>
-              <span className="ml-2 shrink-0 rounded bg-surface2 px-1 text-[9px] font-bold text-muted">{r.juncao}</span>
-              <Handle
-                id={r.id}
-                type="source"
-                position={Position.Right}
-                style={{ top: '50%' }}
-                className="!h-2.5 !w-2.5 !border-2 !border-surface !bg-violet-500"
-              />
+            <div key={r.id} className="relative min-w-0 flex-1 border-line px-2 py-1.5 text-center text-2xs [&:not(:first-child)]:border-l">
+              <span className="block truncate font-medium text-fg">{r.rotulo || `Ramo ${i + 1}`}</span>
+              <Handle id={r.id} type="source" position={Position.Bottom} className={HANDLE} />
             </div>
           ))}
         </div>
       ) : (
-        <Handle type="source" position={Position.Right} className="!h-2.5 !w-2.5 !border-2 !border-surface !bg-brand" />
+        <Handle type="source" position={Position.Bottom} className={HANDLE} />
       )}
     </div>
   );

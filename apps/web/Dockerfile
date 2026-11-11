@@ -30,7 +30,7 @@ COPY --from=build /repo/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build /repo/apps/web/public ./apps/web/public
 # Só a base de conhecimento de PRODUTO vai para a imagem (lib/cerebro.ts lê do
 # filesystem). PRD, Bugs, Arquitetura e revisões de segurança são internos e
-# nunca entram em produção (BUG-028).
+# nunca entram em produção (BUG-030).
 COPY --from=build "/repo/Nyro IA/cerebro/RAG/conhecimento" "/repo/Nyro IA/cerebro/RAG/conhecimento"
 EXPOSE 3210
 ENV PORT=3210

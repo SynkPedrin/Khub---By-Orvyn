@@ -24,6 +24,7 @@ export const Card = forwardRef<HTMLDivElement, { className?: string; children: R
 });
 
 export function Badge({ children, tone = 'brand', className }: { children: ReactNode; tone?: 'brand' | 'green' | 'amber' | 'neutral'; className?: string }) {
+  // Tokens de status (Q1.9): claro e escuro vêm de globals.css, sem cor literal.
   const tones: Record<string, string> = {
     brand: 'text-brand',
     green: 'text-success',

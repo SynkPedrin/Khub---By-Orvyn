@@ -1,4 +1,4 @@
-# KHUB by Orvyn
+# KHUB
 
 CRM com interface Next.js, API NestJS, PostgreSQL/pgvector e filas BullMQ/Redis.
 

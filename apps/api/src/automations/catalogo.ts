@@ -3,8 +3,8 @@ import { z } from 'zod';
 /**
  * Catálogo congelado dos nós do workflow (ADR-0012 — fecha a LACUNA do PRD §7.1;
  * ampliado em E.2 e na trilha W de paridade de motor). Nó fora daqui não existe:
- * a validação da publicação recusa o grafo. Conta atual: 7 gatilhos + 7 controle
- * + 14 ações = 28.
+ * a validação da publicação recusa o grafo. Conta atual: 16 gatilhos + 9 controle
+ * + 19 ações = 44 (Q3.1/Q3.2 somaram esperar até, meta, 4 ações e 4 gatilhos).
  */
 export const TIPOS_NO = [
   // Gatilhos (6) — entram o run
@@ -21,6 +21,11 @@ export const TIPOS_NO = [
   'gatilho.faltou',
   'gatilho.agendamento_cancelado',
   'gatilho.lembrete_agendamento',
+  // Tempo, formulário e pagamento (Q3.2 / W3)
+  'gatilho.agendado',
+  'gatilho.data_contato',
+  'gatilho.formulario_enviado',
+  'gatilho.pagamento_recebido',
   // Controle (7)
   'controle.esperar',
   'controle.esperar_resposta',
@@ -29,6 +34,9 @@ export const TIPOS_NO = [
   'controle.drip',
   'controle.ir_para',
   'controle.encerrar',
+  // Q3.1: esperar até data/campo/evento e meta (goal)
+  'controle.esperar_ate',
+  'controle.meta',
   // Ações (10)
   'acao.enviar_sms',
   'acao.enviar_email',
@@ -45,6 +53,13 @@ export const TIPOS_NO = [
   'acao.ia',
   'acao.chamar_workflow',
   'acao.webhook',
+  // Q4.4
+  'acao.pedir_avaliacao',
+  // Q3.1 (+ W4)
+  'acao.remover_de_fluxo',
+  'acao.atribuir_usuario',
+  'acao.nao_perturbe',
+  'acao.atualizar_negocio',
 ] as const;
 
 export type TipoNo = (typeof TIPOS_NO)[number];
@@ -81,6 +96,135 @@ export const TIPOS_COMPROMISSO = ['reuniao', 'call', 'demo', 'visita', 'followup
 const filtroAgendaSchema = z.object({
   tipo: z.enum(TIPOS_COMPROMISSO).optional(),
   responsavelId: z.string().uuid().optional(),
+});
+
+// ---------------------------------------------------------------------------
+// Q3.1 / Q3.2: blocos compartilhados (tempo, evento, campos personalizados)
+// ---------------------------------------------------------------------------
+
+/** "HH:MM" 24h. */
+export const HORA_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+/** "AAAA-MM-DD" (mesmo formato do campo personalizado tipo data, db/053). */
+export const DATA_RE = /^\d{4}-\d{2}-\d{2}$/;
+/** Chave de campo personalizado (espelha CHAVE_RE de crm/custom-fields.ts). */
+export const CHAVE_CAMPO_RE = /^[a-z][a-z0-9_]{0,49}$/;
+
+/** Fuso IANA válido para o Intl (ex.: America/Sao_Paulo). */
+export function fusoEhValido(f: string): boolean {
+  try {
+    new Intl.DateTimeFormat('pt-BR', { timeZone: f });
+    return true;
+  } catch {
+    return false;
+  }
+}
+const fusoSchema = z.string().max(60).refine(fusoEhValido, 'fuso horário inválido');
+
+/**
+ * Eventos que uma espera ("Esperar até" no modo evento) ou uma meta podem
+ * aguardar. Cada um vem de um evento de domínio do outbox — ver
+ * `eventos-espera.ts` (EVENTO_DOMINIO_PARA_ESPERA).
+ */
+export const EVENTOS_ESPERA = [
+  'mensagem_recebida',
+  'tag_adicionada',
+  'etapa_mudou',
+  'agendamento_criado',
+  'agendamento_confirmado',
+  'negocio_status',
+  'formulario_enviado',
+  'pagamento_recebido',
+] as const;
+export type EventoEspera = (typeof EVENTOS_ESPERA)[number];
+
+/** Evento + filtro opcional (vazio = qualquer). Só o filtro do evento escolhido vale. */
+const filtroEvento = {
+  evento: z.enum(EVENTOS_ESPERA),
+  tag: z.string().max(40).optional(),
+  stageId: z.string().uuid().optional(),
+  status: z.enum(['ganho', 'perdido']).optional(),
+  formId: z.string().uuid().optional(),
+  valorMinimo: z.number().min(0).optional(),
+  contem: z.string().max(200).optional(),
+};
+export interface FiltroEvento {
+  evento: EventoEspera;
+  tag?: string;
+  stageId?: string;
+  status?: 'ganho' | 'perdido';
+  formId?: string;
+  valorMinimo?: number;
+  contem?: string;
+}
+
+/**
+ * Campo de data usado em "Esperar até" (modo campo): agendamento do gatilho,
+ * próxima ação do contato ou campo personalizado do contato/negócio.
+ * `agendamento.data` é aceito como apelido de `agendamento.inicio`.
+ */
+export const CAMPO_DATA_ESPERA_RE = /^(agendamento\.(inicio|fim|data)|contato\.proximaAcaoAt|(contato|negocio)\.campos\.[a-z][a-z0-9_]{0,49})$/;
+/** Campo de data do gatilho "Data do contato": criação ou campo personalizado do contato. */
+export const CAMPO_DATA_GATILHO_RE = /^(contato\.criadoEm|contato\.campos\.[a-z][a-z0-9_]{0,49})$/;
+
+const campoValorSchema = z.object({
+  chave: z.string().regex(CHAVE_CAMPO_RE, 'chave de campo personalizado inválida'),
+  /** Aceita {{...}}. Vazio limpa o campo. Lista (várias opções): separe por vírgula. */
+  valor: z.string().max(2000),
+});
+
+const esperarAteSchema = z.discriminatedUnion('modo', [
+  z.object({
+    modo: z.literal('data'),
+    data: z.string().regex(DATA_RE, 'data no formato AAAA-MM-DD'),
+    hora: z.string().regex(HORA_RE, 'hora no formato HH:MM').default('09:00'),
+    seJaPassou: z.enum(['seguir', 'encerrar']).default('seguir'),
+  }),
+  z.object({
+    modo: z.literal('campo'),
+    campo: z.string().regex(CAMPO_DATA_ESPERA_RE, 'campo de data não suportado'),
+    deslocamento: z.number().int().min(0).max(100_000).default(0),
+    unidade: z.enum(['minutos', 'horas', 'dias']).default('dias'),
+    direcao: z.enum(['antes', 'depois']).default('antes'),
+    /** Hora do dia (só com unidade "dias"). Vazio = mantém a hora do campo. */
+    hora: z.string().regex(HORA_RE, 'hora no formato HH:MM').optional(),
+    seJaPassou: z.enum(['seguir', 'encerrar']).default('seguir'),
+  }),
+  z.object({
+    modo: z.literal('evento'),
+    ...filtroEvento,
+    duracao: z.number().int().positive(),
+    unidade: z.enum(['minutos', 'horas', 'dias']),
+  }),
+]);
+
+const gatilhoAgendadoSchema = z.object({
+  frequencia: z.enum(['diario', 'semanal', 'mensal']).default('diario'),
+  hora: z.string().regex(HORA_RE, 'hora no formato HH:MM').default('09:00'),
+  /** 0 = domingo ... 6 = sábado (só no semanal). */
+  diasSemana: z.array(z.number().int().min(0).max(6)).max(7).default([1]),
+  /** Dia do mês (só no mensal). 31 em mês curto = último dia. */
+  diaMes: z.number().int().min(1).max(31).default(1),
+  /** Vazio = fuso do fluxo. */
+  fuso: fusoSchema.optional(),
+  /** `sem_contato`: um run por janela. `segmento`: um run por contato do segmento. */
+  alvo: z.enum(['sem_contato', 'segmento']).default('sem_contato'),
+  tags: z.array(z.string().min(1).max(40)).max(20).default([]),
+  stageId: z.string().uuid().optional(),
+}).superRefine((c, ctx) => {
+  if (c.frequencia === 'semanal' && !c.diasSemana.length) ctx.addIssue({ code: 'custom', path: ['diasSemana'], message: 'escolha ao menos um dia da semana' });
+  if (c.alvo === 'segmento' && !c.tags.length && !c.stageId) ctx.addIssue({ code: 'custom', path: ['alvo'], message: 'segmento precisa de tag ou etapa (sem filtro dispararia para a base inteira)' });
+});
+
+const gatilhoDataContatoSchema = z.object({
+  campo: z.string().regex(CAMPO_DATA_GATILHO_RE, 'campo de data não suportado'),
+  quando: z.enum(['antes', 'no_dia', 'depois']).default('no_dia'),
+  dias: z.number().int().min(0).max(365).default(0),
+  hora: z.string().regex(HORA_RE, 'hora no formato HH:MM').default('09:00'),
+  /** Repete todo ano (aniversário): compara só dia e mês. */
+  anual: z.boolean().default(true),
+  fuso: fusoSchema.optional(),
+}).superRefine((c, ctx) => {
+  if (c.quando !== 'no_dia' && c.dias < 1) ctx.addIssue({ code: 'custom', path: ['dias'], message: 'informe quantos dias antes ou depois' });
 });
 
 const configs: Record<TipoNo, z.ZodTypeAny> = {
@@ -121,6 +265,14 @@ const configs: Record<TipoNo, z.ZodTypeAny> = {
   'gatilho.agendamento_cancelado': filtroAgendaSchema,
   /** Varredura D-1: dispara quando faltam até 24h para um compromisso `agendado`. */
   'gatilho.lembrete_agendamento': filtroAgendaSchema,
+
+  // ---- Gatilhos por tempo, formulário e pagamento (Q3.2) ----
+  'gatilho.agendado': gatilhoAgendadoSchema,
+  'gatilho.data_contato': gatilhoDataContatoSchema,
+  /** Vazio = qualquer formulário. */
+  'gatilho.formulario_enviado': z.object({ formId: z.string().uuid().optional() }),
+  /** Valor mínimo em reais. Vazio = qualquer pagamento. */
+  'gatilho.pagamento_recebido': z.object({ valorMinimo: z.number().min(0).optional() }),
 
   // ---- Controle ----
   'controle.esperar': z.object({
@@ -196,9 +348,21 @@ const configs: Record<TipoNo, z.ZodTypeAny> = {
   }),
   'acao.adicionar_tag': z.object({ tag: z.string().min(1).max(40) }),
   'acao.remover_tag': z.object({ tag: z.string().min(1).max(40) }),
+  /**
+   * Um campo fixo (`campo` + `valor`), campos personalizados (validados pelo
+   * tipo da definição, db/053) e tags a adicionar/remover. Ao menos um.
+   */
   'acao.atualizar_contato': z.object({
-    campo: z.enum(['nome', 'email', 'telefone', 'empresa', 'tag', 'valorEstimado']),
-    valor: z.string(),
+    campo: z.enum(['nome', 'email', 'telefone', 'empresa', 'tag', 'valorEstimado']).optional(),
+    valor: z.string().optional(),
+    campos: z.array(campoValorSchema).max(50).default([]),
+    tagsAdicionar: z.array(z.string().min(1).max(40)).max(20).default([]),
+    tagsRemover: z.array(z.string().min(1).max(40)).max(20).default([]),
+  }).superRefine((c, ctx) => {
+    if (c.campo && c.valor === undefined) ctx.addIssue({ code: 'custom', path: ['valor'], message: 'informe o novo valor' });
+    if (!c.campo && !c.campos.length && !c.tagsAdicionar.length && !c.tagsRemover.length) {
+      ctx.addIssue({ code: 'custom', path: ['campo'], message: 'escolha ao menos um campo ou tag para atualizar' });
+    }
   }),
   'acao.criar_oportunidade': z.object({
     titulo: z.string().min(1).max(200),
@@ -245,13 +409,94 @@ const configs: Record<TipoNo, z.ZodTypeAny> = {
     metodo: z.enum(['GET', 'POST']).default('POST'),
     corpo: z.string().max(4000).optional(),
   }),
+  /**
+   * Pedido de avaliação (Q4.4): manda o link curto rastreável (`/r/:token`) da
+   * avaliação configurada em Configurações > Avaliações. `mensagem` vazia usa a padrão.
+   */
+  'acao.pedir_avaliacao': z.object({
+    canal: z.enum(['whatsapp', 'email']).default('whatsapp'),
+    mensagem: z.string().max(1000).optional(),
+  }),
+
+  // ---- Q3.1 ----
+  /** Espera até data fixa, até um campo de data (± deslocamento) ou até um evento (com prazo). */
+  'controle.esperar_ate': esperarAteSchema,
+  /**
+   * Meta (goal): quando o evento acontece para o contato em QUALQUER ponto
+   * anterior do fluxo, o run pula para cá (esperas pendentes são canceladas).
+   * `seNaoAtingida`: o que fazer quando o contato chega aqui sem a meta.
+   */
+  'controle.meta': z.object({
+    ...filtroEvento,
+    seNaoAtingida: z.enum(['seguir', 'esperar', 'encerrar']).default('seguir'),
+  }),
+  /** `este`: encerra aqui; `outros`: tira dos fluxos escolhidos; `todos`: de todos os outros. */
+  'acao.remover_de_fluxo': z.object({
+    alvo: z.enum(['este', 'outros', 'todos']).default('este'),
+    workflowIds: z.array(z.string().uuid()).max(50).default([]),
+  }).superRefine((c, ctx) => {
+    if (c.alvo === 'outros' && !c.workflowIds.length) ctx.addIssue({ code: 'custom', path: ['workflowIds'], message: 'escolha ao menos um fluxo' });
+  }),
+  /** Dono fixo ou rodízio (round-robin) entre membros. Grava `contacts.owner_id` (+ negócio aberto, opcional). */
+  'acao.atribuir_usuario': z.object({
+    modo: z.enum(['fixo', 'rodizio']).default('fixo'),
+    usuarioId: z.string().uuid().optional(),
+    usuarios: z.array(z.string().uuid()).max(50).default([]),
+    soSemDono: z.boolean().default(false),
+    /** Também grava o dono do negócio aberto do contato. */
+    negocio: z.boolean().default(false),
+  }).superRefine((c, ctx) => {
+    if (c.modo === 'fixo' && !c.usuarioId) ctx.addIssue({ code: 'custom', path: ['usuarioId'], message: 'escolha o usuário' });
+    if (c.modo === 'rodizio' && !c.usuarios.length) ctx.addIssue({ code: 'custom', path: ['usuarios'], message: 'escolha ao menos um usuário para o rodízio' });
+    if (new Set(c.usuarios).size !== c.usuarios.length) ctx.addIssue({ code: 'custom', path: ['usuarios'], message: 'usuário repetido no rodízio' });
+  }),
+  /** Liga/desliga o "não perturbe" (`contacts.opted_out_at`): bloqueia SMS/WhatsApp e e-mail ao contato. */
+  'acao.nao_perturbe': z.object({ ativar: z.boolean().default(true) }),
+  /** Atualiza o negócio do contexto. Ao menos uma mudança. */
+  'acao.atualizar_negocio': z.object({
+    /** Número ou {{...}} que resolva para número (ex.: {{variaveis.total}}). */
+    valor: z.string().max(60).optional(),
+    status: z.enum(['aberto', 'ganho', 'perdido']).optional(),
+    /** Só com status perdido (db/051). */
+    motivoPerdaId: z.string().uuid().optional(),
+    stageId: z.string().uuid().optional(),
+    dono: z.enum(['manter', 'usuario', 'contato', 'nenhum']).default('manter'),
+    ownerId: z.string().uuid().optional(),
+    campos: z.array(campoValorSchema).max(50).default([]),
+  }).superRefine((c, ctx) => {
+    if (c.dono === 'usuario' && !c.ownerId) ctx.addIssue({ code: 'custom', path: ['ownerId'], message: 'escolha o novo dono' });
+    if (c.motivoPerdaId && c.status !== 'perdido') ctx.addIssue({ code: 'custom', path: ['motivoPerdaId'], message: 'motivo de perda só com status perdido' });
+    const muda = (c.valor !== undefined && c.valor.trim() !== '') || c.status || c.stageId || c.dono !== 'manter' || c.campos.length;
+    if (!muda) ctx.addIssue({ code: 'custom', path: ['status'], message: 'escolha ao menos uma mudança no negócio' });
+  }),
 };
+
+/** Saídas do "Esperar até" no modo evento. */
+export const RAMOS_ESPERAR_EVENTO = [
+  { id: 'aconteceu', rotulo: 'Aconteceu' },
+  { id: 'expirou', rotulo: 'Prazo expirou' },
+] as const;
 
 /** Ramos fixos do "Esperar resposta" — a UI desenha estas duas saídas. */
 export const RAMOS_ESPERAR_RESPOSTA = [
   { id: 'resposta', rotulo: 'Respondeu' },
   { id: 'timeout', rotulo: 'Não respondeu' },
 ] as const;
+
+/**
+ * Saídas nomeadas FIXAS do nó (não definidas pelo usuário). "Esperar até" só
+ * tem duas saídas no modo evento; nos modos data/campo segue por uma só.
+ */
+export function ramosFixosDoNo(no: { tipo: string; config?: Record<string, unknown> }): readonly { id: string; rotulo: string }[] | null {
+  if (no.tipo === 'controle.esperar_resposta') return RAMOS_ESPERAR_RESPOSTA;
+  if (no.tipo === 'controle.esperar_ate' && (no.config as { modo?: unknown } | undefined)?.modo === 'evento') return RAMOS_ESPERAR_EVENTO;
+  return null;
+}
+
+/** Nó com saídas nomeadas: sem ramo escolhido, não pode cair na saída de outro ramo. */
+export function noRamificado(no: { tipo: string; config?: Record<string, unknown> }): boolean {
+  return no.tipo === 'controle.condicao' || no.tipo === 'controle.split' || ramosFixosDoNo(no) !== null;
+}
 
 /** O que fazer quando o nó falha (PRD §7.2 — fallback por nó). */
 export const aoFalharSchema = z.enum(['parar', 'seguir']).default('parar');
@@ -273,14 +518,29 @@ export const arestaSchema = z.object({
   ramo: z.string().optional(),
 });
 
+/**
+ * Nota de texto no canvas (Q3.3). Mora FORA de `nos` de propósito: o executor,
+ * o validador e o publicar só percorrem `nos`/`arestas`, então uma nota nunca
+ * vira passo, nunca recebe conexão e nunca bloqueia a publicação. É anotação
+ * da equipe, versionada junto com o grafo.
+ */
+export const notaSchema = z.object({
+  id: z.string().min(1).max(40),
+  texto: z.string().max(2000).default(''),
+  posicao: z.object({ x: z.number(), y: z.number() }),
+  tom: z.enum(['neutro', 'marca', 'aviso']).optional(),
+});
+
 export const grafoSchema = z.object({
   nos: z.array(noSchema).default([]),
   arestas: z.array(arestaSchema).default([]),
+  notas: z.array(notaSchema).max(200).optional(),
 });
 
 export type Grafo = z.infer<typeof grafoSchema>;
 export type No = z.infer<typeof noSchema>;
 export type Aresta = z.infer<typeof arestaSchema>;
+export type Nota = z.infer<typeof notaSchema>;
 export type Ramo = z.infer<typeof ramoSchema>;
 export type Regra = z.infer<typeof regraSchema>;
 
@@ -326,6 +586,10 @@ export const CATALOGO: MetaNo[] = [
   { tipo: 'gatilho.faltou', categoria: 'gatilho', grupo: 'Agenda', nome: 'Contato faltou', descricao: 'O compromisso foi marcado como falta. Ideal para recuperar e reagendar.', busca: ['agenda', 'falta', 'faltou', 'no-show', 'não compareceu', 'reagendar', 'recuperação'] },
   { tipo: 'gatilho.agendamento_cancelado', categoria: 'gatilho', grupo: 'Agenda', nome: 'Agendamento cancelado', descricao: 'O compromisso foi cancelado.', busca: ['agenda', 'cancelou', 'cancelamento', 'desmarcou'] },
   { tipo: 'gatilho.lembrete_agendamento', categoria: 'gatilho', grupo: 'Agenda', nome: 'Lembrete do agendamento (D-1)', descricao: 'Faltam até 24 horas para um compromisso ainda não confirmado. Se o contato responder "sim", a agenda confirma sozinha.', busca: ['agenda', 'lembrete', 'd-1', 'véspera', 'confirmar', 'reminder'] },
+  { tipo: 'gatilho.agendado', categoria: 'gatilho', grupo: 'Tempo', nome: 'Agendado (recorrente)', descricao: 'Roda todo dia, toda semana ou todo mês num horário. Sem contato ou para cada contato de um segmento (tag ou etapa).', busca: ['cron', 'scheduler', 'agendar', 'recorrente', 'diário', 'semanal', 'mensal', 'horário', 'rotina'] },
+  { tipo: 'gatilho.data_contato', categoria: 'gatilho', grupo: 'Tempo', nome: 'Data do contato (aniversário)', descricao: 'Dias antes, no dia ou depois de uma data do contato: aniversário, renovação, data de cadastro. Varredura diária, uma vez por data. Para repetir todo ano, deixe a reentrada em "sempre".', busca: ['aniversário', 'aniversario', 'birthday', 'data', 'lembrete', 'renovação', 'vencimento', 'custom date'] },
+  { tipo: 'gatilho.formulario_enviado', categoria: 'gatilho', grupo: 'Captação', nome: 'Formulário enviado', descricao: 'O contato enviou um formulário. Use {{formulario.<campo>}} com as respostas.', busca: ['form', 'formulário', 'cadastro', 'inscrição', 'landing'] },
+  { tipo: 'gatilho.pagamento_recebido', categoria: 'gatilho', grupo: 'Financeiro', nome: 'Pagamento recebido', descricao: 'Uma cobrança foi paga. Filtro opcional por valor mínimo. Use {{pagamento.valor}} e {{pagamento.descricao}}.', busca: ['pagamento', 'pago', 'cobrança', 'stripe', 'pix', 'boleto', 'payment', 'recebido', 'venda'] },
   { tipo: 'gatilho.webhook', categoria: 'gatilho', grupo: 'Dados', nome: 'Webhook recebido', descricao: 'Um sistema externo chama a URL deste fluxo (formulário, site, ERP).', busca: ['api', 'integração', 'externo', 'formulário', 'inbound'] },
 
   // ---------------- Controle ----------------
@@ -341,6 +605,9 @@ export const CATALOGO: MetaNo[] = [
   { tipo: 'controle.ir_para', categoria: 'controle', grupo: 'Fluxo', nome: 'Ir para', descricao: 'Pula para outro nó do fluxo. Tem limite de passos contra loop infinito.', busca: ['goto', 'pular', 'saltar'] },
   { tipo: 'controle.encerrar', categoria: 'controle', grupo: 'Fluxo', nome: 'Encerrar', descricao: 'Termina a execução aqui. Útil no fim de um ramo do If/Else.', busca: ['stop', 'parar', 'fim', 'sair'] },
 
+  { tipo: 'controle.esperar_ate', categoria: 'controle', grupo: 'Fluxo', nome: 'Esperar até', descricao: 'Espera até uma data e hora, até um campo de data (ex.: 1 dia antes do agendamento) ou até um evento acontecer, com prazo e duas saídas.', busca: ['wait until', 'até', 'data', 'agendamento', 'evento', 'aguardar', 'timeout', 'véspera'] },
+  { tipo: 'controle.meta', categoria: 'controle', grupo: 'Fluxo', nome: 'Meta', descricao: 'Quando o evento acontece (agendou, pagou, respondeu), o contato pula direto para cá, de qualquer ponto anterior do fluxo.', busca: ['goal', 'objetivo', 'meta', 'conversão', 'pular'] },
+
   // ---------------- Ações ----------------
   { tipo: 'acao.enviar_sms', categoria: 'acao', grupo: 'Comunicação', nome: 'Enviar SMS', descricao: 'Texto simples entregue no WhatsApp via STEVO (API não oficial): sem mídia nem template.', provider: 'stevo', busca: ['whatsapp', 'mensagem', 'texto', 'enviar'] },
   { tipo: 'acao.enviar_email', categoria: 'acao', grupo: 'Comunicação', nome: 'Enviar e-mail', descricao: 'E-mail para o contato pelo canal oficial (SMTP). Aceita {{contato.nome}} no assunto e no corpo.', provider: 'email', busca: ['email', 'e-mail', 'mail', 'mensagem', 'enviar'] },
@@ -348,6 +615,10 @@ export const CATALOGO: MetaNo[] = [
   { tipo: 'acao.adicionar_tag', categoria: 'acao', grupo: 'Contato', nome: 'Adicionar tag', descricao: 'Aplica uma tag ao contato.', busca: ['etiqueta', 'marcar'] },
   { tipo: 'acao.remover_tag', categoria: 'acao', grupo: 'Contato', nome: 'Remover tag', descricao: 'Tira a tag do contato.', busca: ['etiqueta', 'desmarcar'] },
   { tipo: 'acao.atualizar_contato', categoria: 'acao', grupo: 'Contato', nome: 'Atualizar contato', descricao: 'Grava um valor num campo do contato.', busca: ['campo', 'editar', 'campo customizado'] },
+  { tipo: 'acao.atribuir_usuario', categoria: 'acao', grupo: 'Contato', nome: 'Atribuir responsável', descricao: 'Define o dono do contato: um usuário fixo ou rodízio entre membros da equipe. Opcional: só se ainda não tiver dono.', busca: ['dono', 'owner', 'responsável', 'round robin', 'rodízio', 'distribuir', 'atribuir', 'vendedor'] },
+  { tipo: 'acao.nao_perturbe', categoria: 'acao', grupo: 'Contato', nome: 'Não perturbe', descricao: 'Liga ou desliga o "não perturbe": com ele ligado, nenhum SMS, WhatsApp ou e-mail sai para o contato.', busca: ['dnd', 'opt-out', 'descadastrar', 'bloquear', 'silenciar', 'lgpd'] },
+  { tipo: 'acao.remover_de_fluxo', categoria: 'acao', grupo: 'Ferramentas internas', nome: 'Remover de fluxo', descricao: 'Tira o contato deste fluxo ou de outros: cancela as execuções ativas dele.', busca: ['remove', 'sair', 'cancelar', 'parar', 'workflow', 'tirar'] },
+  { tipo: 'acao.atualizar_negocio', categoria: 'acao', grupo: 'Negócios', nome: 'Atualizar negócio', descricao: 'Muda valor, status (ganho, perdido), etapa, dono ou campos personalizados do negócio do contexto.', busca: ['deal', 'oportunidade', 'valor', 'ganho', 'perdido', 'status', 'dono'] },
   { tipo: 'acao.criar_oportunidade', categoria: 'acao', grupo: 'Negócios', nome: 'Criar oportunidade', descricao: 'Cria um negócio na etapa escolhida do funil.', busca: ['deal', 'venda', 'pipeline'] },
   { tipo: 'acao.mover_etapa', categoria: 'acao', grupo: 'Negócios', nome: 'Mover etapa', descricao: 'Move o negócio do contexto para outra etapa.', busca: ['stage', 'pipeline', 'estágio'] },
   { tipo: 'acao.criar_tarefa', categoria: 'acao', grupo: 'Ferramentas internas', nome: 'Criar tarefa', descricao: 'Abre uma tarefa ligada ao contato, para alguém da equipe fazer.', busca: ['task', 'to-do', 'lembrete'] },
@@ -357,4 +628,5 @@ export const CATALOGO: MetaNo[] = [
   { tipo: 'acao.ia', categoria: 'acao', grupo: 'Ferramentas internas', nome: 'IA (analisar)', descricao: 'A Nyro classifica, pontua, resume, responde ou extrai a partir do contexto — e guarda o resultado numa variável.', provider: 'anthropic', busca: ['ia', 'ai', 'nyro', 'score', 'pontuar', 'sentimento', 'resumo', 'classificar', 'inteligência', 'gpt'] },
   { tipo: 'acao.chamar_workflow', categoria: 'acao', grupo: 'Ferramentas internas', nome: 'Acionar outro fluxo', descricao: 'Manda o contato para outra automação. Serve para reaproveitar fluxos.', busca: ['workflow', 'encadear', 'chaining', 'sub-fluxo'] },
   { tipo: 'acao.webhook', categoria: 'acao', grupo: 'Dados', nome: 'Enviar webhook', descricao: 'Chama uma URL externa com o contexto da execução.', busca: ['api', 'integração', 'http', 'send data'] },
+  { tipo: 'acao.pedir_avaliacao', categoria: 'acao', grupo: 'Comunicação', nome: 'Pedir avaliação', descricao: 'Envia ao contato o link de avaliação (Google ou outro) configurado em Configurações > Avaliações. O clique e a nota ficam registrados.', provider: 'stevo', busca: ['avaliação', 'avaliacao', 'review', 'google', 'nps', 'satisfação', 'estrelas', 'depoimento'] },
 ];

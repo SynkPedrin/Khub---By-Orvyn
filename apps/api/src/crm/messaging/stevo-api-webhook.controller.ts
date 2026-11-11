@@ -1,3 +1,6 @@
+import { StevoApiEventosService } from './stevo-api-eventos.service';
+import { chavesDaMidia, extrairMidia, tipoDeEntrada, type MidiaEntrada } from './midia-entrada';
+import { Prisma } from '@prisma/client';
 import { Controller, HttpCode, Logger, Post, Req, UnauthorizedException } from '@nestjs/common';
 import type { Request } from 'express';
 import { z } from 'zod';
@@ -19,7 +22,7 @@ const envelopeSchema = z.object({
   data: z.record(z.unknown()).nullable().optional(),
 });
 
-/** Eventos que o Revenue OS processa; o resto é aceito (2xx) e descartado. */
+/** Eventos que o KHUB processa; o resto é aceito (2xx) e descartado. */
 export const EVENTOS_STEVO = [
   'message.received',
   'message.sent',
@@ -52,9 +55,15 @@ export function payloadMinimo(tipo: string, instanciaId: string, data: Record<st
     texto: s(d.text),
     timestamp: s(d.timestamp),
     motivo: s(d.reason),
+    // Mídia recebida (figurinha/imagem/áudio…): só o necessário para baixar e
+    // exibir. base64 grande não vai para a fila (fica só a URL).
+    midia: (() => {
+      const m = extrairMidia(d);
+      return m && m.base64 && m.base64.length > 2_000_000 ? { ...m, base64: null } : m;
+    })(),
   };
 }
-export type EventoStevoApi = ReturnType<typeof payloadMinimo> & { eventId: string };
+export type EventoStevoApi = Omit<ReturnType<typeof payloadMinimo>, 'midia'> & { midia?: MidiaEntrada | null; eventId: string };
 
 /**
  * Webhook de CONTA da Stevo (API de gestão).
@@ -81,6 +90,7 @@ export class StevoApiWebhookController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly eventos: StevoApiEventosService,
   ) {}
 
   @Post()
@@ -119,13 +129,32 @@ export class StevoApiWebhookController {
 
     const dedupeKey = `stevo_api-${ev.event_id}`;
     const payload: EventoStevoApi = { ...payloadMinimo(ev.type, ev.instance.id, ev.data ?? null), eventId: ev.event_id };
-    await this.prisma.withTenant(tenantId, (tx) =>
+    if (ev.type === 'message.received' && tipoDeEntrada(payload.conteudoTipo)) {
+      // Diagnóstico do formato de mídia (a doc da Stevo não lista os campos): só NOMES de chaves.
+      this.log.log(`mídia recebida (${payload.conteudoTipo}) ${chavesDaMidia(ev.data ?? null)}`);
+    }
+    const linha = await this.prisma.withTenant(tenantId, (tx) =>
       tx.outboxEvent.upsert({
         where: { tenantId_dedupeKey: { tenantId, dedupeKey } },
-        create: { tenantId, kind: 'stevo_api.event', dedupeKey, payload },
+        create: { tenantId, kind: 'stevo_api.event', dedupeKey, payload: payload as unknown as Prisma.InputJsonValue },
         update: {},
+        select: { id: true, status: true },
       }),
     );
+    // TEMPO REAL: processa já, na própria requisição (a API publica no socket
+    // na hora). O outbox continua sendo a garantia: se falhar aqui, o worker
+    // reprocessa; se der certo, marca processado para o worker não repetir
+    // (e o receiveInbound é idempotente pelo id da mensagem, caso os dois corram).
+    if (linha.status === 'pending') {
+      try {
+        await this.eventos.processar(tenantId, payload);
+        await this.prisma.withTenant(tenantId, (tx) =>
+          tx.outboxEvent.updateMany({ where: { id: linha.id, status: 'pending' }, data: { status: 'processed', processedAt: new Date() } }),
+        );
+      } catch (e) {
+        this.log.warn(`processamento imediato falhou (${ev.type}); o worker reprocessa: ${(e as Error).message.slice(0, 160)}`);
+      }
+    }
     return { ok: true };
   }
 }

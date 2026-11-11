@@ -8,7 +8,7 @@ import type { MidiaSaida } from './provider.contract';
  *
  * Contrato tirado da especificação oficial (`openapi.stevo.chat/openapi.yaml`)
  * e dos tipos do SDK oficial `stevo-sdk` — nenhum endpoint inventado (ADR-0031:
- * a Stevo é só transporte; a inteligência é do Revenue OS).
+ * a Stevo é só transporte; a inteligência é do KHUB).
  *
  * Diferente do `StevoProvider` antigo (API de instância, uma instância global
  * no .env): aqui cada TENANT tem sua instância, vinculada em `integrations`
@@ -43,7 +43,7 @@ export interface StevoMe {
   key: { name: string; scopes: string[]; allowed_instance_ids: string[] | null; rate_limit_per_minute?: number };
 }
 
-/** Escopos que o Revenue OS usa (menor privilégio — doc 18 §5). */
+/** Escopos que o KHUB usa (menor privilégio — doc 18 §5). */
 export const ESCOPOS_NECESSARIOS: Record<string, string> = {
   'instances:read': 'listar instâncias e ver conexão',
   'instances:write': 'vincular instância (external_ref)',
@@ -102,7 +102,7 @@ export class StevoApiProvider implements MessagingProvider {
     return (await this.req<StevoMe>('GET', '/v1/me')).dados;
   }
 
-  /** Escopos que faltam para o Revenue OS (para a UI dizer "falta permissão X"). */
+  /** Escopos que faltam para o KHUB (para a UI dizer "falta permissão X"). */
   async escoposFaltando(): Promise<{ escopo: string; para: string }[]> {
     const { key } = await this.me();
     const tem = new Set(key.scopes.map((s) => SINONIMOS[s] ?? s));

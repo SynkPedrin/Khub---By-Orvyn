@@ -5,6 +5,7 @@ import { Button, Field, Input } from '@/components/ui';
 import { Icon } from '@/components/icons';
 import { CAMPOS_CONDICAO, OPERADORES, type MetaNo, type NoGrafo, type Ramo } from '@/lib/automations';
 import { crm, type Contato, type PipelineData } from '@/lib/crm';
+import { FiltroGatilhoAgenda, ehGatilhoAgenda } from '@/components/agenda/FiltroGatilhoAgenda';
 
 interface Props {
   no: NoGrafo;
@@ -287,6 +288,7 @@ export function PainelNo({ no, meta, onMudar, onExcluir, onFechar, outrosNos, ou
             </select>
           </Field>
         )}
+        {ehGatilhoAgenda(no.tipo) && <FiltroGatilhoAgenda tipo={cfg.tipo} responsavelId={cfg.responsavelId} onChange={set} />}
         {no.tipo === 'gatilho.negocio_status' && (
           <Field label="Quando o negócio for" hint="Vazio = qualquer (ganho ou perdido).">
             <select className="input" value={cfg.status ?? ''} onChange={(e) => set({ status: e.target.value || undefined })}>

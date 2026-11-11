@@ -25,7 +25,10 @@ export class AiProviderRegistry {
     this.porNome = new Map<string, AIProvider>([
       [anthropic.nome, anthropic],
       [openai.nome, openai],
-      // A API nativa permite desativar thinking e preserva o schema estruturado.
+      // Ollama tem adapter PRÓPRIO que fala a API nativa (/api/chat): modelos
+      // "thinking" (qwen3.5) só desligam o raciocínio lá (`think: false`) —
+      // pelo endpoint OpenAI-compatível o flag é ignorado, a resposta vinha
+      // vazia (raciocínio comia o teto de tokens) e cada turno levava minutos.
       ['ollama', ollama],
     ]);
   }

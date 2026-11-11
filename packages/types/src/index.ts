@@ -107,6 +107,14 @@ export interface RealtimeEvents {
   'appointment.no_show': AppointmentEvent;
   'appointment.cancelled': AppointmentEvent;
   'appointment.reminder_due': AppointmentEvent;
+  /**
+   * Formulário enviado (Q3.2 · contrato para a Q4.1): o módulo de formulários
+   * publica no outbox com o contato já criado/atualizado. `respostas` vira
+   * `{{formulario.<campo>}}` no fluxo.
+   */
+  'form.submitted': { formId: string; contactId: string; respostas: Record<string, unknown> };
+  /** Cobrança virou paga (db/057, trigger `khub_cobranca_outbox`). Valor em centavos. */
+  'payment.received': { id: string; contactId: string | null; dealId: string | null; valorCentavos: number; moeda: string; descricao: string; pagoEm: string };
   /** Execução de automação ao vivo (Sprint E): alimenta a timeline da run. */
   'automation.run': { runId: string; workflowId: string; nodeId: string; status: string };
 }

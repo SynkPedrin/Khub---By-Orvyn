@@ -45,6 +45,8 @@ export interface MembroAgencia {
   email: string;
   role: string;
   createdAt: string;
+  /** Restrições de subconta. [] = acesso global (todas as subcontas). */
+  clientIds: string[];
 }
 
 export const agency = {
@@ -58,6 +60,10 @@ export const agency = {
   listarClientes: () => req<ClienteAgencia[]>('agency/clients'),
   overview: () => req<AgenciaOverview>('agency/overview'),
   listarMembros: () => req<MembroAgencia[]>('agency/members'),
+  /** Edita papel e/ou visibilidade de subcontas do membro (estilo GHL). */
+  atualizarMembro: (id: string, input: { role?: 'admin' | 'member' | 'viewer'; clientIds?: string[] }) =>
+    req<{ ok: true }>(`agency/members/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  removerMembro: (id: string) => req<{ ok: true }>(`agency/members/${id}`, { method: 'DELETE' }),
   detalheCliente: (id: string) => req<DetalheClienteAgencia>(`agency/clients/${id}`),
   criarCliente: (input: { nome: string; nicho?: string }) =>
     req<{ id: string; tenantId: string }>('agency/clients', { method: 'POST', body: JSON.stringify(input) }),

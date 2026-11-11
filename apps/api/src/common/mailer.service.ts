@@ -42,7 +42,7 @@ export class MailerService {
         return { sent: true, messageId: data.id };
       }
       this.transporter ??= createTransport(this.config.get('SMTP_URL')!);
-      const result = await this.transporter.sendMail({ from: this.config.get('SMTP_FROM') ?? 'KHUB Revenue OS <no-reply@orvyn.app>', to: mail.to, subject: mail.subject, text: mail.text, html: mail.html });
+      const result = await this.transporter.sendMail({ from: this.config.get('SMTP_FROM') ?? 'KHUB <no-reply@orvyn.app>', to: mail.to, subject: mail.subject, text: mail.text, html: mail.html });
       return { sent: true, messageId: result.messageId };
     } catch {
       this.log.warn('Envio de e-mail não confirmado pelo provedor.');

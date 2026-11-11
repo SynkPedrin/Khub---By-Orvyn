@@ -185,6 +185,11 @@ export function atrasoDigitacao(texto: string, cfg: Pick<ConfigFragmentacao, 'di
   return Math.min(cfg.intervaloMaxMs, Math.max(cfg.intervaloMinMs, ms));
 }
 
+/** Junta frases do mesmo bloco; a introdução "…:" e a lista seguinte ficam em linhas próprias. */
+function juntar(g: Frase[]): string {
+  return g.reduce((acc, x, i) => (i === 0 ? x.texto : `${acc}${x.texto.includes('\n') && acc.endsWith(':') ? '\n' : ' '}${x.texto}`), '');
+}
+
 export function fragmentarMensagem(textoBruto: string, cfg: ConfigFragmentacao): ResultadoFragmentacao {
   const ajustes: string[] = [];
   const texto = limparMarkdown(textoBruto);
@@ -205,6 +210,22 @@ export function fragmentarMensagem(textoBruto: string, cfg: ConfigFragmentacao):
   const semantica = paragrafos.length > 1;
   const frases: Frase[] = [];
   paragrafos.forEach((p, idx) => {
+    const linhas = p.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (linhas.length > 1) {
+      // Lista: as linhas ficam juntas (com a quebra) até o limite de caracteres.
+      // Uma linha de abertura terminada em ":" é a introdução da lista.
+      const intro = linhas[0].endsWith(':') ? linhas.shift()! : null;
+      if (intro) for (const f of segmentarFrases(intro)) frases.push({ texto: f, tipo: classificar(f), paragrafo: idx });
+      let buf = '';
+      for (const l of linhas) {
+        if (buf && `${buf}\n${l}`.length > maxC) {
+          frases.push({ texto: buf, tipo: 'info', paragrafo: idx });
+          buf = l;
+        } else buf = buf ? `${buf}\n${l}` : l;
+      }
+      if (buf) frases.push({ texto: buf, tipo: 'info', paragrafo: idx });
+      return;
+    }
     for (const f of segmentarFrases(p)) {
       for (const pedaco of quebrarFraseLonga(f, maxC, maxP)) {
         if (pedaco !== f && !ajustes.includes('frase longa quebrada em orações')) ajustes.push('frase longa quebrada em orações');
@@ -223,11 +244,14 @@ export function fragmentarMensagem(textoBruto: string, cfg: ConfigFragmentacao):
       continue;
     }
     const ult = g[g.length - 1];
-    const juntoTexto = `${g.map((x) => x.texto).join(' ')} ${f.texto}`;
+    const juntoTexto = juntar([...g, f]);
+    const ehLista = (x: Frase) => x.texto.includes('\n');
     const mudouParagrafo = f.paragrafo !== ult.paragrafo && cfg.quebraSemantica !== 'frases';
     const tamanhoAtual = g.reduce((t, x) => t + x.texto.length + 1, 0);
     let quebrar: boolean;
-    if (!cabe(juntoTexto)) quebrar = true;
+    if (ehLista(ult) || (ehLista(f) && !ult.texto.endsWith(':'))) quebrar = true;
+    else if (ehLista(f)) quebrar = juntoTexto.length > maxC;
+    else if (!cabe(juntoTexto)) quebrar = true;
     else if (cfg.quebraSemantica === 'paragrafos') quebrar = mudouParagrafo;
     else if (cfg.quebraSemantica === 'frases') quebrar = !(ult.tipo === 'saudacao' && f.tipo === 'saudacao');
     else if (mudouParagrafo) quebrar = true;
@@ -238,7 +262,7 @@ export function fragmentarMensagem(textoBruto: string, cfg: ConfigFragmentacao):
     else g.push(f);
   }
 
-  let blocos = grupos.map((g) => g.map((x) => x.texto).join(' '));
+  let blocos = grupos.map((g) => juntar(g));
 
   // 3) máximo de blocos: funde o par adjacente de menor soma (preferindo o que cabe)
   while (blocos.length > cfg.maxBlocos) {

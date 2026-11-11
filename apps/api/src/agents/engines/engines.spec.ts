@@ -10,6 +10,10 @@ import { checarCenario, compararAvaliacoes, notaCenario, type ResultadoCenario }
 const frag = (o: Partial<ConfigFragmentacao> = {}): ConfigFragmentacao => ({ ...configPadrao().comunicacao.fragmentacao, ...o });
 
 describe('Message Chunking Engine', () => {
+  it('lista fica em um bloco, com quebra de linha, junto da introdução', () => {
+    const r = fragmentarMensagem('Os valores são:\n- Design de sobrancelha: R$ 38,50\n- Design com henna: R$ 49,50\n\nQuer agendar?', frag());
+    expect(r.blocos.map((b) => b.texto)).toEqual(['Os valores são:\n• Design de sobrancelha: R$ 38,50\n• Design com henna: R$ 49,50', 'Quer agendar?']);
+  });
   it('fragmenta o exemplo da especificação em saudação / informação / pergunta', () => {
     const r = fragmentarMensagem(
       'Olá, Ana! Tudo bem? Vi que você demonstrou interesse no nosso tratamento. Gostaria de entender melhor o que está procurando para conseguir te orientar da melhor maneira. Me conta, o que você está procurando exatamente?',
@@ -116,7 +120,10 @@ describe('Configuração do agente', () => {
     expect(() => mesclarConfig(base, { comunicacao: { fragmentacao: { minBlocos: 5, maxBlocos: 2 } } })).toThrow();
   });
   it('personalidade vira descritores', () => {
-    expect(descreverPersonalidade({ ...configPadrao().personalidade, formalidade: 90 })[0]).toMatch(/formal/);
+    const formal = descreverPersonalidade({ ...configPadrao().personalidade, formalidade: 90 })[0];
+    expect(formal).toMatch(/polida/);
+    // "o senhor/a senhora" é do TOM formal; com tom cordial ele brigava com "trate pelo primeiro nome".
+    expect(formal).not.toMatch(/senhor/);
   });
 });
 
@@ -253,6 +260,23 @@ describe('Validador de naturalidade', () => {
   });
   it('remove emojis quando a política é nunca', () => {
     expect(validarNaturalidade('Perfeito 😀', { ...base, emojis: 'nunca' }).texto).toBe('Perfeito');
+  });
+  it('no meio da conversa tira o cumprimento que abre a resposta', () => {
+    const r = validarNaturalidade('Oi Ana! Tudo bem? 😊\n\nA manicure fica R$ 38,50.', { ...base, ultimaDoContato: 'e a manicure?' });
+    expect(r.texto).toBe('A manicure fica R$ 38,50.');
+    expect(r.avisos).toContain('cumprimento repetido removido');
+  });
+  it('mantém o cumprimento quando o contato cumprimentou ou é a primeira resposta', () => {
+    expect(validarNaturalidade('Bom dia, Ana! A manicure fica R$ 38,50.', { ...base, ultimaDoContato: 'bom dia, e a manicure?' }).texto).toBe('Bom dia, Ana! A manicure fica R$ 38,50.');
+    expect(validarNaturalidade('Oi Ana! A manicure fica R$ 38,50.', { ...base, jaFalouAntes: false, ultimaDoContato: 'e a manicure?' }).texto).toBe('Oi Ana! A manicure fica R$ 38,50.');
+  });
+  it('tira frase de enchimento solta, mas não a que tem conteúdo', () => {
+    const r = validarNaturalidade('Com certeza! A manicure fica R$ 38,50. Fico à disposição!', { ...base, ultimaDoContato: 'e a manicure?' });
+    expect(r.texto).toBe('A manicure fica R$ 38,50.');
+    expect(validarNaturalidade('Com certeza dá para fazer as duas no mesmo dia.', base).texto).toBe('Com certeza dá para fazer as duas no mesmo dia.');
+  });
+  it('não confunde frase com conteúdo com cumprimento', () => {
+    expect(validarNaturalidade('Oi Ana, a manicure fica R$ 38,50.', { ...base, ultimaDoContato: 'e a manicure?' }).texto).toBe('Oi Ana, a manicure fica R$ 38,50.');
   });
 });
 

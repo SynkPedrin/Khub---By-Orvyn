@@ -53,6 +53,10 @@ async function bootstrap(): Promise<void> {
   app.use(/^\/v1\/(agents\/[0-9a-f-]{36}\/conhecimento|crm\/import\/contacts)$/, function uploadConhecimentoJson(req: Parameters<typeof parserUpload>[0], res: Parameters<typeof parserUpload>[1], next: Parameters<typeof parserUpload>[2]) {
     parserUpload(req, res, next);
   });
+  // 2b) Mídia de saída do Inbox (Q2.5): arquivo em base64, até 15 MB.
+  app.use(/^\/v1\/crm\/conversations\/[0-9a-f-]{36}\/midia$/, function midiaInboxJson(req: Parameters<typeof parserUpload>[0], res: Parameters<typeof parserUpload>[1], next: Parameters<typeof parserUpload>[2]) {
+    parserUpload(req, res, next);
+  });
   // 3) Resto da API: limites padrão do Express, com rawBody preservado.
   //    urlencoded TAMBÉM precisa do limite alto: a Evolution/Stevo posta o
   //    webhook como form-urlencoded, e o default (100 kb) derrubava cada

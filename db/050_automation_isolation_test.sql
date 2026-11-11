@@ -1,5 +1,5 @@
 -- =====================================================================
--- Automações (db/050) — teste de isolamento cross-tenant + regressão BUG-027
+-- Automações (db/050) — teste de isolamento cross-tenant + regressão BUG-029
 -- BLOQUEANTE: qualquer vazamento faz RAISE EXCEPTION → exit != 0.
 --
 -- Rodar:  psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/050_automation_isolation_test.sql
@@ -9,7 +9,7 @@
 --   1. A não lê nem altera `workflows.webhook_segredo` de B;
 --   2. A não lê nem altera `workflow_runs.grafo_teste` de B;
 --   3. sem tenant na sessão, nada é visível;
---   4. BUG-027: contato criado com a coluna `origem` (cadastro manual) ou com
+--   4. BUG-029: contato criado com a coluna `origem` (cadastro manual) ou com
 --      `campos_custom.lead_origem` (lead de anúncio) gera `contact.created`
 --      com essa origem no outbox; sem nenhuma das duas, 'Manual'.
 -- (Ambientes ainda com papéis orvyn_*: trocar khub_app/khub_service abaixo.)
@@ -65,25 +65,25 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege OR check_violation THEN NULL;
   END;
 
-  -- BUG-027: origem no outbox
+  -- BUG-029: origem no outbox
   INSERT INTO contacts (id, tenant_id, nome, origem) VALUES ('ca000000-0000-4000-8000-00000000050a', 'a1a1a1a1-0000-4000-8000-000000000050', 'Manual com origem', 'Indicação');
   SELECT payload->>'origem' INTO o FROM outbox_events WHERE kind = 'contact.created' AND payload->>'id' = 'ca000000-0000-4000-8000-00000000050a';
-  IF o IS DISTINCT FROM 'Indicação' THEN RAISE EXCEPTION 'BUG-027[coluna origem]: outbox trouxe %', o; END IF;
+  IF o IS DISTINCT FROM 'Indicação' THEN RAISE EXCEPTION 'BUG-029[coluna origem]: outbox trouxe %', o; END IF;
 
   INSERT INTO contacts (id, tenant_id, nome, campos_custom) VALUES ('ca000000-0000-4000-8000-00000000050b', 'a1a1a1a1-0000-4000-8000-000000000050', 'Lead de anúncio', '{"lead_origem":"Meta Ads"}');
   SELECT payload->>'origem' INTO o FROM outbox_events WHERE kind = 'contact.created' AND payload->>'id' = 'ca000000-0000-4000-8000-00000000050b';
-  IF o IS DISTINCT FROM 'Meta Ads' THEN RAISE EXCEPTION 'BUG-027[lead_origem]: outbox trouxe %', o; END IF;
+  IF o IS DISTINCT FROM 'Meta Ads' THEN RAISE EXCEPTION 'BUG-029[lead_origem]: outbox trouxe %', o; END IF;
 
   INSERT INTO contacts (id, tenant_id, nome, origem) VALUES ('ca000000-0000-4000-8000-00000000050c', 'a1a1a1a1-0000-4000-8000-000000000050', 'Sem origem', '');
   SELECT payload->>'origem' INTO o FROM outbox_events WHERE kind = 'contact.created' AND payload->>'id' = 'ca000000-0000-4000-8000-00000000050c';
-  IF o IS DISTINCT FROM 'Manual' THEN RAISE EXCEPTION 'BUG-027[fallback]: outbox trouxe %', o; END IF;
+  IF o IS DISTINCT FROM 'Manual' THEN RAISE EXCEPTION 'BUG-029[fallback]: outbox trouxe %', o; END IF;
 
   -- o evento nasceu no tenant de A (RLS do outbox)
   PERFORM set_config('app.current_tenant_id', 'b2b2b2b2-0000-4000-8000-000000000050', true);
   SELECT count(*) INTO n FROM outbox_events WHERE payload->>'id' LIKE 'ca000000-0000-4000-8000-00000000050%';
   IF n <> 0 THEN RAISE EXCEPTION 'VAZAMENTO[outbox_events]: B viu % evento(s) de A', n; END IF;
 
-  RAISE NOTICE 'db/050 isolamento + BUG-027: PASS';
+  RAISE NOTICE 'db/050 isolamento + BUG-029: PASS';
 END $$;
 
 ROLLBACK;

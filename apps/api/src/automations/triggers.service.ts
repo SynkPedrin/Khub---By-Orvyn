@@ -6,6 +6,10 @@ import { grafoSchema, validarConfig, type Grafo, type No, type TipoNo } from './
 import type { Contexto } from './executor.service';
 import type { GatilhoJob } from '../events/domain-events.service';
 import { MAPA_AGENDA, contextoAgendamento, ehEventoAgenda, ehGatilhoAgenda, filtroAgendaBate } from './agendamento-contexto';
+import { EVENTO_DOMINIO_PARA_ESPERA } from './eventos-espera';
+import { contatoDoRegistro, negocioDoRegistro } from './contexto';
+
+const brl = (v: number): string => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
 /** Evento de domínio → tipo de gatilho. Evento fora daqui não aciona nada. */
 const MAPA: Partial<Record<RealtimeEvent, TipoNo>> = {
@@ -17,12 +21,15 @@ const MAPA: Partial<Record<RealtimeEvent, TipoNo>> = {
   'contact.tagged': 'gatilho.tag_adicionada',
   // Agenda (migration 054): appointment.* → gatilho.agendamento_* / faltou / lembrete
   ...MAPA_AGENDA,
+  // Q3.2: formulário (publicado pela Q4.1) e cobrança paga (trigger da db/057)
+  'form.submitted': 'gatilho.formulario_enviado',
+  'payment.received': 'gatilho.pagamento_recebido',
 };
 
 /**
  * Normaliza um termo de filtro para comparação tolerante: minúsculas, sem
  * acento e sem espaço/hífen/sublinhado — "Meta Ads" == "metaads" == "meta-ads",
- * "Indicação" == "indicacao". Usado na origem do contato e no canal (BUG-027).
+ * "Indicação" == "indicacao". Usado na origem do contato e no canal (BUG-029).
  */
 export function normalizarTermo(v: unknown): string {
   return String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[\s\-_]+/g, '');
@@ -57,10 +64,19 @@ export class TriggersService {
     // O contato falou: antes de abrir fluxo novo, acorda quem esperava por ele
     // ("Esperar resposta") e para quem tem `pararNoReply`. Ordem importa — quem
     // já respondeu não deve receber o follow-up automático.
+    let contatoDaMensagem: string | null = null;
     if (tipo === 'gatilho.mensagem_recebida') {
-      const contactId = await this.contatoDaConversa(job);
+      contatoDaMensagem = await this.contatoDaConversa(job);
       // Leva o TEXTO da resposta: a condição seguinte ("resposta contém Google") precisa dele.
-      if (contactId) await this.runs.avisarResposta(job.tenantId, contactId, { id: String(job.dados.id ?? ''), texto: String(job.dados.texto ?? '') });
+      if (contatoDaMensagem) await this.runs.avisarResposta(job.tenantId, contatoDaMensagem, { id: String(job.dados.id ?? ''), texto: String(job.dados.texto ?? '') });
+    }
+
+    // Q3.1: metas e "Esperar até" (evento) dos runs JÁ abertos do contato —
+    // independe de haver fluxo novo com este gatilho.
+    const espera = EVENTO_DOMINIO_PARA_ESPERA[job.evento];
+    if (espera) {
+      const contactId = job.evento === 'message.created' ? contatoDaMensagem : await this.contatoDoEvento(job);
+      if (contactId) await this.runs.avisarEvento(job.tenantId, contactId, espera, job.dados);
     }
 
     const ativos = await this.workflowsAtivos(job.tenantId, tipo);
@@ -106,6 +122,19 @@ export class TriggersService {
       }
     }
     return saida;
+  }
+
+  /** Contato de um evento de domínio (fora mensagem, que vem da conversa). */
+  private async contatoDoEvento(job: GatilhoJob): Promise<string | null> {
+    const d = job.dados;
+    if (job.evento === 'contact.tagged') return typeof d.id === 'string' ? d.id : null;
+    if (typeof d.contactId === 'string' && d.contactId) return d.contactId;
+    const dealId = job.evento === 'deal.moved' || job.evento === 'deal.status_changed' ? d.id : job.evento === 'payment.received' ? d.dealId : null;
+    if (typeof dealId !== 'string' || !dealId) return null;
+    return this.prisma.withTenant(job.tenantId, async (tx) => {
+      const deal = await tx.deal.findUnique({ where: { id: dealId }, select: { contactId: true } });
+      return deal?.contactId ?? null;
+    });
   }
 
   private async contatoDaConversa(job: GatilhoJob): Promise<string | null> {
@@ -175,10 +204,7 @@ export class TriggersService {
         });
         await tx.activity.create({ data: { tenantId, actor: 'Webhook', acao: `novo contato via webhook: "${nome}"`, tone: 'success', contactId: c.id } });
       }
-      return {
-        id: c.id, nome: c.nome, email: c.email, telefone: c.telefone, empresa: c.empresa,
-        tag: c.tag, tags: c.tags, valor: Number(c.valorEstimado ?? 0),
-      };
+      return contatoDoRegistro(c);
     });
   }
 
@@ -199,6 +225,12 @@ export class TriggersService {
         return !cfg.stageId || cfg.stageId === (job.dados.stageId as string);
       case 'gatilho.negocio_status':
         return !cfg.status || cfg.status === String(job.dados.status ?? '');
+      case 'gatilho.formulario_enviado':
+        return !cfg.formId || cfg.formId === String(job.dados.formId ?? '');
+      case 'gatilho.pagamento_recebido': {
+        const minimo = Number((gatilho.config as { valorMinimo?: unknown }).valorMinimo ?? 0);
+        return !minimo || Number(job.dados.valorCentavos ?? 0) / 100 >= minimo;
+      }
       default:
         // Agenda: filtro opcional por tipo de compromisso e por responsável.
         if (ehGatilhoAgenda(gatilho.tipo)) return filtroAgendaBate(cfg, job.dados);
@@ -225,7 +257,9 @@ export class TriggersService {
    */
   private async montarContexto(job: GatilhoJob): Promise<Contexto | null> {
     const contactId = this.acharContactId(job);
-    const dealId = job.evento === 'deal.moved' || job.evento === 'deal.status_changed' ? (job.dados.id as string) : undefined;
+    const dealId = job.evento === 'deal.moved' || job.evento === 'deal.status_changed'
+      ? (job.dados.id as string)
+      : job.evento === 'payment.received' && typeof job.dados.dealId === 'string' ? job.dados.dealId : undefined;
 
     return this.prisma.withTenant(job.tenantId, async (tx) => {
       const ctx: Contexto = {};
@@ -251,18 +285,34 @@ export class TriggersService {
         idContato = ag.contactId ?? undefined;
       }
 
+      // Formulário (Q3.2): `{{formulario.<campo>}}` com as respostas + o id.
+      if (job.evento === 'form.submitted') {
+        const respostas = job.dados.respostas && typeof job.dados.respostas === 'object' && !Array.isArray(job.dados.respostas)
+          ? (job.dados.respostas as Record<string, unknown>) : {};
+        ctx.formulario = { ...respostas, id: String(job.dados.formId ?? '') };
+      }
+      // Pagamento (Q3.2): a cobrança como está AGORA no banco (não o payload).
+      if (job.evento === 'payment.received') {
+        const cob = await tx.financeiroCobranca.findUnique({ where: { id: job.dados.id as string } });
+        if (!cob || cob.status !== 'paga') return null;
+        const valor = cob.valorCentavos / 100;
+        ctx.pagamento = {
+          id: cob.id, valor, valorFormatado: brl(valor), valorCentavos: cob.valorCentavos, moeda: cob.moeda,
+          descricao: cob.descricao, pagoEm: (cob.pagoEm ?? new Date()).toISOString(),
+        };
+        if (!idContato && cob.contactId) idContato = cob.contactId;
+      }
+      if (!idContato && (job.evento === 'form.submitted' || job.evento === 'payment.received') && typeof job.dados.contactId === 'string') {
+        idContato = job.dados.contactId;
+      }
+
       if (idContato) {
         const c = await tx.contact.findUnique({ where: { id: idContato } });
-        if (c) {
-          ctx.contato = {
-            id: c.id, nome: c.nome, email: c.email, telefone: c.telefone, empresa: c.empresa,
-            tag: c.tag, tags: c.tags, valor: Number(c.valorEstimado ?? 0),
-          };
-        }
+        if (c) ctx.contato = contatoDoRegistro(c);
       }
       if (dealId) {
         const d = await tx.deal.findUnique({ where: { id: dealId } });
-        if (d) ctx.negocio = { id: d.id, titulo: d.titulo, valor: Number(d.valor ?? 0), stageId: d.stageId, origem: d.origem };
+        if (d) ctx.negocio = negocioDoRegistro(d);
       }
 
       // Sem contato não há a quem automatizar: melhor não abrir run do que abrir

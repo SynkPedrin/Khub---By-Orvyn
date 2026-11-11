@@ -444,16 +444,37 @@ model Deal {
   status     String   @default("aberto")
   /// Valores dos campos personalizados do negócio (db/053). Definições em CustomFieldDef.
   camposCustom Json   @default("{}") @map("campos_custom")
+  /// Motivo de perda (db/051 · Q2.1): obrigatório pela API ao marcar perdido se o tenant tem motivos ativos.
+  motivoPerdaId  String? @map("motivo_perda_id") @db.Uuid
+  motivoPerdaObs String? @map("motivo_perda_obs")
+  /// identities.id do responsável (db/051). Sem FK: a API valida que é membro do tenant.
+  ownerId    String?  @map("owner_id") @db.Uuid
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
   contact    Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
   pipeline   Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
   stage      Stage    @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  motivoPerda LostReason? @relation(fields: [motivoPerdaId], references: [id], onDelete: SetNull)
   tasks      Task[]
   notes      Note[]
   activities Activity[]
 
   @@map("deals")
+}
+
+/// Catálogo de motivos de perda por tenant (db/051 · Q2.1). RLS tenant_rw.
+model LostReason {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  nome      String
+  ativo     Boolean  @default(true)
+  ordem     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  deals     Deal[]
+
+  @@index([tenantId, ordem], map: "idx_lost_reasons_lista")
+  @@map("lost_reasons")
 }
 
 model Conversation {
@@ -634,6 +655,8 @@ model Workflow {
   webhookSegredo String?          @map("webhook_segredo")
   /// Janela de envio também segura "Notificar equipe" (db/050).
   janelaIncluiEquipe Boolean      @default(false) @map("janela_inclui_equipe")
+  /// Pasta da lista de automações (db/058). NULL = sem pasta. Uma por fluxo.
+  pasta         String?
   createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime          @default(now()) @map("updated_at") @db.Timestamptz(6)
   versaoAtiva   WorkflowVersion?  @relation("versaoAtiva", fields: [versaoAtivaId], references: [id], onDelete: SetNull)
@@ -740,6 +763,38 @@ model WorkflowDripCounter {
 
   @@id([tenantId, nodeId, windowStart])
   @@map("workflow_drip_counters")
+}
+
+/// Rodízio do nó "Atribuir usuário" (db/056 · Q3.1). O executor faz UPSERT
+/// atômico via $queryRaw na mesma transação que grava o dono.
+model WorkflowRoundRobin {
+  tenantId   String   @map("tenant_id") @db.Uuid
+  workflowId String   @map("workflow_id") @db.Uuid
+  nodeId     String   @map("node_id")
+  contador   BigInt   @default(0)
+  updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@id([tenantId, workflowId, nodeId])
+  @@map("workflow_round_robin")
+}
+
+/// Agenda dos gatilhos por tempo (db/057 · Q3.2): `gatilho.agendado` e
+/// `gatilho.data_contato`. Escrita na publicação; varrida pelo worker com lease.
+model WorkflowSchedule {
+  tenantId     String    @map("tenant_id") @db.Uuid
+  workflowId   String    @map("workflow_id") @db.Uuid
+  versionId    String    @map("version_id") @db.Uuid
+  nodeId       String    @map("node_id")
+  tipo         String
+  proximoEm    DateTime  @map("proximo_em") @db.Timestamptz(6)
+  ultimaJanela DateTime? @map("ultima_janela") @db.Timestamptz(6)
+  leaseUntil   DateTime? @map("lease_until") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@id([tenantId, workflowId, nodeId])
+  @@index([tenantId, proximoEm], map: "idx_workflow_schedules_due")
+  @@map("workflow_schedules")
 }
 
 /// Marketplace de templates de automação (migration 016). Global (tenantId null,
@@ -1568,4 +1623,243 @@ model Notification {
 
   @@index([tenantId, identityId, createdAt(sort: Desc)], map: "idx_notifications_destino")
   @@map("notifications")
+}
+
+// ==================== Disparos em massa (migration 061 · Q4.3) ====================
+/// Disparo em massa por segmento. Audiência congelada em `BroadcastRecipient`
+/// ao aprovar; ritmo (lote/intervalo/janela) e lease do worker aqui.
+model Broadcast {
+  id                 String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId           String    @map("tenant_id") @db.Uuid
+  nome               String
+  canal              String
+  segmento           Json      @default("{}")
+  mensagem           String    @default("")
+  assunto            String?
+  status             String    @default("rascunho")
+  agendadoPara       DateTime? @map("agendado_para") @db.Timestamptz(6)
+  loteTamanho        Int       @default(20) @map("lote_tamanho")
+  loteIntervaloSeg   Int       @default(60) @map("lote_intervalo_seg")
+  janela             Json      @default("{\"dias\":[1,2,3,4,5],\"inicio\":9,\"fim\":18,\"fuso\":\"America/Sao_Paulo\"}")
+  exigeAprovacao     Boolean   @default(false) @map("exige_aprovacao")
+  aprovadoPor        String?   @map("aprovado_por") @db.Uuid
+  aprovadoEm         DateTime? @map("aprovado_em") @db.Timestamptz(6)
+  rejeitadoMotivo    String?   @map("rejeitado_motivo")
+  criadoPor          String?   @map("criado_por") @db.Uuid
+  criadoPorTipo      String    @default("humano") @map("criado_por_tipo")
+  pausaMotivo        String?   @map("pausa_motivo")
+  pausaDetalhe       Json?     @map("pausa_detalhe")
+  proximoLoteEm      DateTime? @map("proximo_lote_em") @db.Timestamptz(6)
+  leaseUntil         DateTime? @map("lease_until") @db.Timestamptz(6)
+  iniciadoEm         DateTime? @map("iniciado_em") @db.Timestamptz(6)
+  concluidoEm        DateTime? @map("concluido_em") @db.Timestamptz(6)
+  canceladoEm        DateTime? @map("cancelado_em") @db.Timestamptz(6)
+  totalDestinatarios Int       @default(0) @map("total_destinatarios")
+  totalEnviados      Int       @default(0) @map("total_enviados")
+  totalFalhas        Int       @default(0) @map("total_falhas")
+  totalIgnorados     Int       @default(0) @map("total_ignorados")
+  totalRespostas     Int       @default(0) @map("total_respostas")
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@index([tenantId, createdAt(sort: Desc)], map: "idx_broadcasts_lista")
+  @@map("broadcasts")
+}
+
+/// Destinatário congelado de um disparo (idempotente por UNIQUE broadcast+contato).
+model BroadcastRecipient {
+  id           String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  broadcastId  String    @map("broadcast_id") @db.Uuid
+  contactId    String    @map("contact_id") @db.Uuid
+  nome         String    @default("")
+  destino      String?
+  status       String    @default("pendente")
+  messageId    String?   @map("message_id") @db.Uuid
+  erro         String?
+  tentativaEm  DateTime? @map("tentativa_em") @db.Timestamptz(6)
+  enviadoEm    DateTime? @map("enviado_em") @db.Timestamptz(6)
+  respondidoEm DateTime? @map("respondido_em") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([broadcastId, contactId], map: "uq_broadcast_recipient")
+  @@index([tenantId, broadcastId, status], map: "idx_broadcast_recipients_status")
+  @@map("broadcast_recipients")
+}
+
+// ==================== Pedido de avaliação (migration 062 · Q4.4) ====================
+/// Configuração de avaliação por tenant (link público + mensagem padrão).
+model ReviewSettings {
+  tenantId         String   @id @map("tenant_id") @db.Uuid
+  plataforma       String   @default("google")
+  link             String
+  mensagemPadrao   String   @map("mensagem_padrao")
+  assuntoEmail     String   @default("Como foi sua experiência?") @map("assunto_email")
+  filtroSatisfacao Boolean  @default(false) @map("filtro_satisfacao")
+  notaMinima       Int      @default(4) @map("nota_minima") @db.SmallInt
+  updatedBy        String?  @map("updated_by") @db.Uuid
+  updatedAt        DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("review_settings")
+}
+
+/// Pedido de avaliação enviado a um contato, com link curto rastreável `/r/:token`.
+model ReviewRequest {
+  id               String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  contactId        String    @map("contact_id") @db.Uuid
+  canal            String
+  link             String
+  token            String    @unique(map: "uq_review_requests_token")
+  status           String    @default("pendente")
+  origem           String    @default("manual")
+  idempotencyKey   String?   @map("idempotency_key")
+  messageId        String?   @map("message_id") @db.Uuid
+  erro             String?
+  filtroSatisfacao Boolean   @default(false) @map("filtro_satisfacao")
+  notaMinima       Int       @default(4) @map("nota_minima") @db.SmallInt
+  enviadoEm        DateTime? @map("enviado_em") @db.Timestamptz(6)
+  clicadoEm        DateTime? @map("clicado_em") @db.Timestamptz(6)
+  cliques          Int       @default(0)
+  avaliacaoInterna Int?      @map("avaliacao_interna") @db.SmallInt
+  avaliadoEm       DateTime? @map("avaliado_em") @db.Timestamptz(6)
+  comentario       String?
+  redirecionado    Boolean   @default(false)
+  criadoPor        String?   @map("criado_por") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([tenantId, createdAt(sort: Desc)], map: "idx_review_requests_lista")
+  @@map("review_requests")
+}
+
+// ======================= Formulários públicos (Q4.1 · migration 059) =======================
+
+/// Formulário público (/f/<slug>). `campos`/`estilo` validados por Zod em forms/forms.schema.ts.
+model Form {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  nome      String
+  slug      String   @unique
+  campos    Json     @default("[]")
+  estilo    Json     @default("{}")
+  ativo     Boolean  @default(true)
+  tag       String?
+  stageId   String?  @map("stage_id") @db.Uuid
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  envios    FormSubmission[]
+
+  @@index([tenantId, createdAt(sort: Desc)], map: "idx_forms_tenant")
+  @@map("forms")
+}
+
+/// Envio de formulário. `respostas` = { [campoId]: valor }. IP só como sha256.
+model FormSubmission {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  formId    String   @map("form_id") @db.Uuid
+  contactId String?  @map("contact_id") @db.Uuid
+  dealId    String?  @map("deal_id") @db.Uuid
+  respostas Json     @default("{}")
+  utm       Json     @default("{}")
+  ipHash    String?  @map("ip_hash")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  form      Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, formId, createdAt(sort: Desc)], map: "idx_form_submissions_form")
+  @@index([tenantId, contactId], map: "idx_form_submissions_contact")
+  @@map("form_submissions")
+}
+
+// ======================= Agendamento público (Q4.2 · migration 060) =======================
+
+/// Página pública de agendamento (/b/<slug>). `horarios`/`perguntas` validados em booking/booking.schema.ts.
+model BookingPage {
+  id                    String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId              String   @map("tenant_id") @db.Uuid
+  slug                  String   @unique
+  titulo                String
+  descricao             String?
+  duracaoMin            Int      @default(30) @map("duracao_min")
+  intervaloMin          Int      @default(0) @map("intervalo_min")
+  antecedenciaMinHoras  Int      @default(2) @map("antecedencia_min_horas")
+  janelaDias            Int      @default(30) @map("janela_dias")
+  horarios              Json     @default("{}")
+  fuso                  String   @default("America/Sao_Paulo")
+  responsaveis          String[] @default([]) @db.Uuid
+  /// round_robin | fixo
+  distribuicao          String   @default("round_robin")
+  rrCursor              Int      @default(0) @map("rr_cursor")
+  local                 String?
+  tipo                  String   @default("reuniao")
+  perguntas             Json     @default("[]")
+  confirmacaoAutomatica Boolean  @default(false) @map("confirmacao_automatica")
+  estilo                Json     @default("{}")
+  ativo                 Boolean  @default(true)
+  createdBy             String?  @map("created_by") @db.Uuid
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  reservas              BookingReserva[]
+
+  @@index([tenantId, createdAt(sort: Desc)], map: "idx_booking_pages_tenant")
+  @@map("booking_pages")
+}
+
+/// Reserva feita pela página pública: liga o compromisso ao link de gerenciamento (sha256 do token).
+model BookingReserva {
+  id             String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId       String      @map("tenant_id") @db.Uuid
+  bookingPageId  String      @map("booking_page_id") @db.Uuid
+  compromissoId  String      @unique(map: "uq_booking_reservas_compromisso") @map("compromisso_id") @db.Uuid
+  contactId      String?     @map("contact_id") @db.Uuid
+  tokenHash      String      @unique @map("token_hash")
+  respostas      Json        @default("{}")
+  utm            Json        @default("{}")
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  pagina         BookingPage @relation(fields: [bookingPageId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, bookingPageId, createdAt(sort: Desc)], map: "idx_booking_reservas_page")
+  @@map("booking_reservas")
+}
+
+/// Rotinas da NICO (db/039 · ADR-0044): "toda segunda 8h, analise as campanhas".
+model NicoAgendamento {
+  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  titulo         String
+  instrucao      String
+  frequencia     String
+  hora           String    @default("08:00")
+  diaSemana      Int?      @map("dia_semana") @db.SmallInt
+  diaMes         Int?      @map("dia_mes") @db.SmallInt
+  fuso           String    @default("America/Sao_Paulo")
+  ativo          Boolean   @default(true)
+  proximoEm      DateTime  @map("proximo_em") @db.Timestamptz(6)
+  ultimoEm       DateTime? @map("ultimo_em") @db.Timestamptz(6)
+  ultimoStatus   String?   @map("ultimo_status")
+  ultimoErro     String?   @map("ultimo_erro")
+  destinatarioId String?   @map("destinatario_id") @db.Uuid
+  criadoPor      String?   @map("criado_por") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("nico_agendamentos")
+}
+
+/// Relatórios gerados pela NICO (db/039 · ADR-0044). Markdown; a tela exporta .md e PDF.
+model NicoRelatorio {
+  id             String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  titulo         String
+  tipo           String   @default("livre")
+  conteudoMd     String   @map("conteudo_md")
+  origem         String   @default("chat")
+  agendamentoId  String?  @map("agendamento_id") @db.Uuid
+  conversationId String?  @map("conversation_id") @db.Uuid
+  criadoPor      String?  @map("criado_por") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("nico_relatorios")
 }

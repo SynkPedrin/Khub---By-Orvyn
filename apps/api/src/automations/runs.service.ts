@@ -6,7 +6,8 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { DomainEventsService } from '../events/domain-events.service';
 import { ExecutorService, type Contexto } from './executor.service';
-import { grafoSchema, type Grafo, type No } from './catalogo';
+import { grafoSchema, noRamificado, type EventoEspera, type FiltroEvento, type Grafo, type No } from './catalogo';
+import { eventoBate } from './eventos-espera';
 
 /** Janela de envio do workflow (migration 011). */
 interface JanelaConfig {
@@ -24,10 +25,11 @@ interface JanelaConfig {
  * "Notificar equipe" só quando o fluxo marca `janelaIncluiEquipe` — aviso
  * interno costuma ser urgente ("lead pagou o sinal"), então o padrão é não segurar.
  */
-const NOS_DA_JANELA = new Set(['acao.enviar_sms', 'acao.enviar_email']);
+const NOS_DA_JANELA = new Set(['acao.enviar_sms', 'acao.enviar_email', 'acao.pedir_avaliacao']);
 
-/** Nós com saídas nomeadas: sem ramo escolhido, NÃO podem cair na saída de outro ramo. */
-const NOS_RAMIFICADOS = new Set(['controle.condicao', 'controle.split', 'controle.esperar_resposta']);
+/** Nós com saídas nomeadas (condição, split, esperar resposta, esperar até no modo
+ *  evento): sem ramo escolhido, NÃO podem cair na saída de outro ramo — ver
+ *  `noRamificado` no catálogo. */
 
 export const FILA_PASSOS = 'automation-steps';
 
@@ -135,7 +137,7 @@ export class RunsService {
    * ainda estiver apontando para ele — job reentregue depois de um crash não
    * reexecuta o que já passou.
    */
-  async processarPasso(job: PassoJob, tentativa: number): Promise<void> {
+  async processarPasso(job: PassoJob, tentativa: number): Promise<{ adiantadoMs?: number }> {
     const owner = randomUUID();
     const claimed = await this.prisma.withTenant(job.tenantId, tx => tx.workflowRun.updateMany({
       where: { id: job.runId, tenantId: job.tenantId, noAtual: job.noId,
@@ -144,13 +146,32 @@ export class RunsService {
         OR: [{ leaseUntil: null }, { leaseUntil: { lt: new Date() } }],
       }, data: { leaseOwner: owner, leaseUntil: new Date(Date.now() + 120_000), attempts: { increment: 1 } },
     }));
-    if (!claimed.count) return;
-    try { await this.executarPasso(job, tentativa); }
+    if (!claimed.count) return this.jobAdiantado(job);
+    try { await this.executarPasso(job, tentativa); return {}; }
     finally {
       await this.prisma.withTenant(job.tenantId, tx => tx.workflowRun.updateMany({
         where: { id: job.runId, tenantId: job.tenantId, leaseOwner: owner }, data: { leaseOwner: null, leaseUntil: null },
       }));
     }
+  }
+
+  /**
+   * Claim recusado. Se foi só porque o job chegou ANTES do `scheduledAt` (relógio
+   * do Redis × do Postgres, reconcile que reenfileirou, delay encolhido), o run
+   * continua apontando para este nó/geração: devolve o tempo que falta para o
+   * processor reagendar o MESMO job. Antes o job era descartado em silêncio e
+   * o run ficava parado até o reconcile notar (só em fluxo ativo — teste de
+   * rascunho ficava parado para sempre). Job velho (outra geração, outro nó,
+   * run encerrado) continua sendo descartado.
+   */
+  private async jobAdiantado(job: PassoJob): Promise<{ adiantadoMs?: number }> {
+    const run = await this.prisma.withTenant(job.tenantId, (tx) =>
+      tx.workflowRun.findUnique({ where: { id: job.runId, tenantId: job.tenantId }, select: { noAtual: true, generation: true, status: true, scheduledAt: true } }),
+    );
+    if (!run || run.noAtual !== job.noId || !['rodando', 'esperando'].includes(run.status)) return {};
+    if (job.generation !== undefined && run.generation !== job.generation) return {};
+    const falta = run.scheduledAt.getTime() - Date.now();
+    return falta > 0 ? { adiantadoMs: falta } : {};
   }
 
   private async executarPasso(job: PassoJob, tentativa: number): Promise<void> {
@@ -179,12 +200,13 @@ export class RunsService {
     const estado = run.estado as Contexto;
     // Base da trava "contato respondeu → não envia": o início do run, ou o
     // momento em que o fluxo consumiu a última resposta (Esperar resposta).
-    const ctx: Contexto = { ...estado, executionKey: `${runId}:${run.generation}:${noId}`, runStartedAt: estado.baseResposta ?? run.startedAt.toISOString(), workflowId: run.workflowId };
+    const ctx: Contexto = { ...estado, executionKey: `${runId}:${run.generation}:${noId}`, runStartedAt: estado.baseResposta ?? run.startedAt.toISOString(), workflowId: run.workflowId, runId, fuso: run.workflow?.timezone || undefined, ...(run.teste ? { teste: true } : {}) };
     const t0 = Date.now();
     try {
       // Janela de envio: nó que fala com o contato fora do horário é adiado, não
       // executado. Sem isto, uma espera de 2 dias entrega "Oi!" às 3 da manhã.
-      const atraso = this.esperarJanela(no, run.workflow);
+      // Teste não espera janela de envio: só fala com o número de teste.
+      const atraso = ctx.teste ? 0 : this.esperarJanela(no, run.workflow);
       if (atraso > 0) {
         this.log.debug(`nó ${noId} fora da janela de envio: adiado ${Math.round(atraso / 60000)}min`);
         await this.avancar(tenantId, runId, noId, ctx, 'esperando', atraso);
@@ -199,7 +221,7 @@ export class RunsService {
       this.eventos.publicar(tenantId, 'automation.run', { runId, workflowId: run.workflowId, nodeId: noId, status: 'ok' }, { automacao: false });
 
       // Encadeamento: o contato entra em outro fluxo e este segue seu caminho.
-      if (no.tipo === 'acao.chamar_workflow') {
+      if (no.tipo === 'acao.chamar_workflow' && !ctx.teste) {
         await this.encadear(tenantId, (no.config as { workflowId: string }).workflowId, novoCtx, run.workflowId);
       }
 
@@ -209,14 +231,14 @@ export class RunsService {
       // nenhum timer na memória do processo. `mesmoNo` reagenda o próprio nó
       // (é como o "esperar resposta" acorda no timeout).
       if (r.esperarMs && r.esperarMs > 0) {
-        const alvo = r.mesmoNo ? noId : r.irPara ?? this.proximoDe(grafo, noId, r.ramo, NOS_RAMIFICADOS.has(no.tipo));
+        const alvo = r.mesmoNo ? noId : r.irPara ?? this.proximoDe(grafo, noId, r.ramo, noRamificado(no));
         if (!alvo) return this.concluir(tenantId, runId, novoCtx);
         await this.avancar(tenantId, runId, alvo, novoCtx, 'esperando', r.esperarMs);
         await this.enfileirar(tenantId, runId, alvo, r.esperarMs);
         return;
       }
 
-      const proximo = r.irPara ?? this.proximoDe(grafo, noId, r.ramo, NOS_RAMIFICADOS.has(no.tipo));
+      const proximo = r.irPara ?? this.proximoDe(grafo, noId, r.ramo, noRamificado(no));
       if (!proximo) return this.concluir(tenantId, runId, novoCtx);
 
       await this.avancar(tenantId, runId, proximo, novoCtx, 'rodando');
@@ -226,7 +248,7 @@ export class RunsService {
       await this.logar(tenantId, runId, no, 'falhou', tentativa, {}, erro, Date.now() - t0);
       // `aoFalhar: 'seguir'` = fallback do PRD §7.2: o fluxo continua sem o nó.
       if (no.aoFalhar === 'seguir') {
-        const proximo = this.proximoDe(grafo, noId, undefined, NOS_RAMIFICADOS.has(no.tipo));
+        const proximo = this.proximoDe(grafo, noId, undefined, noRamificado(no));
         if (!proximo) return this.concluir(tenantId, runId, ctx);
         await this.avancar(tenantId, runId, proximo, ctx, 'rodando');
         await this.enfileirar(tenantId, runId, proximo, 0);
@@ -385,6 +407,86 @@ export class RunsService {
         this.log.debug(`run ${run.id} cancelado: contato respondeu e o workflow para no reply`);
       }
     }
+  }
+
+  /**
+   * Evento de domínio do contato (Q3.1): dispara METAS e acorda "Esperar até"
+   * no modo evento. Chamado pelo worker de gatilhos ANTES de abrir fluxos novos
+   * (e depois de `avisarResposta`, que trata o "Esperar resposta").
+   *
+   * Meta vence espera: se o run tem uma meta ALCANÇÁVEL a partir do nó atual
+   * (caminho pelas conexões ou "Ir para") cujo evento casou, o run pula para
+   * ela — a geração sobe, então o job da espera pendente vira job velho e é
+   * descartado pelo claim. Meta que já ficou para trás não puxa o run de volta.
+   */
+  async avisarEvento(tenantId: string, contactId: string, evento: EventoEspera, dados: Record<string, unknown>): Promise<{ metas: number; acordados: number }> {
+    const runs = await this.prisma.withTenant(tenantId, (tx) =>
+      tx.workflowRun.findMany({
+        where: { contactId, status: { in: ['rodando', 'esperando'] } },
+        select: { id: true, noAtual: true, estado: true, grafoTeste: true, version: { select: { grafo: true } } },
+        take: 200,
+      }),
+    );
+    let metas = 0;
+    let acordados = 0;
+    for (const run of runs) {
+      if (!run.noAtual) continue;
+      const g = grafoSchema.safeParse(run.grafoTeste ?? run.version.grafo);
+      if (!g.success) continue;
+      const grafo = g.data;
+      const ctx = run.estado as Contexto;
+      const evDados = { ...dados, tipo: evento, em: new Date().toISOString() };
+
+      const meta = this.metaAlcancavel(grafo, run.noAtual, evento, dados, ctx.metasAtingidas ?? []);
+      if (meta) {
+        const novo: Contexto = {
+          ...ctx, metasAtingidas: [...(ctx.metasAtingidas ?? []), meta], evento: evDados,
+          aguardandoResposta: null, respondeu: false, aguardandoEvento: null, eventoOcorreu: false, aguardandoMeta: null,
+        };
+        const ok = await this.saltar(tenantId, run.id, run.noAtual, meta, novo);
+        if (ok) { metas++; await this.enfileirar(tenantId, run.id, meta, 0); }
+        continue;
+      }
+
+      if (ctx.aguardandoEvento && ctx.aguardandoEvento === run.noAtual && !ctx.eventoOcorreu) {
+        const no = grafo.nos.find((n) => n.id === run.noAtual);
+        if (no?.tipo !== 'controle.esperar_ate' || !eventoBate(no.config as Partial<FiltroEvento>, evento, dados)) continue;
+        const ok = await this.saltar(tenantId, run.id, run.noAtual, run.noAtual, { ...ctx, eventoOcorreu: true, evento: evDados });
+        if (ok) { acordados++; await this.enfileirar(tenantId, run.id, run.noAtual, 0); }
+      }
+    }
+    return { metas, acordados };
+  }
+
+  /**
+   * Move o run para `alvo` AGORA, só se ele ainda estiver em `de` (outro
+   * evento/worker pode ter mexido no meio): updateMany condicional = sem corrida.
+   */
+  private async saltar(tenantId: string, runId: string, de: string, alvo: string, estado: Contexto): Promise<boolean> {
+    const r = await this.prisma.withTenant(tenantId, (tx) =>
+      tx.workflowRun.updateMany({
+        where: { id: runId, noAtual: de, status: { in: ['rodando', 'esperando'] } },
+        data: { noAtual: alvo, estado: estado as unknown as Prisma.InputJsonValue, status: 'rodando', generation: { increment: 1 }, scheduledAt: new Date(), attempts: 0 },
+      }),
+    );
+    return r.count > 0;
+  }
+
+  /** Primeira meta (mais próxima, em largura) alcançável a partir de `de` cujo evento casou. */
+  private metaAlcancavel(grafo: Grafo, de: string, evento: EventoEspera, dados: Record<string, unknown>, atingidas: string[]): string | null {
+    const visitados = new Set<string>([de]);
+    const fila = [de];
+    while (fila.length) {
+      const atual = fila.shift()!;
+      const no = grafo.nos.find((n) => n.id === atual);
+      if (no?.tipo === 'controle.meta' && !atingidas.includes(no.id) && eventoBate(no.config as Partial<FiltroEvento>, evento, dados)) return no.id;
+      const vizinhos = grafo.arestas.filter((a) => a.de === atual).map((a) => a.para);
+      if (no?.tipo === 'controle.ir_para') vizinhos.push(String((no.config as { alvoNoId?: string }).alvoNoId ?? ''));
+      for (const v of vizinhos) {
+        if (v && !visitados.has(v)) { visitados.add(v); fila.push(v); }
+      }
+    }
+    return null;
   }
 
   /**

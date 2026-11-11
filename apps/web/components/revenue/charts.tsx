@@ -5,7 +5,7 @@ import { cx } from '../ui';
 import { moeda, moedaCurta, numero } from '@/lib/format';
 
 /**
- * GRÁFICOS DO REVENUE OS
+ * GRÁFICOS DO KHUB
  * ======================
  *
  * SVG inline, sem biblioteca: os formatos aqui são poucos e fixos, e uma
@@ -170,7 +170,7 @@ export function AreaReceita({
 
           {/* Eixo X: só extremos e marcos — nunca um rótulo por ponto */}
           <div className="mt-2 flex justify-between text-2xs text-faint" aria-hidden>
-            {[...new Set([0, Math.floor(dados.length / 4), Math.floor(dados.length / 2), Math.floor((dados.length * 3) / 4), dados.length - 1])].map(
+            {[0, Math.floor(dados.length / 4), Math.floor(dados.length / 2), Math.floor((dados.length * 3) / 4), dados.length - 1].map(
               (i) => (
                 <span key={i}>{dados[i]?.rotulo}</span>
               ),

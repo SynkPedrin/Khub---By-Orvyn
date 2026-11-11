@@ -48,6 +48,11 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     if (!UUID_RE.test(tenantId)) {
       throw new Error('tenantId inválido: esperado UUID');
     }
+    // Teto folgado por padrão: com o LLM local (Ollama) na mesma máquina o
+    // Postgres fica faminto de CPU durante a inferência e transações de 5s
+    // abortavam no meio do atendimento (P2028). O trabalho dentro da transação
+    // continua curto — o limite só evita aborto espúrio sob carga.
+    const opcoes = options ?? { timeout: 20_000, maxWait: 10_000 };
     return this.$transaction(async (tx) => {
       // Parametrizado — sem interpolação de string (defesa contra SQL injection).
       await tx.$queryRaw`SELECT set_config('app.current_tenant_id', ${tenantId}, true)`;

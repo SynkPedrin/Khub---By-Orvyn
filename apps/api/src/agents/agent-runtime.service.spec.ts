@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { AgentRuntimeService } from './agent-runtime.service';
+import { AgentRuntimeService, ATRASO_RESPOSTA_MS } from './agent-runtime.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { AtendimentoService } from '../crm/messaging/atendimento.service';
 import type { DeliveryService } from './delivery/delivery.service';
@@ -203,7 +203,7 @@ describe('AgentRuntimeService — orquestração do atendimento', () => {
       const r = await a.svc.responderOuAdiar(JOB);
       expect(r.desfecho).toBe('adiado');
       // Quarta 08:00 em SP = 11:00 UTC (+ folga de rajada).
-      expect(r.adiarAte!.getTime()).toBe(new Date('2026-11-11T11:00:00Z').getTime() + 4000);
+      expect(r.adiarAte!.getTime()).toBe(new Date('2026-11-11T11:00:00Z').getTime() + ATRASO_RESPOSTA_MS);
       expect(a.runs).toHaveLength(0);
       expect(a.core.processar).not.toHaveBeenCalled();
       expect(a.mensagens.send).not.toHaveBeenCalled();

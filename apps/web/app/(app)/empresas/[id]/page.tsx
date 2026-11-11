@@ -6,6 +6,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { Avatar, Badge, Button, Card, Field, Input } from '@/components/ui';
 import { Icon } from '@/components/icons';
 import { crm, brl, type Empresa360 } from '@/lib/crm';
+import { SkeletonDetail } from '@/components/kit';
+import { CamposPersonalizados } from '@/components/crm/CamposPersonalizados';
 
 const TAMANHOS = ['1-10', '11-50', '51-200', '200+'];
 
@@ -57,7 +59,12 @@ export default function Empresa360Page() {
   };
 
   if (erro) return <div className="mx-auto max-w-2xl px-4 py-16 text-center"><p className="text-muted">{erro}</p><Link href="/empresas" className="mt-3 inline-block text-sm font-semibold text-brand hover:underline">← Voltar</Link></div>;
-  if (!c) return <div className="px-6 py-10 text-sm text-muted">Carregando…</div>;
+  if (!c)
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+        <SkeletonDetail label="Carregando empresa" />
+      </div>
+    );
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 px-4 py-6 sm:px-6">
@@ -103,6 +110,10 @@ export default function Empresa360Page() {
             <Info rotulo="Telefone" valor={c.telefone ?? '-'} />
           </div>
         )}
+      </Card>
+
+      <Card className="p-5">
+        <CamposPersonalizados entidade="company" valores={c.camposCustom} onSalvar={async (camposCustom) => { await crm.updateCompany(id, { camposCustom }); await load(); }} />
       </Card>
 
       <div className="grid gap-5 lg:grid-cols-3">

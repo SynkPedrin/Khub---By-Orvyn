@@ -52,21 +52,27 @@ describe('StevoApiWebhookController', () => {
   const ORIGINAL = { ...process.env };
   afterEach(() => { process.env = { ...ORIGINAL }; });
 
-  function montar(o: { tenant?: string | null } = {}) {
+  function montar(o: { tenant?: string | null; falhaImediata?: boolean; jaProcessado?: boolean } = {}) {
     process.env.STEVO_WEBHOOK_SECRET = SEGREDO;
     const gravados: Record<string, unknown>[] = [];
-    const tx = { outboxEvent: { upsert: jest.fn(async ({ create }: { create: Record<string, unknown> }) => { gravados.push(create); return create; }) } };
+    const tx = {
+      outboxEvent: {
+        upsert: jest.fn(async ({ create }: { create: Record<string, unknown> }) => { gravados.push(create); return { ...create, id: 'ob1', status: o.jaProcessado ? 'processed' : 'pending' }; }),
+        updateMany: jest.fn(async () => ({ count: 1 })),
+      },
+    };
     const prisma = {
       $queryRaw: jest.fn(async () => [{ tenant_id: o.tenant === undefined ? TENANT : o.tenant }]),
       withTenant: jest.fn(async (_t: string, w: (t: unknown) => Promise<unknown>) => w(tx)),
     } as unknown as PrismaService;
-    const ctrl = new StevoApiWebhookController(prisma, new ConfigService());
+    const eventos = { processar: jest.fn(async () => { if (o.falhaImediata) throw new Error('banco fora'); return 'entrada'; }) } as unknown as StevoApiEventosService;
+    const ctrl = new StevoApiWebhookController(prisma, new ConfigService(), eventos);
     const req = (corpoObj: unknown, assinar = true) => {
       const raw = Buffer.from(JSON.stringify(corpoObj));
       const ts = String(Math.floor(Date.now() / 1000));
       return { rawBody: raw, body: corpoObj, headers: { 'x-stevo-timestamp': ts, 'x-stevo-signature': assinar ? assinarStevo(SEGREDO, ts, raw) : 'sha256=' + '0'.repeat(64) } } as never;
     };
-    return { ctrl, req, gravados, prisma };
+    return { ctrl, req, gravados, prisma, eventos, tx };
   }
 
   it('assinatura inválida → 401 e nada gravado', async () => {
@@ -98,6 +104,32 @@ describe('StevoApiWebhookController', () => {
   it('evento que não usamos (ex.: instance.qr.updated) → 200 ignorado', async () => {
     const m = montar();
     await expect(m.ctrl.receber(m.req(envelope({ type: 'instance.qr.updated' })))).resolves.toEqual({ ignorado: 'evento_nao_usado' });
+  });
+  it('TEMPO REAL: processa o evento na própria requisição e marca o outbox como processado', async () => {
+    const m = montar();
+    await m.ctrl.receber(m.req(envelope()));
+    expect(m.eventos.processar).toHaveBeenCalledWith(TENANT, expect.objectContaining({ tipo: 'message.received', texto: 'Oi, quero agendar' }));
+    expect(m.tx.outboxEvent.updateMany).toHaveBeenCalledWith({ where: { id: 'ob1', status: 'pending' }, data: expect.objectContaining({ status: 'processed' }) });
+  });
+
+  it('se o processamento imediato falha, responde 200 e deixa pendente para o worker (nada se perde)', async () => {
+    const m = montar({ falhaImediata: true });
+    await expect(m.ctrl.receber(m.req(envelope()))).resolves.toEqual({ ok: true });
+    expect(m.tx.outboxEvent.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('reentrega de evento já processado não processa de novo', async () => {
+    const m = montar({ jaProcessado: true });
+    await m.ctrl.receber(m.req(envelope()));
+    expect(m.eventos.processar).not.toHaveBeenCalled();
+  });
+
+  it('figurinha: guarda o tipo e a URL da mídia, não o conteúdo cru', async () => {
+    const m = montar();
+    const ev = envelope();
+    (ev as { data: Record<string, unknown> }).data = { message_id: 'w1', chat: '5511999990000@s.whatsapp.net', type: 'sticker', media: { url: 'https://mmg.whatsapp.net/x.webp', mimetype: 'image/webp' } };
+    await m.ctrl.receber(m.req(ev));
+    expect(m.gravados[0]).toMatchObject({ payload: { conteudoTipo: 'sticker', midia: { tipo: 'figurinha', url: 'https://mmg.whatsapp.net/x.webp', mime: 'image/webp' } } });
   });
 });
 
@@ -149,6 +181,12 @@ describe('StevoApiEventosService', () => {
   it('numeroDoJid limpa sufixo e device', () => {
     expect(numeroDoJid('5518991234567:12@s.whatsapp.net')).toBe('5518991234567');
     expect(numeroDoJid(null)).toBeNull();
+  });
+
+  it('figurinha sem texto aparece no inbox com rótulo amigável (não "[sticker]")', async () => {
+    const m = montar();
+    await m.svc.processar(TENANT, { ...base, tipo: 'message.received', conteudoTipo: 'sticker', texto: null, midia: { tipo: 'figurinha', url: null, base64: null, mime: 'image/webp', nome: null, legenda: null } });
+    expect(m.mensagens.receiveInbound).toHaveBeenCalledWith(expect.objectContaining({ text: '🖼️ Figurinha' }));
   });
 });
 

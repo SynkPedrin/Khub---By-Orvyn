@@ -12,6 +12,8 @@ import { GatilhoJob } from '../events/domain-events.service';
 import { isWorker } from '../common/queue-connection';
 import { ATRASO_RESPOSTA_MS, FILA_AGENTES, type AgenteJob } from '../agents/agent-runtime.service';
 import { AgendaService } from '../agenda/agenda.service';
+import { AgendadorService } from '../automations/agendador.service';
+import { DisparosService } from '../disparos/disparos.service';
 
 /** Varredura do lembrete D-1 da agenda: no máximo 1x por minuto por tenant. */
 const INTERVALO_LEMBRETES_MS = 60_000;
@@ -24,7 +26,9 @@ export class OperationsService implements OnModuleInit {
    @InjectQueue('khub-maintenance') private readonly queue: Queue,
    @InjectQueue('automation-steps') private readonly steps: Queue<PassoJob>,
    @InjectQueue(FILA_AGENTES) private readonly agentes: Queue<AgenteJob>,
-   private readonly agenda: AgendaService) {}
+   private readonly agenda: AgendaService,
+   private readonly agendador: AgendadorService,
+   private readonly disparos: DisparosService) {}
  private readonly ultimaVarreduraLembretes = new Map<string, number>();
  async onModuleInit() {
    if (!isWorker()) return;
@@ -45,6 +49,8 @@ export class OperationsService implements OnModuleInit {
        if (Date.now()-ultima >= INTERVALO_LEMBRETES_MS) {
          this.ultimaVarreduraLembretes.set(t.id,Date.now());
          await this.agenda.dispararLembretes(t.id).catch(()=>this.log.error(`varredura de lembretes falhou (tenant ${t.id})`));
+         // Gatilhos por tempo (Q3.2): agendado e data do contato (db/057). Idempotente por lease + dedupe.
+         await this.agendador.varrer(t.id).catch((e)=>this.log.error(`varredura de agendas de automação falhou (tenant ${t.id}): ${(e as Error).message}`));
        }
        const data = await this.db.withTenant(t.id, async tx => ({
          events: await tx.outboxEvent.findMany({where:{status:'pending'},orderBy:{createdAt:'asc'},take:100}),
@@ -96,6 +102,9 @@ export class OperationsService implements OnModuleInit {
          // "Sim" ao lembrete confirma o compromisso (RV-07.1) ANTES dos gatilhos:
          // o appointment.confirmed sai no mesmo commit e o fluxo enxerga o novo status.
          if (p.id && p.de==='contato') await this.agenda.confirmarPorResposta(tenantId,p.id);
+         // Resposta em até 72h a um disparo em massa vira métrica "respondeu" (Q4.3). Idempotente.
+         // Métrica não pode derrubar o evento (ex.: banco ainda sem a db/061): loga e segue.
+         if (p.id && p.de==='contato') await this.disparos.registrarResposta(tenantId,p.id).catch((err: Error)=>this.log.warn(`resposta de disparo não registrada: ${err.message}`));
          if (p.id && p.de==='contato') await this.agentes.add('responder',{tenantId,messageId:p.id},{jobId:`agente-${p.id}`,delay:ATRASO_RESPOSTA_MS,attempts:3,backoff:{type:'exponential',delay:3000},removeOnComplete:1000,removeOnFail:1000});
        }
        await this.triggers.processar({tenantId,evento:e.kind,dados:e.payload,dedupeKey:e.id} as GatilhoJob);

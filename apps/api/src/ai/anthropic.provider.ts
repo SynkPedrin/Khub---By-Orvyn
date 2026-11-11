@@ -134,13 +134,20 @@ export class AnthropicProvider implements AIProvider {
     jsonSchema?: Record<string, unknown>;
     /** Timeout da chamada HTTP (ms). Sem valor = sem limite próprio. */
     timeoutMs?: number;
+    /**
+     * 'anthropic' ignora AI_PROVIDER e vai direto à API da Anthropic (sem
+     * ANTHROPIC_API_KEY, degrada como sempre: `exigirCredencial`). Usado por
+     * quem precisa do Claude mesmo com o backend local ligado (ex.: NICO via
+     * NICO_PROVEDOR). Omitido/'padrao' = segue AI_PROVIDER.
+     */
+    provedor?: 'anthropic' | 'padrao';
   }): Promise<RespostaLLM> {
     // Backend Ollama (local hoje, servidor remoto amanhã): AI_PROVIDER=ollama
     // (ou o alias legado "openai") desvia TUDO que consome `conversar` (Nyro +
     // agentes) para OLLAMA_BASE_URL, sem mudar uma linha dos consumidores. O
     // contrato de entrada/saída (blocos Anthropic) é preservado pela tradução.
     const backend = (process.env.AI_PROVIDER || '').toLowerCase().trim();
-    if (backend === 'ollama' || backend === 'openai') {
+    if (input.provedor !== 'anthropic' && (backend === 'ollama' || backend === 'openai')) {
       return this.conversarOllama(input);
     }
     this.exigirCredencial();
@@ -324,8 +331,16 @@ export class AnthropicProvider implements AIProvider {
       model: modelo,
       think: false,
       stream: false,
+      // Sem `keep_alive` o Ollama descarrega o modelo após 5 min ocioso e o
+      // próximo cliente paga 10–30 s de recarga.
+      keep_alive: process.env.OLLAMA_KEEP_ALIVE || '60m',
       messages: mensagens,
       options: {
+        // Sem `num_ctx` o Ollama usa a janela padrão (4096) e CORTA O INÍCIO do
+        // prompt quando ele passa disso — some o system prompt (identidade,
+        // tabela de preços, regras) e o agente responde genérico/errado.
+        // Medido: prompt do agente de atendimento ≈ 4–7k tokens.
+        num_ctx: Number(process.env.OLLAMA_NUM_CTX) || 16384,
         num_predict: Math.max(input.maxTokens ?? 2048, 4096),
         temperature: input.temperatura ?? 0.3,
       },

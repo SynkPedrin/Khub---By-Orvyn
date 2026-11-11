@@ -4,7 +4,7 @@ import { slugVisivel, vaultInternoLiberado } from './cerebro';
 
 const env = (e: Record<string, string>) => e as unknown as NodeJS.ProcessEnv;
 
-describe('visibilidade do vault (BUG-028: cliente lia PRD, Bugs e revisão de segurança)', () => {
+describe('visibilidade do vault (BUG-030: cliente lia PRD, Bugs e revisão de segurança)', () => {
   it('em produção, documento interno fica invisível', () => {
     const prod = env({ NODE_ENV: 'production' });
     expect(vaultInternoLiberado(prod)).toBe(false);

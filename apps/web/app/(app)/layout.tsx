@@ -15,7 +15,7 @@ import { Icon } from '@/components/icons';
 import { ToastProvider, useFocusTrap, useScrollLock } from '@/components/kit';
 
 /**
- * Shell do KHUB Revenue OS.
+ * Shell do KHUB.
  *
  * Duas superfícies de Liquid Glass flutuando sobre o ambient (ADR-0029):
  * sidebar à esquerda e topbar no topo. O conteúdo rola por baixo delas.

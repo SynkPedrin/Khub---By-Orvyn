@@ -10,12 +10,16 @@ import { NotesService } from '../crm/notes.service';
 import { WorkflowsService } from '../automations/workflows.service';
 import { RetrievalService } from '../rag/retrieval.service';
 import { TOOLS_POR_NOME } from './tools';
+import { NicoAnalisesService } from './analises.service';
 
 export interface ContextoNyro {
   tenantId: string;
   identityId: string;
   nicho: string | null;
   subespecialidade: string | null;
+  /** Execução por rotina agendada (sem humano na conversa). */
+  origem?: 'chat' | 'agendamento';
+  agendamentoId?: string | null;
 }
 
 export interface ResultadoTool {
@@ -48,6 +52,7 @@ export class ToolExecutorService {
     private readonly rag: RetrievalService,
     private readonly marketplace: MarketplaceService,
     private readonly blueprints: BlueprintService,
+    private readonly analises: NicoAnalisesService,
   ) {}
 
   async executar(nome: string, argsBrutos: Record<string, unknown>, ctx: ContextoNyro): Promise<ResultadoTool> {
@@ -142,6 +147,24 @@ export class ToolExecutorService {
         return this.blueprints.aplicar(ctx.tenantId, ctx.identityId, a.blueprint);
       case 'mudar_status_automacao':
         return this.workflows.mudarStatus(ctx.tenantId, a.workflowId, a.status, ctx.identityId);
+
+      // ---------------- marketing e operação (ADR-0044) ----------------
+      case 'analisar_campanhas':
+        return this.analises.analisarCampanhas(ctx.tenantId, a.dias);
+      case 'benchmark_biblioteca_anuncios':
+        return this.analises.benchmarkBiblioteca(a.termos, a.pais);
+      case 'analisar_prompt_agentes':
+        return this.analises.analisarPromptAgentes(ctx.tenantId, a.agentId);
+      case 'diagnosticar_automacoes':
+        return this.analises.diagnosticarAutomacoes(ctx.tenantId, a.workflowId);
+      case 'gerar_relatorio':
+        return this.analises.gerarRelatorio(ctx.tenantId, ctx.identityId, { titulo: a.titulo, tipo: a.tipo, conteudoMd: a.conteudoMd, origem: ctx.origem ?? 'chat', agendamentoId: ctx.agendamentoId ?? null });
+      case 'agendar_rotina':
+        return this.analises.agendar(ctx.tenantId, ctx.identityId, a);
+      case 'listar_rotinas':
+        return this.analises.listarAgendamentos(ctx.tenantId);
+      case 'pausar_rotina':
+        return this.analises.cancelarAgendamento(ctx.tenantId, a.id);
 
       default:
         throw new Error(`tool sem implementação: ${nome}`);

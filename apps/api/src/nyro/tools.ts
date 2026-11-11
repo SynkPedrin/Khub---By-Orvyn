@@ -148,6 +148,64 @@ export const TOOLS: Tool[] = [
     (a) => `adicionar a etapa "${a.nome}" ao funil`,
   ),
 
+  // ---------------- Marketing e operação (ADR-0044) ----------------
+  t(
+    'analisar_campanhas',
+    'Desempenho das campanhas de anúncios (Meta) no período: investimento, leads, CPL, CTR, CPC, CPM, ROAS, frequência, comparação com o período anterior e ALERTAS de diagnóstico. Use antes de opinar sobre tráfego pago.',
+    z.object({ dias: z.number().int().min(3).max(90).default(7) }),
+    'leitura',
+    (a) => `analisar as campanhas dos últimos ${a.dias} dias`,
+  ),
+  t(
+    'benchmark_biblioteca_anuncios',
+    'Monta o benchmark de concorrentes na Biblioteca de Anúncios da Meta: links de busca prontos (anúncios ativos no Brasil) para cada concorrente/termo e o método de análise (tempo no ar, variações, gancho, oferta, CTA).',
+    z.object({ termos: z.array(z.string().min(2).max(80)).min(1).max(8), pais: z.string().length(2).default('BR') }),
+    'leitura',
+    (a) => `montar benchmark na Biblioteca de Anúncios: ${a.termos.join(', ')}`,
+  ),
+  t(
+    'analisar_prompt_agentes',
+    'Avalia o prompt dos Agentes de IA de atendimento (WhatsApp) com uma rubrica 0 a 100 (papel, objetivo, tom, transferência para humano, limites, base de conhecimento, objeções, compliance) e devolve o texto para você sugerir reescrita.',
+    z.object({ agentId: z.string().uuid().optional() }),
+    'leitura',
+    () => 'avaliar o prompt dos agentes de IA',
+  ),
+  t(
+    'diagnosticar_automacoes',
+    'Diagnostica as automações: taxa de falha por fluxo, erros mais comuns, execuções travadas, fluxos ativos que nunca disparam e esperas acumuladas. Use quando perguntarem se as automações estão funcionando ou para achar erro.',
+    z.object({ workflowId: z.string().uuid().optional() }),
+    'leitura',
+    () => 'diagnosticar as automações',
+  ),
+  t(
+    'gerar_relatorio',
+    'Salva um relatório em Markdown (com títulos, tabelas e emojis) no painel da NICO, com download em .md e PDF. Escreva o relatório COMPLETO no campo conteudoMd, usando só números que vieram de tools.',
+    z.object({ titulo: z.string().min(3).max(160), tipo: z.enum(['campanhas', 'benchmark', 'funil', 'automacoes', 'agentes', 'conteudo', 'financeiro', 'livre']).default('livre'), conteudoMd: z.string().min(20).max(60000) }),
+    'escrita',
+    (a) => `salvar o relatório "${a.titulo}"`,
+  ),
+  t(
+    'agendar_rotina',
+    'Cria uma rotina recorrente da NICO (ex.: toda segunda às 8h analisar as campanhas e gerar o relatório). A instrução é o que você fará em cada execução. diaSemana: 0=domingo … 6=sábado.',
+    z.object({ titulo: z.string().min(3).max(120), instrucao: z.string().min(5).max(2000), frequencia: z.enum(['diaria', 'semanal', 'mensal']), hora: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).default('08:00'), diaSemana: z.number().int().min(0).max(6).optional(), diaMes: z.number().int().min(1).max(28).optional() }),
+    'escrita',
+    (a) => `criar a rotina "${a.titulo}" (${a.frequencia} às ${a.hora})`,
+  ),
+  t(
+    'listar_rotinas',
+    'Lista as rotinas agendadas da NICO, com próxima execução e status da última.',
+    z.object({}),
+    'leitura',
+    () => 'listar as rotinas',
+  ),
+  t(
+    'pausar_rotina',
+    'Pausa (cancela) uma rotina agendada da NICO.',
+    z.object({ id: z.string().uuid() }),
+    'escrita',
+    () => 'pausar uma rotina',
+  ),
+
   // ---------------- Sensível (pede aprovação humana) ----------------
   t(
     'instalar_automacao',

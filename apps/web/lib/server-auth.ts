@@ -35,5 +35,5 @@ export async function sessaoValida(cookies: { get(nome: string): { value: string
 }
 
 /** Resposta 401 no formato RFC 7807. */
-export const NAO_AUTENTICADO = { type: 'https://orvyn.dev/errors/unauthorized', title: 'Sessão necessária', status: 401 } as const;
+export const NAO_AUTENTICADO = { type: 'urn:khub:error:unauthorized', title: 'Sessão necessária', status: 401 } as const;
 

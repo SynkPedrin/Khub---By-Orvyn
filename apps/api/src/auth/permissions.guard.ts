@@ -21,11 +21,17 @@ export function permissionFor(controller: string, route: string, method: string)
     if (!read && route.startsWith('import')) return 'contacts.import';
     // Definições de campos personalizados mudam o formulário da conta inteira: só owner/admin (Q2.3).
     if (route.startsWith('custom-fields')) return read ? 'contacts.read' : 'organization.manage';
+    // Motivos de perda (Q2.1) são configuração do funil: manager+ escreve, quem lê o pipeline lê.
+    if (route.startsWith('lost-reasons')) return read ? 'pipeline.read' : 'pipeline.configure';
     const domain = /^(pipeline|stages|deals|proposals)/.test(route) ? 'pipeline' : route.startsWith('conversations') ? 'conversations' : 'contacts';
     return `${domain}.${read ? 'read' : domain === 'conversations' ? 'reply' : 'write'}`;
   }
   if (controller === 'automations' || controller === 'marketplace' || controller === 'blueprints') return `automations.${read ? 'read' : 'write'}`;
   if (controller === 'nyro') return read ? 'contacts.read' : 'automations.write';
+  // Disparo em massa (Q4.3): montar é de manager+; aprovar/rejeitar é de owner/admin (RegrasNegocio §2).
+  if (controller === 'disparos') return read ? 'contacts.read' : /(^|\/)(aprovar|rejeitar)$/.test(route) ? 'organization.manage' : 'automations.write';
+  // Avaliações (Q4.4): pedir avaliação é ação no contato; configurar é da conta.
+  if (controller === 'avaliacoes') return read ? 'contacts.read' : route.startsWith('pedidos') ? 'contacts.write' : 'organization.manage';
   return read ? 'contacts.read' : 'organization.manage';
 }
 

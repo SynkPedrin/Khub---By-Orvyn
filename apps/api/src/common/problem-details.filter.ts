@@ -29,7 +29,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     }
 
     const body: ProblemDetails & Record<string, unknown> = {
-      type: `https://orvyn.dev/errors/${status}`,
+      type: `urn:khub:error:${status}`,
       title,
       status,
       instance: urlSegura(req.url),

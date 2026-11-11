@@ -250,8 +250,8 @@ function DashboardReal() {
           </div>
           <VazioCompacto
             icon="ai"
-            title="Analise sua operação com a NICO"
-            description="Solicite uma análise à NICO. Revise as fontes e aprove as ações sugeridas antes de executá-las."
+            title="Ainda sem insights"
+            description="A NICO analisa pipeline, leads e conversas para sugerir ações quando houver mais atividade."
             cta={{ href: '/nyro', label: 'Perguntar à NICO' }}
           />
         </section>

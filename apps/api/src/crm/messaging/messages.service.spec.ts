@@ -193,6 +193,14 @@ describe('MessagesService.receiveInbound — entrada do WhatsApp', () => {
     expect(a.publicados.map((p) => p.evento)).toContain('contact.created');
   });
 
+  it('contato criado pela entrada nasce com origem = WhatsApp (o outbox lê contacts.origem, db/050)', async () => {
+    const a = ambiente();
+    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).receiveInbound({ ...ENTRADA, fromName: 'Novo Lead' });
+
+    expect(a.contatos[0].origem).toBe('WhatsApp');
+    expect(a.conversas[0].canal).toBe('WhatsApp');
+  });
+
   it('IDEMPOTÊNCIA: reentrega do mesmo webhook não duplica nem republica', async () => {
     const a = ambiente({ contatos: [{ id: 'c1', nome: 'Marina', telefone: '+55 11 99999-1111' }], dedupe: true });
     const r = await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).receiveInbound(ENTRADA);
@@ -319,3 +327,54 @@ describe('MessagesService — provedor por tenant: Stevo API de gestão', () => 
   });
 });
 
+
+describe('MessagesService — mídia de saída (Q2.5)', () => {
+  const CONV = [{ id: 'conv1', contactId: 'c1', contact: { telefone: '+55 11 98888-7777' } }];
+  const PDF = { tipo: 'documento' as const, mime: 'application/pdf', nome: 'proposta.pdf', tamanho: 1200 };
+
+  it('Stevo API com URL do storage: envia por sendMedia e grava o anexo com a CHAVE (nunca a URL)', async () => {
+    const a = ambiente({ conversas: CONV, stevoApi: { externalBusinessId: 'inst-studio', status: 'connected' } });
+    const sendMedia = jest.fn(async () => ({ providerId: 'wamid-midia-1' }));
+    Object.assign(a.stevoApi, { sendMedia, aceitaBase64: false });
+    const midia = { ...PDF, url: 'https://s3.exemplo/assinada', storageKey: 'inbox/t/conv1/k-proposta.pdf' };
+    const r = await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi)
+      .send(TENANT, 'conv1', '📎 Documento: proposta.pdf', 'chave-midia-stevo-0001', undefined, { tipo: 'humano' }, midia);
+    expect(r.status).toBe('sent');
+    expect(sendMedia).toHaveBeenCalledWith(NUMERO_TESTE, midia, 'inst-studio', 'chave-midia-stevo-0001');
+    expect(a.stevoApi.sendText).not.toHaveBeenCalled();
+    expect(a.mensagens[0].anexo).toEqual({ tipo: 'documento', mime: 'application/pdf', nome: 'proposta.pdf', tamanho: 1200, storageKey: 'inbox/t/conv1/k-proposta.pdf' });
+    expect(JSON.stringify(a.mensagens[0].anexo)).not.toContain('assinada');
+  });
+
+  it('Stevo API sem storage (só base64): grava, NÃO tenta e devolve config_required do storage', async () => {
+    const a = ambiente({ conversas: CONV, stevoApi: { externalBusinessId: 'inst-studio', status: 'connected' } });
+    const sendMedia = jest.fn();
+    Object.assign(a.stevoApi, { sendMedia, aceitaBase64: false });
+    const r = await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi)
+      .send(TENANT, 'conv1', '📎 Documento: proposta.pdf', 'chave-midia-stevo-0002', undefined, { tipo: 'humano' }, { ...PDF, base64: 'JVBERi0=', storageFaltando: ['S3_ENDPOINT'] });
+    expect(r.status).toBe('config_required');
+    expect(r).toMatchObject({ provider: 'storage', missing: ['S3_ENDPOINT'] });
+    expect(sendMedia).not.toHaveBeenCalled();
+    expect(a.mensagens).toHaveLength(1);
+  });
+
+  it('provedor sem endpoint de mídia (Stevo legado): grava como midia_nao_suportada e não envia texto no lugar', async () => {
+    const a = ambiente({ conversas: CONV });
+    const legado = stevo(true);
+    const r = await new MessagesService(a.prisma, legado, evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi)
+      .send(TENANT, 'conv1', '📎 Documento: proposta.pdf', 'chave-midia-legado-01', undefined, { tipo: 'humano' }, { ...PDF, url: 'https://s3.exemplo/x' });
+    expect(r.status).toBe('midia_nao_suportada');
+    expect(legado.sendText).not.toHaveBeenCalled();
+  });
+
+  it('Evolution aceita base64: envia sem storage', async () => {
+    const a = ambiente({ conversas: CONV });
+    const sendMedia = jest.fn(async () => ({ providerId: 'evo-1' }));
+    const evo = { configured: () => true, missing: () => [], sendText: jest.fn(), sendMedia, aceitaBase64: true } as unknown as EvolutionProvider;
+    a.tx.integration.findFirst = jest.fn(async ({ where }: any) => (where.provider === 'evolution' ? { externalBusinessId: 'khub-t', status: 'connected' } : null));
+    const r = await new MessagesService(a.prisma, stevo(true), evo, new ConfigService(), a.eventos, a.atendimento, a.stevoApi)
+      .send(TENANT, 'conv1', '📎 Imagem: foto.png', 'chave-midia-evo-00001', undefined, { tipo: 'humano' }, { tipo: 'imagem', mime: 'image/png', nome: 'foto.png', tamanho: 10, base64: 'iVBORw0K' });
+    expect(r.status).toBe('sent');
+    expect(sendMedia).toHaveBeenCalledWith(NUMERO_TESTE, expect.objectContaining({ base64: 'iVBORw0K' }), 'khub-t', 'chave-midia-evo-00001');
+  });
+});

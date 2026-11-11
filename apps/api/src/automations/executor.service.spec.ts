@@ -8,6 +8,7 @@ import type { TasksService } from '../crm/tasks.service';
 import type { NotesService } from '../crm/notes.service';
 import type { MailerService, MailResult } from '../common/mailer.service';
 import type { AiService } from '../ai/ai.service';
+import type { CustomFieldsService } from '../crm/custom-fields.service';
 import type { Grafo, No } from './catalogo';
 
 const TENANT = '11111111-1111-1111-1111-111111111111';
@@ -39,6 +40,7 @@ function ambiente(opts?: { dripCount?: number; lastInboundAt?: Date | null; ulti
       work({
         conversation: { findFirst: jest.fn(async () => ({ id: 'conv1' })), create: jest.fn(async () => ({ id: 'conv1' })) },
         contact: { findUnique: jest.fn(async () => ({ lastInboundAt: opts?.lastInboundAt ?? null })) },
+        deal: { findUnique: jest.fn(async () => null) },
         message: { findFirst: jest.fn(async () => (opts?.ultimaMsg ? { id: 'm9', corpo: opts.ultimaMsg } : null)) },
         // drip: o UPSERT devolve a nova contagem da janela (controlável no teste)
         $queryRaw: jest.fn(async () => [{ count: opts?.dripCount ?? 1 }]),
@@ -54,7 +56,11 @@ function ambiente(opts?: { dripCount?: number; lastInboundAt?: Date | null; ulti
     missing: jest.fn(() => ['ANTHROPIC_API_KEY']),
     executar: jest.fn(async () => ({ texto: 'quente', uso: { entrada: 0, saida: 0, cache: 0, custoUsd: 0 }, modelo: 'x' })),
   } as unknown as AiService;
-  return { svc: new ExecutorService(prisma, new ConfigService(), crm, mensagens, tarefas, notas, mailer, ai), chamadas, crm, mensagens, tarefas, notas, mailer, ai };
+  const camposCustom = {
+    list: jest.fn(async () => []),
+    atualizarCamposContato: jest.fn(async (_t: string, _id: string, valores: Record<string, unknown>) => ({ ok: true as const, alterados: Object.keys(valores) })),
+  } as unknown as CustomFieldsService;
+  return { svc: new ExecutorService(prisma, new ConfigService(), crm, mensagens, tarefas, notas, mailer, ai, camposCustom), chamadas, camposCustom, crm, mensagens, tarefas, notas, mailer, ai };
 }
 
 const no = (tipo: string, config: Record<string, unknown>): No => ({ id: 'n1', tipo: tipo as No['tipo'], posicao: { x: 0, y: 0 }, config });

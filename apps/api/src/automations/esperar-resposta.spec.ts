@@ -7,6 +7,7 @@ import type { TasksService } from '../crm/tasks.service';
 import type { NotesService } from '../crm/notes.service';
 import type { MailerService } from '../common/mailer.service';
 import type { AiService } from '../ai/ai.service';
+import type { CustomFieldsService } from '../crm/custom-fields.service';
 import type { Grafo, No } from './catalogo';
 
 const TENANT = '11111111-1111-1111-1111-111111111111';
@@ -16,7 +17,7 @@ const GRAFO: Grafo = { nos: [], arestas: [] };
 const vazio = <T,>() => ({} as T);
 function executor() {
   const prisma = { withTenant: jest.fn(async (_t: string, w: (tx: unknown) => Promise<unknown>) => w({})) } as unknown as PrismaService;
-  return new ExecutorService(prisma, new ConfigService(), vazio<CrmService>(), vazio<MessagesService>(), vazio<TasksService>(), vazio<NotesService>(), vazio<MailerService>(), vazio<AiService>());
+  return new ExecutorService(prisma, new ConfigService(), vazio<CrmService>(), vazio<MessagesService>(), vazio<TasksService>(), vazio<NotesService>(), vazio<MailerService>(), vazio<AiService>(), vazio<CustomFieldsService>());
 }
 
 const no: No = { id: 'espera', tipo: 'controle.esperar_resposta', posicao: { x: 0, y: 0 }, config: { duracao: 2, unidade: 'dias' } };

@@ -14,10 +14,16 @@ const req = clienteApi('/api/v1/');
 export interface Profile { id: string; nome: string; email: string; role: string; idioma: string; prefs: Record<string, unknown> }
 export interface Business { nome: string; endereco: string | null; telefone: string | null; website: string | null; idioma: string; nicho: string | null; plano: string; status: string; settings: import('@/components/app/AccountPreferencesForm').AccountPreferences }
 export interface Member { identityId: string; role: string; isDefault: boolean; email: string; nome: string | null; idioma: string | null }
+/** Resultado de criar/reenviar convite (ADR-0042). */
+export interface ConviteEntregue {
+  ok: boolean; inviteId: string; email: string; acceptUrl: string;
+  emailSent: boolean; missing?: string[]; erro?: string;
+  whatsappTexto: string; whatsappUrl: string; linkPublico: boolean;
+}
 export interface Invite { id: string; email: string; role: string; expiresAt: string; createdAt: string }
 export interface AuditRow { id: string; actorType: string; actorId: string | null; acao: string; entidade: string | null; entidadeId: string | null; ts: string }
 
-export interface NotificationItem { id: string; tipo: 'mensagem' | 'integracao'; titulo: string; detalhe: string; url: string; ts: string; novo: boolean }
+export interface NotificationItem { id: string; tipo: 'mensagem' | 'integracao' | 'mencao' | 'disparo_aprovacao' | 'avaliacao_negativa'; titulo: string; detalhe: string; url: string; ts: string; novo: boolean }
 export interface Tag { id: string; name: string; color: string; descricao: string; usos: number; createdAt: string }
 export interface ApiKey { id: string; name: string; keyPrefix: string; scopes: string[]; lastUsedAt: string | null; revokedAt: string | null; createdAt: string }
 /** A chave em claro (`key`) só existe na resposta da criação. */
@@ -27,15 +33,21 @@ export const settingsApi = {
   emailStatus: () => req<import('@/components/app/EmailDeliveryStatus').EmailStatus>('settings/email-status'),
   notifications: () => req<{ items: NotificationItem[]; naoLidas: number }>('settings/notifications'),
   markNotificationsRead: () => req<{ ok: boolean }>('settings/notifications/read', { method: 'POST' }),
+  /** Marca UMA como lida (Q2.6). `id` no formato `men:`/`conv:`/`int:` + uuid. */
+  markNotificationRead: (id: string) => req<{ ok: boolean }>(`settings/notifications/${encodeURIComponent(id)}/read`, { method: 'POST' }),
   profile: () => req<Profile>('settings/profile'),
   updateProfile: (d: Partial<{ nome: string; idioma: string; prefs: Record<string, unknown> }>) => req<{ ok: boolean }>('settings/profile', { method: 'PATCH', body: JSON.stringify(d) }),
   business: () => req<Business>('settings/business'),
   updateBusiness: (d: Partial<Business>) => req<{ ok: boolean }>('settings/business', { method: 'PATCH', body: JSON.stringify(d) }),
   members: () => req<{ members: Member[]; invites: Invite[] }>('settings/members'),
-  invite: (email: string, role: string) =>
-    req<{ ok: boolean; acceptUrl: string; emailSent: boolean; missing?: string[]; erro?: string }>('settings/invites', { method: 'POST', body: JSON.stringify({ email, role }) }),
+  invite: (email: string, role: string, extra: { nome?: string; mensagem?: string; telefone?: string } = {}) =>
+    req<ConviteEntregue>('settings/invites', { method: 'POST', body: JSON.stringify({ email, role, ...extra }) }),
+  resendInvite: (id: string, extra: { nome?: string; mensagem?: string; telefone?: string } = {}) =>
+    req<ConviteEntregue>(`settings/invites/${id}/resend`, { method: 'POST', body: JSON.stringify(extra) }),
   revokeInvite: (id: string) => req<{ ok: boolean }>(`settings/invites/${id}`, { method: 'DELETE' }),
   changeRole: (identityId: string, role: string) => req<{ ok: boolean }>(`settings/members/${identityId}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }),
+  removeMember: (identityId: string) => req<{ ok: boolean; sessoesRevogadas: number; conversasLiberadas: number }>(`settings/members/${identityId}`, { method: 'DELETE' }),
+  revokeAllSessions: () => req<{ ok: boolean; sessoesRevogadas: number }>('settings/sessions/revoke-all', { method: 'POST' }),
   audit: () => req<AuditRow[]>('settings/audit'),
   integrations: () => req<{ id: string; provider: string; status: string; health: string; lastSyncAt: string | null }[]>('integrations'),
 

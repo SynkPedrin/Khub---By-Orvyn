@@ -7,7 +7,7 @@ const SECOES = [
   { href: '#fluxo', label: 'O fluxo' },
   { href: '#produto', label: 'Produto' },
   { href: '#nyro', label: 'NICO' },
-  { href: '#crm', label: 'CRM vs Revenue OS' },
+  { href: '#crm', label: 'CRM vs KHUB' },
 ];
 
 /** Rodapé compacto — uma faixa, não meia tela vazia. */

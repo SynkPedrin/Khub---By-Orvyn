@@ -31,7 +31,7 @@ export function Founder() {
 
           <div>
             <Reveal>
-              <p className="lp-label mb-8">Por que a KHUB existe</p>
+              <p className="lp-label lp-eyebrow mb-8">Por que a KHUB existe</p>
             </Reveal>
             <div className="flex max-w-[58ch] flex-col gap-6">
               <Reveal delay={0.06}>

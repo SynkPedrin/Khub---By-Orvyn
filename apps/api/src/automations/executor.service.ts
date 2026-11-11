@@ -1,5 +1,5 @@
 import { UnrecoverableError } from 'bullmq';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
 import { CrmService } from '../crm/crm.service';
@@ -9,7 +9,11 @@ import { NotesService } from '../crm/notes.service';
 import { MailerService } from '../common/mailer.service';
 import { AiService, type TarefaIA } from '../ai/ai.service';
 import { soDigitos } from '../crm/telefone';
+import { CustomFieldsService } from '../crm/custom-fields.service';
+import { AvaliacoesService } from '../avaliacoes/avaliacoes.service';
 import { validarConfig, type Grafo, type No, type Ramo, type Regra, type TipoNo } from './catalogo';
+import { NosMotor } from './nos-motor';
+import { agoraNoFuso, fusoOuPadrao, lerData } from './tempo';
 
 /** Contexto que viaja com a execução (é o `estado` persistido do run). */
 export interface Contexto {
@@ -17,8 +21,35 @@ export interface Contexto {
   runStartedAt?: string;
   /** Workflow que está rodando — persiste a origem da mensagem (migration 036). */
   workflowId?: string;
-  contato?: { id: string; nome: string; email: string | null; telefone: string | null; empresa: string | null; tag: string; tags: string[]; valor: number };
-  negocio?: { id: string; titulo: string; valor: number; stageId: string; origem: string | null };
+  contato?: {
+    id: string; nome: string; email: string | null; telefone: string | null; empresa: string | null; tag: string; tags: string[]; valor: number;
+    /** Q3.1: campos personalizados (`contato.campos.<chave>`), dono, não perturbe, origem. */
+    campos?: Record<string, unknown>;
+    ownerId?: string | null;
+    naoPerturbe?: boolean;
+    origem?: string | null;
+    proximaAcaoAt?: string | null;
+    criadoEm?: string;
+  };
+  /** Run em execução (Q3.1: "Remover de fluxo" não cancela a si mesmo). */
+  runId?: string;
+  /** Fuso do fluxo (workflows.timezone): "Esperar até" e condição por dia/hora. */
+  fuso?: string;
+  /** Respostas do formulário do gatilho (Q3.2): `{{formulario.<campo>}}`. */
+  formulario?: Record<string, unknown>;
+  /** Pagamento do gatilho (Q3.2): `{{pagamento.valor}}`, `.descricao`. */
+  pagamento?: { id: string; valor: number; valorFormatado: string; valorCentavos: number; moeda: string; descricao: string; pagoEm: string };
+  /** Id do "Esperar até" (modo evento) segurando o run. */
+  aguardandoEvento?: string | null;
+  /** Marcado pelo RunsService quando o evento esperado chega. */
+  eventoOcorreu?: boolean;
+  /** Dados do último evento que acordou uma espera ou disparou uma meta. */
+  evento?: Record<string, unknown>;
+  /** Metas (goal) já atingidas neste run. */
+  metasAtingidas?: string[];
+  /** Id da meta segurando o run (`seNaoAtingida: esperar`). */
+  aguardandoMeta?: string | null;
+  negocio?: { id: string; titulo: string; valor: number; stageId: string; origem: string | null; status?: string; ownerId?: string | null; campos?: Record<string, unknown> };
   /** `canal`: canal da conversa (WhatsApp, Instagram…) — filtro do gatilho (Q1.2). */
   /** Compromisso do gatilho de agenda (migration 054): `{{agendamento.data}}`, `.hora`, `.titulo`, `.local`. */
   agendamento?: import('./agendamento-contexto').ContextoAgendamento;
@@ -35,6 +66,13 @@ export interface Contexto {
   respondeu?: boolean;
   /** ISO de quando o fluxo consumiu a última resposta (ver RunsService.avisarResposta). */
   baseResposta?: string;
+  /**
+   * Execução de TESTE (botão Testar ou a NICO no modo simples). Nunca toca a
+   * operação do cliente: mensagens vão só para o número de teste
+   * (`AUTOMATION_TEST_PHONE`), ações de CRM/webhook/e-mail são simuladas com o
+   * que SERIAM, esperas são puladas e nada encadeia outro fluxo.
+   */
+  teste?: boolean;
 }
 
 export interface ResultadoNo {
@@ -75,7 +113,14 @@ export class ExecutorService {
     private readonly notas: NotesService,
     private readonly mailer: MailerService,
     private readonly ai: AiService,
-  ) {}
+    private readonly camposCustom: CustomFieldsService,
+    // Opcional: specs antigos constroem o executor sem ele (Q4.4).
+    @Optional() private readonly avaliacoes?: AvaliacoesService,
+  ) {
+    this.motor = new NosMotor(prisma, crm, camposCustom, (t, c) => this.interpolar(t, c), (campo, c) => this.valorDoCampo(campo, c));
+  }
+
+  private readonly motor: NosMotor;
 
   async executar(tenantId: string, no: No, ctx: Contexto, grafo: Grafo): Promise<ResultadoNo> {
     // Config fora do schema do catálogo (ex.: grafo gravado por fora da API, como o
@@ -84,7 +129,25 @@ export class ExecutorService {
     // com a causa legível.
     const valida = validarConfig(no.tipo as TipoNo, no.config);
     if (!valida.ok) throw new UnrecoverableError(`config inválida no nó "${no.id}" (${no.tipo}): ${valida.erro}`);
+    // Nós da Q3.1 recebem a config JÁ com os defaults do catálogo aplicados.
+    const noValido: No = { ...no, config: valida.dados as Record<string, unknown> };
+    if (ctx.teste) {
+      const simulado = await this.emTeste(tenantId, noValido, ctx);
+      if (simulado) return simulado;
+    }
     switch (no.tipo as TipoNo) {
+      case 'controle.esperar_ate':
+        return this.motor.esperarAte(noValido, ctx);
+      case 'controle.meta':
+        return this.motor.meta(noValido, ctx);
+      case 'acao.remover_de_fluxo':
+        return this.motor.removerDeFluxo(tenantId, noValido, ctx);
+      case 'acao.atribuir_usuario':
+        return this.motor.atribuirUsuario(tenantId, noValido, ctx);
+      case 'acao.nao_perturbe':
+        return this.motor.naoPerturbe(tenantId, noValido, ctx);
+      case 'acao.atualizar_negocio':
+        return this.motor.atualizarNegocio(tenantId, noValido, ctx);
       case 'controle.esperar':
         return this.esperar(no);
       case 'controle.esperar_resposta':
@@ -92,7 +155,7 @@ export class ExecutorService {
       case 'controle.encerrar':
         return { encerrar: true, saida: { motivo: (no.config as { motivo?: string }).motivo ?? 'fim do fluxo' } };
       case 'controle.condicao':
-        return this.condicao(no, ctx);
+        return this.condicao(no, ctx.teste ? ctx : await this.motor.contextoAtual(tenantId, ctx));
       case 'controle.split':
         return this.split(no, ctx);
       case 'controle.drip':
@@ -102,7 +165,7 @@ export class ExecutorService {
       case 'acao.enviar_sms':
         return this.enviarSms(tenantId, no, ctx);
       case 'acao.enviar_email':
-        return this.enviarEmail(no, ctx);
+        return this.enviarEmail(tenantId, no, ctx);
       case 'acao.notificar_equipe':
         return this.notificarEquipe(tenantId, no, ctx);
       case 'acao.definir_variavel':
@@ -116,7 +179,7 @@ export class ExecutorService {
       case 'acao.remover_tag':
         return this.mexerTag(tenantId, no, ctx, 'remove');
       case 'acao.atualizar_contato':
-        return this.atualizarContato(tenantId, no, ctx);
+        return this.motor.atualizarContato(tenantId, noValido, ctx);
       case 'acao.criar_oportunidade':
         return this.criarOportunidade(tenantId, no, ctx);
       case 'acao.mover_etapa':
@@ -130,10 +193,121 @@ export class ExecutorService {
         return { saida: { encadear: (no.config as { workflowId: string }).workflowId } };
       case 'acao.webhook':
         return this.webhook(no, ctx);
+      case 'acao.pedir_avaliacao':
+        return this.pedirAvaliacao(tenantId, no, ctx);
       default:
         // Gatilho não "executa": ele abre o run. Cair aqui é grafo inválido.
         throw new Error(`nó não executável: ${no.tipo}`);
     }
+  }
+
+  // ------------------------------------------------------------------ teste
+
+  /**
+   * Sandbox do teste. Devolve o resultado SIMULADO do nó, ou `null` quando o
+   * nó roda de verdade (condição, A/B, IA, variável, formatar, ir para,
+   * encerrar: nenhum deles toca a operação). Regra do product owner: teste
+   * nunca afeta o cliente — nem mensagem a contato, nem dado do CRM, nem
+   * disparo de outra automação.
+   */
+  private async emTeste(tenantId: string, no: No, ctx: Contexto): Promise<ResultadoNo | null> {
+    const cfg = no.config as Record<string, unknown>;
+    const simulado = (descricao: string, extra: Record<string, unknown> = {}, contexto?: Partial<Contexto>): ResultadoNo => ({
+      saida: { simulado: true, descricao, ...extra },
+      ...(contexto ? { contexto } : {}),
+    });
+
+    switch (no.tipo as TipoNo) {
+      case 'acao.enviar_sms':
+        return this.enviarParaNumeroDeTeste(tenantId, no, ctx, this.interpolar(String(cfg.texto ?? ''), ctx), 'contato');
+      case 'acao.notificar_equipe':
+        return this.enviarParaNumeroDeTeste(tenantId, no, ctx, this.interpolar(String(cfg.texto ?? ''), ctx), 'equipe');
+      case 'acao.enviar_email': {
+        const assunto = this.interpolar(String(cfg.assunto ?? ''), ctx);
+        const texto = this.interpolar(String(cfg.corpo ?? ''), ctx);
+        return simulado(`E-mail para ${ctx.contato?.email ?? 'o contato'} (não enviado no teste)`, { assunto, texto, para: ctx.contato?.email ?? null });
+      }
+      case 'acao.webhook':
+        return simulado(`Chamaria ${String(cfg.metodo ?? 'POST')} ${String(cfg.url ?? '')} (não chamado no teste)`, { url: cfg.url, metodo: cfg.metodo ?? 'POST' });
+      case 'acao.adicionar_tag':
+      case 'acao.remover_tag': {
+        if (!ctx.contato) throw new Error('nó de tag sem contato no contexto');
+        const tag = String(cfg.tag ?? '');
+        const atuais = ctx.contato.tags ?? [];
+        const tags = no.tipo === 'acao.adicionar_tag'
+          ? Array.from(new Set([...atuais, tag]))
+          : atuais.filter((t) => t.toLowerCase() !== tag.toLowerCase());
+        const verbo = no.tipo === 'acao.adicionar_tag' ? 'Adicionaria' : 'Removeria';
+        return simulado(`${verbo} a tag "${tag}"`, { tags }, { contato: { ...ctx.contato, tags } });
+      }
+      case 'acao.criar_oportunidade': {
+        const titulo = this.interpolar(String(cfg.titulo ?? ''), ctx);
+        const valor = Number(cfg.valor ?? 0);
+        return simulado(`Criaria a oportunidade "${titulo}"`, { titulo, valor, stageId: cfg.stageId }, {
+          negocio: { id: 'teste', titulo, valor, stageId: String(cfg.stageId ?? ''), origem: String(cfg.origem ?? 'Automação') },
+        });
+      }
+      case 'acao.mover_etapa':
+        return simulado('Moveria a oportunidade de etapa', { stageId: cfg.stageId }, ctx.negocio ? { negocio: { ...ctx.negocio, stageId: String(cfg.stageId ?? '') } } : undefined);
+      case 'acao.criar_tarefa':
+        return simulado(`Criaria a tarefa "${this.interpolar(String(cfg.titulo ?? ''), ctx)}"`, { prioridade: cfg.prioridade ?? 'media' });
+      case 'acao.criar_nota':
+        return simulado('Criaria uma nota no contato', { texto: this.interpolar(String(cfg.corpo ?? ''), ctx) });
+      case 'acao.atualizar_contato':
+        return simulado('Atualizaria os dados do contato', { campos: cfg.campos ?? null });
+      case 'acao.atualizar_negocio':
+        return simulado('Atualizaria a oportunidade', { campos: cfg.campos ?? null });
+      case 'acao.atribuir_usuario':
+        return simulado('Atribuiria um responsável ao contato');
+      case 'acao.nao_perturbe':
+        return simulado('Mudaria o "não perturbe" do contato');
+      case 'acao.remover_de_fluxo':
+        return simulado('Tiraria o contato de outros fluxos');
+      case 'acao.chamar_workflow':
+        // Sem `encadear`: o RunsService também não encadeia run de teste.
+        return simulado('Colocaria o contato em outra automação (não disparada no teste)', { workflowId: cfg.workflowId });
+      case 'controle.esperar':
+        return simulado(`Esperaria ${String(cfg.duracao)} ${String(cfg.unidade)} (pulado no teste)`);
+      case 'controle.drip':
+        return simulado('Liberaria em lotes (pulado no teste, sem consumir a cota real)');
+      case 'controle.esperar_resposta':
+        return { ramo: 'timeout', saida: { simulado: true, descricao: 'No teste não há resposta real: segue pelo caminho "sem resposta"' }, contexto: { aguardandoResposta: null } };
+      case 'controle.esperar_ate':
+        return cfg.modo === 'evento'
+          ? { ramo: 'expirou', saida: { simulado: true, descricao: 'No teste o evento não acontece: segue pelo prazo expirado' }, contexto: { aguardandoEvento: null } }
+          : simulado('Esperaria até a data (pulado no teste)');
+      case 'controle.meta':
+        return simulado('Meta: no teste o fluxo segue em frente');
+      case 'acao.pedir_avaliacao':
+        return simulado(`Pediria avaliação por ${String(cfg.canal ?? 'whatsapp') === 'email' ? 'e-mail' : 'WhatsApp'} (não enviado no teste)`);
+      default:
+        // À prova de futuro: ação nova sem tratamento de teste NÃO roda — só as
+        // que não tocam a operação (IA, variável, formatar) passam direto.
+        if (no.tipo.startsWith('acao.') && !ACOES_SEGURAS_NO_TESTE.has(no.tipo)) {
+          return simulado('Ação simulada no teste (não executada)');
+        }
+        return null;
+    }
+  }
+
+  /**
+   * Teste com mensagem REAL, mas só para o número de teste: texto já
+   * personalizado com os dados reais do contato. Não abre conversa nem grava
+   * mensagem no Inbox do cliente.
+   */
+  private async enviarParaNumeroDeTeste(tenantId: string, no: No, ctx: Contexto, corpo: string, destinoOriginal: 'contato' | 'equipe'): Promise<ResultadoNo> {
+    const numero = soDigitos(this.config.get('AUTOMATION_TEST_PHONE') ?? '');
+    const paraQuem = destinoOriginal === 'contato' ? (ctx.contato?.telefone ?? 'o contato') : 'a equipe';
+    if (!numero) {
+      return { saida: { simulado: true, status: 'config_required', missing: ['AUTOMATION_TEST_PHONE'], texto: corpo, descricao: `Mensagem para ${paraQuem} (sem número de teste configurado, não enviada)` } };
+    }
+    if (!ctx.executionKey) throw new UnrecoverableError('teste_sem_chave_de_execucao');
+    const r = await this.mensagens.notificarNumero(tenantId, numero, corpo, `${ctx.executionKey}:teste`);
+    if (r.status === 'pending') throw new Error('messaging_provider_rate_limited');
+    return {
+      saida: { teste: true, status: r.status, texto: corpo, para: mascararNumero(numero), descricao: `Mensagem que iria para ${paraQuem}, entregue no número de teste` },
+      contexto: { passos: { ...(ctx.passos ?? {}), [no.id]: { status: r.status } } },
+    };
   }
 
   // ---------------------------------------------------------------- controle
@@ -290,9 +464,16 @@ export class ExecutorService {
     switch (regra.operador) {
       case 'existe': return existe;
       case 'nao_existe': return !existe;
-      case 'maior': return Number(bruto) > Number(regra.valor);
-      case 'menor': return Number(bruto) < Number(regra.valor);
+      case 'maior': return this.comparar(bruto, regra.valor, ctx) > 0;
+      case 'menor': return this.comparar(bruto, regra.valor, ctx) < 0;
       default: break;
+    }
+
+    // Listas (tags, multiselect): "contém" = tem o ITEM, não um pedaço de texto
+    // ("vip" não casa com a tag "vipgold"). Igual/diferente já eram por item.
+    if (Array.isArray(bruto) && (regra.operador === 'contem' || regra.operador === 'nao_contem')) {
+      const tem = bruto.some((v) => String(v).trim().toLowerCase() === alvo.trim());
+      return regra.operador === 'contem' ? tem : !tem;
     }
 
     // texto e listas comparam sem diferenciar maiúscula/acento de digitação
@@ -306,8 +487,25 @@ export class ExecutorService {
     }
   }
 
+  /**
+   * Maior/menor: número com número; senão, data com data (campo personalizado
+   * de data, `agora.data`). Sem comparação possível = NaN (nenhum dos dois casa).
+   */
+  private comparar(bruto: unknown, valor: string | undefined, ctx: Contexto): number {
+    const a = Number(bruto);
+    const b = Number(valor);
+    if (bruto !== null && bruto !== '' && valor !== undefined && valor !== '' && Number.isFinite(a) && Number.isFinite(b)) return a - b;
+    const fuso = fusoOuPadrao(ctx.fuso);
+    const da = lerData(bruto, fuso);
+    const db = lerData(valor, fuso);
+    if (da && db) return da.instante.getTime() - db.instante.getTime();
+    return Number.NaN;
+  }
+
   /** `contato.tags` / `negocio.valor` / `mensagem.texto` → valor do contexto. */
   private valorDoCampo(campo: string, ctx: Contexto): unknown {
+    // Dia da semana / hora / data AGORA no fuso do fluxo (Q3.1).
+    if (campo.startsWith('agora.')) return agoraNoFuso(campo, fusoOuPadrao(ctx.fuso));
     // Primeiro nome para saudação ("Oii, Ana!"). Nome que é só telefone (contato
     // criado pelo WhatsApp sem nome) vira vazio — melhor que "Olá, 5541999…!".
     if (campo === 'contato.primeiroNome') {
@@ -380,11 +578,44 @@ export class ExecutorService {
     });
   }
 
-  private async enviarEmail(no: No, ctx: Contexto): Promise<ResultadoNo> {
+  /**
+   * Pedido de avaliação (Q4.4). Idempotente pela chave do passo: retry não
+   * manda dois pedidos. Sem canal configurado o passo fica `config_required`
+   * (mesma regra do e-mail); sem configuração de avaliação é erro definitivo.
+   */
+  private async pedirAvaliacao(tenantId: string, no: No, ctx: Contexto): Promise<ResultadoNo> {
+    const { canal, mensagem } = no.config as { canal: 'whatsapp' | 'email'; mensagem?: string };
+    if (!ctx.contato) throw new UnrecoverableError('nó "pedir avaliação" sem contato no contexto');
+    if (!ctx.executionKey) throw new UnrecoverableError('pedido_avaliacao_sem_chave_de_execucao');
+    if (!this.avaliacoes) throw new UnrecoverableError('módulo de avaliações indisponível');
+    let r;
+    try {
+      r = await this.avaliacoes.pedir(tenantId, { contactId: ctx.contato.id, canal, ...(mensagem?.trim() ? { mensagem: mensagem.trim() } : {}) }, { tipo: 'automacao', workflowId: ctx.workflowId, idempotencyKey: `${ctx.executionKey}:avaliacao` });
+    } catch (e) {
+      // 400/404 (sem configuração, opt-out, sem telefone): repetir não resolve.
+      const status = (e as { status?: number }).status;
+      if (status && status >= 400 && status < 500) throw new UnrecoverableError(`pedir_avaliacao: ${(e as Error).message}`);
+      throw e;
+    }
+    if (r.status === 'adiar') throw new Error('messaging_provider_rate_limited');
+    if (r.status === 'falhou') throw new UnrecoverableError(`pedir_avaliacao_${r.erro ?? 'falhou'}`);
+    return {
+      saida: { status: r.status === 'enviado' ? 'sent' : 'config_required', pedidoId: r.pedido.id, canal, missing: r.missing ?? [] },
+      contexto: { passos: { ...(ctx.passos ?? {}), [no.id]: { status: r.status, pedidoId: r.pedido.id } } },
+    };
+  }
+
+  private async enviarEmail(tenantId: string, no: No, ctx: Contexto): Promise<ResultadoNo> {
     const { assunto, corpo } = no.config as { assunto: string; corpo: string };
     const contato = ctx.contato;
     if (!contato) throw new Error('nó de e-mail sem contato no contexto');
     if (!contato.email) throw new Error('contato sem e-mail: não há destinatário');
+    // "Não perturbe" (opted_out_at) vale para e-mail também, não só WhatsApp:
+    // lido do banco agora, não do contexto do gatilho (pode ter mudado na espera).
+    const optOut = await this.prisma.withTenant(tenantId, (tx) => tx.contact.findUnique({ where: { id: contato.id }, select: { optedOutAt: true } }));
+    if (optOut?.optedOutAt) {
+      return { saida: { status: 'cancelled', motivo: 'nao_perturbe', para: contato.email }, contexto: { passos: { ...(ctx.passos ?? {}), [no.id]: { status: 'cancelled' } } } };
+    }
 
     const subject = this.interpolar(assunto, ctx);
     const text = this.interpolar(corpo, ctx);
@@ -493,17 +724,6 @@ export class ExecutorService {
     return { saida: { tags }, contexto: { contato: { ...contato, tags } } };
   }
 
-  private async atualizarContato(tenantId: string, no: No, ctx: Contexto): Promise<ResultadoNo> {
-    const { campo, valor } = no.config as { campo: string; valor: string };
-    const contato = ctx.contato;
-    if (!contato) throw new Error('nó de atualização sem contato no contexto');
-
-    const v = this.interpolar(valor, ctx);
-    const patch = campo === 'valorEstimado' ? { valorEstimado: Number(v) || 0 } : { [campo]: v };
-    await this.crm.updateContact(tenantId, contato.id, patch);
-    return { saida: { campo, valor: v }, contexto: { contato: { ...contato, ...patch } as Contexto['contato'] } };
-  }
-
   private async criarOportunidade(tenantId: string, no: No, ctx: Contexto): Promise<ResultadoNo> {
     const { titulo, stageId, valor, origem } = no.config as { titulo: string; stageId: string; valor?: number; origem?: string };
     const r = await this.crm.createDeal(tenantId, {
@@ -585,4 +805,12 @@ export class ExecutorService {
     // Variável vazia não deixa pontuação órfã: "Oii, !" → "Oii!".
     return r.replace(/,\s*([!?.])/g, '$1').replace(/[ \t]{2,}/g, ' ');
   }
+}
+
+/** Ações sem efeito fora do run: rodam de verdade também no teste. */
+const ACOES_SEGURAS_NO_TESTE = new Set<string>(['acao.ia', 'acao.definir_variavel', 'acao.formatar_texto']);
+
+/** `5518991234567` → `+55 18 •••••-2039`: o log mostra o destino sem expor o número. */
+function mascararNumero(d: string): string {
+  return d.length >= 8 ? `+${d.slice(0, 2)} ${d.slice(2, 4)} •••••-${d.slice(-4)}` : '••••';
 }

@@ -24,7 +24,7 @@ import {
 } from '@/lib/demo/dataset';
 
 /**
- * IA COPILOTO — o cérebro único do Revenue OS.
+ * IA COPILOTO — o cérebro único do KHUB.
  *
  * Um agente, não uma frota. A conversa à esquerda faz o RACIOCÍNIO; os
  * painéis à direita mostram o que ele já apurou e oferecem a EXECUÇÃO.

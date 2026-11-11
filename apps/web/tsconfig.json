@@ -38,7 +38,9 @@
     ".next-buildcheck/types/**/*.ts",
     ".next-qa-agents/types/**/*.ts",
     ".next-build-khub/types/**/*.ts",
-    ".next-release/types/**/*.ts"
+    ".next-verif/types/**/*.ts",
+    ".next-demo/types/**/*.ts",
+    ".next-deploy/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

@@ -38,18 +38,18 @@ export function AuthShell({
     <div className="grid min-h-screen grid-cols-1 lg:h-screen lg:grid-cols-[52fr_48fr]">
       {/* ESQUERDA — vídeo real, painel estrutural (não é fundo da tela
           inteira: ocupa 52% no desktop, e vira uma faixa curta no mobile). */}
-      <div className="relative h-[32vh] overflow-hidden lg:h-full lg:border-r lg:border-[rgba(20,20,30,0.06)]">
+      <div className="relative h-[32vh] overflow-hidden lg:h-full lg:border-r lg:border-[rgba(255,255,255,0.08)]">
         {/* Novo papel de parede KHUB (branco, roxo e verde) com véu claro à
             esquerda, onde mora o texto. Imagem estática e leve. */}
         <div
           className="absolute inset-0"
           aria-hidden
-          style={{ backgroundImage: "url('/khub-fundo.jpg')", backgroundSize: 'cover', backgroundPosition: 'center' }}
+          style={{ backgroundImage: "url('/khub-wallpaper.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', filter: 'brightness(.75) saturate(1.2)' }}
         />
         <div
           className="pointer-events-none absolute inset-0"
           aria-hidden
-          style={{ background: 'linear-gradient(90deg, rgba(248,248,252,.88) 0%, rgba(248,248,252,.62) 48%, rgba(248,248,252,.12) 100%)' }}
+          style={{ background: 'linear-gradient(90deg, rgba(6,6,7,.92) 0%, rgba(6,6,7,.72) 48%, rgba(6,6,7,.3) 100%)' }}
         />
 
         {/* Logo — compacta no mobile (faixa de 32vh), tamanho pleno no
@@ -74,7 +74,7 @@ export function AuthShell({
                 lineHeight: 0.96,
                 fontWeight: 650,
                 letterSpacing: '-0.045em',
-                color: '#171526',
+                color: '#f5f5f7',
               }}
             >
               {headlineLines.map((linha) => (
@@ -84,31 +84,31 @@ export function AuthShell({
               ))}
               <span
                 className="block"
-                style={{ background: 'linear-gradient(135deg, #963EFF, #792EFF)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}
+                style={{ background: 'linear-gradient(135deg, #d6ff8f, #9bee45)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}
               >
                 {headlineAccent}
               </span>
             </h1>
 
-            <p style={{ marginTop: 24, maxWidth: 480, fontSize: 17, lineHeight: 1.5, color: '#6B6980' }}>{supportingCopy}</p>
+            <p style={{ marginTop: 24, maxWidth: 480, fontSize: 17, lineHeight: 1.5, color: '#a1a1a6' }}>{supportingCopy}</p>
 
             <div style={{ marginTop: 32 }} className="space-y-4">
               {BENEFICIOS.map((b) => (
                 <div key={b.texto} className="flex items-center gap-3.5">
                   <span
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full backdrop-blur-[8px]"
-                    style={{ background: 'rgba(255,255,255,.72)', border: '1px solid rgba(91,75,130,.12)' }}
+                    style={{ background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.12)' }}
                   >
-                    <Icon name={b.icon} size={14} style={{ color: '#792EFF' }} />
+                    <Icon name={b.icon} size={14} style={{ color: '#c2f970' }} />
                   </span>
-                  <span style={{ fontSize: 14.5, color: '#171526' }}>{b.texto}</span>
+                  <span style={{ fontSize: 14.5, color: '#f5f5f7' }}>{b.texto}</span>
                 </div>
               ))}
             </div>
 
             <div
               className="flex items-center gap-2.5"
-              style={{ marginTop: 28, fontSize: 10.5, letterSpacing: '.14em', textTransform: 'uppercase', color: '#6B6980', opacity: 0.8 }}
+              style={{ marginTop: 28, fontSize: 10.5, letterSpacing: '.14em', textTransform: 'uppercase', color: '#a1a1a6', opacity: 0.8 }}
             >
               <span>Mais conversas</span>
               <span>·</span>
@@ -121,26 +121,26 @@ export function AuthShell({
 
         {/* Rodapé — só desktop */}
         <div className="absolute hidden lg:block" style={{ left: 'clamp(40px, 4vw, 72px)', bottom: 40 }}>
-          <p style={{ fontSize: 12, lineHeight: 1.5, color: '#6B6980' }}>
+          <p style={{ fontSize: 12, lineHeight: 1.5, color: '#8e8e96' }}>
             Sistema para um crescimento real.
             <br />© 2026 KHUB
           </p>
         </div>
       </div>
 
-      {/* DIREITA — superfície off-white, sem vídeo por trás. */}
-      <div className="relative flex items-center justify-center overflow-hidden bg-[#F8F6F2] px-6 py-10 lg:px-10">
+      {/* DIREITA — preto, com iluminação roxa sutil. */}
+      <div className="relative flex items-center justify-center overflow-hidden bg-[#060607] px-6 py-10 lg:px-10">
         <div
           className="pointer-events-none absolute inset-0"
           aria-hidden
-          style={{ background: 'radial-gradient(circle at 50% 38%, rgba(123,46,255,.045), transparent 42%)' }}
+          style={{ background: 'radial-gradient(circle at 50% 38%, rgba(155,238,69,.08), transparent 46%), radial-gradient(circle at 90% 95%, rgba(150,62,255,.1), transparent 40%)' }}
         />
 
         <div className="relative w-full animate-auth-in" style={{ maxWidth: 'min(440px, calc(100% - 80px))' }}>
           <div className="auth-card relative">
             <div
               className="absolute flex h-9 w-9 items-center justify-center rounded-xl"
-              style={{ right: 22, top: 22, background: 'rgba(123,46,255,.05)', border: '1px solid rgba(123,46,255,.08)' }}
+              style={{ right: 22, top: 22, background: 'rgba(155,238,69,.1)', border: '1px solid rgba(155,238,69,.25)' }}
             >
               <Image src="/khub-mark.png" alt="" width={20} height={20} unoptimized className="object-contain opacity-90" />
             </div>

@@ -64,6 +64,10 @@ export function Sidebar({
       /* armazenamento indisponível: fica expandida */
     }
   }, [podeRecolher]);
+  // Editor de automação: o canvas precisa de espaço, então a sidebar fica
+  // recolhida no quadrado do KHUB (o editor começa logo depois dela, ver
+  // automacoes/[id]/page.tsx). Não mexe na preferência das outras telas.
+  const noEditor = /^\/automacoes\/[^/]+$/.test(pathname);
   const alternar = () =>
     setRecolhida((r) => {
       try {
@@ -73,7 +77,7 @@ export function Sidebar({
       }
       return !r;
     });
-  const curta = podeRecolher && recolhida;
+  const curta = podeRecolher && (noEditor || recolhida);
 
   // Plano real do tenant ativo (assinatura da plataforma). Sem assinatura ou
   // sem resposta, o cartão não aparece: nada de "Plano Pro" fixo (Q1.9).
@@ -99,25 +103,25 @@ export function Sidebar({
         className,
       )}
     >
-      {/* Marca — logo completa expandida; o símbolo KHUB quando recolhida. */}
-      <div className={cx('sidebar-hairline flex h-topbar shrink-0 items-center border-b', curta ? 'justify-center px-2' : 'px-5')}>
+      {/* Marca — logo branca ocupando a sidebar de ponta a ponta; símbolo KHUB quando recolhida. */}
+      <div className={cx('sidebar-brand sidebar-hairline flex shrink-0 items-center border-b', curta ? 'h-topbar justify-center px-2' : 'px-4 py-5')}>
         <Link
           href="/dashboard"
           onClick={onNavigate}
           aria-label="KHUB, ir para o Dashboard"
-          className="flex items-center"
+          className="flex w-full items-center"
         >
           {curta ? (
-            <Image src="/khub-mark.png" alt="KHUB" width={330} height={330} unoptimized priority className="h-8 w-8 object-contain" />
+            <Image src="/khub-mark.png" alt="KHUB" width={330} height={330} unoptimized priority className="h-9 w-9 object-contain" />
           ) : (
             <Image
               src="/khub-logo.png"
               alt="KHUB"
-              width={751}
-              height={301}
+              width={711}
+              height={261}
               unoptimized
               priority
-              className="h-8 w-auto object-contain"
+              className="h-auto w-full object-contain"
             />
           )}
         </Link>
@@ -127,7 +131,7 @@ export function Sidebar({
       <nav aria-label="Navegação principal" className="flex-1 overflow-y-auto scrollbar-thin px-3 py-2">
         {contexto && !curta && <section className="mb-3 border-b border-line pb-3" aria-label="Agência e subcontas">
           <Link href="/agency" onClick={onNavigate} className="nav-item" aria-current={modoAgencia ? 'page' : undefined}>
-            <Icon name="building" size={19} /><span>Agência</span>
+            <Icon name="building" size={21} /><span>Agência</span>
           </Link>
           <label htmlFor={`subcontas-${onNavigate ? 'mobile' : 'desktop'}`} className="mt-2 block text-xs text-muted">Pesquisar subcontas</label>
           <input id={`subcontas-${onNavigate ? 'mobile' : 'desktop'}`} type="search" className="input mt-1 w-full" placeholder="Nome do cliente" value={busca} onChange={e => setBusca(e.target.value)} />
@@ -141,7 +145,7 @@ export function Sidebar({
         </section>}
         {contexto && curta && (
           <Link href="/agency" onClick={onNavigate} title="Agência" className="nav-item mb-2 justify-center px-0" aria-current={modoAgencia ? 'page' : undefined}>
-            <Icon name="building" size={19} />
+            <Icon name="building" size={21} />
             <span className="sr-only">Agência</span>
           </Link>
         )}
@@ -169,12 +173,12 @@ export function Sidebar({
                           aria-hidden
                         />
                       )}
-                      <Icon name={item.icon} size={19} className="relative shrink-0" />
+                      <Icon name={item.icon} size={21} className="relative shrink-0" />
                       <span className={cx('relative flex-1 truncate', curta && 'sr-only')}>{t(item.label)}</span>
                       {count ? (
                         <span
                           className={cx(
-                            'inline-flex items-center justify-center rounded-full bg-brand font-semibold text-white',
+                            'inline-flex items-center justify-center rounded-full bg-brand font-semibold text-[#0e1a04]',
                             curta ? 'absolute right-2 top-1.5 h-4 min-w-4 px-1 text-2xs' : 'h-5 min-w-5 px-1.5 text-[11px]',
                           )}
                           aria-label={`${count} não lidas`}
@@ -205,7 +209,7 @@ export function Sidebar({
               alerta={assinatura.status === 'inadimplente' || assinatura.status === 'cancelada'}
             />
           ) : null)}
-        {podeRecolher && (
+        {podeRecolher && !noEditor && (
           <button
             type="button"
             onClick={alternar}

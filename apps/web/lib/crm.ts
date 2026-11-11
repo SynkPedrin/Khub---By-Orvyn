@@ -46,6 +46,8 @@ export interface Contato360 {
   id: string; nome: string; email: string | null; telefone: string | null; empresa: string | null;
   tag: string; tags: string[]; valor: number; camposCustom: Record<string, unknown>;
   ultimoContatoAt: string | null; createdAt: string;
+  /** "Não perturbe" (Q2.2): data em que foi marcado; null = recebe mensagens. */
+  optedOutAt?: string | null; ownerId?: string | null;
   company: { id: string; nome: string; dominio: string | null; segmento: string | null } | null;
   negocios: { id: string; titulo: string; valor: number; status: string; stage: string; cor: string; origem: string | null }[];
   conversas: { id: string; canal: string; ultimaPrevia: string | null; ultimaHora: string | null; naoLidas: number }[];
@@ -58,6 +60,12 @@ export interface Negocio360 {
   stage: { id: string; nome: string; cor: string } | null;
   contato: { id: string; nome: string; email: string | null; telefone: string | null } | null;
   createdAt: string; updatedAt: string; tarefas: Tarefa[]; notas: Nota[];
+  /** Valores dos campos personalizados do negócio (Q2.3). */
+  camposCustom?: Record<string, unknown>;
+  /** Dono e motivo de perda (Q2.1). */
+  ownerId?: string | null;
+  motivoPerda?: { id: string; nome: string } | null;
+  motivoPerdaObs?: string | null;
 }
 export interface Tarefa {
   id: string; titulo: string; descricao?: string | null; status: string; prioridade: string;
@@ -75,6 +83,8 @@ export interface Empresa360 {
   contatos: { id: string; nome: string; email: string | null; telefone: string | null; tag: string }[];
   negocios: { id: string; titulo: string; valor: number; status: string; stage: string; cor: string; contato: string | null }[];
   valorAberto: number; tarefas: Tarefa[]; notas: Nota[];
+  /** Valores dos campos personalizados da empresa (Q2.3). */
+  camposCustom?: Record<string, unknown>;
 }
 export type Atendimento = 'ia' | 'humano';
 export interface Conversa {

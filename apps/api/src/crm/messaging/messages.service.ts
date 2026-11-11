@@ -145,8 +145,8 @@ export class MessagesService {
       // transporte tem de caber nele — URL do storage, ou base64 só para quem
       // aceita (Evolution). Senão, grava e devolve gated, sem tentar.
       let gateStorage=false;
-      if (midia && !['sem_telefone','config_required','cancelled'].includes(status)) {
-        const impl=this.impl(providerNome);
+      if (midia && ['sending','bloqueado_dev'].includes(status)) {
+        const impl: MessagingProvider=this.impl(providerNome);
         if (!impl.sendMedia) status='midia_nao_suportada';
         else if (!midia.url && !(midia.base64 && impl.aceitaBase64)) { status='config_required'; gateStorage=true; }
       }
@@ -171,7 +171,7 @@ export class MessagesService {
       try {
         // Nunca cai para o telefone real fora de produção (a trava acima garante que existe).
         const destination=this.emProducao() ? ctx.phone : this.config.get('STEVO_TEST_NUMBER')!;
-        const impl=this.impl(ctx.providerNome);
+        const impl: MessagingProvider=this.impl(ctx.providerNome);
         const result=midia && impl.sendMedia ? await impl.sendMedia(destination,midia,ctx.instance,idempotencyKey) : await impl.sendText(destination,texto,ctx.instance,idempotencyKey);
         await this.prisma.withTenant(tenantId,tx=>tx.message.update({where:{id:ctx.msg.id,tenantId},data:{deliveryStatus:'sent',providerId:result.providerId,sentAt:new Date()}}));
         status='sent';
@@ -218,7 +218,9 @@ export class MessagesService {
       let contact = achadoId ? await tx.contact.findUnique({ where: { id: achadoId } }) : null;
       const contatoNovo = !contact;
       if (!contact) {
-        contact = await tx.contact.create({ data: { tenantId: input.tenantId, nome: input.fromName || input.fromNumber, telefone: input.fromNumber, tag: 'Lead', ultimoContatoAt: new Date() } });
+        // `origem` = canal da entrada (a conversa abaixo é sempre de WhatsApp). Antes ficava
+        // nula e o outbox (db/050, que lê `contacts.origem`) publicava "Manual".
+        contact = await tx.contact.create({ data: { tenantId: input.tenantId, nome: input.fromName || input.fromNumber, telefone: input.fromNumber, tag: 'Lead', origem: 'WhatsApp', ultimoContatoAt: new Date() } });
       }
       await tx.$queryRaw`SELECT id FROM contacts WHERE id=${contact.id}::uuid FOR UPDATE`;
       const optout=/^(stop|parar|sair|cancelar|remover|não quero|nao quero)\b/i.test(input.text.trim());

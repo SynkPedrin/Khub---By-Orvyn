@@ -34,14 +34,62 @@ export class AgencyService {
     });
   }
 
-  /** Time da agência (seção 26 — V1 é só listagem; convite reaproveita o fluxo de invite do tenant, não um novo). */
+  /** Time da agência. Inclui `clientIds` (restrições de subconta por membro) para a matriz de acesso carregar em uma chamada. */
   async listarMembros(identityId: string) {
     const membro = await this.membroDe(identityId);
     if (!membro) throw new ForbiddenException('identidade não pertence a nenhuma agência');
-    const membros = await this.prisma.agencyMember.findMany({ where: { agencyId: membro.agencyId }, orderBy: { createdAt: 'asc' } });
+    const membros = await this.prisma.agencyMember.findMany({
+      where: { agencyId: membro.agencyId },
+      orderBy: { createdAt: 'asc' },
+      include: { clientAccess: { select: { clientAccountId: true } } },
+    });
     const identidades = await this.prisma.identity.findMany({ where: { id: { in: membros.map((m) => m.identityId) } }, select: { id: true, email: true } });
     const emailPorId = new Map(identidades.map((i) => [i.id, i.email]));
-    return membros.map((m) => ({ id: m.id, identityId: m.identityId, email: emailPorId.get(m.identityId) ?? '—', role: m.role, createdAt: m.createdAt }));
+    return membros.map((m) => ({
+      id: m.id,
+      identityId: m.identityId,
+      email: emailPorId.get(m.identityId) ?? '—',
+      role: m.role,
+      createdAt: m.createdAt,
+      // [] = sem restrição configurada = acesso global a todas as subcontas.
+      clientIds: m.clientAccess.map((a) => a.clientAccountId),
+    }));
+  }
+
+  /**
+   * Edita papel e/ou acesso a subcontas de um membro (estilo GHL: visibilidade
+   * por usuário). Só owner/admin. O dono da agência e o próprio editor não
+   * podem ser alterados. `clientIds` vazio remove a restrição (acesso global);
+   * ids são validados contra as subcontas da agência.
+   */
+  async atualizarMembro(identityId: string, agencyMemberId: string, input: { role?: string; clientIds?: string[] }) {
+    const membro = await this.membroDe(identityId);
+    if (!membro || !['owner', 'admin'].includes(membro.role)) throw new ForbiddenException('apenas o dono ou um admin da agência edita membros');
+    const alvo = await this.prisma.agencyMember.findFirst({ where: { id: agencyMemberId, agencyId: membro.agencyId } });
+    if (!alvo) throw new NotFoundException('membro não encontrado nesta agência');
+    if (alvo.identityId === identityId) throw new ForbiddenException('você não pode editar o próprio acesso');
+    if (alvo.identityId === membro.agency.ownerIdentityId) throw new ForbiddenException('o dono da agência não pode ser editado');
+
+    if (input.role !== undefined) {
+      if (!['admin', 'member', 'viewer'].includes(input.role)) throw new ForbiddenException("papel inválido (use admin, member ou viewer)");
+      await this.prisma.agencyMember.update({ where: { id: alvo.id }, data: { role: input.role } });
+    }
+
+    if (input.clientIds !== undefined) {
+      const clientes = await this.prisma.agencyClientAccount.findMany({ where: { agencyId: membro.agencyId }, select: { id: true } });
+      const validos = new Set(clientes.map((c) => c.id));
+      const ids = [...new Set(input.clientIds)];
+      if (ids.some((id) => !validos.has(id))) throw new ForbiddenException('subconta inválida para esta agência');
+      await this.prisma.$transaction(async (tx) => {
+        await tx.agencyMemberClientAccess.deleteMany({ where: { agencyMemberId: alvo.id } });
+        if (ids.length > 0) {
+          await tx.agencyMemberClientAccess.createMany({ data: ids.map((clientAccountId) => ({ agencyMemberId: alvo.id, clientAccountId })) });
+        }
+      });
+    }
+
+    await this.auditar(membro.agencyId, identityId, 'agency.member.update', 'agency_member', alvo.id);
+    return { ok: true };
   }
 
   /**

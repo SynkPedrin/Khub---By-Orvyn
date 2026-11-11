@@ -39,6 +39,7 @@ export const PROVIDER_LABEL: Record<string, string> = {
   oauth_google: 'Login com Google',
   oauth_github: 'Login com GitHub',
   integrations_crypto: 'Cifra de credenciais',
+  storage: 'Armazenamento de arquivos',
 };
 
 export function providerLabel(p: string): string {

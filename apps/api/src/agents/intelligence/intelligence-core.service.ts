@@ -11,6 +11,7 @@ import { cortarNoLimite, ferramentasDoAgente, toolsParaModelo } from '../catalog
 import type { AgentConfig } from '../config/agent-config';
 import { analiseJsonSchema, analiseSchema, analisarHeuristica, intencoesValidas, sanearAnalise, type Analise } from '../engines/analysis';
 import { fragmentarMensagem, type ResultadoFragmentacao } from '../engines/message-chunker';
+import { contextoAgenda, detectarPedidoAgenda } from '../engines/agenda-intent';
 import { avaliarRegras, separarAcoes } from '../engines/rules-engine';
 import { validarNaturalidade } from '../engines/response-validator';
 import { KnowledgeService, type ConfiancaBusca } from '../knowledge/knowledge.service';
@@ -82,6 +83,24 @@ export interface ResultadoCore {
   tokensSaida: number;
   custoUsd: number;
   tempos: { analiseMs: number; conhecimentoMs: number; geracaoMs: number; totalMs: number };
+}
+
+/**
+ * A resposta anuncia que a conversa vai para uma pessoa ("vou te passar para
+ * a equipe", "já encaminhei para nossa atendente")? Exige verbo de
+ * transferência E destino humano na mesma frase, para não pegar "vou passar o
+ * valor" ou "a equipe confirma o horário".
+ */
+export function prometeuTransferencia(texto: string): boolean {
+  const t = texto.toLowerCase();
+  return t.split(/(?<=[.!?\n])\s+/).some(
+    (frase) =>
+      /\b(vou|irei|vamos|já|ja|estou|to|tô)\s+(te\s+|lhe\s+|seu caso\s+|sua conversa\s+|seu atendimento\s+)?(transferir|transferindo|passar|passando|encaminhar|encaminhando|encaminhei|transferi|passei)\b/.test(frase) &&
+      /\b(equipe|atendente|humano|humana|pessoa|colega|respons[áa]vel|gerente|recep[çc][ãa]o)\b/.test(frase) &&
+      // "passo para a equipe confirmar o horário" é pedido de aprovação de
+      // agenda, não troca de atendente. ("...para verificarem o ocorrido" É troca.)
+      !/\b(confirm|aprov|valid|verific|chec)\w*\s+(o\s+|seu\s+|sua\s+|esse\s+|este\s+)?(hor[áa]rio|agendamento|reserva|vaga|pedido|disponibilidade)/.test(frase),
+  );
 }
 
 /**
@@ -256,6 +275,21 @@ export class IntelligenceCoreService {
       return fim({ decisao: 'transferir', motivo: `IA não configurada (falta ${this.llm.missing().join(', ')})` }, conhecimento, { conhecimentoMs });
     }
 
+    // 4b) pré-consulta de agenda: pedido de horário com dia identificável já
+    // chega ao modelo com os horários livres (ver engines/agenda-intent.ts).
+    const preFerramentas: ResultadoCore['ferramentas'] = [];
+    let blocoAgenda = '';
+    if (permitidas.has('ver_agendamentos') && e.contactId && this.llm.configured()) {
+      const agora = new Date();
+      const pedido = detectarPedidoAgenda(ultima, agora, cfg.horario.fuso, analise.intencao);
+      if (pedido) {
+        const res = await this.tools.executar('ver_agendamentos', { data: pedido.data, duracaoMin: 60 }, ctxTools, permitidas);
+        preFerramentas.push({ nome: 'ver_agendamentos', ok: res.ok, erro: res.erro });
+        const livres = res.ok ? ((res.dados as { horariosLivres?: { inicio: string; fim: string }[] } | undefined)?.horariosLivres ?? []) : null;
+        if (livres) blocoAgenda = `\n${contextoAgenda(pedido, livres, cfg.horario.fuso, agora)}`;
+      }
+    }
+
     // 5) geração com ferramentas
     const tG = Date.now();
     const system = `${promptEstavel(e.agente, { empresa: e.empresa, nicho: e.nicho })}\n\n${contextoDinamico({
@@ -266,12 +300,14 @@ export class IntelligenceCoreService {
       instrucoesRegras: sep.instrucoes,
       conhecimento: deveConsultar ? { trechos, consultado: true, confianca: conhecimento.confianca?.nivel ?? 'nenhuma', conflitos: conhecimento.conflitos } : null,
       intencoesExtras: e.intencoesExtras,
-    })}`;
+      agora: new Date(),
+      fuso: cfg.horario.fuso,
+    })}${blocoAgenda}`;
     const historico = historicoParaModelo(e.historico.slice(-cfg.inteligencia.janelaHistorico));
     if (!historico.length) return fim({ decisao: 'sem_resposta', motivo: 'mensagem sem texto' }, conhecimento, { conhecimentoMs });
 
     const conversa: MensagemLLM[] = [...historico];
-    const ferramentas: ResultadoCore['ferramentas'] = [];
+    const ferramentas: ResultadoCore['ferramentas'] = [...preFerramentas];
     const fontes = [...conhecimento.fontes];
     let texto = '';
     let transferir: string | undefined;
@@ -328,9 +364,17 @@ export class IntelligenceCoreService {
         emojis: cfg.comunicacao.emojis,
         evitarRepeticao: cfg.comunicacao.evitarRepeticao,
         anteriores,
+        ultimaDoContato: ultima,
       });
       texto = v.texto;
       validacao = v.avisos;
+    }
+
+    // "Vou te passar para a equipe" sem chamar a ferramenta deixaria o contato
+    // esperando um humano que nunca soube da conversa (modelo pequeno faz isso
+    // com frequência). O que foi prometido passa a ser verdade.
+    if (texto && !transferir && permitidas.has('transferir_para_humano') && !ferramentas.some((f) => f.pendente) && prometeuTransferencia(texto)) {
+      transferir = 'o agente avisou a transferência para a equipe';
     }
 
     // Falha de geração não pode deixar um cliente sem encaminhamento.

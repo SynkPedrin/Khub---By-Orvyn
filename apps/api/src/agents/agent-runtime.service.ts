@@ -15,8 +15,14 @@ import { MessagesService } from '../crm/messaging/messages.service';
 import { avaliarHorario, mensagemForaDoHorario } from './config/horario';
 
 export const FILA_AGENTES = 'agent-replies';
-/** Espera antes de responder: junta a rajada "oi / tudo bem? / queria saber…". */
-export const ATRASO_RESPOSTA_MS = 4000;
+/**
+ * Espera antes de responder: junta a rajada "oi / tudo bem? / queria saber…".
+ * 4 s pegava só metade das rajadas reais (quem digita no celular leva 5–10 s
+ * entre uma mensagem e outra) e cada rajada partida custava uma geração
+ * inteira jogada fora — caro em modelo local, onde a fila é de um por vez.
+ * Ajustável por AGENTE_ESPERA_RAJADA_MS.
+ */
+export const ATRASO_RESPOSTA_MS = Number(process.env.AGENTE_ESPERA_RAJADA_MS) || 7000;
 
 export interface AgenteJob {
   tenantId: string;
@@ -214,9 +220,20 @@ export class AgentRuntimeService {
       if (r.custoUsd > 0) await this.core.registrarUso(tenantId, agente.nome, { modelo: r.modelo, entrada: r.tokensEntrada, saida: r.tokensSaida, custoUsd: r.custoUsd, latenciaMs: Date.now() - t0 });
       await this.aprendizado.registrar(tenantId, eventosDoTurno(agente.id, r, { conversationId: conv.id, runId, limiarConfianca: efetivo.config.inteligencia.limiarConfianca, mensagem: ultima }));
 
+      // O contato escreveu de novo enquanto o modelo pensava: esta resposta já
+      // nasceu velha. O job da mensagem nova responde com o contexto inteiro.
+      const chegouOutra = await this.prisma.withTenant(tenantId, (tx) =>
+        tx.message.findFirst({ where: { conversationId: conv.id, autorTipo: 'contato', createdAt: { gt: alvo.createdAt } }, select: { id: true } }),
+      );
+      if (chegouOutra && r.decisao === 'responder') return this.fechar(tenantId, runId, 'ignorado', 'contato mandou nova mensagem durante a geração (respondida pela mais recente)', t0, r, efetivo.versionId);
+
       let sequencia: { sequenciaId: string; blocos: number } | null = null;
       if (r.fragmentacao.blocos.length && (r.decisao === 'responder' || r.decisao === 'transferir')) {
-        sequencia = await this.entregas.enfileirar({ tenantId, agentId: agente.id, conversationId: conv.id, runId, blocos: r.fragmentacao.blocos, chaveBase: `agent:${messageId}` });
+        // A "digitação" do 1º bloco já aconteceu enquanto o modelo gerava: só
+        // espera o que faltar. Os demais mantêm o ritmo de digitação.
+        const decorrido = Date.now() - t0;
+        const blocos = r.fragmentacao.blocos.map((b, i) => (i === 0 ? { ...b, atrasoMs: Math.max(0, b.atrasoMs - decorrido) } : b));
+        sequencia = await this.entregas.enfileirar({ tenantId, agentId: agente.id, conversationId: conv.id, runId, blocos, chaveBase: `agent:${messageId}` });
       }
 
       let desfecho: DesfechoRun;

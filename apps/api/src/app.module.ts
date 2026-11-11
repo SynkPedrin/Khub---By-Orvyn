@@ -27,11 +27,15 @@ import { CommonModule } from './common/common.module';
 import { AiModule } from './ai/ai.module';
 import { AgencyModule } from './agency/agency.module';
 import { AgentsModule } from './agents/agents.module';
+import { DisparosModule } from './disparos/disparos.module';
+import { AvaliacoesModule } from './avaliacoes/avaliacoes.module';
+import { FormsModule } from './forms/forms.module';
+import { BookingModule } from './booking/booking.module';
 import { PermissionsGuard } from './auth/permissions.guard';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 
 @Module({
-  imports: [OperationsModule, ConfigModule, CommonModule, AiModule, PrismaModule, AuthModule, TenantsModule, RealtimeModule, EventsModule, RagModule, CrmModule, AutomationsModule, MarketplaceModule, BlueprintModule, NyroModule, IntegrationsModule, SettingsModule, FinanceiroModule, BillingModule, AgendaModule, AnalyticsModule, AgencyModule, AgentsModule],
+  imports: [OperationsModule, ConfigModule, CommonModule, AiModule, PrismaModule, AuthModule, TenantsModule, RealtimeModule, EventsModule, RagModule, CrmModule, AutomationsModule, MarketplaceModule, BlueprintModule, NyroModule, IntegrationsModule, SettingsModule, FinanceiroModule, BillingModule, AgendaModule, AnalyticsModule, AgencyModule, AgentsModule, DisparosModule, AvaliacoesModule, FormsModule, BookingModule],
   controllers: [HealthController],
   providers: [
     // Ordem importa: autentica (seta req.user) → rate limit por tenant → auditoria.

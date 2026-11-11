@@ -20,6 +20,7 @@ export async function POST(req: NextRequest, { params }: { params: { chave: stri
   // (o HMAC é calculado sobre ele).
   const headers: Record<string, string> = { 'content-type': req.headers.get('content-type') ?? 'application/json' };
   const chave = req.headers.get('idempotency-key');
+  // Sem cortar: a API recusa > 200 com 400; cortar aqui faria chaves longas diferentes colidirem.
   if (chave) headers['idempotency-key'] = chave;
   const assinatura = req.headers.get('x-khub-signature');
   if (assinatura) headers['x-khub-signature'] = assinatura;

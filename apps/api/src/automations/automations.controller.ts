@@ -1,7 +1,10 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
-import { IsArray, IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsISO8601, IsObject, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { WorkflowsService } from './workflows.service';
 import { RunsService } from './runs.service';
+import { EditorService, normalizarDesde } from './editor.service';
+import { NicoMontadorService } from './nico-montador.service';
 import { CurrentUser, TenantId, type AuthUser } from '../auth/decorators';
 
 class CriarWorkflowDto {
@@ -12,6 +15,18 @@ class RenomearDto {
   @IsOptional() @IsString() @MinLength(1) @MaxLength(160) nome?: string;
   @IsOptional() @IsString() @MaxLength(500) descricao?: string;
   @IsOptional() @IsArray() @IsString({ each: true }) @MaxLength(24, { each: true }) tags?: string[];
+  /** Pasta da lista (db/058). `null` tira o fluxo da pasta. */
+  @IsOptional() @IsString() @MaxLength(60) pasta?: string | null;
+}
+class StatsQuery {
+  @IsOptional() @IsISO8601() desde?: string;
+}
+class MetricasQuery {
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(90) dias?: number;
+}
+class RunsContatoQuery {
+  @IsUUID() contactId!: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limite?: number;
 }
 class GrafoDto {
   @IsObject() grafo!: Record<string, unknown>;
@@ -24,6 +39,18 @@ class RollbackDto {
 }
 class TestarDto {
   @IsUUID() contactId!: string;
+}
+/** Modo simples: a conversa com a NICO que descreve o fluxo. */
+class MensagemNicoDto {
+  @IsIn(['usuario', 'nico']) autor!: 'usuario' | 'nico';
+  @IsString() @MinLength(1) @MaxLength(3000) texto!: string;
+}
+class NicoMontarDto {
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(30) @ValidateNested({ each: true }) @Type(() => MensagemNicoDto) conversa!: MensagemNicoDto[];
+  @IsOptional() @IsUUID() workflowId?: string;
+}
+class NicoTestarDto {
+  @IsOptional() @IsUUID() contactId?: string;
 }
 class ConfigDto {
   @IsOptional() @IsIn(['uma_vez', 'sempre', 'apos_terminar']) reentrada?: 'uma_vez' | 'sempre' | 'apos_terminar';
@@ -42,6 +69,8 @@ export class AutomationsController {
   constructor(
     private readonly workflows: WorkflowsService,
     private readonly runs: RunsService,
+    private readonly editor: EditorService,
+    private readonly nico: NicoMontadorService,
   ) {}
 
   /** Paleta do canvas: os 15 nós (ADR-0012). Fonte única = catalogo.ts. */
@@ -53,6 +82,12 @@ export class AutomationsController {
   @Get('workflows')
   listar(@TenantId() t: string) {
     return this.workflows.listar(t);
+  }
+
+  /** Métricas dos cards da lista (Q3.3): ativos agora, concluídos e erros no período. */
+  @Get('workflows/metricas')
+  metricas(@TenantId() t: string, @Query() q: MetricasQuery) {
+    return this.editor.metricas(t, q.dias ?? 30);
   }
 
   @Get('workflows/:id')
@@ -95,6 +130,30 @@ export class AutomationsController {
   @HttpCode(200)
   rollback(@TenantId() t: string, @CurrentUser() u: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: RollbackDto) {
     return this.workflows.rollback(t, id, dto.versionId, u.identityId);
+  }
+
+  /** Duplica o fluxo (rascunho novo, sem webhook nem segredo do original). */
+  @Post('workflows/:id/duplicar')
+  duplicar(@TenantId() t: string, @CurrentUser() u: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.editor.duplicar(t, u.identityId, id);
+  }
+
+  /** Histórico de versões publicadas (número, data, autor, nº de nós, ativa). */
+  @Get('workflows/:id/versoes')
+  versoes(@TenantId() t: string, @Param('id', ParseUUIDPipe) id: string) {
+    return this.editor.versoes(t, id);
+  }
+
+  /** Grafo de uma versão, para ver em modo leitura antes de restaurar. */
+  @Get('workflows/:id/versoes/:versionId')
+  versao(@TenantId() t: string, @Param('id', ParseUUIDPipe) id: string, @Param('versionId', ParseUUIDPipe) versionId: string) {
+    return this.editor.versao(t, id, versionId);
+  }
+
+  /** Estatística por nó no canvas: concluídos, esperando agora e erros desde `desde` (padrão 7 dias). */
+  @Get('workflows/:id/stats')
+  stats(@TenantId() t: string, @Param('id', ParseUUIDPipe) id: string, @Query() q: StatsQuery) {
+    return this.editor.estatisticas(t, id, normalizarDesde(q.desde));
   }
 
   @Patch('workflows/:id/status')
@@ -143,7 +202,28 @@ export class AutomationsController {
     return this.workflows.testar(t, id, dto.contactId);
   }
 
+  // ------------------------------------------------- modo simples (NICO)
+  /** Conversa → automação em RASCUNHO (nunca publica). Pode devolver perguntas. */
+  @Post('nico/montar')
+  @HttpCode(200)
+  nicoMontar(@TenantId() t: string, @CurrentUser() u: AuthUser, @Body() dto: NicoMontarDto) {
+    return this.nico.montar(t, u.identityId, dto.conversa, dto.workflowId);
+  }
+
+  /** Teste real com dados reais: execução de teste, mensagens só no número de teste. */
+  @Post('nico/workflows/:id/testar')
+  @HttpCode(200)
+  nicoTestar(@TenantId() t: string, @Param('id', ParseUUIDPipe) id: string, @Body() dto: NicoTestarDto) {
+    return this.nico.testar(t, id, dto.contactId);
+  }
+
   // ------------------------------------------------------------- execuções
+  /** Execuções de um contato em todos os fluxos (perfil do contato). */
+  @Get('runs')
+  runsDoContato(@TenantId() t: string, @Query() q: RunsContatoQuery) {
+    return this.editor.runsDoContato(t, q.contactId, q.limite ?? 50);
+  }
+
   @Get('workflows/:id/runs')
   runsDo(@TenantId() t: string, @Param('id', ParseUUIDPipe) id: string, @Query('limite') limite?: string) {
     return this.runs.listarRuns(t, id, Number(limite) || 30);
@@ -156,8 +236,9 @@ export class AutomationsController {
 
   @Post('runs/:id/cancelar')
   @HttpCode(200)
-  cancelar(@TenantId() t: string, @Param('id', ParseUUIDPipe) id: string) {
-    return this.runs.cancelar(t, id);
+  cancelar(@TenantId() t: string, @CurrentUser() u: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    // "Remover deste fluxo" (Q3.3): auditado e diz se havia o que cancelar.
+    return this.editor.cancelarRun(t, id, u.identityId);
   }
 
   @Get('dlq')

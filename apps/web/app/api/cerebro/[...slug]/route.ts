@@ -14,7 +14,7 @@ export async function GET(req: NextRequest, { params }: { params: { slug: string
   if (!doc) {
     return NextResponse.json(
       {
-        type: 'https://orvyn.dev/errors/not-found',
+        type: 'urn:khub:error:not-found',
         title: 'Documento não encontrado',
         status: 404,
         detail: `Nenhum documento em '${segments.join('/')}'.`,

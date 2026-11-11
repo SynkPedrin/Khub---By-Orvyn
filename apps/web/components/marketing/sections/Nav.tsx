@@ -10,7 +10,7 @@ const LINKS = [
   { href: '#fluxo', label: 'O fluxo' },
   { href: '#produto', label: 'Produto' },
   { href: '#nyro', label: 'NICO' },
-  { href: '#crm', label: 'CRM vs Revenue OS' },
+  { href: '#crm', label: 'CRM vs KHUB' },
 ];
 
 /**
@@ -43,11 +43,10 @@ export function Nav() {
     return () => io.disconnect();
   }, []);
 
-  const fundo = onDark
-    ? 'bg-[rgba(21,18,25,0.78)] shadow-[inset_0_-1px_0_0_rgba(248,246,242,0.1)] backdrop-blur-xl'
-    : scrolled
-      ? 'bg-[rgba(248,246,242,0.82)] shadow-[inset_0_-1px_0_0_var(--lp-rule-soft)] backdrop-blur-xl backdrop-saturate-150'
-      : 'bg-transparent';
+  // Identidade Kroma (ADR-0043): a página é toda escura; ao rolar, ink translúcido.
+  const fundo = onDark || scrolled
+    ? 'bg-[rgba(5,5,5,0.88)] shadow-[inset_0_-1px_0_0_var(--lp-rule)] backdrop-blur-xl'
+    : 'bg-transparent';
 
   return (
     <header
@@ -59,7 +58,7 @@ export function Nav() {
             height={22}
             priority
             label=""
-            className={onDark ? 'brightness-0 invert transition-[filter] duration-500' : 'transition-[filter] duration-500'}
+            className="transition-[filter] duration-500"
           />
         </Link>
 
@@ -86,11 +85,7 @@ export function Nav() {
           </Link>
           <Link
             href={SIGNUP_URL}
-            className="inline-flex h-10 items-center rounded-[6px] px-[18px] text-[13.5px] font-semibold tracking-[-0.01em] transition-colors duration-300 hover:bg-[var(--lp-accent)] hover:text-white"
-            style={{
-              background: onDark ? 'var(--lp-on-dark)' : 'var(--lp-ink)',
-              color: onDark ? 'var(--lp-graphite)' : 'var(--lp-bg)',
-            }}
+            className="inline-flex h-11 items-center rounded-full bg-[var(--lp-ink)] px-[22px] text-[13.5px] font-semibold tracking-[-0.01em] text-[var(--lp-bg)] transition-colors duration-300 hover:bg-[var(--lp-accent)]"
           >
             Criar conta
           </Link>

@@ -1,11 +1,12 @@
 import { BadRequestException, Body, Controller, ForbiddenException, Headers, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
-import { IsArray, IsIn, IsNumber, IsObject, IsOptional, IsString, IsUUID, MaxLength, Min } from 'class-validator';
+import { IsArray, IsIn, IsNumber, IsObject, IsOptional, IsString, IsUUID, MaxLength, Min, ArrayMaxSize, IsBoolean } from 'class-validator';
 import { CrmService } from './crm.service';
 import { MessagesService } from './messaging/messages.service';
 import { CurrentUser, TenantId, type AuthUser } from '../auth/decorators';
 import { AtendimentoService } from './messaging/atendimento.service';
 import { SkipAudit } from '../common/audit.interceptor';
 import { filtroDaQuery, parseOrdem } from './contatos-filtro';
+import { filtroNegociosDaQuery } from './pipeline-filtro';
 
 class CreateContactDto {
   @IsString() @MaxLength(160) nome!: string;
@@ -35,9 +36,11 @@ class UpdateContactDto {
   @IsOptional() @IsString() @MaxLength(40) telefone?: string;
   @IsOptional() @IsString() @MaxLength(160) empresa?: string;
   @IsOptional() @IsString() @MaxLength(40) tag?: string;
-  @IsOptional() @IsArray() @IsString({ each: true }) tags?: string[];
+  @IsOptional() @IsArray() @ArrayMaxSize(50) @IsString({ each: true }) @MaxLength(40, { each: true }) tags?: string[];
   @IsOptional() @IsNumber() @Min(0) valorEstimado?: number;
   @IsOptional() @IsUUID() companyId?: string;
+  /** "Não perturbe" (Q2.2): true grava `opted_out_at = now()`, false limpa. */
+  @IsOptional() @IsBoolean() naoPerturbe?: boolean;
   /** Campos personalizados `{ chave: valor }` validados pelas definições (Q2.3). */
   @IsOptional() @IsObject() camposCustom?: Record<string, unknown>;
 }
@@ -54,6 +57,11 @@ class UpdateDealDto {
   @IsOptional() @IsUUID() contactId?: string;
   /** Campos personalizados `{ chave: valor }` validados pelas definições (Q2.3). */
   @IsOptional() @IsObject() camposCustom?: Record<string, unknown>;
+  /** Motivo de perda (Q2.1): obrigatório ao marcar `perdido` se o tenant tem motivos ativos; `null` limpa. */
+  @IsOptional() @IsUUID() motivoPerdaId?: string | null;
+  @IsOptional() @IsString() @MaxLength(500) motivoPerdaObs?: string | null;
+  /** identityId do responsável (Q2.1); `null` deixa sem dono. */
+  @IsOptional() @IsUUID() ownerId?: string | null;
 }
 class SendMessageDto {
   @IsString() @MaxLength(4000) texto!: string;
@@ -127,10 +135,15 @@ export class CrmController {
     return this.crm.createContact(tenantId, dto);
   }
 
+  /**
+   * Quadro de um funil. Filtros (Q2.1): `q, ownerId (uuid|nenhum), origem, tag,
+   * valorMin, valorMax, status (abertos|ganhos|perdidos|todos; padrão abertos),
+   * criadoDe, criadoAte (AAAA-MM-DD)`.
+   */
   @Get('pipeline')
-  pipeline(@TenantId() tenantId: string, @Query('pipelineId') pipelineId?: string) {
+  pipeline(@TenantId() tenantId: string, @Query() query: Record<string, unknown>, @Query('pipelineId') pipelineId?: string) {
     if (pipelineId && !/^[0-9a-f-]{36}$/i.test(pipelineId)) throw new BadRequestException('pipelineId inválido');
-    return this.crm.pipeline(tenantId, pipelineId);
+    return this.crm.pipeline(tenantId, pipelineId, filtroNegociosDaQuery(query));
   }
 
   @Post('deals')
@@ -150,7 +163,7 @@ export class CrmController {
 
   @Patch('deals/:id')
   updateDeal(@TenantId() tenantId: string, @Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateDealDto) {
-    return this.crm.updateDeal(tenantId, id, dto);
+    return this.crm.updateDeal(tenantId, id, dto, { exigirMotivoPerda: true });
   }
 
   @Delete('deals/:id')

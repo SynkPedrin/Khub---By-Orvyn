@@ -2,6 +2,10 @@ import { Module } from '@nestjs/common';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { CrmService } from './crm.service';
 import { CrmController } from './crm.controller';
+import { ContatosController } from './contatos.controller';
+import { ContatosMassaService } from './contatos-massa.service';
+import { ContatosMesclaService } from './contatos-mescla.service';
+import { ContatosViewsService } from './contatos-views.service';
 import { CrmF2Controller } from './crm-f2.controller';
 import { PipelinesController } from './pipelines.controller';
 import { ComercialController } from './comercial.controller';
@@ -12,6 +16,10 @@ import { ImportacaoService } from './importacao.service';
 import { CompaniesService } from './companies.service';
 import { CustomFieldsService } from './custom-fields.service';
 import { CustomFieldsController } from './custom-fields.controller';
+import { LostReasonsService } from './lost-reasons.service';
+import { LostReasonsController } from './lost-reasons.controller';
+import { NegociosMassaService } from './negocios-massa.service';
+import { NegociosController } from './negocios.controller';
 import { TasksService } from './tasks.service';
 import { NotesService } from './notes.service';
 import { LeadsService } from './leads.service';
@@ -29,18 +37,25 @@ import { WhatsAppConnectionService } from './messaging/whatsapp-connection.servi
 import { WhatsAppController } from './messaging/whatsapp.controller';
 import { AvatarContatoService } from './messaging/avatar-contato.service';
 import { CryptoService } from '../integrations/crypto.service';
+import { InboxService } from './messaging/inbox.service';
+import { InboxController } from './messaging/inbox.controller';
 
 @Module({
   imports: [RealtimeModule],
-  controllers: [CrmController, CrmF2Controller, CustomFieldsController, PipelinesController, ComercialController, StevoWebhookController, StevoApiWebhookController, EvolutionWebhookController, WhatsAppController],
+  controllers: [ContatosController, NegociosController, LostReasonsController, CrmController, CrmF2Controller, CustomFieldsController, PipelinesController, ComercialController, StevoWebhookController, StevoApiWebhookController, EvolutionWebhookController, WhatsAppController, InboxController],
   providers: [
     CrmService,
+    ContatosMassaService,
+    ContatosMesclaService,
+    ContatosViewsService,
     PipelinesService,
     ProposalsService,
     CarteiraService,
     ImportacaoService,
     CompaniesService,
     CustomFieldsService,
+    LostReasonsService,
+    NegociosMassaService,
     TasksService,
     NotesService,
     LeadsService,
@@ -53,6 +68,7 @@ import { CryptoService } from '../integrations/crypto.service';
     EvolutionProvider,
     WhatsAppConnectionService,
     AvatarContatoService,
+    InboxService,
     // Instância própria (stateless, só depende de ConfigService) — evita
     // ciclo de import com IntegrationsModule, que é quem importa CrmModule.
     CryptoService,

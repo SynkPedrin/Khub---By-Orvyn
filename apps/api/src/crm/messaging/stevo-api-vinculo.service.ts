@@ -26,7 +26,7 @@ export class StevoApiVinculoService {
       throw new ConflictException('instância já vinculada a outra subconta na Stevo (external_ref) — desvincule lá primeiro');
     }
     const ja = await this.prisma.$queryRaw<{ tenant_id: string | null }[]>`SELECT resolve_tenant_by_stevo_api_instance(${instanciaId}) AS tenant_id`;
-    if (ja[0]?.tenant_id && ja[0].tenant_id !== tenantId) throw new ConflictException('instância já vinculada a outra subconta no Revenue OS');
+    if (ja[0]?.tenant_id && ja[0].tenant_id !== tenantId) throw new ConflictException('instância já vinculada a outra subconta no KHUB');
 
     const conexao = await this.stevo.conexao(instanciaId);
     if (inst.external_ref !== tenantId) await this.stevo.definirExternalRef(instanciaId, tenantId);

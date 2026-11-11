@@ -7,6 +7,11 @@ import { ABERTO, escolherFunil, receitaMensal, resumirFunil, type NegocioRef } f
 import { orderByDaOrdem, whereDoFiltro, type FiltroContatos, type OrdemContatos } from './contatos-filtro';
 import { idsPorTelefone } from './contatos-sql';
 import { camposDe, filtroCamposContato, validarCamposNaTransacao } from './custom-fields.service';
+import { limparObsPerda, resolverMotivoPerda } from './lost-reasons.service';
+import { totaisDoFunil, whereDosNegocios, type FiltroNegocios } from './pipeline-filtro';
+
+/** Teto de negócios por quadro (Q2.1): acima disso a resposta avisa `truncado` e a tela pede filtro. */
+export const LIMITE_QUADRO = 2000;
 
 const num = (d: Prisma.Decimal | number | null | undefined): number => (d == null ? 0 : Number(d));
 const brl = (v: number): string => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
@@ -51,6 +56,8 @@ export interface UpdateContactInput {
   tags?: string[];
   valorEstimado?: number;
   companyId?: string;
+  /** "Não perturbe" (Q2.2): true marca agora, false desmarca. */
+  naoPerturbe?: boolean;
   /** Substitui o jsonb inteiro, sem validar (uso interno: agentes, perfil, leads). */
   camposCustom?: Record<string, unknown>;
   /**
@@ -68,6 +75,29 @@ export interface UpdateDealInput {
   contactId?: string;
   /** PATCH de campos personalizados do negócio, validado e mesclado (Q2.3). */
   camposCustom?: Record<string, unknown>;
+  /** Motivo de perda (Q2.1): vale ao marcar/manter como perdido; `null` limpa. */
+  motivoPerdaId?: string | null;
+  motivoPerdaObs?: string | null;
+  /** identityId do responsável (Q2.1); `null` deixa sem dono. Precisa ser membro do tenant. */
+  ownerId?: string | null;
+}
+export interface UpdateDealOpts {
+  /**
+   * Exige motivo ao marcar como perdido quando o tenant tem motivos ativos.
+   * Só a rota HTTP do usuário liga isto: perda registrada pelo sistema
+   * (proposta recusada, automação) não tem quem escolha o motivo.
+   */
+  exigirMotivoPerda?: boolean;
+}
+
+/** Tags do contato: sem espaço sobrando, sem vazia, sem repetida (case-insensitive). */
+export function limparTags(tags: string[]): string[] {
+  const out: string[] = [];
+  for (const t of tags) {
+    const tag = t.replace(/\s+/g, ' ').trim().slice(0, 40);
+    if (tag && !out.some((x) => x.toLowerCase() === tag.toLowerCase())) out.push(tag);
+  }
+  return out;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -152,6 +182,9 @@ export class CrmService {
           ganho: r?.valorGanho ?? 0,
           conversao: r?.conversao ?? 0,
           conversaoBase: r?.conversaoBase ?? null,
+          // Base da conversão honesta na tela: com poucos fechados, "Poucos dados".
+          ganhos: r?.ganhos ?? 0,
+          perdidos: r?.perdidos ?? 0,
         },
         funilNome: funil?.nome ?? null,
         funil: r?.etapas ?? [],
@@ -253,6 +286,8 @@ export class CrmService {
         tag: c.tag,
         tags: c.tags,
         valor: num(c.valorEstimado),
+        optedOutAt: c.optedOutAt,
+        ownerId: c.ownerId,
         camposCustom: c.camposCustom,
         ultimoContatoAt: c.ultimoContatoAt,
         createdAt: c.createdAt,
@@ -278,7 +313,7 @@ export class CrmService {
 
   private async atualizarContato(tenantId: string, id: string, input: UpdateContactInput) {
     return this.prisma.withTenant(tenantId, async (tx) => {
-      const atual = await tx.contact.findUnique({ where: { id }, select: { id: true, nome: true, tags: true, camposCustom: true } });
+      const atual = await tx.contact.findUnique({ where: { id }, select: { id: true, nome: true, tags: true, camposCustom: true, optedOutAt: true } });
       if (!atual) throw new NotFoundException('contato inexistente');
       if (input.companyId) {
         const empresa = await tx.company.findUnique({ where: { id: input.companyId }, select: { id: true } });
@@ -295,16 +330,22 @@ export class CrmService {
           telefone: input.telefone === undefined ? undefined : input.telefone || null,
           empresa: input.empresa === undefined ? undefined : input.empresa || null,
           tag: input.tag ?? undefined,
-          tags: input.tags ?? undefined,
+          tags: input.tags === undefined ? undefined : limparTags(input.tags),
           valorEstimado: input.valorEstimado ?? undefined,
           companyId: input.companyId === undefined ? undefined : input.companyId || null,
+          // não regrava a data de quem já estava marcado (vale como prova de quando pediu)
+          optedOutAt: input.naoPerturbe === undefined ? undefined : input.naoPerturbe ? (atual.optedOutAt ?? new Date()) : null,
           camposCustom: ((camposValidados ?? input.camposCustom) as Prisma.InputJsonValue) ?? undefined,
           updatedAt: new Date(),
         },
       });
       await tx.activity.create({ data: { tenantId, actor: 'Você', acao: `atualizou o contato "${input.nome ?? atual.nome}"`, tone: 'neutral', contactId: id } });
       const antes = new Set((atual.tags ?? []).map((t) => t.toLowerCase()));
-      const tagsAdicionadas = (input.tags ?? []).filter((t) => !antes.has(t.toLowerCase()));
+      const tagsAdicionadas = limparTags(input.tags ?? []).filter((t) => !antes.has(t.toLowerCase()));
+      // tag nova digitada no perfil entra no catálogo (Configurações › Tags)
+      for (const tag of tagsAdicionadas) {
+        await tx.$executeRaw`INSERT INTO crm_tags (tenant_id, name) VALUES (${tenantId}::uuid, ${tag}) ON CONFLICT (tenant_id, lower(name)) DO NOTHING`;
+      }
       return { ok: true, tagsAdicionadas };
     });
   }
@@ -385,7 +426,7 @@ export class CrmService {
     return this.prisma.withTenant(tenantId, async (tx) => {
       const d = await tx.deal.findUnique({
         where: { id },
-        include: { stage: { select: { id: true, nome: true, cor: true } }, contact: { select: { id: true, nome: true, email: true, telefone: true } } },
+        include: { stage: { select: { id: true, nome: true, cor: true } }, contact: { select: { id: true, nome: true, email: true, telefone: true } }, motivoPerda: { select: { id: true, nome: true } } },
       });
       if (!d) throw new NotFoundException('negócio inexistente');
       const [tarefas, notas] = await Promise.all([
@@ -396,24 +437,30 @@ export class CrmService {
         id: d.id, titulo: d.titulo, valor: num(d.valor), origem: d.origem, status: d.status,
         stage: d.stage, contato: d.contact, createdAt: d.createdAt, updatedAt: d.updatedAt,
         camposCustom: camposDe(d.camposCustom),
+        ownerId: d.ownerId, motivoPerda: d.motivoPerda, motivoPerdaObs: d.motivoPerdaObs,
         tarefas: tarefas.map((t) => ({ id: t.id, titulo: t.titulo, status: t.status, prioridade: t.prioridade, dueAt: t.dueAt })),
         notas: notas.map((n) => ({ id: n.id, corpo: n.corpo, autor: n.authorNome, createdAt: n.createdAt })),
       };
     });
   }
 
-  async updateDeal(tenantId: string, id: string, input: UpdateDealInput) {
-    const r = await this.atualizarDeal(tenantId, id, input);
+  async updateDeal(tenantId: string, id: string, input: UpdateDealInput, opts: UpdateDealOpts = {}) {
+    const r = await this.atualizarDeal(tenantId, id, input, opts);
     this.eventos.publicar(tenantId, 'deal.updated', { id });
     // Mudança de status (ganho/perdido) é gatilho de pós-venda/reativação.
     if (r.statusMudou) this.eventos.publicar(tenantId, 'deal.status_changed', { id, status: r.status, contactId: r.contactId });
     return { ok: r.ok };
   }
 
-  private async atualizarDeal(tenantId: string, id: string, input: UpdateDealInput) {
+  private async atualizarDeal(tenantId: string, id: string, input: UpdateDealInput, opts: UpdateDealOpts = {}) {
     return this.prisma.withTenant(tenantId, async (tx) => {
       const atual = await tx.deal.findUnique({ where: { id }, select: { id: true, titulo: true, status: true, contactId: true, camposCustom: true } });
       if (!atual) throw new NotFoundException('negócio inexistente');
+      const perda = await this.dadosDePerda(tx, tenantId, atual.status, input, opts);
+      if (input.ownerId) {
+        const m = await tx.membership.findUnique({ where: { identityId_tenantId: { identityId: input.ownerId, tenantId } }, select: { id: true } });
+        if (!m) throw new BadRequestException('responsável não é membro desta operação');
+      }
       const camposCustom = input.camposCustom
         ? await validarCamposNaTransacao(tx, 'deal', input.camposCustom, { atuais: camposDe(atual.camposCustom), exigirObrigatorios: true })
         : undefined;
@@ -435,14 +482,49 @@ export class CrmService {
           stageId: input.stageId ?? undefined,
           contactId: input.contactId === undefined ? undefined : input.contactId || null,
           camposCustom: (camposCustom as Prisma.InputJsonValue | undefined) ?? undefined,
+          ...perda.data,
+          ownerId: input.ownerId === undefined ? undefined : input.ownerId,
           updatedAt: new Date(),
         },
       });
-      await tx.activity.create({ data: { tenantId, actor: 'Você', acao: `atualizou o negócio "${input.titulo ?? atual.titulo}"`, tone: 'neutral', dealId: id } });
+      const titulo = input.titulo ?? atual.titulo;
+      await tx.activity.create({
+        data: perda.motivoNome !== undefined
+          ? { tenantId, actor: 'Você', acao: `marcou "${titulo}" como perdido${perda.motivoNome ? ` (${perda.motivoNome})` : ''}`, tone: 'warn', dealId: id }
+          : { tenantId, actor: 'Você', acao: `atualizou o negócio "${titulo}"`, tone: 'neutral', dealId: id },
+      });
       const statusMudou = input.status !== undefined && input.status !== atual.status;
       const contactId = input.contactId === undefined ? atual.contactId : input.contactId || null;
       return { ok: true, statusMudou, status: input.status ?? atual.status, contactId };
     });
+  }
+
+  /**
+   * Regra do motivo de perda (Q2.1) no PATCH do negócio:
+   *  - virar `perdido`: motivo validado (obrigatório se `exigirMotivoPerda` e há motivos ativos);
+   *  - sair de `perdido`: motivo e observação são limpos;
+   *  - continuar `perdido`: dá para trocar o motivo/observação;
+   *  - motivo em negócio que não está/fica perdido: 400 (não grava dado sem sentido).
+   * `motivoNome` definido = o negócio acabou de ser marcado como perdido (atividade).
+   */
+  private async dadosDePerda(tx: Prisma.TransactionClient, tenantId: string, statusAtual: string, input: UpdateDealInput, opts: UpdateDealOpts) {
+    const statusFinal = input.status ?? statusAtual;
+    const obs = limparObsPerda(input.motivoPerdaObs);
+    const mexeuNoMotivo = input.motivoPerdaId !== undefined || obs !== undefined;
+    if (statusFinal !== 'perdido') {
+      if (mexeuNoMotivo && (input.motivoPerdaId || obs)) throw new BadRequestException('motivo de perda só vale para negócio perdido');
+      return statusAtual === 'perdido' ? { data: { motivoPerdaId: null, motivoPerdaObs: null } } : { data: {} };
+    }
+    const virouPerdido = statusAtual !== 'perdido';
+    if (!virouPerdido && !mexeuNoMotivo) return { data: {} };
+    // trocar o motivo de um já perdido segue a mesma regra de obrigatoriedade
+    const motivoPerdaId = virouPerdido || input.motivoPerdaId !== undefined
+      ? await resolverMotivoPerda(tx, tenantId, input.motivoPerdaId, !!opts.exigirMotivoPerda)
+      : undefined;
+    const motivoNome = virouPerdido
+      ? (motivoPerdaId ? (await tx.lostReason.findUnique({ where: { id: motivoPerdaId }, select: { nome: true } }))?.nome ?? null : null)
+      : undefined;
+    return { data: { ...(motivoPerdaId !== undefined ? { motivoPerdaId } : {}), ...(obs !== undefined ? { motivoPerdaObs: obs } : {}) }, motivoNome };
   }
 
   async deleteDeal(tenantId: string, id: string) {
@@ -472,7 +554,7 @@ export class CrmService {
           empresa: input.empresa ?? null,
           tag: input.tag ?? 'Lead',
           valorEstimado: input.valorEstimado ?? 0,
-          // BUG-027: a origem informada no cadastro vai para a coluna — é dela que
+          // BUG-029: a origem informada no cadastro vai para a coluna — é dela que
           // o outbox monta o `contact.created` que o gatilho filtra.
           origem: input.origem?.trim() || null,
           ultimoContatoAt: new Date(),
@@ -489,27 +571,62 @@ export class CrmService {
   }
 
   /**
-   * Quadro de UM funil (o pedido ou o principal) com os negócios ABERTOS.
-   * Ganhos/perdidos saem do quadro (antes apareciam como em andamento) e
-   * etapas de outros funis não se misturam. `pipelines` alimenta o seletor.
+   * Quadro de UM funil (o pedido ou o principal). Padrão: só negócios ABERTOS
+   * (ganhos/perdidos saem do quadro; etapas de outros funis não se misturam).
+   * Q2.1: aceita o filtro do pipeline (busca, dono, origem, tag do contato,
+   * faixa de valor, status, criado em) e devolve `totais` sobre o filtrado,
+   * `opcoes` (origens/tags do funil para os seletores) e `truncado` acima de
+   * LIMITE_QUADRO. `pipelines` alimenta o seletor de funil.
    */
-  async pipeline(tenantId: string, pipelineId?: string) {
+  async pipeline(tenantId: string, pipelineId?: string, filtro: FiltroNegocios = {}) {
     return this.prisma.withTenant(tenantId, async (tx) => {
-      const { funis, etapas, deals, negocios } = await this.baseFunil(tx);
-      const funil = escolherFunil(funis, negocios, pipelineId);
-      const abertosPorFunil = new Map<string, number>();
-      for (const n of negocios) if (n.status === ABERTO) abertosPorFunil.set(n.pipelineId, (abertosPorFunil.get(n.pipelineId) ?? 0) + 1);
-      return {
+      const [funis, etapas, abertos] = await Promise.all([
+        tx.pipeline.findMany({ orderBy: { createdAt: 'asc' }, select: { id: true, nome: true } }),
+        tx.stage.findMany({ orderBy: { ordem: 'asc' }, select: { id: true, pipelineId: true, nome: true, cor: true, ordem: true } }),
+        tx.deal.groupBy({ by: ['pipelineId'], where: { status: ABERTO }, _count: { _all: true } }),
+      ]);
+      const abertosPorFunil = new Map(abertos.map((a) => [a.pipelineId, a._count._all]));
+      // mesma regra de `escolherFunil` (o pedido; senão o com mais abertos; empate = mais antigo), sem carregar os negócios
+      const qtd = (id: string) => abertosPorFunil.get(id) ?? 0;
+      const funil = funis.find((f) => f.id === pipelineId) ?? (funis.length ? funis.reduce((m, f) => (qtd(f.id) > qtd(m.id) ? f : m), funis[0]) : null);
+      const base = {
         pipelineId: funil?.id ?? null,
         pipelines: funis.map((f) => ({ id: f.id, nome: f.nome, abertos: abertosPorFunil.get(f.id) ?? 0 })),
+      };
+      if (!funil) return { ...base, stages: [], totais: totaisDoFunil([]), opcoes: { origens: [], tags: [] }, truncado: false };
+
+      const [deals, origens, tagsContato] = await Promise.all([
+        tx.deal.findMany({
+          where: whereDosNegocios(funil.id, filtro),
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: LIMITE_QUADRO + 1,
+          select: {
+            id: true, titulo: true, valor: true, origem: true, status: true, stageId: true, ownerId: true, createdAt: true, contactId: true,
+            contact: { select: { nome: true, ultimoContatoAt: true } },
+            motivoPerda: { select: { nome: true } },
+          },
+        }),
+        tx.deal.findMany({ where: { pipelineId: funil.id, origem: { not: null } }, distinct: ['origem'], select: { origem: true }, orderBy: { origem: 'asc' }, take: 100 }),
+        tx.$queryRaw<{ tag: string }[]>`
+          SELECT DISTINCT t AS tag FROM deals d JOIN contacts c ON c.id = d.contact_id,
+            LATERAL unnest(array_append(c.tags, c.tag)) t
+          WHERE d.pipeline_id = ${funil.id}::uuid AND t IS NOT NULL AND btrim(t) <> ''
+          ORDER BY 1 LIMIT 200`,
+      ]);
+      const truncado = deals.length > LIMITE_QUADRO;
+      const linhas = deals.slice(0, LIMITE_QUADRO).map((d) => ({
+        id: d.id, titulo: d.titulo, contato: d.contact?.nome ?? '-', contactId: d.contactId, valor: num(d.valor), origem: d.origem ?? '',
+        status: d.status, stageId: d.stageId, ownerId: d.ownerId, createdAt: d.createdAt,
+        ultimoContatoAt: d.contact?.ultimoContatoAt ?? null, motivoPerda: d.motivoPerda?.nome ?? null,
+      }));
+      return {
+        ...base,
         stages: etapas
-          .filter((e) => e.pipelineId === funil?.id)
-          .map((s) => ({
-            id: s.id, nome: s.nome, cor: s.cor,
-            deals: deals
-              .filter((d) => d.stageId === s.id && d.status === ABERTO)
-              .map((d) => ({ id: d.id, titulo: d.titulo, contato: d.contact?.nome ?? '-', valor: num(d.valor), origem: d.origem ?? '' })),
-          })),
+          .filter((e) => e.pipelineId === funil.id)
+          .map((s) => ({ id: s.id, nome: s.nome, cor: s.cor, deals: linhas.filter((d) => d.stageId === s.id) })),
+        totais: totaisDoFunil(linhas),
+        opcoes: { origens: origens.map((o) => o.origem!).filter(Boolean), tags: tagsContato.map((t) => t.tag) },
+        truncado,
       };
     });
   }

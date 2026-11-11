@@ -25,12 +25,12 @@ export const metadata: Metadata = {
 };
 
 /**
- * Landing page pública do KHUB Revenue OS — primeira tela em "/".
+ * Landing page pública do KHUB, primeira tela em "/", com a identidade visual da Kroma (ADR-0043).
  *
  * Arquitetura de leitura (ver `docs/lp-qa/`):
  *   hero → ruptura editorial → fluxo sticky (6 estágios) → produto em
  *   tela cheia → conversas → PIPELINE (única seção dark) → automações →
- *   NYRO → campanhas → analytics → integrações → CRM vs Revenue OS →
+ *   NYRO → campanhas → analytics → integrações → CRM vs KHUB →
  *   fundador → sequência tipográfica final → CTA → rodapé.
  *
  * A Revenue Spine (`components/marketing/ui/RevenueSpine.tsx`) é o fio

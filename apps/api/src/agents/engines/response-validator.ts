@@ -20,6 +20,8 @@ export interface PoliticaNaturalidade {
   evitarRepeticao: boolean;
   /** Últimas mensagens do agente nesta conversa (mais recente por último). */
   anteriores: readonly string[];
+  /** Última mensagem do contato: se ELE cumprimentou, o agente pode cumprimentar de volta. */
+  ultimaDoContato?: string;
 }
 
 export interface ResultadoValidacao {
@@ -39,6 +41,20 @@ export function similaridade(a: string, b: string): number {
 }
 
 const RE_EMOJI = /\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*/gu;
+const RE_CUMPRIMENTO = /^(oi+e*|ola|opa|bom dia|boa tarde|boa noite|tudo (bem|bom|certo|sim|otimo|joia)|como vai|e (ai|com voce))\b/;
+
+const RE_ENCHIMENTO = /^(com certeza|fico a (sua )?disposicao|estou a (sua )?disposicao|qualquer duvida(,)? (estou|fico) a disposicao|estou aqui para (te |lhe )?ajudar|otima pergunta|entendo perfeitamente|sera um prazer (te |lhe )?ajudar)$/;
+
+/** Frase que é SÓ enchimento de telemarketing ("Com certeza!", "Fico à disposição!"). */
+export function eEnchimento(frase: string): boolean {
+  return RE_ENCHIMENTO.test(norm(frase.replace(RE_EMOJI, '')));
+}
+
+/** Frase que é SÓ cumprimento ("Oi Mariana!", "Tudo sim, e com você?"): curta, sem número, começa saudando. */
+export function eCumprimento(frase: string): boolean {
+  const n = norm(frase.replace(RE_EMOJI, ''));
+  return n.length > 0 && n.length <= 45 && !/\d/.test(n) && RE_CUMPRIMENTO.test(n);
+}
 
 export function validarNaturalidade(texto: string, p: PoliticaNaturalidade): ResultadoValidacao {
   const avisos: string[] = [];
@@ -46,11 +62,31 @@ export function validarNaturalidade(texto: string, p: PoliticaNaturalidade): Res
   const perguntasAnteriores = p.anteriores.flatMap((m) => segmentarFrases(m)).filter((f) => f.trim().endsWith('?'));
   const nomeAgente = norm(p.agenteNome);
 
-  const saida = paragrafos
-    .map((par) => {
-      const frases = segmentarFrases(par);
+  // Meio da conversa: "Oi Mariana! Tudo bem?" de novo é o tique mais robótico
+  // que existe. Só cai o cumprimento que ABRE a resposta, e só se o contato
+  // não cumprimentou nesta mensagem.
+  const contatoCumprimentou = !!p.ultimaDoContato && segmentarFrases(p.ultimaDoContato).some((f) => RE_CUMPRIMENTO.test(norm(f)));
+  // Sem a mensagem do contato não dá para saber se ele cumprimentou: não mexe.
+  let abrindo = p.jaFalouAntes && p.ultimaDoContato !== undefined && !contatoCumprimentou;
+
+  // Linha a linha: uma lista ("• Manicure R$ 38,50\n• Pedicure…") não pode
+  // virar uma frase corrida só porque o validador remontou com espaço.
+  const limparLinha = (linha: string): string => {
+      const frases = segmentarFrases(linha).filter((f) => {
+        if (!abrindo) return true;
+        if (eCumprimento(f)) {
+          avisos.push('cumprimento repetido removido');
+          return false;
+        }
+        abrindo = false;
+        return true;
+      });
       const mantidas = frases.filter((f) => {
         const n = norm(f);
+        if (eEnchimento(f)) {
+          avisos.push('frase de enchimento removida');
+          return false;
+        }
         if (p.jaFalouAntes && !p.reapresentar && nomeAgente && (new RegExp(`\\b(sou (a|o)|aqui (e|eh) (a|o)|meu nome (e|eh)) ${nomeAgente}\\b`).test(n))) {
           avisos.push('reapresentação removida');
           return false;
@@ -62,7 +98,9 @@ export function validarNaturalidade(texto: string, p: PoliticaNaturalidade): Res
         return true;
       });
       return mantidas.join(' ');
-    })
+  };
+  const saida = paragrafos
+    .map((par) => par.split('\n').map(limparLinha).filter((l) => l.trim()).join('\n'))
     .filter((x) => x.trim());
 
   let resultado = saida.join('\n\n');
