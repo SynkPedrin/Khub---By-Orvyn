@@ -39,6 +39,10 @@ const schema = z.object({
   GOOGLE_OAUTH_REDIRECT_URI: z.string().optional(),
   TIKTOK_APP_ID: z.string().optional(),
   TIKTOK_APP_SECRET: z.string().optional(),
+  // Conversas omnichannel (db/063): fora de produção, resposta por Instagram,
+  // Messenger e YouTube só sai com isto em 'true' (mesma trava de dev do
+  // WhatsApp: nada vai a pessoa real sem decisão explícita).
+  CANAIS_ENVIO_DEV: z.enum(['true', 'false']).default('false'),
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   STRIPE_PUBLISHABLE_KEY: z.string().optional(),

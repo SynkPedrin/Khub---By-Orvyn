@@ -4,6 +4,23 @@ import { TenantsService } from '../tenants/tenants.service';
 import { CrmService } from '../crm/crm.service';
 import { TokenService } from '../auth/token.service';
 
+/** Papel que o membro da agência recebe DENTRO da subconta (owner/admin da agência = admin no cliente). */
+export function papelNoCliente(roleAgencia: string): 'admin' | 'member' | 'viewer' {
+  return roleAgencia === 'owner' || roleAgencia === 'admin' ? 'admin' : roleAgencia === 'viewer' ? 'viewer' : 'member';
+}
+
+/** Item do seletor de subcontas da sidebar (leve: sem métricas de CRM). */
+export interface SubcontaSeletor {
+  id: string;
+  tenantId: string;
+  nome: string;
+  status: string;
+  isDemo: boolean;
+  endereco: string | null;
+  fixado: boolean;
+  ultimoAcessoEm: Date | null;
+}
+
 export interface CriarClienteInput {
   nome: string;
   nicho?: string;
@@ -88,8 +105,66 @@ export class AgencyService {
       });
     }
 
+    // O que mudou na agência vale DENTRO das subcontas: tira o vínculo das
+    // que saíram da visibilidade e ajusta o papel nas que ficaram. Antes, o
+    // membro restringido continuava entrando nas subcontas que já tinha
+    // aberto, e o admin rebaixado continuava admin nelas.
+    const sync = await this.sincronizarAcessos(alvo.id, identityId);
+
     await this.auditar(membro.agencyId, identityId, 'agency.member.update', 'agency_member', alvo.id);
-    return { ok: true };
+    return { ok: true, ...sync };
+  }
+
+  /**
+   * Alinha as memberships NÃO padrão do membro nos tenants da agência com o
+   * acesso atual dele (papel + subcontas visíveis). O tenant próprio da
+   * pessoa (`isDefault`) nunca é tocado.
+   */
+  private async sincronizarAcessos(agencyMemberId: string, atorId: string): Promise<{ subcontasRevogadas: number; papeisAjustados: number }> {
+    const alvo = await this.prisma.agencyMember.findUniqueOrThrow({ where: { id: agencyMemberId }, include: { agency: true } });
+    const visiveis = new Set((await this.clientesVisiveis(alvo)).map((c) => c.tenantId));
+    const daAgencia = await this.prisma.agencyClientAccount.findMany({ where: { agencyId: alvo.agencyId }, select: { tenantId: true } });
+    const vinculos = await this.prisma.membership.findMany({
+      where: { identityId: alvo.identityId, tenantId: { in: daAgencia.map((c) => c.tenantId) }, isDefault: false },
+      select: { tenantId: true, role: true },
+    });
+    const papel = papelNoCliente(alvo.role);
+    const revogar = vinculos.filter((v) => !visiveis.has(v.tenantId)).map((v) => v.tenantId);
+    const ajustar = vinculos.filter((v) => visiveis.has(v.tenantId) && v.role !== papel).map((v) => v.tenantId);
+
+    if (revogar.length) await this.revogarTenants(alvo.identityId, revogar, atorId);
+    if (ajustar.length) {
+      await this.prisma.membership.updateMany({ where: { identityId: alvo.identityId, tenantId: { in: ajustar }, isDefault: false }, data: { role: papel } });
+      for (const t of ajustar) {
+        await this.prisma.withTenant(t, (tx) => tx.user.updateMany({ where: { identityId: alvo.identityId }, data: { role: papel } }));
+        await this.auditar(t, atorId, 'agency.member.role_sync', 'agency_member', alvo.id);
+      }
+    }
+    return { subcontasRevogadas: revogar.length, papeisAjustados: ajustar.length };
+  }
+
+  /**
+   * Tira o acesso da identidade a estes tenants (vínculo não padrão, sessões
+   * e perfil de usuário). O guard confere a membership a cada requisição:
+   * o acesso cai na hora.
+   */
+  private async revogarTenants(alvoIdentityId: string, tenantIds: string[], atorId: string): Promise<{ tenantsRemovidos: string[]; sessoesRevogadas: number }> {
+    const r = await this.prisma.$transaction(async (tx) => {
+      const vinculos = await tx.membership.findMany({ where: { identityId: alvoIdentityId, tenantId: { in: tenantIds }, isDefault: false }, select: { tenantId: true } });
+      const tenantsRemovidos = vinculos.map((v) => v.tenantId);
+      await tx.membership.deleteMany({ where: { identityId: alvoIdentityId, tenantId: { in: tenantsRemovidos }, isDefault: false } });
+      const sessoes = await tx.refreshToken.updateMany({ where: { identityId: alvoIdentityId, tenantId: { in: tenantsRemovidos }, revokedAt: null }, data: { revokedAt: new Date() } });
+      return { tenantsRemovidos, sessoesRevogadas: sessoes.count };
+    });
+    // Perfil do usuário em cada cliente (tabela com RLS: uma transação por tenant).
+    for (const t of r.tenantsRemovidos) {
+      await this.prisma.withTenant(t, async (tx) => {
+        await tx.user.deleteMany({ where: { identityId: alvoIdentityId } });
+        await tx.conversation.updateMany({ where: { assigneeId: alvoIdentityId }, data: { assigneeId: null } });
+      });
+      await this.auditar(t, atorId, 'agency.member.access_revoke', 'identity', alvoIdentityId);
+    }
+    return r;
   }
 
   /**
@@ -109,23 +184,9 @@ export class AgencyService {
     if (alvo.role === 'owner' && membro.role !== 'owner') throw new ForbiddenException('apenas o dono remove outro dono');
 
     const clientes = await this.prisma.agencyClientAccount.findMany({ where: { agencyId: membro.agencyId }, select: { tenantId: true } });
-    const tenantIds = clientes.map((c) => c.tenantId);
-    const r = await this.prisma.$transaction(async (tx) => {
-      const vinculos = await tx.membership.findMany({ where: { identityId: alvo.identityId, tenantId: { in: tenantIds }, isDefault: false }, select: { tenantId: true } });
-      const tenantsRemovidos = vinculos.map((v) => v.tenantId);
-      await tx.membership.deleteMany({ where: { identityId: alvo.identityId, tenantId: { in: tenantsRemovidos } } });
-      const sessoes = await tx.refreshToken.updateMany({ where: { identityId: alvo.identityId, tenantId: { in: tenantsRemovidos }, revokedAt: null }, data: { revokedAt: new Date() } });
-      await tx.agencyMember.delete({ where: { id: alvo.id } }); // cascata: agency_member_client_access
-      return { tenantsRemovidos, sessoesRevogadas: sessoes.count };
-    });
-    // Perfil do usuário em cada cliente (tabela com RLS: uma transação por tenant).
-    for (const t of r.tenantsRemovidos) {
-      await this.prisma.withTenant(t, async (tx) => {
-        await tx.user.deleteMany({ where: { identityId: alvo.identityId } });
-        await tx.conversation.updateMany({ where: { assigneeId: alvo.identityId }, data: { assigneeId: null } });
-      });
-      await this.auditar(t, identityId, 'agency.member.remove', 'agency_member', alvo.id);
-    }
+    const r = await this.revogarTenants(alvo.identityId, clientes.map((c) => c.tenantId), identityId);
+    await this.prisma.agencyMember.delete({ where: { id: alvo.id } }); // cascata: client_access e client_prefs
+    for (const t of r.tenantsRemovidos) await this.auditar(t, identityId, 'agency.member.remove', 'agency_member', alvo.id);
     return { ok: true, clientesRemovidos: r.tenantsRemovidos.length, sessoesRevogadas: r.sessoesRevogadas };
   }
 
@@ -165,6 +226,48 @@ export class AgencyService {
         };
       }),
     );
+  }
+
+  /**
+   * Seletor de subcontas da sidebar (estilo GHL): só o necessário para o
+   * menu — nome, endereço, fixado, último acesso. Sem `crm.overview` por
+   * cliente (era isso que deixava cada carregamento de página lento).
+   */
+  async seletor(identityId: string): Promise<SubcontaSeletor[]> {
+    const membro = await this.membroDe(identityId);
+    if (!membro) throw new ForbiddenException('identidade não pertence a nenhuma agência');
+    const clientes = await this.clientesVisiveis(membro);
+    const [tenants, prefs] = await Promise.all([
+      this.prisma.tenant.findMany({ where: { id: { in: clientes.map((c) => c.tenantId) } }, select: { id: true, endereco: true } }),
+      // Sem db/064 o seletor ainda lista tudo (só sem fixadas/recentes).
+      this.prisma.agencyMemberClientPref.findMany({ where: { agencyMemberId: membro.id } }).catch(() => []),
+    ]);
+    const endereco = new Map(tenants.map((t) => [t.id, t.endereco?.trim() || null]));
+    const pref = new Map(prefs.map((p) => [p.clientAccountId, p]));
+    return clientes.map((c) => ({
+      id: c.id,
+      tenantId: c.tenantId,
+      nome: c.displayName,
+      status: c.status,
+      isDemo: c.isDemo,
+      endereco: endereco.get(c.tenantId) ?? null,
+      fixado: pref.get(c.id)?.fixado ?? false,
+      ultimoAcessoEm: pref.get(c.id)?.ultimoAcessoEm ?? null,
+    }));
+  }
+
+  /** Fixa/desfixa uma subconta no seletor do PRÓPRIO membro (só subcontas que ele vê). */
+  async fixar(identityId: string, clientAccountId: string, fixado: boolean) {
+    const membro = await this.membroDe(identityId);
+    if (!membro) throw new ForbiddenException('identidade não pertence a nenhuma agência');
+    const visivel = (await this.clientesVisiveis(membro)).some((c) => c.id === clientAccountId);
+    if (!visivel) throw new NotFoundException('subconta não encontrada ou sem acesso');
+    await this.prisma.agencyMemberClientPref.upsert({
+      where: { agencyMemberId_clientAccountId: { agencyMemberId: membro.id, clientAccountId } },
+      create: { agencyMemberId: membro.id, clientAccountId, fixado },
+      update: { fixado, updatedAt: new Date() },
+    });
+    return { ok: true, fixado };
   }
 
   async detalheCliente(identityId: string, clientAccountId: string) {
@@ -210,13 +313,19 @@ export class AgencyService {
     if (cliente.status !== 'active') throw new ForbiddenException('cliente não está ativo');
 
     const identity = await this.prisma.identity.findUniqueOrThrow({ where: { id: identityId } });
-    const papel = membro.role === 'owner' || membro.role === 'admin' ? 'admin' : membro.role === 'viewer' ? 'viewer' : 'member';
+    const papel = papelNoCliente(membro.role);
 
-    await this.prisma.membership.upsert({
+    const vinculo = await this.prisma.membership.upsert({
       where: { identityId_tenantId: { identityId, tenantId: cliente.tenantId } },
       create: { identityId, tenantId: cliente.tenantId, role: papel, isDefault: false },
       update: {},
     });
+    // Vínculo aberto pela agência segue o papel ATUAL na agência (o tenant
+    // próprio da pessoa — isDefault — nunca é rebaixado por aqui).
+    const sincronizar = !vinculo.isDefault && vinculo.role !== papel;
+    if (sincronizar) {
+      await this.prisma.membership.update({ where: { identityId_tenantId: { identityId, tenantId: cliente.tenantId } }, data: { role: papel } });
+    }
 
     // "pedro.gabriel@..." → "Pedro Gabriel" — sem isto o primeiro acesso a
     // um cliente novo criava um User com nome cru tipo "pedro.gabriel",
@@ -232,7 +341,20 @@ export class AgencyService {
       user = await this.prisma.withTenant(cliente.tenantId, (tx) =>
         tx.user.create({ data: { tenantId: cliente.tenantId, identityId, email: identity.email, nome, role: papel }, select: { id: true, role: true, nome: true } }),
       );
+    } else if (!vinculo.isDefault && user.role !== papel) {
+      const id = user.id;
+      user = await this.prisma.withTenant(cliente.tenantId, (tx) => tx.user.update({ where: { id }, data: { role: papel }, select: { id: true, role: true, nome: true } }));
     }
+
+    // "Recentes" do seletor de subcontas. Preferência de interface: se falhar
+    // (ex.: banco ainda sem db/064), a troca de subconta segue normalmente.
+    await this.prisma.agencyMemberClientPref
+      .upsert({
+        where: { agencyMemberId_clientAccountId: { agencyMemberId: membro.id, clientAccountId: cliente.id } },
+        create: { agencyMemberId: membro.id, clientAccountId: cliente.id, ultimoAcessoEm: new Date() },
+        update: { ultimoAcessoEm: new Date(), updatedAt: new Date() },
+      })
+      .catch(() => undefined);
 
     const access = this.tokens.signAccess({ sub: identityId, tenant_id: cliente.tenantId, role: user.role, email: identity.email });
     const refresh = await this.tokens.issueRefresh(identityId, cliente.tenantId, userAgent);

@@ -194,6 +194,7 @@ export function contextoDinamico(i: {
         (a.proximoPasso ? `; próximo passo sugerido=${esc(a.proximoPasso)}` : ''),
     );
     if (a.pedeHumano) linhas.push('O contato pediu atendimento humano: avise em uma frase e use transferir_para_humano.');
+    else if (a.intencao === 'reclamacao') linhas.push('O contato está reclamando: reconheça em uma frase, sem se justificar nem prometer solução, diga que vai passar para a equipe e chame transferir_para_humano NESTA resposta.');
   }
   if (i.instrucoesRegras.length) linhas.push(`REGRAS DA EMPRESA ATIVADAS NESTA MENSAGEM:\n${i.instrucoesRegras.map((r) => `- ${esc(r)}`).join('\n')}`);
   if (i.conhecimento?.consultado) {

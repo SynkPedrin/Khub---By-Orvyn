@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StevoProvider, type MessagingProvider } from './stevo.provider';
 import { EvolutionProvider } from './evolution.provider';
@@ -10,6 +10,7 @@ import { acharContatoPorTelefone } from '../telefone';
 import { AtendimentoService, type EstadoAtendimento } from './atendimento.service';
 import { StevoApiProvider } from './stevo-api.provider';
 import type { MidiaSaida } from './provider.contract';
+import { CanaisService } from './canais/canais.service';
 
 /**
  * Autoria do envio. `humano` com `identityId` = alguém digitou no Inbox (e por
@@ -51,6 +52,8 @@ export class MessagesService {
     private readonly eventos: DomainEventsService,
     private readonly atendimento: AtendimentoService,
     private readonly stevoApi: StevoApiProvider,
+    // Opcional só para os testes antigos que montam o serviço à mão; no Nest sempre existe.
+    @Optional() private readonly canais?: CanaisService,
   ) {}
 
   /** Implementação por nome (o nome é decidido POR TENANT dentro da transação). */
@@ -116,6 +119,12 @@ export class MessagesService {
 
   /** Reserve before sending. An uncertain provider acceptance is NEVER retried. */
   async send(tenantId: string, conversationId: string, texto: string, idempotencyKey: string = randomUUID(), runStartedAt?: string, autor: AutorEnvio = { tipo: 'humano' }, midia?: MidiaEnvio) {
+    // Conversa de Instagram/Messenger/Facebook/YouTube com id na rede (db/063):
+    // a resposta sai pela rede dela, não pelo WhatsApp do tenant.
+    const canalConv = this.canais ? await this.prisma.withTenant(tenantId, (tx) => tx.conversation.findUnique({ where: { id: conversationId }, select: { canal: true, externoId: true } })) : null;
+    if (this.canais && canalConv && canalConv.canal !== 'WhatsApp' && this.canais.atende(canalConv)) {
+      return this.canais.enviar(tenantId, conversationId, texto, idempotencyKey, autor, !!midia);
+    }
     let assumiu: EstadoAtendimento | null = null;
     const ctx = await this.prisma.withTenant(tenantId, async tx => {
       // $executeRaw: pg_advisory_xact_lock devolve `void`, que o Prisma não desserializa em $queryRaw (P2010).
@@ -233,7 +242,8 @@ export class MessagesService {
         const inicial = await this.atendimento.estadoInicial(tx, 'WhatsApp');
         conv = await tx.conversation.create({ data: { tenantId: input.tenantId, contactId: contact.id, nome: contact.nome, canal: 'WhatsApp', ultimaPrevia: input.text.slice(0, 140), naoLidas: 1, ultimaHora: hora, ...inicial } });
       } else {
-        conv = await tx.conversation.update({ where: { id: conv.id }, data: { ultimaPrevia: input.text.slice(0, 140), naoLidas: { increment: 1 }, ultimaHora: hora, updatedAt: new Date() } });
+        // Mensagem nova reabre conversa resolvida ("Marcar como", db/063).
+        conv = await tx.conversation.update({ where: { id: conv.id }, data: { ultimaPrevia: input.text.slice(0, 140), naoLidas: { increment: 1 }, ultimaHora: hora, status: 'aberta', updatedAt: new Date() } });
       }
       const msg = await tx.message.create({ data: { tenantId: input.tenantId, conversationId: conv.id, autorTipo: 'contato', corpo: input.text, hora }, select: { id: true } });
       return {

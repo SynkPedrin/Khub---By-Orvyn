@@ -63,7 +63,9 @@ function erroZod(e: ZodError): BadRequestException {
   return new BadRequestException({ message: problemas[0] ?? 'dados inválidos', code: 'formulario_invalido', problemas });
 }
 
+/** Referência cross-tenant/inexistente barrada pelo trigger `tenant_reference` (23503 → Prisma P2003). */
 function ehErroReferencia(e: unknown): boolean {
+  if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') return true;
   return e instanceof Error && /related resource not found|23503/.test(e.message);
 }
 

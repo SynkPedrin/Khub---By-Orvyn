@@ -1,8 +1,10 @@
-import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Headers, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Headers, HttpCode, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import { ArrayMaxSize, IsArray, IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 import { CurrentUser, TenantId, type AuthUser } from '../../auth/decorators';
 import { SkipAudit } from '../../common/audit.interceptor';
 import { InboxService } from './inbox.service';
+import { ConversasService } from './conversas.service';
+import { SugestoesService } from './sugestoes.service';
 
 class MidiaDto {
   @IsIn(['imagem', 'documento', 'audio']) tipo!: 'imagem' | 'documento' | 'audio';
@@ -19,6 +21,9 @@ class NotaDto {
 class IniciarConversaDto {
   @IsUUID() contactId!: string;
   @IsIn(['WhatsApp']) canal!: 'WhatsApp';
+}
+class MarcarDto {
+  @IsIn(['resolvida', 'aberta', 'nao_lida']) acao!: 'resolvida' | 'aberta' | 'nao_lida';
 }
 class RespostaDto {
   @IsString() @MinLength(1) @MaxLength(33) atalho!: string;
@@ -40,7 +45,33 @@ const CHAVE = /^[a-zA-Z0-9_-]{16,128}$/;
  */
 @Controller('crm')
 export class InboxController {
-  constructor(private readonly inbox: InboxService) {}
+  constructor(
+    private readonly inbox: InboxService,
+    private readonly conversas: ConversasService,
+    private readonly sugestoes: SugestoesService,
+  ) {}
+
+  /** Contagens leves da coluna Canais/Status/Etiquetas (+ redes conectadas). */
+  @Get('conversations/contagens')
+  contagens(@TenantId() tenantId: string) {
+    return this.conversas.contagens(tenantId);
+  }
+
+  /** "Marcar como": resolvida, aberta ou não lida. O serviço audita (`conversa.marcada`). */
+  @SkipAudit()
+  @Patch('conversations/:id/status')
+  marcar(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: MarcarDto) {
+    if (user.role === 'viewer') throw new ForbiddenException('perfil somente leitura');
+    return this.conversas.marcar(user.tenantId, id, dto.acao, user.identityId);
+  }
+
+  /** Sugestões da IA: rascunhos para o atendente revisar (nada é enviado nem gravado). */
+  @SkipAudit()
+  @HttpCode(200)
+  @Post('conversations/:id/sugestoes')
+  sugerir(@TenantId() tenantId: string, @Param('id', ParseUUIDPipe) id: string) {
+    return this.sugestoes.sugerir(tenantId, id);
+  }
 
   /** Mensagens + anexos (URL assinada na hora) + notas internas, em ordem. */
   @Get('conversations/:id/thread')

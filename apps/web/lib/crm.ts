@@ -96,8 +96,13 @@ export interface Conversa {
   handoffMotivo: string | null;
   /** ISO da última atividade (a lista é leve: as mensagens vêm de `crm.mensagens`). */
   atualizadaEm?: string;
-  contato?: { id: string; telefone: string | null; email: string | null; fotoUrl?: string | null } | null;
+  contato?: { id: string; telefone: string | null; email: string | null; fotoUrl?: string | null; empresa?: string | null } | null;
   mensagens: { id: string; de: string; texto: string; hora: string | null; agentId?: string | null }[];
+  /** Conversas omnichannel (db/063): DM ou comentário, aberta/resolvida e etiquetas do contato. */
+  tipo?: 'dm' | 'comentario';
+  status?: string;
+  etiquetas?: string[];
+  contextoExterno?: Record<string, string | undefined> | null;
 }
 export interface MensagemConversa {
   id: string; de: string; texto: string; hora: string | null; status?: string; agentId?: string | null; criadaEm?: string;
@@ -112,7 +117,7 @@ export interface Atendente { identityId: string; nome: string; email: string; ro
 export interface SendResult {
   id: string;
   hora: string;
-  status: 'sent' | 'failed' | 'sem_telefone' | 'config_required' | 'unknown' | 'pending' | 'cancelled';
+  status: 'sent' | 'failed' | 'sem_telefone' | 'config_required' | 'unknown' | 'pending' | 'cancelled' | 'canal_desconectado' | 'bloqueado_dev' | 'midia_nao_suportada';
   erro: string | null;
   missing?: string[];
 }
@@ -171,7 +176,8 @@ export const crm = {
   deleteNote: (id: string) => req<{ ok: boolean }>(`notes/${id}`, { method: 'DELETE' }),
 
   // ---- Inbox ----
-  conversations: () => req<Conversa[]>('conversations'),
+  /** Lista filtrada no servidor (canal, status, etiqueta, tipo, busca) — ver lib/conversas-filtro. */
+  conversations: (qs = '') => req<Conversa[]>(`conversations${qs ? `?${qs}` : ''}`),
   atendentes: () => req<Atendente[]>('atendentes'),
   mudarAtendimento: (id: string, body: { acao: 'assumir' | 'devolver_ia' | 'atribuir'; agentId?: string; assigneeId?: string }) =>
     req<EstadoAtendimento>(`conversations/${id}/atendimento`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),

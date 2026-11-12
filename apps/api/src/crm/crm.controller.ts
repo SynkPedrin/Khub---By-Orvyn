@@ -4,6 +4,8 @@ import { CrmService } from './crm.service';
 import { MessagesService } from './messaging/messages.service';
 import { CurrentUser, TenantId, type AuthUser } from '../auth/decorators';
 import { AtendimentoService } from './messaging/atendimento.service';
+import { ConversasService } from './messaging/conversas.service';
+import { filtroConversasDaQuery } from './messaging/conversas-filtro';
 import { SkipAudit } from '../common/audit.interceptor';
 import { filtroDaQuery, parseOrdem } from './contatos-filtro';
 import { filtroNegociosDaQuery } from './pipeline-filtro';
@@ -75,7 +77,7 @@ class AtendimentoDto {
 /** CRM Core. O tenant vem SEMPRE do JWT (@TenantId) — nunca de header do browser. */
 @Controller('crm')
 export class CrmController {
-  constructor(private readonly crm: CrmService, private readonly messages: MessagesService, private readonly atendimento: AtendimentoService) {}
+  constructor(private readonly crm: CrmService, private readonly messages: MessagesService, private readonly atendimento: AtendimentoService, private readonly conversas: ConversasService) {}
 
   @Get('overview')
   overview(@TenantId() tenantId: string) {
@@ -171,9 +173,10 @@ export class CrmController {
     return this.crm.deleteDeal(tenantId, id);
   }
 
+  /** Lista leve, filtrável por canal/status/etiqueta/tipo/busca (Conversas omnichannel, db/063). */
   @Get('conversations')
-  conversations(@TenantId() tenantId: string) {
-    return this.crm.listConversations(tenantId);
+  conversations(@TenantId() tenantId: string, @Query() query: Record<string, unknown>) {
+    return this.conversas.listar(tenantId, filtroConversasDaQuery(query));
   }
 
   @Get('conversations/:id/messages')

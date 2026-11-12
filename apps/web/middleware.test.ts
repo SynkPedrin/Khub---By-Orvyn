@@ -34,3 +34,18 @@ describe('middleware de sessão — resposta da API em /auth/me', () => {
     expect(r.headers.get('x-middleware-next')).toBe('1');
   });
 });
+
+describe('middleware de sessão: páginas públicas de formulário e agendamento (Q4.1/Q4.2)', () => {
+  const anonimo = (path: string) => new NextRequest(`http://localhost:3000${path}`);
+  it.each(['/f/contato-site-a1b2c3', '/f/contato-site-a1b2c3/embed', '/b/consulta-inicial', '/b/consulta-inicial/gerenciar/abc'])('%s abre sem login e sem consultar a API', async (path) => {
+    const f = vi.fn(); vi.stubGlobal('fetch', f);
+    const r = await middleware(anonimo(path));
+    expect(f).not.toHaveBeenCalled();
+    expect(r.headers.get('x-middleware-next')).toBe('1');
+  });
+  it.each(['/formularios', '/fx', '/booking', '/agenda/paginas'])('%s continua protegida', async (path) => {
+    const r = await middleware(anonimo(path));
+    expect(r.status).toBe(307);
+    expect(r.headers.get('location')).toContain('/login');
+  });
+});

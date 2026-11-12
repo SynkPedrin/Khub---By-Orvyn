@@ -22,6 +22,7 @@ function rotuloPasso(tipo: string): string {
     'gatilho.tag_adicionada': 'Gatilho',
     'acao.enviar_sms': 'Mensagem',
     'acao.notificar_equipe': 'Aviso à equipe',
+    'acao.pedir_avaliacao': 'Pedido de avaliação',
     'acao.adicionar_tag': 'Tag',
     'acao.remover_tag': 'Tag',
     'acao.criar_oportunidade': 'Oportunidade',

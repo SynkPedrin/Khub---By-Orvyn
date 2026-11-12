@@ -211,7 +211,12 @@ export function fragmentarMensagem(textoBruto: string, cfg: ConfigFragmentacao):
   const frases: Frase[] = [];
   paragrafos.forEach((p, idx) => {
     const linhas = p.split('\n').map((l) => l.trim()).filter(Boolean);
-    if (linhas.length > 1) {
+    // Só é LISTA se as linhas têm marcador ("• ", "- ", "1.") ou se há uma
+    // introdução "…:". Frases soltas em linhas seguidas continuam sendo frases
+    // (cada uma pode virar seu balão).
+    const marcadas = linhas.filter((l) => /^(•|\d{1,2}[.)])\s/.test(l)).length;
+    const ehListaReal = linhas.length > 1 && (marcadas >= 2 || (linhas[0].endsWith(':') && marcadas >= 1));
+    if (ehListaReal) {
       // Lista: as linhas ficam juntas (com a quebra) até o limite de caracteres.
       // Uma linha de abertura terminada em ":" é a introdução da lista.
       const intro = linhas[0].endsWith(':') ? linhas.shift()! : null;
@@ -263,6 +268,13 @@ export function fragmentarMensagem(textoBruto: string, cfg: ConfigFragmentacao):
   }
 
   let blocos = grupos.map((g) => juntar(g));
+
+  // 2b) balão que é só um aparte "(Gel ou comum)" volta para o anterior
+  blocos = blocos.reduce<string[]>((acc, b) => {
+    if (acc.length && /^\([^()]{1,80}\)[.!?]?$/.test(b.trim())) acc[acc.length - 1] = `${acc[acc.length - 1]} ${b.trim()}`;
+    else acc.push(b);
+    return acc;
+  }, []);
 
   // 3) máximo de blocos: funde o par adjacente de menor soma (preferindo o que cabe)
   while (blocos.length > cfg.maxBlocos) {

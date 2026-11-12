@@ -298,7 +298,7 @@ export class InboxService {
             select: { id: true, nome: true, telefone: true, email: true, empresa: true, tag: true, tags: true, origem: true, ownerId: true, createdAt: true },
           })
         : null;
-      const [negocios, tarefas] = c
+      const [negocios, tarefas, observacoes, atividades] = c
         ? await Promise.all([
             tx.deal.findMany({
               where: { contactId: c.id, status: 'aberto' },
@@ -312,8 +312,11 @@ export class InboxService {
               take: 3,
               select: { id: true, titulo: true, dueAt: true, prioridade: true },
             }),
+            // "Observações" e "Atividades recentes" do painel Dados do Lead (Conversas, db/063).
+            tx.note.findMany({ where: { contactId: c.id }, orderBy: { createdAt: 'desc' }, take: 3, select: { id: true, corpo: true, authorNome: true, createdAt: true } }),
+            tx.activity.findMany({ where: { contactId: c.id }, orderBy: { createdAt: 'desc' }, take: 5, select: { id: true, acao: true, actor: true, tone: true, createdAt: true } }),
           ])
-        : [[], []];
+        : [[], [], [], []];
       const pessoas = [c?.ownerId, conv.assigneeId].filter((v): v is string => !!v);
       const usuarios = pessoas.length ? await tx.user.findMany({ where: { identityId: { in: pessoas } }, select: { identityId: true, nome: true } }) : [];
       const nome = new Map(usuarios.map((u) => [u.identityId, u.nome]));
@@ -335,6 +338,8 @@ export class InboxService {
           : null,
         negocios: negocios.map((d) => ({ id: d.id, titulo: d.titulo, valor: Number(d.valor), etapa: d.stage?.nome ?? '', cor: d.stage?.cor ?? null, funil: d.pipeline?.nome ?? '' })),
         tarefas: tarefas.map((t) => ({ id: t.id, titulo: t.titulo, dueAt: t.dueAt?.toISOString() ?? null, prioridade: t.prioridade })),
+        observacoes: observacoes.map((n) => ({ id: n.id, corpo: n.corpo, autor: n.authorNome, criadaEm: n.createdAt.toISOString() })),
+        atividades: atividades.map((a) => ({ id: a.id, acao: a.acao, ator: a.actor, tom: a.tone, criadaEm: a.createdAt.toISOString() })),
       };
     });
   }

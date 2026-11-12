@@ -213,7 +213,9 @@ export class BookingService {
 
   private traduzirErroGravacao(e: unknown): unknown {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') return new ConflictException({ message: 'esse link já está em uso: escolha outro', code: 'slug_em_uso' });
-    if (e instanceof Error && /não é membro desta conta/.test(e.message)) return new BadRequestException('um dos responsáveis não é membro desta conta');
+    // O trigger da db/060 levanta 23503 (o Prisma traduz para P2003 e esconde a mensagem).
+    const fk = e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003';
+    if (fk || (e instanceof Error && /não é membro desta conta/.test(e.message))) return new BadRequestException('um dos responsáveis não é membro desta conta');
     return e;
   }
 

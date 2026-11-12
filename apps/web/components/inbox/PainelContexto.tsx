@@ -124,7 +124,7 @@ export function PainelContexto({ conversationId, versao, onContexto }: { convers
         )}
       </Secao>
 
-      <Secao titulo="Negócio aberto" icone="briefcase">
+      <Secao titulo="Pipeline e etapa" icone="briefcase">
         {ctx.negocios.length === 0 ? (
           <p className="text-sm text-muted">Nenhum negócio aberto com este contato.</p>
         ) : (
@@ -173,6 +173,48 @@ export function PainelContexto({ conversationId, versao, onContexto }: { convers
               <li key={t.id} className="flex items-baseline justify-between gap-2 text-sm">
                 <span className="truncate text-fg">{t.titulo}</span>
                 {t.dueAt && <span className="shrink-0 text-xs text-muted tabular">{dataCurta(t.dueAt)}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Secao>
+
+      {/* Dados do Lead (Conversas, db/063): observações e atividades do contato. */}
+      <Secao
+        titulo="Observações"
+        icone="note"
+        acao={c ? <Link href={`/contatos/${c.id}`} className="text-xs font-medium text-brand hover:underline">Adicionar</Link> : undefined}
+      >
+        {!ctx.observacoes?.length ? (
+          <p className="text-sm text-muted">Nenhuma observação sobre este contato.</p>
+        ) : (
+          <ul className="space-y-2">
+            {ctx.observacoes.map((n) => (
+              <li key={n.id} className="rounded-xl bg-[var(--fill-4)] px-3 py-2">
+                <p className="line-clamp-4 whitespace-pre-wrap break-words text-sm text-fg">{n.corpo}</p>
+                <p className="mt-1 text-xs text-muted">{n.autor ? `${n.autor}, ` : ''}{dataCurta(n.criadaEm)}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Secao>
+
+      <Secao
+        titulo="Atividades recentes"
+        icone="history"
+        acao={c ? <Link href={`/contatos/${c.id}`} className="text-xs font-medium text-brand hover:underline">Ver todas</Link> : undefined}
+      >
+        {!ctx.atividades?.length ? (
+          <p className="text-sm text-muted">Sem atividade registrada.</p>
+        ) : (
+          <ul className="space-y-2">
+            {ctx.atividades.map((a) => (
+              <li key={a.id} className="flex items-start gap-2 text-sm">
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--text-3)]" aria-hidden />
+                <span className="min-w-0">
+                  <span className="block text-fg">{a.acao}</span>
+                  <span className="block text-xs text-muted">{a.ator ? `${a.ator}, ` : ''}{dataCurta(a.criadaEm)}</span>
+                </span>
               </li>
             ))}
           </ul>

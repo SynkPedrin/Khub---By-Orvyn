@@ -158,6 +158,14 @@ describe('MessagesService.send — a mensagem SEMPRE persiste (ADR-0008)', () =>
     expect(prov.sendText).not.toHaveBeenCalled();
   });
 
+  it('Q3.1 · contato em "não perturbe" (opted_out_at): grava, NÃO chama o provedor e devolve cancelled', async () => {
+    const a = ambiente({ conversas: [{ id: 'conv1', contactId: 'c1', contact: { telefone: '+55 11 99999-1111', optedOutAt: new Date() } }] });
+    const prov = stevo(true);
+    const r = await new MessagesService(a.prisma, prov, evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).send(TENANT, 'conv1', 'Promoção!');
+    expect(r.status).toBe('cancelled');
+    expect(prov.sendText).not.toHaveBeenCalled();
+  });
+
   it('conversa inexistente falha antes de qualquer efeito', async () => {
     const a = ambiente({ conversas: [] });
     await expect(new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).send(TENANT, 'sumiu', 'Oi'))

@@ -119,6 +119,11 @@
   --ch-email: #8b5cf6;
   --ch-linkedin: #0a66c2;
   --ch-site: #8e8e96;
+  /* Conversas omnichannel (db/063): cores oficiais das marcas, só como identificação do canal */
+  --ch-messenger: #0a7cff;
+  --ch-facebook: #1877f2;
+  --ch-youtube: #ff0033;
+  --ch-tiktok: #25f4ee;
 
   /* ---------- RADIUS (concêntrico) ---------- */
   --r-sm: 8px;
@@ -2799,5 +2804,99 @@ a {
   .lp-hero-k {
     top: 30%;
     opacity: 0.5;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Seletor de subcontas (estilo GHL) — components/agency/SubaccountSwitcher.tsx.
+   Só tokens: segue o tema claro/escuro sem cor própria.                 */
+/* ------------------------------------------------------------------ */
+@layer components {
+  .subconta-trigger {
+    background: var(--fill-2);
+    border: 1px solid var(--glass-border-subtle);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  }
+  .subconta-trigger:hover,
+  .subconta-trigger-aberto {
+    background: var(--fill-3);
+    border-color: var(--brand-border);
+  }
+  .subconta-trigger:disabled {
+    cursor: progress;
+    opacity: 0.7;
+  }
+  .subconta-avatar {
+    background: linear-gradient(135deg, var(--brand-soft), var(--fill-3));
+    border: 1px solid var(--brand-border);
+    color: var(--brand-bright);
+  }
+  .subconta-painel {
+    border-radius: 18px;
+  }
+  .subconta-busca {
+    background: var(--fill-2);
+    border: 1px solid var(--glass-border-subtle);
+    transition: border-color 0.18s, box-shadow 0.18s;
+  }
+  .subconta-busca:focus-within {
+    border-color: var(--brand-border);
+    box-shadow: 0 0 0 3px var(--brand-softer);
+  }
+  .subconta-agencia {
+    color: var(--brand-bright);
+    transition: background 0.18s;
+  }
+  .subconta-agencia:hover {
+    background: var(--brand-softer);
+  }
+  .subconta-agencia-icone {
+    background: var(--brand-soft);
+    border: 1px solid var(--brand-border);
+  }
+  .subconta-linha {
+    border: 1px solid transparent;
+  }
+  .subconta-linha-atual {
+    border-color: var(--brand-border);
+    background: var(--brand-softer);
+  }
+  .subconta-destaque {
+    background: var(--fill-3);
+  }
+  .subconta-selo {
+    flex-shrink: 0;
+    border-radius: 999px;
+    background: var(--fill-3);
+    padding: 1px 6px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .subconta-casa {
+    color: var(--brand-bright);
+  }
+  .subconta-pino {
+    color: var(--muted);
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s, color 0.15s;
+  }
+  .subconta-linha:hover .subconta-pino,
+  .subconta-linha[aria-selected='true'] .subconta-pino,
+  .subconta-pino-ativo,
+  .subconta-pino:focus-visible {
+    opacity: 1;
+  }
+  .subconta-pino:hover {
+    background: var(--fill-4);
+  }
+  .subconta-pino-ativo {
+    color: var(--brand-bright);
+  }
+  /* Tela de toque não tem hover: o alfinete fica sempre visível. */
+  @media (hover: none) {
+    .subconta-pino {
+      opacity: 1;
+    }
   }
 }

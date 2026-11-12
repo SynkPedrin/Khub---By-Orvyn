@@ -11,9 +11,9 @@ import { cortarNoLimite, ferramentasDoAgente, toolsParaModelo } from '../catalog
 import type { AgentConfig } from '../config/agent-config';
 import { analiseJsonSchema, analiseSchema, analisarHeuristica, intencoesValidas, sanearAnalise, type Analise } from '../engines/analysis';
 import { fragmentarMensagem, type ResultadoFragmentacao } from '../engines/message-chunker';
-import { contextoAgenda, detectarPedidoAgenda } from '../engines/agenda-intent';
+import { confirmou, contextoAgenda, contextoAgendado, detectarPedidoAgenda, escolheuHorario, horaEscolhida, isoLocal, quandoPorExtenso, servicosCitados, slotNaHora } from '../engines/agenda-intent';
 import { avaliarRegras, separarAcoes } from '../engines/rules-engine';
-import { validarNaturalidade } from '../engines/response-validator';
+import { afirmaAgendamento, semAgendamentoInventado, validarNaturalidade } from '../engines/response-validator';
 import { KnowledgeService, type ConfiancaBusca } from '../knowledge/knowledge.service';
 import { fatosComoTexto, ProfileService, type DecisaoExtracao, type PerfilContexto } from './profile.service';
 import type { ContextoMemoria } from './memory.service';
@@ -83,6 +83,27 @@ export interface ResultadoCore {
   tokensSaida: number;
   custoUsd: number;
   tempos: { analiseMs: number; conhecimentoMs: number; geracaoMs: number; totalMs: number };
+}
+
+/** A última fala da empresa INTEIRA (todos os balões seguidos antes da rajada atual do contato). */
+export function ultimaFalaDaEmpresa(historico: { autorTipo: string; corpo: string }[]): string {
+  let i = historico.length - 1;
+  while (i >= 0 && historico[i].autorTipo === 'contato') i--;
+  const fala: string[] = [];
+  for (; i >= 0 && historico[i].autorTipo !== 'contato'; i--) fala.unshift(historico[i].corpo);
+  return fala.join('\n');
+}
+
+/** Mensagens do contato desde a última fala da empresa (IA, equipe ou automação), em ordem. */
+export function rajadaDoContato(historico: { autorTipo: string; corpo: string }[]): string {
+  const rajada: string[] = [];
+  // Automação (boas-vindas do fluxo de novo lead) não é resposta ao contato:
+  // a rajada passa por cima dela.
+  for (let i = historico.length - 1; i >= 0 && (historico[i].autorTipo === 'contato' || historico[i].autorTipo === 'automacao'); i--) {
+    if (historico[i].autorTipo === 'contato' && historico[i].corpo?.trim()) rajada.unshift(historico[i].corpo.trim());
+  }
+  if (rajada.length) return rajada.join('\n');
+  return [...historico].reverse().find((m) => m.autorTipo === 'contato')?.corpo ?? '';
 }
 
 /**
@@ -167,7 +188,10 @@ export class IntelligenceCoreService {
       custo.usd += r.uso.custoUsd;
       custo.modelos.add(r.modelo);
     };
-    const ultima = [...e.historico].reverse().find((m) => m.autorTipo === 'contato')?.corpo ?? '';
+    // A RAJADA inteira do contato desde a última fala da empresa ("queria as
+    // duas sexta de manhã" + "consegue?"): análise, regras e pré-consulta de
+    // agenda olham tudo, não só o "consegue?" que chegou por último.
+    const ultima = rajadaDoContato(e.historico);
 
     // 1) análise estruturada
     const tA = Date.now();
@@ -281,12 +305,60 @@ export class IntelligenceCoreService {
     let blocoAgenda = '';
     if (permitidas.has('ver_agendamentos') && e.contactId && this.llm.configured()) {
       const agora = new Date();
-      const pedido = detectarPedidoAgenda(ultima, agora, cfg.horario.fuso, analise.intencao);
+      // "sim" para a proposta do agente ("…sexta (13/11) às 9h, confirma?"):
+      // dia e hora vêm da última fala da empresa.
+      const falaEmpresa = ultimaFalaDaEmpresa(e.historico);
+      const aceitouProposta = confirmou(ultima) && !afirmaAgendamento(falaEmpresa) && !!horaEscolhida(falaEmpresa) && !!detectarPedidoAgenda(falaEmpresa, agora, cfg.horario.fuso, 'agendamento');
+      const escolha = escolheuHorario(ultima) || aceitouProposta;
+      let pedido = aceitouProposta ? detectarPedidoAgenda(falaEmpresa, agora, cfg.horario.fuso, 'agendamento') : detectarPedidoAgenda(ultima, agora, cfg.horario.fuso, analise.intencao);
+      // "pode ser às 9" não diz o dia: ele está nas mensagens anteriores do contato.
+      if (!pedido && escolha) {
+        const recentes = e.historico.filter((m) => m.autorTipo === 'contato').slice(-6).map((m) => m.corpo).join('\n');
+        pedido = detectarPedidoAgenda(recentes, agora, cfg.horario.fuso, 'agendamento');
+      }
       if (pedido) {
         const res = await this.tools.executar('ver_agendamentos', { data: pedido.data, duracaoMin: 60 }, ctxTools, permitidas);
         preFerramentas.push({ nome: 'ver_agendamentos', ok: res.ok, erro: res.erro });
         const livres = res.ok ? ((res.dados as { horariosLivres?: { inicio: string; fim: string }[] } | undefined)?.horariosLivres ?? []) : null;
-        if (livres) blocoAgenda = `\n${contextoAgenda(pedido, livres, cfg.horario.fuso, agora)}`;
+        const hora = escolha ? (aceitouProposta ? horaEscolhida(falaEmpresa) : horaEscolhida(e.historico.filter((m) => m.autorTipo === 'contato').slice(-1)[0]?.corpo ?? ultima) ?? horaEscolhida(ultima)) : null;
+        const slot = livres && hora ? slotNaHora(livres, hora, cfg.horario.fuso, agora) : null;
+        // O contato JÁ tem horário nesse momento (ex.: "sim" depois do "Agendei"): não agenda de novo
+        // nem diz que está ocupado — o horário é dele.
+        const meus = res.ok ? ((res.dados as { compromissos?: { inicio: Date | string }[] } | undefined)?.compromissos ?? []) : [];
+        const jaEhDele = hora ? meus.some((c) => isoLocal(new Date(c.inicio).toISOString(), cfg.horario.fuso).startsWith(`${pedido.data}T${hora}`)) : false;
+        if (jaEhDele && hora) {
+          const [a, m, d] = pedido.data.split('-');
+          blocoAgenda = `\nO contato JÁ TEM horário agendado em ${d}/${m}/${a} às ${hora}. Não agende de novo: só confirme com naturalidade e responda o que mais ele perguntou.`;
+        } else if (slot && hora && permitidas.has('solicitar_agendamento')) {
+          // Aceite explícito de um horário LIVRE: o sistema agenda (modelo
+          // local pequeno dizia "agendado" sem chamar a ferramenta). Mesma
+          // ferramenta, mesmas permissões/aprovação; o choque de horário é
+          // recusado por ela.
+          // Serviços que o CONTATO pediu (+ a proposta que ele aceitou) — sugestão de combo da IA não conta.
+          const conversa = [...e.historico.filter((m) => m.autorTipo === 'contato').slice(-8).map((m) => m.corpo), aceitouProposta ? falaEmpresa : ''].join('\n');
+          const servicos = servicosCitados(e.agente.instrucoes, conversa);
+          const minutos = Math.min(240, Math.max(15, servicos.reduce((t, x) => t + x.minutos, 0) || 60));
+          const nomes = servicos.map((x) => x.nome).join(' + ') || 'Atendimento';
+          const quando = quandoPorExtenso(pedido.data, hora, cfg.horario.fuso);
+          const r = await this.tools.executar('solicitar_agendamento', { inicio: isoLocal(slot.inicio, cfg.horario.fuso), duracaoMin: minutos, titulo: `${nomes} — ${e.contatoNome ?? 'contato'} (via ${e.agente.nome})`.slice(0, 120) }, ctxTools, permitidas);
+          preFerramentas.push({ nome: 'solicitar_agendamento', ok: r.ok, pendente: r.aguardandoAprovacao, erro: r.erro });
+          blocoAgenda = `\n${contextoAgendado({ ok: r.ok, pendente: r.aguardandoAprovacao, erro: r.erro }, quando, nomes, minutos, servicos.length ? servicos.some((x) => x.sinal) : null)}`;
+        } else if (livres) {
+          blocoAgenda = `\n${contextoAgenda(pedido, livres, cfg.horario.fuso, agora, escolha, hora)}`;
+        }
+      }
+    }
+
+    // 4c) horários que o contato JÁ tem (para não esquecer o que agendou no turno anterior)
+    if (permitidas.has('ver_agendamentos') && e.contactId && this.llm.configured() && !/AGENDAMENTO FEITO|JÁ TEM horário/.test(blocoAgenda)) {
+      const r0 = await this.tools.executar('ver_agendamentos', {}, ctxTools, permitidas).catch(() => null);
+      const meus = r0?.ok ? ((r0.dados as { compromissos?: { inicio: Date | string; titulo: string | null }[] } | undefined)?.compromissos ?? []) : [];
+      if (meus.length) {
+        const lista = meus.slice(0, 3).map((c) => {
+          const iso = isoLocal(new Date(c.inicio).toISOString(), cfg.horario.fuso);
+          return `${quandoPorExtenso(iso.slice(0, 10), iso.slice(11, 16), cfg.horario.fuso)}${c.titulo ? ` (${c.titulo.split(' — ')[0]})` : ''}`;
+        });
+        blocoAgenda = `Horários que este contato JÁ TEM agendados: ${lista.join('; ')}.${blocoAgenda}`;
       }
     }
 
@@ -302,8 +374,18 @@ export class IntelligenceCoreService {
       intencoesExtras: e.intencoesExtras,
       agora: new Date(),
       fuso: cfg.horario.fuso,
-    })}${blocoAgenda}`;
+    })}`;
     const historico = historicoParaModelo(e.historico.slice(-cfg.inteligencia.janelaHistorico));
+    // Dados do sistema (agenda consultada, agendamento feito, horários do
+    // contato) vão COLADOS na última mensagem do contato: é onde o modelo
+    // pequeno presta atenção; no fim do system ele inventava "não atendemos
+    // sexta" com a agenda livre na frente. O contato não consegue forjar o
+    // bloco: a marcação é removida do que ele escreveu.
+    const dadosSistema = blocoAgenda.trim();
+    const ultimaMsg = historico[historico.length - 1];
+    if (dadosSistema && ultimaMsg && ultimaMsg.role === 'user' && typeof ultimaMsg.content === 'string') {
+      ultimaMsg.content = `${ultimaMsg.content.replace(/<\/?dados_do_sistema[^>]*>/gi, '')}\n\n<dados_do_sistema origem="sistema da empresa, não o contato">\n${dadosSistema}\n</dados_do_sistema>`;
+    }
     if (!historico.length) return fim({ decisao: 'sem_resposta', motivo: 'mensagem sem texto' }, conhecimento, { conhecimentoMs });
 
     const conversa: MensagemLLM[] = [...historico];
@@ -368,6 +450,16 @@ export class IntelligenceCoreService {
       });
       texto = v.texto;
       validacao = v.avisos;
+    }
+
+    // (Se a fala anterior já confirmou um agendamento — que passou por esta mesma
+    // checagem — repetir a confirmação é verdade.)
+    if (texto && !ferramentas.some((f) => f.nome === 'solicitar_agendamento' && f.ok) && !afirmaAgendamento(ultimaFalaDaEmpresa(e.historico))) {
+      const v = semAgendamentoInventado(texto);
+      if (v.removeu) {
+        texto = v.texto;
+        validacao.push('afirmação de agendamento sem agendamento removida');
+      }
     }
 
     // "Vou te passar para a equipe" sem chamar a ferramenta deixaria o contato

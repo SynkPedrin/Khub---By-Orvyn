@@ -44,6 +44,8 @@ export const PRIMARY_NAV: NavItem[] = [
   { href: '/tarefas', label: 'Tarefas', icon: 'check2', grupo: 'Operação' },
   { href: '/automacoes', label: 'Automações', icon: 'zap', grupo: 'Crescimento' },
   { href: '/campanhas', label: 'Campanhas', icon: 'send', grupo: 'Crescimento' },
+  // Captura de leads por link/embed (Q4.1).
+  { href: '/formularios', label: 'Formulários', icon: 'file', grupo: 'Crescimento' },
   { href: '/analytics', label: 'Analytics', icon: 'trend', grupo: 'Crescimento' },
   // Cobranças e links de pagamento: receita, junto das ferramentas de crescimento (Q2.6).
   { href: '/financeiro', label: 'Financeiro', icon: 'finance', grupo: 'Crescimento' },

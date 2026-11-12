@@ -124,3 +124,28 @@ export function validarNaturalidade(texto: string, p: PoliticaNaturalidade): Res
   }
   return { texto: resultado.trim(), avisos };
 }
+
+const RE_DIZ_QUE_AGENDOU = /\b(agendamento (esta |ficou |foi )?(confirmado|feito|realizado|marcado)|(esta|ficou|foi) (agendad|marcad|reservad)[oa]|agendei|ja (agendei|marquei|reservei)|vaga (esta |ficou )?garantida|horario (esta |ficou )?(confirmado|garantido|reservado))/;
+
+/**
+ * Tira a frase que AFIRMA um agendamento que não existe (nenhum
+ * solicitar_agendamento deu certo neste turno). Prometer ("vou agendar") pode;
+ * afirmar sem ter feito é o pior erro de um agente de agenda.
+ */
+/** A fala afirma um agendamento ("Agendei…", "vaga garantida") — não é uma proposta a aceitar. */
+export function afirmaAgendamento(texto: string): boolean {
+  return segmentarFrases(texto.replace(/\n+/g, ' ')).some((f) => RE_DIZ_QUE_AGENDOU.test(norm(f)));
+}
+
+export function semAgendamentoInventado(texto: string): { texto: string; removeu: boolean } {
+  let removeu = false;
+  const out = texto
+    .split(/\n\s*\n/)
+    .map((par) => segmentarFrases(par).filter((f) => {
+      if (RE_DIZ_QUE_AGENDOU.test(norm(f))) { removeu = true; return false; }
+      return true;
+    }).join(' '))
+    .filter((x) => x.trim())
+    .join('\n\n');
+  return { texto: out.trim() ? out : texto, removeu: removeu && !!out.trim() };
+}

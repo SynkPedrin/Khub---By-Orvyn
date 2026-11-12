@@ -60,6 +60,18 @@ export const ICONE: Record<string, IconName> = {
   'acao.criar_nota': 'knowledge',
   'acao.chamar_workflow': 'sparkles',
   'acao.webhook': 'marketing',
+  'acao.pedir_avaliacao': 'star',
+  // Q3.1 / Q3.2
+  'gatilho.agendado': 'clock',
+  'gatilho.data_contato': 'calendar',
+  'gatilho.formulario_enviado': 'file',
+  'gatilho.pagamento_recebido': 'dollar',
+  'controle.esperar_ate': 'clock',
+  'controle.meta': 'target',
+  'acao.remover_de_fluxo': 'minus',
+  'acao.atribuir_usuario': 'users',
+  'acao.nao_perturbe': 'shield',
+  'acao.atualizar_negocio': 'briefcase',
 };
 
 // Gatilho verde · controle roxo · ação azul, só como acento (o corpo é o card).

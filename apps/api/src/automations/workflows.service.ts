@@ -73,6 +73,16 @@ export class WorkflowsService {
     return CATALOGO;
   }
 
+  /** Membros que podem ser dono de contato/negócio (Q3.1). */
+  async responsaveis(tenantId: string): Promise<{ identityId: string; nome: string | null; email: string }[]> {
+    return this.prisma.withTenant(tenantId, (tx) => tx.$queryRaw<{ identityId: string; nome: string | null; email: string }[]>`
+      SELECT m.identity_id AS "identityId", u.nome, i.email
+        FROM memberships m JOIN identities i ON i.id = m.identity_id
+        LEFT JOIN users u ON u.identity_id = m.identity_id AND u.tenant_id = ${tenantId}::uuid
+       WHERE m.tenant_id = ${tenantId}::uuid
+       ORDER BY coalesce(u.nome, i.email)`);
+  }
+
   async listar(tenantId: string) {
     return this.prisma.withTenant(tenantId, async (tx) => {
       const wfs = await tx.workflow.findMany({

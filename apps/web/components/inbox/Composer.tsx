@@ -36,6 +36,8 @@ export interface ComposerProps {
   onTexto: (texto: string) => Promise<void> | void;
   onMidia: (arquivo: File, legenda: string) => Promise<void> | void;
   onNota: (corpo: string, mencoes: string[]) => Promise<void> | void;
+  /** Rascunho vindo de fora (Sugestões da IA): cada `n` novo substitui o texto, para o humano revisar. */
+  rascunho?: { texto: string; n: number } | null;
 }
 
 /**
@@ -46,7 +48,7 @@ export interface ComposerProps {
  *    com as variáveis já resolvidas para esta conversa;
  *  - clipe anexa imagem, documento ou áudio (o texto vira legenda).
  */
-export function Composer({ iaRespondendo, atendentes, meuId, dados, ocupado, topo, onTexto, onMidia, onNota }: ComposerProps) {
+export function Composer({ iaRespondendo, atendentes, meuId, dados, ocupado, topo, onTexto, onMidia, onNota, rascunho }: ComposerProps) {
   const toast = useToast();
   const [modo, setModo] = useState<Modo>('responder');
   const [texto, setTexto] = useState('');
@@ -66,6 +68,15 @@ export function Composer({ iaRespondendo, atendentes, meuId, dados, ocupado, top
   useEffect(() => carregarRespostas(), [carregarRespostas]);
 
   const equipe = useMemo(() => atendentes.filter((a) => a.identityId !== meuId), [atendentes, meuId]);
+
+  // Sugestão da IA escolhida: vira rascunho de RESPOSTA (nunca enviada sozinha).
+  useEffect(() => {
+    if (!rascunho) return;
+    setModo('responder');
+    setTexto(rascunho.texto);
+    setSugestao(null);
+    requestAnimationFrame(() => campo.current?.focus());
+  }, [rascunho]);
 
   /** Recalcula o menu de sugestão a partir do cursor. */
   const avaliar = (valor: string, cursor: number) => {

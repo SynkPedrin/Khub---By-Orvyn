@@ -95,8 +95,10 @@ const PADROES_INTENCAO: [string, RegExp, number][] = [
   ['solicitacao_humana', /\b(falar com (um|uma|alguem|atendente|humano|pessoa|gerente|responsavel)|atendente|humano de verdade|pessoa real|quero (um|uma) (humano|pessoa))\b/, 3],
   ['cancelamento', /\b(cancelar|cancelamento|desistir|desisto|encerrar (o )?contrato|quero sair|reembolso|estorno)\b/, 3],
   ['reclamacao', /\b(reclama|absurdo|pessim|horrivel|descaso|insatisfeit|nao funcion|nao resolve|procon|reclame aqui|vergonha|decepcion|enganad)\w*/, 3],
+  // Reclamação de atendimento em linguagem de WhatsApp ("tô chateada, ninguém me atendeu").
+  ['reclamacao', /\b(chatead|irritad|frustrad|desrespeit|falta de respeito|mal atendid|ninguem (me )?(atendeu|respondeu|retornou|deu retorno)|fiquei esperando|fiquei plantad|me deixaram esperando|nao me (atenderam|responderam|retornaram)|esperando ha \d+)\w*/, 3],
   ['agendamento', /\b(agendar|agendamento|marcar|horario|horarios|disponibilidade|consulta (dia|amanha|hoje)|remarcar|que dia|qual dia|vaga)\b/, 2],
-  ['orcamento', /\b(orcamento|proposta|cotacao|cotar|quanto (custa|fica|sai|e|eh)|qual (o )?(valor|preco)|valores|precos|tabela de preco|investimento)\b/, 2],
+  ['orcamento', /\b(orcamento|proposta|cotacao|cotar|quanto (custa|fica|sai|e|eh|ta|esta|cobra)|qual (o )?(valor|preco)|valores|precos|tabela de preco|investimento)\b/, 2],
   ['compra', /\b(quero (comprar|contratar|fechar|assinar|fazer)|vou (comprar|contratar|fechar)|como (faco|faz) (pra|para) (comprar|contratar|pagar)|fechado|pode (mandar|enviar) (o )?(link|pix|boleto)|forma de pagamento|parcel)\w*/, 2],
   ['negociacao', /\b(desconto|negociar|melhor preco|consegue (fazer|baixar)|abaixar|condicao especial|a vista|parcelar em)\b/, 2],
   ['comparacao', /\b(diferenca entre|comparar|comparando|melhor que|versus|vs\.?|concorrente|outra (empresa|clinica)|em outro lugar)\b/, 2],

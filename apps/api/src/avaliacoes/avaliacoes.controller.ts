@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, HttpCode, Param, Post, Put, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
 import { CurrentUser, Public, TenantId, type AuthUser } from '../auth/decorators';
 import { SkipAudit } from '../common/audit.interceptor';
 import { ConfigRequiredException, type Provider } from '../config/config.service';
@@ -19,7 +19,9 @@ export class AvaliacoesController {
     return this.avaliacoes.obterConfig(t);
   }
 
-  @Put('config')
+  // POST (não PUT): o proxy /api/v1 da web encaminha GET/POST/PATCH/DELETE.
+  @Post('config')
+  @HttpCode(200)
   salvar(@TenantId() t: string, @CurrentUser() u: AuthUser, @Body() body: unknown) {
     return this.avaliacoes.salvarConfig(t, u.identityId, body);
   }

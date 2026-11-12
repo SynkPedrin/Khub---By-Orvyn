@@ -16,7 +16,9 @@ type IconName =
   | 'globe' | 'linkedin' | 'whatsapp' | 'instagram' | 'check2' | 'minus'
   | 'expand' | 'command' | 'crown' | 'trophy' | 'shield' | 'bolt'
   // Editor de automações (Q3.3)
-  | 'undo' | 'redo' | 'copy' | 'layout' | 'history' | 'folder';
+  | 'undo' | 'redo' | 'copy' | 'layout' | 'history' | 'folder'
+  // Seletor de subcontas
+  | 'chevronsUpDown' | 'pin';
 
 const P = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
 
@@ -111,6 +113,9 @@ const PATHS: Record<IconName, React.ReactNode> = {
   layout: <><rect x="8.5" y="3" width="7" height="5" rx="1.4" {...P} /><rect x="3" y="16" width="7" height="5" rx="1.4" {...P} /><rect x="14" y="16" width="7" height="5" rx="1.4" {...P} /><path d="M12 8v4M6.5 16v-2a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v2" {...P} /></>,
   history: <><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6" {...P} /><path d="M3.5 4v4h4" {...P} /><path d="M12 7.5V12l3 2" {...P} /></>,
   folder: <path d="M3.5 7a2 2 0 0 1 2-2h4l2 2.2h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" {...P} />,
+  // Seletor de subcontas (estilo GHL): abre/fecha e fixar.
+  chevronsUpDown: <path d="m7.5 9.5 4.5-4.5 4.5 4.5M7.5 14.5l4.5 4.5 4.5-4.5" {...P} />,
+  pin: <><path d="M9 3.8h6M10 3.8v5.4L7 13v1.6h10V13l-3-3.8V3.8" {...P} /><path d="M12 14.6V20.5" {...P} /></>,
 };
 
 export function Icon({ name, size = 20, ...rest }: { name: IconName; size?: number } & SVGProps<SVGSVGElement>) {

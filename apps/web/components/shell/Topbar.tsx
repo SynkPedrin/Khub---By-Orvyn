@@ -136,7 +136,7 @@ function SearchTrigger() {
 
 function AccountMenu() {
   const { user, ready, signOut } = useAuth();
-  const { contexto, clientes, clienteAtivo, entrarNoCliente } = useAgency();
+  const { contexto, subcontas, clienteAtivo, entrarNoCliente } = useAgency();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -211,7 +211,7 @@ function AccountMenu() {
               <hr className="divider my-1.5" />
               <p className="px-2.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-faint">Clientes</p>
               <div className="max-h-56 overflow-y-auto">
-                {clientes.map((c) => (
+                {subcontas.map((c) => (
                   <button
                     key={c.id}
                     type="button"

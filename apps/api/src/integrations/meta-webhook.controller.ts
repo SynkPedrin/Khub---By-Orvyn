@@ -1,10 +1,12 @@
-import { Controller, Get, Logger, Post, Query, Req, Res } from '@nestjs/common';
+import { Controller, Get, Logger, Optional, Post, Query, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { Public } from '../auth/decorators';
 import { ConfigService } from '../config/config.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MetaLeadsService } from './meta-leads.service';
+import { CanaisIngestaoService } from '../crm/messaging/canais/canais-ingestao.service';
+import { eventosDeConversa } from '../crm/messaging/canais/meta-canais.parse';
 
 /**
  * Webhook Meta (Lead Ads). GET = verificação do subscription; POST = eventos.
@@ -19,6 +21,9 @@ export class MetaWebhookController {
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly leads: MetaLeadsService,
+    // Conversas omnichannel (db/063): DM e comentários do Instagram/Messenger/página.
+    // Superfície pública do CrmModule; opcional só para os testes antigos.
+    @Optional() private readonly conversas?: CanaisIngestaoService,
   ) {}
 
   @Get()
@@ -43,9 +48,20 @@ export class MetaWebhookController {
       return res.status(403).send('invalid signature');
     }
 
-    if (!req.body || !Array.isArray(req.body.entry) || req.body.entry.some((entry: any) => !entry || !Array.isArray(entry.changes))) {
+    // Lead Ads e comentários chegam em `entry[].changes[]`; DM (Messenger e
+    // Instagram) em `entry[].messaging[]`. Entrada sem nenhum dos dois é inválida.
+    if (!req.body || !Array.isArray(req.body.entry) || req.body.entry.some((entry: any) => !entry || (!Array.isArray(entry.changes) && !Array.isArray(entry.messaging)))) {
       this.log.warn('invalid_meta_payload');
       return res.status(400).send('invalid payload');
+    }
+    // DM e comentários (idempotente: reentrega não duplica). Conta não
+    // conectada em nenhum tenant é descartada sem escrita — não faz a Meta
+    // reentregar para sempre.
+    if (this.conversas) {
+      for (const ev of eventosDeConversa(req.body)) {
+        const r = await this.conversas.receberDaMeta(ev);
+        if ('semTenant' in r) this.log.warn(`meta_conta_sem_tenant rede=${ev.rede} conta=${ev.contaId}`);
+      }
     }
     const eventos = this.leads.parse(req.body);
     for (const ev of eventos) {

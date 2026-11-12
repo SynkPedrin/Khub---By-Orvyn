@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-import { agency, type ClienteAgencia, type MeuContextoAgencia } from '@/lib/agency';
+import { agency, type ClienteAgencia, type MeuContextoAgencia, type SubcontaSeletor } from '@/lib/agency';
 import { useAuth } from '@/lib/auth';
 import { PRIMARY_NAV, SECONDARY_NAV } from '@/components/shell/nav';
 
@@ -11,9 +11,14 @@ const ROTAS_SEGURAS = new Set([...PRIMARY_NAV, ...SECONDARY_NAV].map((i) => i.hr
 interface AgencyCtxValue {
   /** `null` = identidade não pertence a nenhuma agência (cliente direto — seção 28, zero UI de agência). */
   contexto: MeuContextoAgencia | null;
+  /** Lista COM métricas (contatos, negócios…): só carregada nas telas `/agency`. */
   clientes: ClienteAgencia[];
-  /** Cliente cujo tenantId bate com o tenant ativo da sessão agora. */
-  clienteAtivo: ClienteAgencia | null;
+  /** Lista leve do seletor da sidebar (todas as telas): fixadas e recentes do usuário. */
+  subcontas: SubcontaSeletor[];
+  /** Subconta cujo tenantId bate com o tenant ativo da sessão agora. */
+  clienteAtivo: SubcontaSeletor | null;
+  /** Fixa/desfixa no seletor (otimista; desfaz se a API recusar). */
+  fixar: (clientAccountId: string, fixado: boolean) => Promise<void>;
   carregando: boolean;
   erro: string | null;
   /** true durante a troca (chamada + reload) — UI usa pra esconder dado do cliente anterior (seção 21). */
@@ -29,6 +34,10 @@ export function AgencyProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? '/dashboard';
   const [contexto, setContexto] = useState<MeuContextoAgencia | null>(null);
   const [clientes, setClientes] = useState<ClienteAgencia[]>([]);
+  const [subcontas, setSubcontas] = useState<SubcontaSeletor[]>([]);
+  // A lista com métricas chama o overview do CRM de CADA cliente: só vale a
+  // pena nas telas da agência, não em todo carregamento de página.
+  const naAgencia = pathname.startsWith('/agency');
   const [carregando, setCarregando] = useState(true);
   const [trocandoCliente, setTrocandoCliente] = useState(false);
   const [destinoNome, setDestinoNome] = useState('');
@@ -40,21 +49,30 @@ export function AgencyProvider({ children }: { children: React.ReactNode }) {
     try {
       const ctx = await agency.meuContexto();
       setContexto(ctx);
-      setClientes(ctx ? await agency.listarClientes() : []);
+      if (!ctx) {
+        setSubcontas([]);
+        setClientes([]);
+        return;
+      }
+      const [leve, completa] = await Promise.all([agency.seletor(), naAgencia ? agency.listarClientes() : Promise.resolve(null)]);
+      setSubcontas(leve);
+      if (completa) setClientes(completa);
     } catch {
       setContexto(null);
       setClientes([]);
+      setSubcontas([]);
       setErro('Não foi possível carregar a agência. Atualize a página para tentar novamente.');
     } finally {
       setCarregando(false);
     }
-  }, []);
+  }, [naAgencia]);
 
   useEffect(() => {
     if (!ready) return;
     if (!user) {
       setContexto(null);
       setClientes([]);
+      setSubcontas([]);
       setCarregando(false);
       return;
     }
@@ -84,14 +102,24 @@ export function AgencyProvider({ children }: { children: React.ReactNode }) {
   }, [ready, user?.tenantId]);
 
   const clienteAtivo = useMemo(
-    () => clientes.find((c) => c.tenantId === user?.tenantId) ?? null,
-    [clientes, user?.tenantId],
+    () => subcontas.find((c) => c.tenantId === user?.tenantId) ?? null,
+    [subcontas, user?.tenantId],
   );
+
+  const fixar = useCallback(async (clientAccountId: string, fixado: boolean) => {
+    setSubcontas((xs) => xs.map((c) => (c.id === clientAccountId ? { ...c, fixado } : c)));
+    try {
+      await agency.fixar(clientAccountId, fixado);
+    } catch {
+      setSubcontas((xs) => xs.map((c) => (c.id === clientAccountId ? { ...c, fixado: !fixado } : c)));
+      setErro('Não foi possível fixar esta subconta. Tente novamente.');
+    }
+  }, []);
 
   const entrarNoCliente = useCallback(
     async (clientAccountId: string) => {
       if (emTroca.current) return;
-      const cliente = clientes.find(c => c.id === clientAccountId);
+      const cliente = subcontas.find(c => c.id === clientAccountId);
       if (!cliente) return;
       emTroca.current = true;
       setDestinoNome(cliente.nome);
@@ -115,12 +143,12 @@ export function AgencyProvider({ children }: { children: React.ReactNode }) {
         setErro('Não foi possível entrar nesta subconta. Tente novamente.');
       }
     },
-    [pathname, clientes],
+    [pathname, subcontas],
   );
 
   const value = useMemo<AgencyCtxValue>(
-    () => ({ contexto, clientes, clienteAtivo, carregando, erro, trocandoCliente, entrarNoCliente, recarregarClientes: carregar }),
-    [contexto, clientes, clienteAtivo, carregando, erro, trocandoCliente, entrarNoCliente, carregar],
+    () => ({ contexto, clientes, subcontas, clienteAtivo, fixar, carregando, erro, trocandoCliente, entrarNoCliente, recarregarClientes: carregar }),
+    [contexto, clientes, subcontas, clienteAtivo, fixar, carregando, erro, trocandoCliente, entrarNoCliente, carregar],
   );
 
   return (

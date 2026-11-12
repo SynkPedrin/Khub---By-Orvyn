@@ -241,6 +241,16 @@ export class AutomationsController {
     return this.editor.cancelarRun(t, id, u.identityId);
   }
 
+  /**
+   * Membros da conta para os nós "Atribuir responsável" e "Atualizar negócio"
+   * (Q3.1). Só id, nome e e-mail: quem edita automação (automations.read) não
+   * precisa da permissão de gestão de equipe (users.manage) para escolher um dono.
+   */
+  @Get('responsaveis')
+  responsaveis(@TenantId() t: string) {
+    return this.workflows.responsaveis(t);
+  }
+
   @Get('dlq')
   dlq(@TenantId() t: string) {
     return this.runs.listarDlq(t);

@@ -12,21 +12,34 @@ import { settingsApi } from '@/lib/settings';
 import { useAuth } from '@/lib/auth';
 import { ApiError } from '@/lib/api-error';
 import { useRealtime } from '@/lib/realtime';
-import { Menu, useToast, type MenuEntry } from '@/components/kit';
-import { corpoDaMidia, inbox, lerBase64, tipoDoArquivo, type ContextoConversa, type ItemThread } from '@/lib/inbox';
+import { Drawer, Menu, useToast, type MenuEntry } from '@/components/kit';
+import { corpoDaMidia, inbox, lerBase64, tipoDoArquivo, type ContagensConversas, type ContextoConversa, type ItemThread } from '@/lib/inbox';
+import { FILTRO_INICIAL, STATUS_LISTA, filtrarBusca, mesmoFiltro, queryDaLista, type FiltroLista } from '@/lib/conversas-filtro';
 import { Composer } from './Composer';
 import { AnexoBolha } from './AnexoBolha';
 import { PainelContexto } from './PainelContexto';
 import { NovaConversaModal } from './NovaConversaModal';
+import { ColunaCanais } from './ColunaCanais';
+import { CanaisConectados } from './CanaisConectados';
+import { SugestoesIA } from './SugestoesIA';
+import { CanalIcone, SeloCanal, canalInfo } from './CanalIcone';
 
 /**
  * Inbox de atendimento REAL (ADR-0039) — substitui a tela que só existia no
  * modo demo. Lista leve + mensagens carregadas por conversa, tempo real com
  * polling de reserva, envio otimista reconciliado, marcar como lida ao abrir
  * e troca de atendimento IA ↔ humano.
+ *
+ * Desenho oficial (PO, 2026-11-11): o mockup de Conversas da LP, em 4
+ * colunas: Canais/Status/Etiquetas (contagens reais) · lista com abas e busca ·
+ * thread com "Marcar como" e Sugestões da IA · Dados do Lead. Canal, status e
+ * etiqueta filtram NO SERVIDOR; a busca e "Responsável" filtram a lista
+ * carregada. No celular, lista e thread alternam e filtros/painel viram drawer.
  */
 
-type Filtro = 'todas' | 'nao_lidas' | 'minhas' | 'ia' | 'humano';
+type Responsavel = 'todos' | 'minhas' | 'ia' | 'humano';
+const RESPONSAVEL: [Responsavel, string][] = [['todos', 'Qualquer responsável'], ['minhas', 'Minhas'], ['ia', 'Com a IA'], ['humano', 'Com a equipe']];
+const ABAS = STATUS_LISTA.filter((s) => s.chave === 'todas' || s.chave === 'nao_lidas' || s.chave === 'em_atendimento');
 type Msg = ItemThread & { local?: 'enviando' | 'falhou' };
 const PREF_PAINEL = 'khub:inbox:painel';
 
@@ -35,7 +48,7 @@ const STATUS_SAIDA: Record<string, { rotulo: string; tom: string }> = {
   falhou: { rotulo: 'Falhou', tom: 'text-danger' },
   failed: { rotulo: 'Falhou', tom: 'text-danger' },
   bloqueado_dev: { rotulo: 'Não enviada (ambiente de teste)', tom: 'text-warning' },
-  canal_desconectado: { rotulo: 'WhatsApp desconectado', tom: 'text-warning' },
+  canal_desconectado: { rotulo: 'Canal desconectado', tom: 'text-warning' },
   sending: { rotulo: 'Enviando…', tom: 'text-muted' },
   unknown: { rotulo: 'Entrega não confirmada', tom: 'text-warning' },
   config_required: { rotulo: 'Não enviada: falta configurar', tom: 'text-warning' },
@@ -81,7 +94,7 @@ function CorpoMensagem({ texto }: { texto: string }) {
  * está conectado, o CTA não pode sugerir "conectar de novo" — o que falta é
  * a primeira mensagem chegar.
  */
-function InboxVazio({ onNova }: { onNova: () => void }) {
+function InboxVazio({ onNova, onConectar }: { onNova: () => void; onConectar: () => void }) {
   const [conectado, setConectado] = useState<boolean | null>(null);
   useEffect(() => {
     settingsApi
@@ -100,7 +113,7 @@ function InboxVazio({ onNova }: { onNova: () => void }) {
         description={
           conectado
             ? 'WhatsApp conectado e funcionando. Quando um cliente escrever, a conversa aparece aqui na hora.'
-            : 'Quando um cliente escrever no WhatsApp conectado, a conversa aparece aqui na hora.'
+            : 'Conecte o WhatsApp, o Instagram, o Messenger ou o YouTube. Quando um cliente escrever ou comentar, a conversa aparece aqui na hora.'
         }
         action={
           conectado ? (
@@ -108,9 +121,9 @@ function InboxVazio({ onNova }: { onNova: () => void }) {
               <Icon name="plus" size={15} /> Iniciar conversa
             </button>
           ) : (
-            <Link href="/configuracoes?aba=integracoes" className="btn btn-primary btn-sm">
-              <Icon name="whatsapp" size={15} /> Conectar WhatsApp
-            </Link>
+            <button type="button" className="btn btn-primary btn-sm" onClick={onConectar}>
+              <Icon name="link" size={15} /> Conectar canais
+            </button>
           )
         }
       />
@@ -127,7 +140,16 @@ export function InboxAtendimento() {
   const [total, setTotal] = useState(0);
   const [erroThread, setErroThread] = useState(false);
   const [busca, setBusca] = useState('');
-  const [filtro, setFiltro] = useState<Filtro>('todas');
+  const [filtro, setFiltroLista] = useState<FiltroLista>(FILTRO_INICIAL);
+  const [responsavel, setResponsavel] = useState<Responsavel>('todos');
+  const [contagens, setContagens] = useState<ContagensConversas | null>(null);
+  const [canaisAberto, setCanaisAberto] = useState(false);
+  const [filtrosMobile, setFiltrosMobile] = useState(false);
+  const [painelMobile, setPainelMobile] = useState(false);
+  const [rascunho, setRascunho] = useState<{ texto: string; n: number } | null>(null);
+  const [marcando, setMarcando] = useState(false);
+  const filtroRef = useRef<FiltroLista>(FILTRO_INICIAL);
+  const cacheSel = useRef<Conversa | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [aviso, setAviso] = useState('');
   const [gated, setGated] = useState<{ provider: string; missing: string[] } | null>(null);
@@ -148,8 +170,12 @@ export function InboxAtendimento() {
   const descer = useCallback((suave = true) => setTimeout(() => fimRef.current?.scrollIntoView({ behavior: suave ? 'smooth' : 'auto', block: 'end' }), 30), []);
 
   const carregarLista = useCallback(async () => {
+    inbox.contagens().then(setContagens).catch(() => undefined);
+    const pedido = filtroRef.current;
     try {
-      const cs = await crm.conversations();
+      const cs = await crm.conversations(queryDaLista(pedido));
+      // Resposta de um filtro que já mudou: descarta (a do filtro atual vem a seguir).
+      if (!mesmoFiltro(pedido, filtroRef.current)) return null;
       setConvs(cs);
       setErroLista(false);
       return cs;
@@ -157,6 +183,35 @@ export function InboxAtendimento() {
       setErroLista(true);
       return null;
     }
+  }, []);
+
+  const mudarFiltro = useCallback(
+    (f: FiltroLista) => {
+      setFiltrosMobile(false);
+      if (mesmoFiltro(f, filtroRef.current)) return;
+      filtroRef.current = f;
+      setFiltroLista(f);
+      setConvs(null);
+      void carregarLista().then((cs) => {
+        for (const c of cs ?? []) versaoRef.current[c.id] = c.atualizadaEm;
+      });
+    },
+    [carregarLista],
+  );
+
+  // Volta do OAuth de um canal (`?canais=1&conectado=…|erro=…`): abre o painel e avisa.
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('canais') !== '1') return;
+    setCanaisAberto(true);
+    const erroOauth = p.get('erro');
+    if (erroOauth) toast.error('Não consegui conectar o canal', { description: erroOauth });
+    else if (p.get('conectado')) {
+      const n = Number(p.get('contas') ?? 0);
+      toast.success(n ? `${n} conta(s) conectada(s)` : 'Nenhuma conta nova conectada', p.get('aviso') ? { description: p.get('aviso')! } : undefined);
+    }
+    window.history.replaceState(null, '', '/conversas');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const abrir = useCallback(
@@ -280,21 +335,40 @@ export function InboxAtendimento() {
     return () => clearInterval(t);
   }, [conectado, sincronizar]);
 
-  const conversa = convs?.find((c) => c.id === sel) ?? null;
+  // A conversa aberta continua aberta quando um filtro a tira da lista.
+  const achada = convs?.find((c) => c.id === sel) ?? null;
+  if (achada) cacheSel.current = achada;
+  const conversa = achada ?? (sel && cacheSel.current?.id === sel ? cacheSel.current : null);
 
   const visiveis = useMemo(() => {
-    const q = busca.trim().toLowerCase();
-    return (convs ?? []).filter((c) => {
-      if (filtro === 'nao_lidas' && !c.naoLidas) return false;
-      if (filtro === 'minhas' && (!user?.identityId || c.assigneeId !== user.identityId)) return false;
-      if (filtro === 'ia' && c.atendimento !== 'ia') return false;
-      if (filtro === 'humano' && c.atendimento !== 'humano') return false;
-      if (!q) return true;
-      return c.nome.toLowerCase().includes(q) || (c.ultimaPrevia ?? '').toLowerCase().includes(q) || (c.contato?.telefone ?? '').includes(q);
+    const porResponsavel = (convs ?? []).filter((c) => {
+      if (responsavel === 'minhas') return !!user?.identityId && c.assigneeId === user.identityId;
+      if (responsavel === 'ia') return c.atendimento === 'ia';
+      if (responsavel === 'humano') return c.atendimento === 'humano';
+      return true;
     });
-  }, [convs, busca, filtro, user?.identityId]);
+    return filtrarBusca(porResponsavel, busca);
+  }, [convs, busca, responsavel, user?.identityId]);
 
-  const naoLidasTotal = (convs ?? []).filter((c) => c.naoLidas > 0).length;
+  const filtroAtivo = !mesmoFiltro(filtro, FILTRO_INICIAL) || responsavel !== 'todos';
+
+  /** "Marcar como": resolvida, reaberta ou não lida (com desfazer pelo próprio menu). */
+  const marcar = async (acao: 'resolvida' | 'aberta' | 'nao_lida') => {
+    if (!conversa || marcando) return;
+    setMarcando(true);
+    try {
+      const r = await inbox.marcar(conversa.id, acao);
+      setConvs((cs) => cs?.map((c) => (c.id === conversa.id ? { ...c, status: r.status, naoLidas: r.naoLidas } : c)) ?? cs);
+      if (cacheSel.current?.id === conversa.id) cacheSel.current = { ...cacheSel.current, status: r.status, naoLidas: r.naoLidas };
+      toast.success(acao === 'resolvida' ? 'Conversa resolvida' : acao === 'aberta' ? 'Conversa reaberta' : 'Marcada como não lida');
+      inbox.contagens().then(setContagens).catch(() => undefined);
+      if (acao === 'nao_lida') setSel(null);
+    } catch (e) {
+      toast.error('Não consegui marcar a conversa', { description: e instanceof ApiError && e.message ? e.message : undefined });
+    } finally {
+      setMarcando(false);
+    }
+  };
 
   const enviar = async (digitado: string) => {
     const t = digitado.trim();
@@ -312,7 +386,8 @@ export function InboxAtendimento() {
       setGated(null);
       if (r.status === 'config_required') setGated({ provider: (r as { provider?: string }).provider ?? 'stevo', missing: r.missing ?? [] });
       else if (r.status === 'sem_telefone') setAviso('Este contato não tem telefone cadastrado. A mensagem foi registrada, mas não saiu.');
-      else if (r.status === 'failed') setAviso(`O WhatsApp recusou a mensagem${r.erro ? ` (${r.erro})` : ''}. Tente de novo.`);
+      else if (r.status === 'failed') setAviso(`O ${canalInfo(conversa.canal).rotulo} recusou a mensagem${r.erro ? ` (${r.erro})` : ''}. Tente de novo.`);
+      else if (r.status === 'canal_desconectado') setAviso(`A conta do ${canalInfo(conversa.canal).rotulo} está desconectada. Conecte de novo em Canais conectados.`);
     } catch (e) {
       setThread((p) => p?.map((m) => (m.id === tmp ? { ...m, local: 'falhou' } : m)) ?? p);
       const cr = e instanceof ApiError ? e.configRequired : null;
@@ -342,7 +417,7 @@ export function InboxAtendimento() {
       setGated(r.status === 'config_required' ? { provider: r.provider ?? 'storage', missing: r.missing } : null);
       if (r.status === 'sem_telefone') setAviso('Este contato não tem telefone cadastrado. O arquivo foi registrado, mas não saiu.');
       else if (r.status === 'failed') setAviso(`O WhatsApp recusou o arquivo${r.erro ? ` (${r.erro})` : ''}. Tente de novo.`);
-      else if (r.status === 'midia_nao_suportada') setAviso('O canal conectado não envia arquivos. Conecte o WhatsApp pela Stevo ou Evolution.');
+      else if (r.status === 'midia_nao_suportada') setAviso(conversa.canal === 'WhatsApp' ? 'O canal conectado não envia arquivos. Conecte o WhatsApp pela Stevo ou Evolution.' : `O ${canalInfo(conversa.canal).rotulo} não recebe arquivos por aqui: responda com texto.`);
     } catch (e) {
       setThread((p) => p?.filter((m) => m.id !== tmp) ?? p);
       const cr = e instanceof ApiError ? e.configRequired : null;
@@ -419,11 +494,17 @@ export function InboxAtendimento() {
     />
   );
 
-  if (convs && convs.length === 0) {
+  const drawerCanais = (
+    <CanaisConectados open={canaisAberto} onClose={() => setCanaisAberto(false)} onMudou={() => void carregarLista()} />
+  );
+
+  // Vazio de verdade (sem filtro e sem nenhuma conversa na conta): convida a conectar.
+  if (convs && convs.length === 0 && !filtroAtivo && contagens?.total === 0) {
     return (
       <>
-        <InboxVazio onNova={() => setNovaConversa(true)} />
+        <InboxVazio onNova={() => setNovaConversa(true)} onConectar={() => setCanaisAberto(true)} />
         {modalNova}
+        {drawerCanais}
       </>
     );
   }
@@ -437,30 +518,58 @@ export function InboxAtendimento() {
     else grupos.push({ dia, itens: [m] });
   }
 
+  const painelVisivel = painel && !!conversa;
+  const colunaCanais = <ColunaCanais contagens={contagens} filtro={filtro} onFiltro={mudarFiltro} onConectar={() => { setFiltrosMobile(false); setCanaisAberto(true); }} />;
+
   return (
-    <div className="card grid h-[calc(100dvh-210px)] min-h-[520px] grid-cols-[minmax(0,1fr)] overflow-hidden p-0 lg:grid-cols-[340px_minmax(0,1fr)]">
-      {/* LISTA */}
-      <section className={cx('flex min-h-0 min-w-0 flex-col border-line lg:border-r', conversa ? 'hidden lg:flex' : 'flex')} aria-label="Conversas">
-        <div className="space-y-3 border-b border-line p-4">
-          <div className="flex items-center justify-between">
-            <p className="t-section">
-              {convs ? `${convs.length} conversas` : 'Conversas'}
-            </p>
-            <span className="flex items-center gap-2">
-              {naoLidasTotal > 0 && <span className="pill pill-brand">{naoLidasTotal} não lidas</span>}
-              <button type="button" className="btn btn-soft btn-sm" onClick={() => setNovaConversa(true)}>
-                <Icon name="plus" size={14} /> Nova
-              </button>
-            </span>
+    <div
+      className={cx(
+        'grid h-[calc(100dvh-210px)] min-h-[520px] grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[200px_320px_minmax(0,1fr)]',
+        painelVisivel ? '2xl:grid-cols-[210px_330px_minmax(0,1fr)_300px]' : '2xl:grid-cols-[210px_330px_minmax(0,1fr)]',
+      )}
+    >
+      {/* 1 · CANAIS, STATUS E ETIQUETAS (no celular, drawer pelo botão de filtros) */}
+      <aside className="card hidden min-h-0 flex-col overflow-hidden p-0 xl:flex" aria-label="Canais, status e etiquetas">
+        {colunaCanais}
+      </aside>
+
+      {/* 2 · LISTA */}
+      <section className={cx('card min-h-0 min-w-0 flex-col overflow-hidden p-0', conversa ? 'hidden lg:flex' : 'flex')} aria-label="Conversas">
+        <div className="border-b border-line px-3 pt-3">
+          <div className="flex gap-2">
+            <div className="relative min-w-0 flex-1">
+              <Icon name="search" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
+              <input type="search" className="input h-9 w-full pl-9" placeholder="Buscar conversas..." value={busca} onChange={(e) => setBusca(e.target.value)} aria-label="Buscar conversas" />
+            </div>
+            <button type="button" className={cx('btn btn-icon btn-sm h-9 w-9 xl:hidden', filtroAtivo && 'text-brand')} aria-label="Canais, status e etiquetas" onClick={() => setFiltrosMobile(true)}>
+              <Icon name="funnel" size={15} />
+            </button>
+            <Menu
+              label="Filtrar por responsável"
+              triggerClassName={cx('btn btn-icon btn-sm h-9 w-9', responsavel !== 'todos' && 'text-brand')}
+              menuClassName="w-56"
+              trigger={<Icon name="users" size={15} />}
+              items={[
+                { type: 'label', id: 'resp', label: 'Responsável' } as MenuEntry,
+                ...RESPONSAVEL.map(([v, r]): MenuEntry => ({ id: v, label: r, icon: responsavel === v ? 'check' : undefined, onSelect: () => setResponsavel(v) })),
+              ]}
+            />
+            <button type="button" className="btn btn-soft btn-icon btn-sm h-9 w-9" aria-label="Nova conversa" title="Nova conversa" onClick={() => setNovaConversa(true)}>
+              <Icon name="plus" size={15} />
+            </button>
           </div>
-          <div className="relative">
-            <Icon name="search" size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
-            <input type="search" className="input w-full pl-9" placeholder="Buscar nome, telefone ou mensagem" value={busca} onChange={(e) => setBusca(e.target.value)} aria-label="Buscar conversas" />
-          </div>
-          <div className="segbar w-full" role="tablist" aria-label="Filtrar conversas">
-            {([['todas', 'Todas'], ['minhas', 'Minhas'], ['nao_lidas', 'Não lidas'], ['ia', 'IA'], ['humano', 'Equipe']] as [Filtro, string][]).map(([v, r]) => (
-              <button key={v} type="button" role="tab" aria-selected={filtro === v} className="seg flex-1 whitespace-nowrap px-2" onClick={() => setFiltro(v)}>
-                {r}
+          <div className="mt-2 flex gap-4" role="tablist" aria-label="Status das conversas">
+            {ABAS.map((a) => (
+              <button
+                key={a.chave}
+                type="button"
+                role="tab"
+                aria-selected={filtro.status === a.chave}
+                className="tab whitespace-nowrap py-2 text-[13px]"
+                onClick={() => mudarFiltro({ ...filtro, status: a.chave })}
+              >
+                {a.rotulo}
+                {contagens && a.chave !== 'em_atendimento' ? ` (${contagens.status[a.chave]})` : ''}
               </button>
             ))}
           </div>
@@ -476,7 +585,16 @@ export function InboxAtendimento() {
                 </div>
               </li>
             ))}
-          {convs && visiveis.length === 0 && <li className="px-4 py-10 text-center text-[13px] text-muted">Nenhuma conversa com esse filtro.</li>}
+          {convs && visiveis.length === 0 && (
+            <li className="px-4 py-10 text-center text-[13px] text-muted">
+              Nenhuma conversa com esse filtro.
+              {filtroAtivo && (
+                <button type="button" className="mt-2 block w-full text-[12.5px] font-medium text-brand hover:underline" onClick={() => { setResponsavel('todos'); mudarFiltro(FILTRO_INICIAL); }}>
+                  Limpar filtros
+                </button>
+              )}
+            </li>
+          )}
           {visiveis.map((c) => {
             const ativa = c.id === sel;
             return (
@@ -486,26 +604,32 @@ export function InboxAtendimento() {
                   onClick={() => void abrir(c.id)}
                   aria-current={ativa ? 'true' : undefined}
                   className={cx(
-                    'flex w-full items-center gap-3 px-4 py-3 text-left transition-colors',
+                    'flex w-full items-start gap-3 border-b border-line px-3 py-3 text-left transition-colors',
                     ativa ? 'bg-[color-mix(in_srgb,var(--brand)_8%,transparent)]' : 'hover:bg-[var(--fill-4)]',
                   )}
                 >
                   <span className="relative shrink-0">
                     <AvatarContato nome={c.nome} fotoUrl={c.contato?.fotoUrl} size={40} />
-                    <span className="absolute -bottom-0.5 -right-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[var(--base-0)] shadow-sm">
-                      <Icon name={c.canal === 'Instagram' ? 'instagram' : 'whatsapp'} size={11} className={c.canal === 'Instagram' ? 'text-[var(--ch-instagram)]' : 'text-[var(--ch-whatsapp)]'} />
-                    </span>
+                    <SeloCanal canal={c.canal} />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline justify-between gap-2">
                       <span className={cx('truncate text-[14px] text-fg', c.naoLidas ? 'font-semibold' : 'font-medium')}>{c.nome}</span>
                       <span className={cx('shrink-0 text-[11.5px] tabular', c.naoLidas ? 'font-semibold text-brand' : 'text-muted')}>{c.ultimaHora ?? ''}</span>
                     </span>
+                    {c.contato?.empresa && <span className="block truncate text-[12px] text-brand">{c.contato.empresa}</span>}
                     <span className="mt-0.5 flex items-center gap-2">
-                      {c.atendimento === 'ia' && <span className="shrink-0 rounded-full bg-brand-soft px-1.5 text-[10.5px] font-semibold text-brand">IA</span>}
+                      {c.atendimento === 'ia' && <span className="shrink-0 rounded-full bg-[var(--violet-soft)] px-1.5 text-[11px] font-semibold text-[var(--violet)]">IA</span>}
                       <span className={cx('truncate text-[13px]', c.naoLidas ? 'text-fg' : 'text-muted')}>{c.ultimaPrevia ?? 'Sem mensagens'}</span>
+                    </span>
+                    <span className="mt-1.5 flex items-center gap-1.5">
+                      {c.tipo === 'comentario' && <span className="pill h-5 shrink-0 px-2 text-[11px]">Comentário</span>}
+                      {c.status === 'resolvida' && <span className="pill pill-success h-5 shrink-0 px-2 text-[11px]">Resolvida</span>}
+                      {(c.etiquetas ?? []).slice(0, 2).map((e) => (
+                        <span key={e} className="pill h-5 max-w-[7.5rem] truncate px-2 text-[11px]">{e}</span>
+                      ))}
                       {c.naoLidas > 0 && (
-                        <span className="ml-auto inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-brand px-1.5 text-[11px] font-semibold text-white">{c.naoLidas > 99 ? '99+' : c.naoLidas}</span>
+                        <span className="ml-auto inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-brand px-1.5 text-[11px] font-semibold text-[var(--base-0)]">{c.naoLidas > 99 ? '99+' : c.naoLidas}</span>
                       )}
                     </span>
                   </span>
@@ -517,7 +641,7 @@ export function InboxAtendimento() {
       </section>
 
       {/* CONVERSA */}
-      <section className={cx('min-h-0 min-w-0 flex-col', conversa ? 'flex' : 'hidden lg:flex')} aria-label="Mensagens">
+      <section className={cx('card min-h-0 min-w-0 flex-col overflow-hidden p-0', conversa ? 'flex' : 'hidden lg:flex')} aria-label="Mensagens">
         {!conversa ? (
           <div className="flex flex-1 items-center justify-center p-8">
             <EmptyState icon="chat" title="Selecione uma conversa" description="Escolha um contato à esquerda para ver o histórico e responder." />
@@ -529,11 +653,15 @@ export function InboxAtendimento() {
               <button type="button" className="btn btn-ghost btn-icon btn-sm lg:hidden" onClick={() => setSel(null)} aria-label="Voltar para a lista">
                 <Icon name="arrowLeft" size={18} />
               </button>
-              <AvatarContato nome={conversa.nome} fotoUrl={conversa.contato?.fotoUrl} size={38} />
+              <span className="relative shrink-0">
+                <AvatarContato nome={conversa.nome} fotoUrl={conversa.contato?.fotoUrl} size={38} />
+                <SeloCanal canal={conversa.canal} />
+              </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[15px] font-semibold text-fg">{conversa.nome}</p>
-                <p className="truncate text-[12.5px] text-muted">
-                  {conversa.canal}
+                <p className="flex items-center gap-1.5 truncate text-[12.5px] text-muted">
+                  <CanalIcone canal={conversa.canal} size={13} />
+                  {conversa.tipo === 'comentario' ? `Comentário no ${canalInfo(conversa.canal).rotulo}` : canalInfo(conversa.canal).rotulo}
                   {conversa.contato?.telefone ? ` · ${conversa.contato.telefone}` : ''}
                 </p>
               </div>
@@ -557,7 +685,7 @@ export function InboxAtendimento() {
                 <Menu
                   label="Atribuir conversa"
                   disabled={trocando || atendentes.length === 0}
-                  triggerClassName="btn btn-ghost btn-sm"
+                  triggerClassName="btn btn-ghost btn-sm !w-auto gap-1.5 !px-2.5"
                   menuClassName="w-64"
                   trigger={
                     <>
@@ -586,20 +714,36 @@ export function InboxAtendimento() {
                     ),
                   ]}
                 />
+                <Menu
+                  label="Marcar como"
+                  disabled={marcando}
+                  triggerClassName="btn btn-sm !w-auto gap-1.5 !px-3"
+                  menuClassName="w-56"
+                  trigger={
+                    <>
+                      <span className="hidden sm:inline">Marcar como</span>
+                      <Icon name="chevronDown" size={14} />
+                    </>
+                  }
+                  items={[
+                    conversa.status === 'resolvida'
+                      ? { id: 'aberta', label: 'Reabrir conversa', icon: 'undo', onSelect: () => void marcar('aberta') }
+                      : { id: 'resolvida', label: 'Resolvida', icon: 'check2', onSelect: () => void marcar('resolvida') },
+                    { id: 'nao_lida', label: 'Não lida', icon: 'eyeOff', onSelect: () => void marcar('nao_lida') },
+                  ]}
+                />
                 <button
                   type="button"
-                  className="btn btn-ghost btn-icon btn-sm hidden xl:inline-flex"
-                  aria-label={painel ? 'Recolher painel do contato' : 'Mostrar painel do contato'}
+                  className="btn btn-ghost btn-icon btn-sm hidden 2xl:inline-flex"
+                  aria-label={painel ? 'Recolher Dados do Lead' : 'Mostrar Dados do Lead'}
                   aria-pressed={painel}
                   onClick={alternarPainel}
                 >
                   <Icon name="layout" size={16} />
                 </button>
-                {conversa.contato?.id && (
-                  <Link href={`/contatos/${conversa.contato.id}`} className="btn btn-ghost btn-sm xl:hidden">
-                    Ver contato
-                  </Link>
-                )}
+                <button type="button" className="btn btn-ghost btn-sm 2xl:hidden" onClick={() => setPainelMobile(true)}>
+                  <Icon name="info" size={14} /> <span className="hidden sm:inline">Dados do lead</span>
+                </button>
               </div>
               {conversa.atendimento === 'humano' && conversa.handoffMotivo && (
                 <p className="w-full rounded-lg bg-[var(--fill-4)] px-3 py-2 text-[12.5px] text-muted">Transferida para a equipe: {conversa.handoffMotivo}</p>
@@ -701,8 +845,11 @@ export function InboxAtendimento() {
               <div ref={fimRef} />
             </div>
 
+            <SugestoesIA conversationId={conversa.id} onEscolher={(texto) => setRascunho((r) => ({ texto, n: (r?.n ?? 0) + 1 }))} />
+
             <Composer
               key={conversa.id}
+              rascunho={rascunho}
               iaRespondendo={conversa.atendimento === 'ia'}
               atendentes={atendentes}
               meuId={user?.identityId}
@@ -714,6 +861,11 @@ export function InboxAtendimento() {
               }}
               topo={
                 <>
+                  {conversa.tipo === 'comentario' && (
+                    <p className="mb-2 flex items-center gap-1.5 text-[12.5px] text-muted">
+                      <Icon name="globe" size={13} /> Resposta pública: vai como resposta ao comentário no {canalInfo(conversa.canal).rotulo}.
+                    </p>
+                  )}
                   {gated && (
                     <div className="mb-3">
                       <ConfigRequired provider={gated.provider} missing={gated.missing} />
@@ -731,14 +883,32 @@ export function InboxAtendimento() {
               onNota={criarNota}
             />
           </div>
-          {painel && (
-            <aside className="hidden w-80 shrink-0 flex-col border-l border-line xl:flex" aria-label="Contexto do contato">
-              <PainelContexto conversationId={conversa.id} versao={versaoContexto} onContexto={setContexto} />
-            </aside>
-          )}
           </div>
         )}
       </section>
+
+      {/* 4 · DADOS DO LEAD (abaixo de 2xl, drawer) */}
+      {painelVisivel && conversa && (
+        <aside className="card hidden min-h-0 flex-col overflow-hidden p-0 2xl:flex" aria-label="Dados do Lead">
+          <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
+            <h2 className="text-[15px] font-semibold text-fg">Dados do Lead</h2>
+            {conversa.contato?.id && (
+              <Link href={`/contatos/${conversa.contato.id}`} className="text-[12.5px] font-medium text-brand hover:underline">
+                Editar
+              </Link>
+            )}
+          </div>
+          <PainelContexto conversationId={conversa.id} versao={versaoContexto} onContexto={setContexto} />
+        </aside>
+      )}
+
+      <Drawer open={painelMobile && !!conversa} onClose={() => setPainelMobile(false)} title="Dados do Lead" width="sm:max-w-sm" className="[&>div:last-child]:p-0">
+        {conversa && <PainelContexto conversationId={conversa.id} versao={versaoContexto} onContexto={setContexto} />}
+      </Drawer>
+      <Drawer open={filtrosMobile} onClose={() => setFiltrosMobile(false)} title="Canais, status e etiquetas" side="left" width="sm:max-w-xs" className="[&>div:last-child]:p-0">
+        {colunaCanais}
+      </Drawer>
+      {drawerCanais}
       {modalNova}
     </div>
   );

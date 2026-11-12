@@ -4,12 +4,21 @@ import { analisarHeuristica, sanearAnalise, intencoesValidas } from './analysis'
 import { avaliarRegras, separarAcoes, type ContextoRegras } from './rules-engine';
 import { decidirExtracao } from './profile-policy';
 import { escolherEstrategia, horarioDaTentativa, motivoParada, partesLocais, proximoHorarioPermitido } from './followup-policy';
-import { validarNaturalidade } from './response-validator';
+import { semAgendamentoInventado, validarNaturalidade } from './response-validator';
 import { checarCenario, compararAvaliacoes, notaCenario, type ResultadoCenario } from './evaluation-scoring';
 
 const frag = (o: Partial<ConfigFragmentacao> = {}): ConfigFragmentacao => ({ ...configPadrao().comunicacao.fragmentacao, ...o });
 
 describe('Message Chunking Engine', () => {
+  it('frases em linhas seguidas (sem marcador) não viram lista', () => {
+    const r = fragmentarMensagem('Que bom que deu certo!\nSua manicure ficou para sexta às 9h, com a Isabela, e a pedicure logo depois.\nQualquer coisa me chama', frag({ preferirCurtas: true, tamanhoMedio: 110 }));
+    expect(r.blocos.length).toBeGreaterThan(1);
+    expect(r.blocos.every((b) => !b.texto.includes('\n'))).toBe(true);
+  });
+  it('aparte entre parênteses não vira balão sozinho', () => {
+    const r = fragmentarMensagem('Qual tipo de esmaltação você prefere?\n\n(Gel ou comum)', frag());
+    expect(r.blocos.map((b) => b.texto)).toEqual(['Qual tipo de esmaltação você prefere? (Gel ou comum)']);
+  });
   it('lista fica em um bloco, com quebra de linha, junto da introdução', () => {
     const r = fragmentarMensagem('Os valores são:\n- Design de sobrancelha: R$ 38,50\n- Design com henna: R$ 49,50\n\nQuer agendar?', frag());
     expect(r.blocos.map((b) => b.texto)).toEqual(['Os valores são:\n• Design de sobrancelha: R$ 38,50\n• Design com henna: R$ 49,50', 'Quer agendar?']);
@@ -245,6 +254,24 @@ describe('Follow-up', () => {
     const base = new Date('2026-11-02T10:00:00Z');
     expect(horarioDaTentativa(base, 1, regra)!.toISOString()).toBe('2026-11-03T10:00:00.000Z');
     expect(horarioDaTentativa(base, 3, regra)!.toISOString()).toBe('2026-11-05T10:00:00.000Z');
+  });
+});
+
+describe('Heurística de reclamação', () => {
+  it('reconhece reclamação de atendimento em linguagem de WhatsApp', () => {
+    expect(analisarHeuristica('Estou muito chateada, marquei ontem e ninguém me atendeu, fiquei esperando 40 minutos!').intencao).toBe('reclamacao');
+    expect(analisarHeuristica('que falta de respeito, ninguem me retornou').intencao).toBe('reclamacao');
+    expect(analisarHeuristica('quanto custa o lash lift?').intencao).not.toBe('reclamacao');
+  });
+});
+
+describe('Agendamento inventado', () => {
+  it('tira a afirmação, mantém a promessa', () => {
+    const r = semAgendamentoInventado('Ótimo, Mariana!\n\nSeu agendamento está confirmado para sexta às 9h.\n\nQualquer dúvida me chama');
+    expect(r.removeu).toBe(true);
+    expect(r.texto).toBe('Ótimo, Mariana!\n\nQualquer dúvida me chama');
+    expect(semAgendamentoInventado('Vou agendar sua manicure para sexta às 9h, pode ser?').removeu).toBe(false);
+    expect(semAgendamentoInventado('Sua vaga está garantida!').texto).toBe('Sua vaga está garantida!');
   });
 });
 

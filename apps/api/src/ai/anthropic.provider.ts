@@ -50,6 +50,31 @@ export function aceitaEffort(modelo: string): boolean {
   return !modelo.startsWith('claude-haiku-4-5');
 }
 
+const ORDEM_EFFORT = ['low', 'medium', 'high'] as const;
+type Effort = (typeof ORDEM_EFFORT)[number];
+
+/**
+ * Política de custo da operação (deploy com crédito limitado):
+ *  - `ANTHROPIC_MODEL_FORCE`: TODA chamada à Anthropic usa este modelo, seja
+ *    qual for o pedido (agentes, NICO, sugestões). Ex.: `claude-haiku-5-5`.
+ *  - `ANTHROPIC_EFFORT_MAX`: teto de esforço de raciocínio (cobrado como saída).
+ *    Sem effort pedido, aplica o teto, porque o Haiku 5.5 usa `medium` por padrão.
+ * Sem as variáveis, nada muda (comportamento anterior).
+ */
+export function aplicarPoliticaDeCusto(
+  modelo: string,
+  effort: Effort | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): { modelo: string; effort: Effort | undefined } {
+  const forcado = (env.ANTHROPIC_MODEL_FORCE || '').trim();
+  const modeloFinal = /^claude-[a-z0-9-]+$/.test(forcado) ? forcado : modelo;
+  const teto = (env.ANTHROPIC_EFFORT_MAX || '').trim() as Effort;
+  if (!ORDEM_EFFORT.includes(teto)) return { modelo: modeloFinal, effort };
+  const pedido = effort ?? teto;
+  const effortFinal = ORDEM_EFFORT.indexOf(pedido) > ORDEM_EFFORT.indexOf(teto) ? teto : pedido;
+  return { modelo: modeloFinal, effort: effortFinal };
+}
+
 /**
  * Fallback de recusa no servidor (`fallbacks: "default"`): suportado no Opus
  * 5.5 e no Sonnet 5.5 pela Claude API. Numa recusa, a própria API reexecuta
@@ -152,6 +177,9 @@ export class AnthropicProvider implements AIProvider {
     }
     this.exigirCredencial();
     const chave = this.config.get('ANTHROPIC_API_KEY')!;
+    // Política de custo do deploy (modelo forçado e teto de esforço).
+    const politica = aplicarPoliticaDeCusto(input.modelo, input.effort);
+    input = { ...input, modelo: politica.modelo, effort: politica.effort };
 
     const corpo: Record<string, unknown> = {
       model: input.modelo,

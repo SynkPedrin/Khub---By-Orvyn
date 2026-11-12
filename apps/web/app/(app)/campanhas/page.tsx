@@ -16,17 +16,16 @@ import { ads, type AdsOverview, type Campaign as AdsCampaign } from '@/lib/ads';
 import { brl } from '@/lib/crm';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import type { Campanha } from '@/lib/revenue/types';
+import { Tabs, TabPanel } from '@/components/kit';
+import { ListaDisparos } from '@/components/disparos/ListaDisparos';
 
 /**
  * CAMPANHAS — prospecção multicanal.
  *
- * Módulo novo: não existia no KHUB OS. Nesta fase entrega **arquitetura,
- * interface e modelo de dados**; o disparo real fica desligado.
- *
- * Isso é deliberado. Ligar envio em massa antes de haver opt-out, janela de
- * envio, limite por tenant e trilha de auditoria transforma o produto em
- * ferramenta de spam — e queima o domínio do cliente junto. O botão de
- * publicar existe, mas diz o que falta em vez de disparar.
+ * Modo real (Q4.3): aba Disparos com envio em massa de verdade, agora que
+ * existem opt-out, janela de envio, limite diário por tenant, aprovação humana
+ * e trilha de auditoria (DisparosService). A aba Anúncios mostra a Meta Ads.
+ * O modo demo continua com o dataset ilustrativo.
  */
 export default function CampanhasPage() {
   const demo = modoDemo();
@@ -454,7 +453,32 @@ function PainelCampanha({ campanha }: { campanha: Campanha }) {
  * quem conectava a Meta não via nada. A gestão completa fica em
  * Marketing → Ads; esta seção é a vitrine do que já está rodando.
  */
+/**
+ * Modo real: duas abas. "Disparos" é o disparo em massa por segmento (Q4.3),
+ * com aprovação, lotes, janela e opt-out; "Anúncios" mantém os dados da Meta Ads.
+ */
 function CampanhasReais() {
+  const [aba, setAba] = useState<'disparos' | 'anuncios'>('disparos');
+  return (
+    <div className="space-y-4">
+      <Tabs
+        idBase="campanhas-abas"
+        label="Tipo de campanha"
+        value={aba}
+        onChange={setAba}
+        items={[{ value: 'disparos', label: 'Disparos' }, { value: 'anuncios', label: 'Anúncios (Meta Ads)' }]}
+      />
+      <TabPanel idBase="campanhas-abas" value="disparos" active={aba === 'disparos'}>
+        <ListaDisparos />
+      </TabPanel>
+      <TabPanel idBase="campanhas-abas" value="anuncios" active={aba === 'anuncios'}>
+        <AnunciosReais />
+      </TabPanel>
+    </div>
+  );
+}
+
+function AnunciosReais() {
   const [ov, setOv] = useState<AdsOverview | null>(null);
   const [camps, setCamps] = useState<AdsCampaign[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -536,22 +560,16 @@ function CampanhasReais() {
         </section>
       )}
 
-      {/* Prospecção multicanal segue desligada nesta fase — o aviso só faz
-          sentido quando não há nada de anúncios para mostrar. */}
-      {!carregando && (
+      {!carregando && !temAds && (
         <div className="card">
           <EmptyState
-            icon="send"
-            title={temAds ? 'Campanhas de prospecção em breve' : 'Campanhas ainda não estão disponíveis'}
-            description={
-              temAds
-                ? 'As campanhas de anúncios da Meta já aparecem acima. Cadências de contato (WhatsApp, e-mail, esperas e follow-ups) são montadas em Automações, já funcionando.'
-                : 'Enquanto isso, cadências de contato (WhatsApp, e-mail, esperas e follow-ups) são montadas em Automações, já funcionando. Se você conectou o Meta Ads, suas campanhas aparecem em Marketing → Ads.'
-            }
+            icon="marketing"
+            title="Nenhuma campanha de anúncios conectada"
+            description="Conecte a Meta Ads para ver investimento, leads e ROAS das campanhas aqui. Disparos de WhatsApp e e-mail ficam na aba Disparos."
             action={
-              <Link href="/automacoes" className="btn btn-primary btn-sm">
-                <Icon name="zap" size={15} />
-                Ir para Automações
+              <Link href="/configuracoes?tab=integracoes" className="btn btn-primary btn-sm">
+                <Icon name="link" size={15} />
+                Conectar Meta Ads
               </Link>
             }
           />

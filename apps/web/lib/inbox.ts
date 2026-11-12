@@ -67,9 +67,32 @@ export interface ContextoConversa {
   } | null;
   negocios: { id: string; titulo: string; valor: number; etapa: string; cor: string | null; funil: string }[];
   tarefas: { id: string; titulo: string; dueAt: string | null; prioridade: string }[];
+  /** Notas do contato (painel "Dados do Lead"). */
+  observacoes?: { id: string; corpo: string; autor: string | null; criadaEm: string }[];
+  /** Atividades recentes do contato. */
+  atividades?: { id: string; acao: string; ator: string; tom: string; criadaEm: string }[];
+}
+
+/** Contagens leves da coluna Canais/Status/Etiquetas (db/063). */
+export interface ContagensConversas {
+  total: number;
+  canais: Record<string, number>;
+  status: { todas: number; nao_lidas: number; em_atendimento: number; aguardando: number; resolvidas: number };
+  etiquetas: { nome: string; cor: string | null; total: number }[];
+  /** Canais com conta conectada (WhatsApp, Instagram, Messenger…). */
+  conectados: string[];
+}
+
+export interface SugestaoIA {
+  titulo: string;
+  texto: string;
 }
 
 export const inbox = {
+  contagens: () => req<ContagensConversas>('conversations/contagens'),
+  marcar: (conversationId: string, acao: 'resolvida' | 'aberta' | 'nao_lida') =>
+    req<{ id: string; status: string; naoLidas: number }>(`conversations/${conversationId}/status`, { method: 'PATCH', headers: json, body: JSON.stringify({ acao }) }),
+  sugestoes: (conversationId: string) => req<{ sugestoes: SugestaoIA[]; modelo: string }>(`conversations/${conversationId}/sugestoes`, { method: 'POST' }),
   thread: (conversationId: string) => req<{ id: string; total: number; mensagens: ItemThread[] }>(`conversations/${conversationId}/thread`),
   contexto: (conversationId: string) => req<ContextoConversa>(`conversations/${conversationId}/contexto`),
   enviarMidia: (conversationId: string, corpo: { tipo: TipoMidia; mime: string; nome: string; base64: string; legenda?: string }, key: string = crypto.randomUUID()) =>

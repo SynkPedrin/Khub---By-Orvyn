@@ -40,7 +40,8 @@
     ".next-build-khub/types/**/*.ts",
     ".next-verif/types/**/*.ts",
     ".next-demo/types/**/*.ts",
-    ".next-deploy/types/**/*.ts"
+    ".next-deploy/types/**/*.ts",
+    ".next-canais/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

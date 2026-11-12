@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Headers, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
-import { IsArray, IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 import { CurrentUser, type AuthUser } from '../auth/decorators';
 import { SkipAudit } from '../common/audit.interceptor';
 import { AgencyService } from './agency.service';
@@ -7,6 +7,10 @@ import { AgencyService } from './agency.service';
 class CriarClienteDto {
   @IsString() @MinLength(2) @MaxLength(120) nome!: string;
   @IsOptional() @IsString() @MaxLength(80) nicho?: string;
+}
+
+class FixarDto {
+  @IsBoolean() fixado!: boolean;
 }
 
 class AtualizarMembroDto {
@@ -35,6 +39,18 @@ export class AgencyController {
   @Get('clients')
   listarClientes(@CurrentUser() user: AuthUser) {
     return this.agency.listarClientes(user.identityId);
+  }
+
+  /** Seletor de subcontas da sidebar: lista leve + fixadas + recentes do membro. */
+  @Get('switcher')
+  seletor(@CurrentUser() user: AuthUser) {
+    return this.agency.seletor(user.identityId);
+  }
+
+  /** Fixa/desfixa a subconta no seletor do próprio usuário. */
+  @Patch('clients/:id/pin')
+  fixar(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: FixarDto) {
+    return this.agency.fixar(user.identityId, id, dto.fixado);
   }
 
   @Get('overview')

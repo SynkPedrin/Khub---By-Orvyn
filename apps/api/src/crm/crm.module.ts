@@ -39,10 +39,16 @@ import { AvatarContatoService } from './messaging/avatar-contato.service';
 import { CryptoService } from '../integrations/crypto.service';
 import { InboxService } from './messaging/inbox.service';
 import { InboxController } from './messaging/inbox.controller';
+import { ConversasService } from './messaging/conversas.service';
+import { SugestoesService } from './messaging/sugestoes.service';
+import { CanaisController } from './messaging/canais/canais.controller';
+import { CanaisService } from './messaging/canais/canais.service';
+import { CanaisIngestaoService } from './messaging/canais/canais-ingestao.service';
+import { MetaCanaisHttp, YoutubeHttp } from './messaging/canais/canais.http';
 
 @Module({
   imports: [RealtimeModule],
-  controllers: [ContatosController, NegociosController, LostReasonsController, CrmController, CrmF2Controller, CustomFieldsController, PipelinesController, ComercialController, StevoWebhookController, StevoApiWebhookController, EvolutionWebhookController, WhatsAppController, InboxController],
+  controllers: [ContatosController, NegociosController, LostReasonsController, CrmController, CrmF2Controller, CustomFieldsController, PipelinesController, ComercialController, StevoWebhookController, StevoApiWebhookController, EvolutionWebhookController, WhatsAppController, InboxController, CanaisController],
   providers: [
     CrmService,
     ContatosMassaService,
@@ -69,12 +75,19 @@ import { InboxController } from './messaging/inbox.controller';
     WhatsAppConnectionService,
     AvatarContatoService,
     InboxService,
+    // Conversas omnichannel (db/063): filtros/contagens e canais conectados.
+    ConversasService,
+    SugestoesService,
+    CanaisService,
+    CanaisIngestaoService,
+    MetaCanaisHttp,
+    YoutubeHttp,
     // Instância própria (stateless, só depende de ConfigService) — evita
     // ciclo de import com IntegrationsModule, que é quem importa CrmModule.
     CryptoService,
   ],
   // superfície pública do CRM: quem age em nome do usuário (automations,
   // integrations, e a Nyro em F) entra por aqui — nunca no banco direto.
-  exports: [CrmService, MessagesService, AtendimentoService, StevoApiProvider, StevoApiEventosService, StevoApiVinculoService, LeadsService, TasksService, CompaniesService, NotesService, CustomFieldsService],
+  exports: [CrmService, MessagesService, CanaisIngestaoService, AtendimentoService, StevoApiProvider, StevoApiEventosService, StevoApiVinculoService, LeadsService, TasksService, CompaniesService, NotesService, CustomFieldsService],
 })
 export class CrmModule {}

@@ -23,6 +23,7 @@ import { Button, Confirm, Menu, SkeletonLines, Tooltip, useToast, type MenuEntry
 import { ErrorState } from '@/components/revenue/States';
 import { NoCanvas, type DadosNo } from '@/components/automations/NoCanvas';
 import { PainelNo } from '@/components/automations/PainelNo';
+import { configPadraoMotor, ramosMotor, resumirMotor } from '@/lib/automations-motor';
 import { PainelAdicionar } from '@/components/automations/PainelAdicionar';
 import { TestarAutomacao } from '@/components/automations/TestarAutomacao';
 import { ModoSimples } from '@/components/automations/ModoSimples';
@@ -52,6 +53,8 @@ const rid = () => Math.random().toString(36).slice(2, 9);
 
 /** Resumo mostrado no card do canvas — o usuário entende o fluxo sem abrir cada nó. */
 function resumir(tipo: string, cfg: Record<string, any>): string {
+  const motor = resumirMotor(tipo, cfg); // Q3.1/Q3.2
+  if (motor !== undefined) return motor;
   switch (tipo) {
     case 'gatilho.contato_criado': return cfg.origem ? `origem: ${cfg.origem}` : 'qualquer contato novo';
     case 'gatilho.etapa_mudou': return cfg.stageId ? 'etapa específica' : 'qualquer etapa';
@@ -87,12 +90,15 @@ function resumir(tipo: string, cfg: Record<string, any>): string {
     case 'acao.ia': return cfg.tarefa ? `IA: ${cfg.tarefa} → ${cfg.salvarEm || 'ia'}` : 'configure a IA';
     case 'acao.chamar_workflow': return cfg.workflowId ? 'entra em outro fluxo' : 'escolha o fluxo';
     case 'acao.webhook': return cfg.url || 'defina a URL';
+    case 'acao.pedir_avaliacao': return `por ${cfg.canal === 'email' ? 'e-mail' : 'WhatsApp'}`;
     default: return '';
   }
 }
 
 /** Saídas do nó: fixas (esperar resposta) ou definidas pelo usuário (If/Else). */
 function ramosDoNo(tipo: string, cfg: Record<string, any>, m?: MetaNo): Ramo[] | undefined {
+  const motor = ramosMotor(tipo, cfg); // "Esperar até": duas saídas só no modo evento
+  if (motor !== undefined) return motor ?? undefined;
   if (m?.ramosFixos) return m.ramosFixos.map((r) => ({ id: r.id, rotulo: r.rotulo, juncao: 'AND' as const, regras: [] }));
   if (tipo === 'controle.condicao') return (cfg.ramos ?? []) as Ramo[];
   // split: o canvas só precisa de id+rótulo por saída (o peso mora na config)
@@ -102,6 +108,8 @@ function ramosDoNo(tipo: string, cfg: Record<string, any>, m?: MetaNo): Ramo[] |
 
 /** Config inicial de cada tipo: o nó nasce utilizável, não vazio. */
 function configPadrao(tipo: string): Record<string, unknown> {
+  const motor = configPadraoMotor(tipo); // Q3.1/Q3.2
+  if (motor) return motor;
   switch (tipo) {
     case 'controle.esperar': return { duracao: 10, unidade: 'minutos' };
     case 'controle.esperar_resposta': return { duracao: 1, unidade: 'dias' };
@@ -111,6 +119,7 @@ function configPadrao(tipo: string): Record<string, unknown> {
     case 'acao.criar_tarefa': return { titulo: '', prioridade: 'media', emDias: 0 };
     case 'gatilho.webhook': return { identificarPor: 'email', campo: 'email', seNaoAchar: 'criar' };
     case 'acao.webhook': return { metodo: 'POST' };
+    case 'acao.pedir_avaliacao': return { canal: 'whatsapp' };
     default: return {};
   }
 }

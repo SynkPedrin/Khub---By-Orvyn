@@ -11,6 +11,7 @@ import { modoDemo } from '@/lib/demo/flag';
 import { useEffect, useState } from 'react';
 import { useLocale } from '@/lib/locale';
 import { useAgency } from '@/components/agency/AgencyProvider';
+import { SubaccountSwitcher } from '@/components/agency/SubaccountSwitcher';
 import { motionTokens } from '@/lib/motion';
 import { billingApi, NOME_PLANO, ROTULO_STATUS, type BillingStatus } from '@/lib/billing';
 
@@ -40,10 +41,7 @@ export function Sidebar({
 }) {
   const pathname = usePathname() ?? '/';
   const {t}=useLocale();
-  const { contexto, clientes, clienteAtivo, entrarNoCliente, trocandoCliente, erro } = useAgency();
-  const [busca, setBusca] = useState('');
-  const normalizar = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const encontrados = clientes.filter(c => normalizar(c.nome).includes(normalizar(busca.trim())));
+  const { contexto, clienteAtivo } = useAgency();
   // Modo agência tem a PRÓPRIA navegação (seção 24 do brief) — nunca
   // misturada com a operacional de um cliente. `/agency` nunca é rota de
   // um cliente (nome reservado), então esta checagem é segura.
@@ -127,28 +125,15 @@ export function Sidebar({
         </Link>
       </div>
 
+      {/* Seletor de subcontas (estilo GHL): só para quem é de uma agência. */}
+      {contexto && (
+        <div className={cx('shrink-0 pt-3', curta ? 'px-2' : 'px-3')}>
+          <SubaccountSwitcher curta={curta} onNavigate={onNavigate} />
+        </div>
+      )}
+
       {/* Navegação primária */}
       <nav aria-label="Navegação principal" className="flex-1 overflow-y-auto scrollbar-thin px-3 py-2">
-        {contexto && !curta && <section className="mb-3 border-b border-line pb-3" aria-label="Agência e subcontas">
-          <Link href="/agency" onClick={onNavigate} className="nav-item" aria-current={modoAgencia ? 'page' : undefined}>
-            <Icon name="building" size={21} /><span>Agência</span>
-          </Link>
-          <label htmlFor={`subcontas-${onNavigate ? 'mobile' : 'desktop'}`} className="mt-2 block text-xs text-muted">Pesquisar subcontas</label>
-          <input id={`subcontas-${onNavigate ? 'mobile' : 'desktop'}`} type="search" className="input mt-1 w-full" placeholder="Nome do cliente" value={busca} onChange={e => setBusca(e.target.value)} />
-          <div className="mt-2 max-h-48 overflow-y-auto">
-            {encontrados.map(c => <button key={c.id} type="button" className="nav-item w-full text-left" disabled={trocandoCliente || c.status !== 'active'} aria-pressed={clienteAtivo?.id === c.id} onClick={() => void entrarNoCliente(c.id)}>
-              <span className="truncate">{c.nome}</span>{clienteAtivo?.id === c.id && <Icon name="check2" size={14} />}
-            </button>)}
-            {!encontrados.length && <p className="px-2 py-3 text-xs text-muted">Nenhuma subconta encontrada.</p>}
-          </div>
-          {erro && <p role="alert" className="mt-2 text-xs text-danger">{erro}</p>}
-        </section>}
-        {contexto && curta && (
-          <Link href="/agency" onClick={onNavigate} title="Agência" className="nav-item mb-2 justify-center px-0" aria-current={modoAgencia ? 'page' : undefined}>
-            <Icon name="building" size={21} />
-            <span className="sr-only">Agência</span>
-          </Link>
-        )}
         {grupos.map(({ grupo, itens }, gi) => (
           <div key={grupo ?? gi} className={cx(gi > 0 && (curta ? 'mt-2 border-t border-line pt-2' : 'sidebar-hairline mt-3 border-t pt-3'))}>
             {grupo && !curta && <p className="nav-grupo">{grupo}</p>}

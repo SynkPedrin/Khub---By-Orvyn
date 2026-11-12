@@ -4,7 +4,7 @@ import { HttpException, Injectable, Logger } from '@nestjs/common';
 export type Provider =
   | 'stevo' | 'stevo_api' | 'stevo_webhook' | 'evolution' | 'meta' | 'google_ads' | 'tiktok' | 'stripe'
   | 'voyage' | 'anthropic' | 'email' | 'oauth_google' | 'oauth_github'
-  | 'google_calendar' | 'integrations_crypto' | 'storage';
+  | 'google_calendar' | 'integrations_crypto' | 'storage' | 'youtube';
 
 /** Variáveis obrigatórias por provedor (Seção 2 do Brief-Finalizacao). */
 const REQUIRED: Record<Provider, string[]> = {
@@ -34,6 +34,8 @@ const REQUIRED: Record<Provider, string[]> = {
   // Storage S3-compatible (R2/AWS/MinIO) — anexos do Inbox (Q2.5). S3_REGION
   // e S3_PUBLIC_BASE_URL são opcionais (ver docs/ENV.md).
   storage: ['S3_ENDPOINT', 'S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'],
+  // Comentários do YouTube em Conversas (db/063): OAuth do Google + YouTube Data API v3.
+  youtube: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
 };
 
 /**

@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import { Button, Field, Input } from '@/components/ui';
 import { Icon } from '@/components/icons';
-import { CAMPOS_CONDICAO, OPERADORES, type MetaNo, type NoGrafo, type Ramo } from '@/lib/automations';
+import { OPERADORES, type MetaNo, type NoGrafo, type Ramo } from '@/lib/automations';
 import { crm, type Contato, type PipelineData } from '@/lib/crm';
 import { FiltroGatilhoAgenda, ehGatilhoAgenda } from '@/components/agenda/FiltroGatilhoAgenda';
+import { PainelNoMotor, TIPOS_MOTOR, useCamposCondicao } from './PainelNoMotor';
 
 interface Props {
   no: NoGrafo;
@@ -214,18 +215,8 @@ export function PainelNo({ no, meta, onMudar, onExcluir, onFechar, outrosNos, ou
         {(no.tipo === 'acao.adicionar_tag' || no.tipo === 'acao.remover_tag') && (
           <Field label="Tag"><Input value={cfg.tag ?? ''} onChange={(e) => set({ tag: e.target.value })} placeholder="cliente-vip" /></Field>
         )}
-        {no.tipo === 'acao.atualizar_contato' && (
-          <>
-            <Field label="Campo">
-              <select className="input" value={cfg.campo ?? 'tag'} onChange={(e) => set({ campo: e.target.value })}>
-                {['nome', 'email', 'telefone', 'empresa', 'tag', 'valorEstimado'].map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </Field>
-            <Field label="Novo valor" hint="Aceita {{contato.nome}} etc.">
-              <Input value={cfg.valor ?? ''} onChange={(e) => set({ valor: e.target.value })} />
-            </Field>
-          </>
-        )}
+        {/* Q3.1/Q3.2: nós e gatilhos novos (e o "Atualizar contato" com campos personalizados e tags) */}
+        {TIPOS_MOTOR.has(no.tipo) && <PainelNoMotor no={no} set={set} outrosFluxos={outrosFluxos} />}
         {no.tipo === 'acao.criar_oportunidade' && (
           <>
             <Field label="Título"><Input value={cfg.titulo ?? ''} onChange={(e) => set({ titulo: e.target.value })} placeholder="Proposta · {{contato.nome}}" /></Field>
@@ -260,6 +251,21 @@ export function PainelNo({ no, meta, onMudar, onExcluir, onFechar, outrosNos, ou
               </Field>
               <Field label="Vence em (dias)"><Input type="number" min={0} value={cfg.emDias ?? 0} onChange={(e) => set({ emDias: Number(e.target.value) || 0 })} /></Field>
             </div>
+          </>
+        )}
+        {no.tipo === 'acao.pedir_avaliacao' && (
+          <>
+            <Field label="Canal">
+              <select className="input" value={cfg.canal ?? 'whatsapp'} onChange={(e) => set({ canal: e.target.value })}>
+                <option value="whatsapp">WhatsApp</option><option value="email">E-mail</option>
+              </select>
+            </Field>
+            <Field label="Mensagem (opcional)" hint="Vazio = mensagem padrão de Configurações > Avaliações. Use {{link}} onde o link deve entrar.">
+              <textarea className="input min-h-24 resize-y" value={cfg.mensagem ?? ''} maxLength={1000} onChange={(e) => set({ mensagem: e.target.value || undefined })} placeholder="Oi, {{contato.primeiroNome}}! Pode avaliar nosso atendimento? {{link}}" />
+            </Field>
+            <p className="rounded-lg bg-[var(--fill-4)] px-3 py-2 text-[11px] leading-snug text-muted">
+              O link é curto e rastreável: o clique e a nota ficam no relatório de Avaliações. Com o filtro de satisfação ligado, notas baixas viram feedback interno.
+            </p>
           </>
         )}
         {no.tipo === 'acao.webhook' && (
@@ -376,6 +382,7 @@ export function PainelNo({ no, meta, onMudar, onExcluir, onFechar, outrosNos, ou
 
 /** If/Else: ramos com AND/OR/NONE e regras. */
 function EditorRamos({ ramos, onMudar }: { ramos: Ramo[]; onMudar: (r: Ramo[]) => void }) {
+  const camposCondicao = useCamposCondicao();
   const alterar = (i: number, patch: Partial<Ramo>) => onMudar(ramos.map((r, j) => (j === i ? { ...r, ...patch } : r)));
 
   return (
@@ -422,7 +429,7 @@ function EditorRamos({ ramos, onMudar }: { ramos: Ramo[]; onMudar: (r: Ramo[]) =
                   onChange={(e) => alterar(i, { regras: ramo.regras.map((r, x) => (x === k ? { ...r, campo: e.target.value } : r)) })}
                   className="input h-7 w-full text-[11px]"
                 >
-                  {CAMPOS_CONDICAO.map((c) => <option key={c.valor} value={c.valor}>{c.rotulo}</option>)}
+                  {camposCondicao.map((c) => <option key={c.valor} value={c.valor}>{c.rotulo}</option>)}
                 </select>
                 <div className="flex gap-1">
                   <select

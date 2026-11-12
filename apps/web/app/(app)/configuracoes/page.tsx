@@ -14,12 +14,13 @@ import { useAuth } from '@/lib/auth';
 import { AccountPreferencesForm } from '@/components/app/AccountPreferencesForm';
 import { TagsTab } from '@/components/settings/TagsTab';
 import { CamposPersonalizadosTab } from '@/components/settings/CamposPersonalizadosTab';
+import { AvaliacoesTab } from '@/components/settings/AvaliacoesTab';
 import { MotivosPerdaTab } from '@/components/settings/MotivosPerdaTab';
 import { SkeletonLines, SkeletonRows } from '@/components/kit';
 import { EncerrarSessoes } from '@/components/app/EquipeAcoes';
 import { EquipeConvites } from '@/components/app/EquipeConvites';
 
-type Tab = 'perfil' | 'personalizacao' | 'empresa' | 'equipe' | 'integracoes' | 'tags' | 'campos' | 'motivos' | 'chaves' | 'auditoria';
+type Tab = 'perfil' | 'personalizacao' | 'empresa' | 'equipe' | 'integracoes' | 'tags' | 'campos' | 'avaliacoes' | 'motivos' | 'chaves' | 'auditoria';
 const TABS: { key: Tab; label: string; icon: IconName; grupo: 'Conta' | 'Avançado' }[] = [
   { key: 'perfil', label: 'Meu perfil', icon: 'user', grupo: 'Conta' },
   { key: 'personalizacao', label: 'Personalização', icon: 'sparkles', grupo: 'Conta' },
@@ -28,6 +29,7 @@ const TABS: { key: Tab; label: string; icon: IconName; grupo: 'Conta' | 'Avança
   { key: 'integracoes', label: 'Integrações', icon: 'marketing', grupo: 'Avançado' },
   { key: 'tags', label: 'Tags', icon: 'sparkles', grupo: 'Avançado' },
   { key: 'campos', label: 'Campos personalizados', icon: 'list', grupo: 'Avançado' },
+  { key: 'avaliacoes', label: 'Avaliações', icon: 'star', grupo: 'Avançado' },
   { key: 'motivos', label: 'Motivos de perda', icon: 'target', grupo: 'Avançado' },
   { key: 'chaves', label: 'Chaves de API', icon: 'settings', grupo: 'Avançado' },
   { key: 'auditoria', label: 'Auditoria', icon: 'knowledge', grupo: 'Avançado' },
@@ -103,6 +105,7 @@ export default function ConfiguracoesPage() {
           {tab === 'integracoes' && <IntegrationsMarketplace />}
           {tab === 'tags' && <TagsTab />}
           {tab === 'campos' && <CamposPersonalizadosTab />}
+          {tab === 'avaliacoes' && <AvaliacoesTab />}
           {tab === 'motivos' && <MotivosPerdaTab />}
           {tab === 'chaves' && <ApiKeysTab />}
           {tab === 'auditoria' && <AuditoriaTab />}

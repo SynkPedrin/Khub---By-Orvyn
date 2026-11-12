@@ -10,6 +10,7 @@ import { Confirm, SkeletonDetail, useToast } from '@/components/kit';
 import { CamposPersonalizados } from '@/components/crm/CamposPersonalizados';
 import { PerfilTagsNaoPerturbe } from '@/components/crm/leads/PerfilTagsNaoPerturbe';
 import { AutomacoesDoContato } from '@/components/automations/AutomacoesDoContato';
+import { PedirAvaliacao } from '@/components/avaliacoes/PedirAvaliacao';
 
 const TONE: Record<string, 'brand' | 'green' | 'amber' | 'neutral'> = {
   'Lead quente': 'amber', Lead: 'neutral', Paciente: 'brand', Cliente: 'green',
@@ -161,6 +162,7 @@ export default function Contato360Page() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <PedirAvaliacao contato={c} />
             <Button variant="ghost" onClick={() => setEditando((v) => !v)}><Icon name="settings" size={15} /> {editando ? 'Cancelar' : 'Editar'}</Button>
             <Button variant="ghost" onClick={() => setConfirmando(true)} className="btn-danger"><Icon name="trash" size={15} /> Excluir</Button>
           </div>

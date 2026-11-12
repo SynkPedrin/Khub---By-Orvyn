@@ -235,6 +235,7 @@ model AgencyMember {
   createdAt    DateTime                        @default(now()) @map("created_at") @db.Timestamptz(6)
   agency       Agency                          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   clientAccess AgencyMemberClientAccess[]
+  clientPrefs  AgencyMemberClientPref[]
 
   @@unique([agencyId, identityId])
   @@map("agency_members")
@@ -251,9 +252,25 @@ model AgencyClientAccount {
   updatedAt   DateTime                   @default(now()) @map("updated_at") @db.Timestamptz(6)
   agency      Agency                     @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   memberAccess AgencyMemberClientAccess[]
+  memberPrefs  AgencyMemberClientPref[]
 
   @@unique([agencyId, tenantId])
   @@map("agency_client_accounts")
+}
+
+/// Preferências do membro por subconta no seletor (db/064): fixar e último acesso ("Recentes").
+model AgencyMemberClientPref {
+  agencyMemberId  String              @map("agency_member_id") @db.Uuid
+  clientAccountId String              @map("client_account_id") @db.Uuid
+  fixado          Boolean             @default(false)
+  ultimoAcessoEm  DateTime?           @map("ultimo_acesso_em") @db.Timestamptz(6)
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime            @default(now()) @map("updated_at") @db.Timestamptz(6)
+  member          AgencyMember        @relation(fields: [agencyMemberId], references: [id], onDelete: Cascade)
+  clientAccount   AgencyClientAccount @relation(fields: [clientAccountId], references: [id], onDelete: Cascade)
+
+  @@id([agencyMemberId, clientAccountId])
+  @@map("agency_member_client_prefs")
 }
 
 model AgencyMemberClientAccess {
@@ -494,12 +511,42 @@ model Conversation {
   assigneeId    String?   @map("assignee_id") @db.Uuid
   handoffMotivo String?   @map("handoff_motivo")
   handoffAt     DateTime? @map("handoff_at") @db.Timestamptz(6)
+  /// 'dm' | 'comentario' (db/063): comentário de post/anúncio/vídeo também é conversa.
+  tipo            String    @default("dm")
+  /// Id da conversa NA REDE (IGSID/PSID da DM, id do comentário raiz). Único por (tenant, canal).
+  externoId       String?   @map("externo_id")
+  canalConexaoId  String?   @map("canal_conexao_id") @db.Uuid
+  /// De onde veio o comentário (post/mídia/vídeo). Nunca token.
+  contextoExterno Json?     @map("contexto_externo")
   updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   contact      Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
   messages     Message[]
 
   @@map("conversations")
+}
+
+/// Conta de rede conectada pelo tenant dentro de Conversas (db/063):
+/// Instagram/Messenger (página do Facebook), YouTube (canal). O WhatsApp
+/// continua em `integrations` (Stevo/Evolution). Token só cifrado.
+model ChannelConnection {
+  id                   String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId             String    @map("tenant_id") @db.Uuid
+  rede                 String
+  externalId           String    @map("external_id")
+  pageId               String?   @map("page_id")
+  nome                 String    @default("")
+  status               String    @default("conectado")
+  credentialsEncrypted String?   @map("credentials_encrypted")
+  scopes               String[]
+  connectedBy          String?   @map("connected_by") @db.Uuid
+  erro                 String?
+  ultimaSyncAt         DateTime? @map("ultima_sync_at") @db.Timestamptz(6)
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([rede, externalId], map: "channel_connections_ext_uq")
+  @@map("channel_connections")
 }
 
 model Message {
