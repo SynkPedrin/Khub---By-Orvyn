@@ -9,6 +9,12 @@ Status: `aberto` · `em correção` · `corrigido` · `não reproduz`.
 
 ## Abertos
 
+### BUG-035 — Rotas de origem/foto 404: controller importado mas não registrado no módulo (S2) — corrigido 2026-11-13
+- **Reprodução:** com a 066 no ar, `GET /v1/crm/contacts/:id/origem`, `/foto` e `/crm/atribuicao/*` respondiam 404 em runtime, com tsc e jest verdes.
+- **Causa raiz:** `OrigemFotoController` estava importado no `crm.module.ts` mas fora do array `controllers` — o Nest só registra o que está no array; o typecheck não reclama porque o import era "usado".
+- **Correção:** controller no array; regressão E2E `apps/api/scripts/qa/e2e-origem-foto.mjs` (20/20), que exercita as rotas contra API real.
+- **Lição:** import de controller sem registro passa em tsc e em todo teste unitário — só E2E contra a API de verdade pega. Na mesma leva: o campo `origem` ficava "WhatsApp" mesmo com anúncio confirmado; a regra `origemAtualizada` (atribuicao.ts) promove placeholder de canal e preserva origem específica (teste unitário no `atribuicao.spec.ts`).
+
 ### BUG-030 — Vault interno visível para clientes (S1) — corrigido 2026-11-10
 - **Reprodução:** qualquer usuário logado de qualquer subconta abria `/conhecimento` ou `GET /api/cerebro` e lia PRD, Bugs, Arquitetura e revisões de segurança; a imagem de produção copiava o vault inteiro.
 - **Causa:** `lib/cerebro.ts` listava todo o diretório; o Dockerfile do web copiava `Nyro IA/cerebro` inteiro.
