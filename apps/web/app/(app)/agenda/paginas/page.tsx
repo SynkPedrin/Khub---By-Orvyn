@@ -113,8 +113,9 @@ export default function PaginasAgendamentoPage() {
               </div>
               <div className="mt-auto flex flex-wrap items-center gap-2 text-xs text-muted">
                 <Badge tone={p.ativo ? 'green' : 'neutral'}>{p.ativo ? 'Publicada' : 'Pausada'}</Badge>
+                {p.ownerId && <Badge tone="brand">Pessoal</Badge>}
                 <span className="inline-flex items-center gap-1"><Icon name="clock" size={13} />{p.duracaoMin} min</span>
-                <span className="inline-flex items-center gap-1"><Icon name="users" size={13} />{p.responsaveis.length ? `${p.responsaveis.length} na equipe` : 'Agenda geral'}</span>
+                <span className="inline-flex items-center gap-1"><Icon name="users" size={13} />{p.ownerId ? 'Calendário individual' : p.responsaveis.length ? `${p.responsaveis.length} na equipe` : 'Agenda geral'}</span>
                 <span className="tabular inline-flex items-center gap-1"><Icon name="check" size={13} />{p.totalReservas} reserva(s)</span>
               </div>
             </article>

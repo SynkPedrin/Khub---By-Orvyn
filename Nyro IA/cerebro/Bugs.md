@@ -294,3 +294,10 @@ Invariante 6 exige "rate limiting por tenant e por integração; circuit breaker
 - Existe em outros pontos?:
 - Correção + teste de regressão:
 ```
+
+### INCIDENTE — Env vars do Render apagadas por PUT parcial na API (2026-11-13)
+- **Severidade:** S1 (a instância antiga seguiu no ar com o env em memória; qualquer restart derrubaria a produção).
+- **Causa raiz:** `PUT /v1/services/{id}/env-vars` da API do Render **substitui o conjunto inteiro** de variáveis (não faz merge). Um PUT com só `FIRECRAWL_API_KEY` e `NICO_PROVEDOR` apagou as outras 20 (DATABASE_URL, JWT_SECRET, chaves Stevo/Meta/Voyage etc.).
+- **Como foi pego:** o deploy seguinte falhou no boot do worker; o erro só apareceu depois de instrumentar o `worker.ts`, que engolia a exceção real ("Worker failed to start" genérico → agora imprime `Error: Env inválida — JWT_SECRET: Required`).
+- **Correção:** conjunto completo restaurado (22 vars) a partir de `deploy/.env.render` (JWT/DB/proxy), `apps/api/.env` (chaves de provedor) e `render.yaml` (AI_PROVIDER, REDIS_URL derivada do keyvalue). Opcionais `ANTHROPIC_EFFORT_MAX` e `ANTHROPIC_MODEL_FORCE` não foram restauradas (valor desconhecido; o código tem default).
+- **Lição (permanente):** para mudar UMA var no Render, primeiro GET a lista inteira e fazer PUT com a lista completa alterada. Melhor: manter as vars no `render.yaml` (que faz merge) e não na API.
