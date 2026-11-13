@@ -1,5 +1,5 @@
 import { Body, Controller, HttpCode, Post } from '@nestjs/common';
-import type { RagEscopo } from '@orvyn/types';
+import type { RagEscopo } from '@khub/types';
 import { PrismaService } from '../prisma/prisma.service';
 import { IngestionService } from './ingestion/ingestion.service';
 import { RetrievalService } from './retrieval.service';
@@ -18,7 +18,7 @@ export class RagController {
   @Post('documents')
   @HttpCode(202)
   async register(@TenantId() tenantId: string, @Body() dto: RegisterDocumentDto) {
-    // Ingestão de base do tenant. Bases global/nicho são publicadas por script (orvyn_service).
+    // Ingestão de base do tenant. Bases global/nicho são publicadas por script (khub_service).
     return this.ingestion.register({
       tenantId,
       escopo: 'tenant',

@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'node:crypto';
-import type { RagEscopo, RagHit } from '@orvyn/types';
+import type { RagEscopo, RagHit } from '@khub/types';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
 import { EmbeddingsService } from './embeddings/embeddings.service';
@@ -111,6 +111,60 @@ export class RetrievalService {
     await this.cache.set(cacheKey, JSON.stringify(hits), this.cacheTtl);
     await this.logQuery(ctx, query, escopos, hits, Date.now() - t0, false);
     this.log.debug(`RAG "${query.slice(0, 40)}" -> ${hits.length} hits em ${Date.now() - t0}ms`);
+    return hits;
+  }
+
+  /**
+   * Busca de um AGENTE (db/034): igual a `search`, mas restringe os documentos
+   * do tenant às fontes ativas do agente (`documentIds`; null = todos). O
+   * filtro roda DENTRO do WHERE das funções `agent_rag_search_*` (invariante
+   * RAG 5) e a transação continua sob a RLS do tenant (invariante 1).
+   */
+  async searchAgente(ctx: RagContext, query: string, escopos: RagEscopo[], documentIds: string[] | null, k = this.topN): Promise<RagHit[]> {
+    const t0 = Date.now();
+    if (documentIds && !documentIds.length && !escopos.some((e) => e !== 'tenant')) return [];
+    const ids = documentIds && documentIds.length ? documentIds : documentIds ? ['00000000-0000-0000-0000-000000000000'] : null;
+    const lexicalOnly = !this.embeddings.available;
+    const cacheKey = `${this.cacheKey(ctx, query, escopos, lexicalOnly)}:ag:${createHash('sha1').update((ids ?? ['*']).slice().sort().join(',')).digest('hex').slice(0, 16)}:${k}`;
+    const cached = await this.cache.get(cacheKey);
+    if (cached) {
+      const hits = JSON.parse(cached) as RagHit[];
+      await this.logQuery(ctx, query, escopos, hits, Date.now() - t0, true);
+      return hits;
+    }
+    const candidates = lexicalOnly
+      ? await this.prisma.withTenant(ctx.tenantId, (tx) =>
+          tx.$queryRawUnsafe<Candidate[]>(
+            `SELECT * FROM agent_rag_search_lexical($1::text, $2::text, $3::text, $4::text[], $5::uuid[], $6::int)`,
+            query, ctx.nicho, ctx.subespecialidade, escopos, ids, this.preRerank,
+          ),
+        )
+      : await this.embeddings.embedOne(query, 'query').then((qvec) =>
+          this.prisma.withTenant(ctx.tenantId, (tx) =>
+            tx.$queryRawUnsafe<Candidate[]>(
+              `SELECT * FROM agent_rag_search_hybrid($1::vector, $2::text, $3::text, $4::text, $5::text[], $6::uuid[], $7::int, $8::int, $9::int)`,
+              EmbeddingsService.toSqlVector(qvec), query, ctx.nicho, ctx.subespecialidade, escopos, ids, this.kEach, this.preRerank, this.rrfK,
+            ),
+          ),
+        );
+    if (!candidates.length) {
+      await this.logQuery(ctx, query, escopos, [], Date.now() - t0, false);
+      return [];
+    }
+    const reranked = await this.reranker.rerank(
+      query,
+      candidates.map((c) => ({ id: c.chunk_id, text: `${c.breadcrumb ?? ''}\n${c.conteudo}`, baseScore: c.score })),
+      k,
+    );
+    const byId = new Map(candidates.map((c) => [c.chunk_id, c]));
+    const hits: RagHit[] = reranked
+      .filter((r) => !this.reranker.calibrated || r.score >= this.minScore)
+      .map((r) => {
+        const c = byId.get(r.id)!;
+        return { chunkId: c.chunk_id, documentId: c.document_id, escopo: c.escopo, titulo: c.titulo, breadcrumb: c.breadcrumb, conteudo: c.conteudo, score: r.score };
+      });
+    await this.cache.set(cacheKey, JSON.stringify(hits), this.cacheTtl);
+    await this.logQuery(ctx, query, escopos, hits, Date.now() - t0, false);
     return hits;
   }
 

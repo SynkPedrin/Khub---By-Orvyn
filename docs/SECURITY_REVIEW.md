@@ -1,4 +1,4 @@
-# ORVYN Revenue OS — Revisão de Segurança
+# KHUB Revenue OS — Revisão de Segurança
 
 > Semana 1. Achados **verificados no código**, não presumidos. Cada item traz
 > onde foi checado.
@@ -30,7 +30,7 @@ Um risco **Alto** foi fechado nesta semana (vendor lock-in de IA).
 | `.env` rastreado pelo git | ✅ nenhum — só `.env.example` |
 | Segredo no histórico do git | ✅ nenhum `.env` real já foi commitado |
 | `.env.example` com valor real | ✅ só placeholders (`CHANGE_ME`, `troque-por-...`) |
-| Segredo em `NEXT_PUBLIC_*` | ✅ só `NEXT_PUBLIC_API_URL` e `NEXT_PUBLIC_ORVYN_DEMO` |
+| Segredo em `NEXT_PUBLIC_*` | ✅ só `NEXT_PUBLIC_API_URL` e `NEXT_PUBLIC_KHUB_DEMO` |
 | Frontend chamando LLM direto | ✅ nenhuma chamada a `api.anthropic.com`/`api.openai.com` |
 
 Chave de IA nunca chega ao navegador: o frontend fala com `/api/*`, que faz
@@ -132,7 +132,7 @@ rodou em cada ambiente.
 
 **S-5 · Modo demo depende de disciplina de ambiente.**
 
-`NEXT_PUBLIC_ORVYN_DEMO=1` em produção faria toda tela exibir dado fabricado.
+`NEXT_PUBLIC_KHUB_DEMO=1` em produção faria toda tela exibir dado fabricado.
 
 - **Mitigação já existente:** a flag nunca liga sozinha, e com ela ativa **toda
   tela mostra o selo "Dados de demonstração"** — não é possível confundir sem

@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
-import { IsIn, IsISO8601, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { IsIn, IsISO8601, IsObject, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 import { CompaniesService } from './companies.service';
 import { TasksService, type TaskFilter } from './tasks.service';
 import { NotesService } from './notes.service';
@@ -13,6 +13,8 @@ class CompanyDto {
   @IsOptional() @IsString() @MaxLength(80) segmento?: string;
   @IsOptional() @IsIn(['1-10', '11-50', '51-200', '200+']) tamanho?: string;
   @IsOptional() @IsString() @MaxLength(200) site?: string;
+  /** Campos personalizados `{ chave: valor }` validados pelas definições (Q2.3). */
+  @IsOptional() @IsObject() camposCustom?: Record<string, unknown>;
 }
 class UpdateCompanyDto {
   @IsOptional() @IsString() @MinLength(1) @MaxLength(160) nome?: string;
@@ -22,6 +24,8 @@ class UpdateCompanyDto {
   @IsOptional() @IsString() @MaxLength(80) segmento?: string;
   @IsOptional() @IsIn(['1-10', '11-50', '51-200', '200+']) tamanho?: string;
   @IsOptional() @IsString() @MaxLength(200) site?: string;
+  /** Campos personalizados `{ chave: valor }` validados pelas definições (Q2.3). */
+  @IsOptional() @IsObject() camposCustom?: Record<string, unknown>;
 }
 
 class TaskDto {

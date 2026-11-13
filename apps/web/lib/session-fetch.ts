@@ -10,7 +10,7 @@ import { ApiError } from './api-error';
  *
  * ## O bug que isto corrige
  *
- * Quando o cookie `orvyn_refresh` existe mas não pode ser validado (expirado,
+ * Quando o cookie `khub_refresh` existe mas não pode ser validado (expirado,
  * revogado, ou API fora do ar), acontecia isto:
  *
  *   1. a chamada responde 401

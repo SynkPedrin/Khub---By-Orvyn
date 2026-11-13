@@ -32,7 +32,7 @@ Antes de investir pesado em crescimento (mais verba, mais gente, nova unidade). 
 - **Se aproximando:** 3–4 dimensões fortes — resolva as lacunas enquanto planeja a escala.
 - **Pronto:** 5–6 dimensões fortes — execute o plano de escala.
 
-## Aplicação no Orvyn
+## Aplicação no KHUB
 A Nyro pode avaliar "processo repetível" e "unit economics" com dados reais do CRM (CAC via integrações de ads, LTV via recorrência no pipeline) antes de recomendar que o cliente aumente o orçamento de tráfego.
 
 ## Aviso

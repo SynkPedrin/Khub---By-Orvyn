@@ -24,7 +24,7 @@ import {
 } from '@/lib/demo/dataset';
 
 /**
- * IA COPILOTO — o cérebro único do Revenue OS.
+ * IA COPILOTO — o cérebro único do KHUB.
  *
  * Um agente, não uma frota. A conversa à esquerda faz o RACIOCÍNIO; os
  * painéis à direita mostram o que ele já apurou e oferecem a EXECUÇÃO.
@@ -363,7 +363,7 @@ function TopOportunidades() {
           </div>
           <div className="shrink-0 text-right">
             <span className="pill pill-success h-[20px] px-2 text-[11px]">{o.probabilidade}%</span>
-            <p className="mt-0.5 text-[10.5px] text-muted">{o.nota}</p>
+            <p className="mt-0.5 text-2xs text-muted">{o.nota}</p>
           </div>
         </li>
       ))}
@@ -387,7 +387,7 @@ function NegociosEmRisco() {
           </div>
           <div className="shrink-0 text-right">
             <span className="pill pill-danger h-[20px] px-2 text-[11px]">{n.risco}%</span>
-            <p className="mt-0.5 text-[10.5px] text-muted">{n.motivo}</p>
+            <p className="mt-0.5 text-2xs text-muted">{n.motivo}</p>
           </div>
         </li>
       ))}

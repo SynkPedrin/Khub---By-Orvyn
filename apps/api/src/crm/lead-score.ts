@@ -1,8 +1,8 @@
 /**
- * SCORE ORVYN — v0 (regras determinísticas)
+ * SCORE KHUB — v0 (regras determinísticas)
  * ==========================================
  *
- * Os mockups mostram um "Score ORVYN" de 0 a 100 por lead. Esta é a V0 e ela
+ * Os mockups mostram um "Score KHUB" de 0 a 100 por lead. Esta é a V0 e ela
  * é **honesta sobre o que é**: um somatório de regras auditáveis, não um
  * modelo preditivo. Nenhuma tela deve chamar isso de "probabilidade de
  * conversão calculada por IA" — é um ranking operacional de prioridade.
@@ -72,7 +72,7 @@ export const PESOS = {
 } as const;
 
 /**
- * Calcula o Score ORVYN de um lead.
+ * Calcula o Score KHUB de um lead.
  *
  * Determinístico: os mesmos sinais produzem sempre o mesmo número. Sem
  * relógio interno além de `agora` (injetável) e sem aleatoriedade — é o que

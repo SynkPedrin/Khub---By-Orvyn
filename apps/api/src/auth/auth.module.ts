@@ -4,6 +4,7 @@ import { AuthService } from './auth.service';
 import { OAuthService } from './oauth.service';
 import { AuthController } from './auth.controller';
 import { TokenService } from './token.service';
+import { PasswordResetService } from './password-reset.service';
 import { TenantsModule } from '../tenants/tenants.module';
 
 @Module({
@@ -15,7 +16,7 @@ import { TenantsModule } from '../tenants/tenants.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, OAuthService, TokenService],
+  providers: [AuthService, OAuthService, TokenService, PasswordResetService],
   exports: [JwtModule, TokenService],
 })
 export class AuthModule {}

@@ -1,5 +1,6 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
-import { IsEmail, IsIn, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { ArrayMaxSize, IsArray, IsEmail, IsIn, IsObject, IsOptional, IsString, MaxLength, ValidateIf } from 'class-validator';
+import { MODULOS } from '../auth/modulos';
 import { SettingsService } from './settings.service';
 import { CurrentUser, TenantId, type AuthUser } from '../auth/decorators';
 import { SkipAudit } from '../common/audit.interceptor';
@@ -21,6 +22,21 @@ class UpdateBusinessDto {
 class InviteDto {
   @IsEmail() email!: string;
   @IsOptional() @IsIn(['owner', 'admin', 'manager', 'member', 'viewer']) role?: string;
+  /** Personalização (ADR-0042): nome de quem recebe, recado e WhatsApp dele. */
+  @IsOptional() @IsString() @MaxLength(120) nome?: string;
+  @IsOptional() @IsString() @MaxLength(600) mensagem?: string;
+  @IsOptional() @IsString() @MaxLength(30) telefone?: string;
+  /** Acesso por módulo (ADR-0045). Ausente = sem restrição. Ignorado para owner/admin. */
+  @IsOptional() @IsArray() @ArrayMaxSize(MODULOS.length) @IsIn([...MODULOS], { each: true }) modulos?: string[];
+}
+class ModulosDto {
+  /** `null` tira a restrição (vê tudo o que o papel permite). */
+  @ValidateIf((_o, v) => v !== null) @IsArray() @ArrayMaxSize(MODULOS.length) @IsIn([...MODULOS], { each: true }) modulos!: string[] | null;
+}
+class ResendInviteDto {
+  @IsOptional() @IsString() @MaxLength(120) nome?: string;
+  @IsOptional() @IsString() @MaxLength(600) mensagem?: string;
+  @IsOptional() @IsString() @MaxLength(30) telefone?: string;
 }
 class RoleDto {
   @IsIn(['owner', 'admin', 'manager', 'member', 'viewer']) role!: string;
@@ -60,15 +76,38 @@ export class SettingsController {
   }
   @Post('invites')
   invite(@TenantId() t: string, @CurrentUser() u: AuthUser, @Body() dto: InviteDto) {
-    return this.settings.createInvite(t, u.identityId, dto.email, dto.role ?? 'member');
+    return this.settings.createInvite(t, u.identityId, dto.email, dto.role ?? 'member', { nome: dto.nome, mensagem: dto.mensagem, telefone: dto.telefone, modulos: dto.modulos });
+  }
+  /** Novo link (o anterior deixa de valer) + reenvio do e-mail + texto de WhatsApp. */
+  @Post('invites/:id/resend')
+  @HttpCode(200)
+  resendInvite(@TenantId() t: string, @CurrentUser() u: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: ResendInviteDto) {
+    return this.settings.resendInvite(t, u.identityId, id, dto);
   }
   @Delete('invites/:id')
   revoke(@TenantId() t: string, @CurrentUser() u: AuthUser, @Param('id') id: string) {
     return this.settings.revokeInvite(t, u.identityId, id);
   }
+  /** Acesso por módulo de um membro (ADR-0045): vale na próxima requisição dele. */
+  @Patch('members/:identityId/modulos')
+  modulos(@TenantId() t: string, @CurrentUser() u: AuthUser, @Param('identityId', ParseUUIDPipe) target: string, @Body() dto: ModulosDto) {
+    return this.settings.changeModulos(t, u.identityId, target, dto.modulos);
+  }
   @Patch('members/:identityId/role')
   role(@TenantId() t: string, @CurrentUser() u: AuthUser, @Param('identityId') target: string, @Body() dto: RoleDto) {
     return this.settings.changeRole(t, u.identityId, target, dto.role);
+  }
+
+  /** Remove o membro: acesso cai na hora e as sessões do tenant são revogadas (SEC-01). */
+  @Delete('members/:identityId')
+  removeMember(@TenantId() t: string, @CurrentUser() u: AuthUser, @Param('identityId', ParseUUIDPipe) target: string) {
+    return this.settings.removeMember(t, u.identityId, target);
+  }
+  /** Sair de todos os dispositivos (revoga todas as sessões da identidade). */
+  @Post('sessions/revoke-all')
+  @HttpCode(200)
+  revokeSessions(@TenantId() t: string, @CurrentUser() u: AuthUser) {
+    return this.settings.revokeMySessions(t, u.identityId);
   }
 
   @Get('audit')
@@ -85,5 +124,12 @@ export class SettingsController {
   @HttpCode(200)
   readNotifications(@TenantId() t: string, @CurrentUser() u: AuthUser) {
     return this.settings.markNotificationsRead(t, u.identityId);
+  }
+  /** Ler uma notificação não é ação de negócio — sem linha de auditoria. */
+  @SkipAudit()
+  @Post('notifications/:id/read')
+  @HttpCode(200)
+  readNotification(@TenantId() t: string, @CurrentUser() u: AuthUser, @Param('id') id: string) {
+    return this.settings.markNotificationRead(t, u.identityId, id);
   }
 }

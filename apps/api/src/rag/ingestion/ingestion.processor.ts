@@ -49,9 +49,13 @@ export class IngestionProcessor {
         await this.setStatus(tenantId, documentId, 'published', null);
         return { chunks: 0 };
       }
-      const vectors = await this.embeddings.embed(chunks.map((c) => c.conteudo), 'document');
+      // Sem credencial de embedding: grava os chunks SEM vetor (a busca lexical
+      // já funciona) e marca o documento para reindexar quando a chave chegar —
+      // degradação suave (Brief §2), em vez de deixar a base inteira em `failed`.
+      const lexical = !this.embeddings.available;
+      const vectors = lexical ? chunks.map(() => null) : await this.embeddings.embed(chunks.map((c) => c.conteudo), 'document');
       await this.writeChunks(tenantId, doc, chunks, vectors);
-      await this.setStatus(tenantId, documentId, 'published', null);
+      await this.setStatus(tenantId, documentId, 'published', null, { indexacao: lexical ? 'lexical' : 'hibrida', chunks: chunks.length });
       return { chunks: chunks.length };
     } catch (e) {
       const msg = (e as Error).message;
@@ -70,13 +74,14 @@ export class IngestionProcessor {
     tenantId: string | null,
     doc: DocRow,
     chunks: { ordem: number; breadcrumb: string | null; conteudo: string; tokens: number }[],
-    vectors: number[][],
+    vectors: (number[] | null)[],
   ): Promise<void> {
     await this.noEscopo(tenantId, async (tx) => {
       await tx.$executeRawUnsafe(`DELETE FROM rag_chunks WHERE document_id = $1::uuid`, doc.id);
       for (let i = 0; i < chunks.length; i++) {
         const c = chunks[i];
-        const vec = EmbeddingsService.toSqlVector(vectors[i]);
+        const v = vectors[i];
+        const vec = v ? EmbeddingsService.toSqlVector(v) : null;
         await tx.$executeRawUnsafe(
           `INSERT INTO rag_chunks
              (document_id, tenant_id, escopo, nicho, subespecialidade, ordem, breadcrumb, conteudo, tokens, embedding, embedding_model, status)
@@ -91,22 +96,27 @@ export class IngestionProcessor {
           c.conteudo,
           c.tokens,
           vec,
-          this.embeddings.dims === 1024 ? 'voyage-3-large' : `dims-${this.embeddings.dims}`,
+          v ? (this.embeddings.dims === 1024 ? 'voyage-3-large' : `dims-${this.embeddings.dims}`) : 'none',
         );
       }
     });
   }
 
-  private async setStatus(tenantId: string | null, id: string, status: string, erro: string | null): Promise<void> {
-    await this.noEscopo(tenantId, (db) =>
-      db.ragDocument.update({
+  private async setStatus(tenantId: string | null, id: string, status: string, erro: string | null, meta?: Record<string, unknown>): Promise<void> {
+    await this.noEscopo(tenantId, async (db) => {
+      await db.ragDocument.update({
         where: { id },
         data: {
           status: status as never,
           erro,
           publishedAt: status === 'published' ? new Date() : null,
+          updatedAt: new Date(),
         },
-      }),
-    );
+      });
+      // Merge atômico (`||`): quem grava outras chaves de metadados em paralelo não perde nada.
+      if (meta) {
+        await db.$executeRaw`UPDATE rag_documents SET metadados = metadados || ${JSON.stringify({ ...meta, processadoEm: new Date().toISOString() })}::jsonb WHERE id = ${id}::uuid`;
+      }
+    });
   }
 }

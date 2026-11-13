@@ -1,8 +1,8 @@
-# Estado do Sistema — ORVYN OS (handoff atualizado)
+# Estado do Sistema — KHUB OS (handoff atualizado)
 
 > Fotografia técnica **do que existe hoje**: o que funciona de verdade (verificado), o que é parcial/fachada, e o que falta. Foco em **Auth · CRM · IA/Nyro (RAG)**. Legenda:
 > ✅ **funciona** (real, verificado) · 🟡 **parcial / fachada / não ligado** · ⛔ **não existe ainda**.
-> Marca: **ORVYN OS** (identificadores internos seguem `orvyn`). Ver [[PRD]] · [[Arquitetura]] · [[Banco]] · [[APIs]] · [[Tasks]] · [[Bugs]].
+> Marca: **KHUB OS** (identificadores internos seguem `khub`). Ver [[PRD]] · [[Arquitetura]] · [[Banco]] · [[APIs]] · [[Tasks]] · [[Bugs]].
 
 ---
 
@@ -34,8 +34,8 @@ for f in 000_foundation 001_rag_schema 001a_rls_harden 003_crm_schema 004_auth_t
   docker exec -i orvyn-postgres psql -U postgres -d orvyn -v ON_ERROR_STOP=1 < db/$f.sql; done
 docker exec -i orvyn-postgres psql -U postgres -d orvyn -v ON_ERROR_STOP=1 < db/002_isolation_test.sql  # teste (rollback)
 
-pnpm --filter @orvyn/api run build && (cd apps/api && node dist/main.js)   # API :3333 (usa apps/api/.env)
-pnpm --filter @orvyn/web run dev            # Web :3210
+pnpm --filter @khub/api run build && (cd apps/api && node dist/main.js)   # API :3333 (usa apps/api/.env)
+pnpm --filter @khub/web run dev            # Web :3210
 ```
 ⚠️ **Nunca rode `next build` com o `next dev` ligado** (corrompe `.next/` → BUG-005). Para produção: `next start`.
 
@@ -87,7 +87,7 @@ A **Nyro** foi projetada para 4 papéis (PRD §5): **Arquiteta · Operadora (SDR
 
 **Inteligência de marketing/operação da Nyro (camada global):** ✅ **ingerida e buscável**.
 - 12 frameworks C-Level (6 marketing: STP, Funil de Demanda, Go-to-Market, Arquitetura de Marca, Atribuição, Pirâmide de Conteúdo; 6 operação: OKR, Dashboards, Design Org., Mapeamento de Processos, Matriz de Alocação, Prontidão para Escalar) → **73 chunks, escopo global**, com `metadados` (dominio/framework/plano/intenções).
-- Seed: `apps/api/scripts/seed-global-rag.mjs` (como `orvyn_service`, fora do request path). **Buscável por BM25 agora** (ex.: "posicionar"→STP, "lançar serviço"→GTM); **busca semântica** entra com a chave Voyage (backfill de embeddings).
+- Seed: `apps/api/scripts/seed-global-rag.mjs` (como `khub_service`, fora do request path). **Buscável por BM25 agora** (ex.: "posicionar"→STP, "lançar serviço"→GTM); **busca semântica** entra com a chave Voyage (backfill de embeddings).
 - Superfície no produto: **`/marketing`** (Central de Marketing) lista os frameworks; `/conhecimento` abre cada um. Ver [[RAG/conhecimento/global/_INDICE|_INDICE]].
 
 ### 4.2 Nyro como agente/operadora — ⛔ ainda não opera

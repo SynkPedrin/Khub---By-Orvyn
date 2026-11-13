@@ -9,7 +9,7 @@ const CRM = [
   'O follow-up depende de alguém lembrar.',
 ];
 
-const REVENUE_OS = [
+const O_KHUB_FAZ = [
   'A conversa acontece dentro do registro do lead.',
   'A automação cruza lead, conversa, pipeline e tarefa.',
   'O relatório é a operação lida em tempo real.',
@@ -17,7 +17,7 @@ const REVENUE_OS = [
 ];
 
 /**
- * CRM vs Revenue OS — split editorial, sem tabela.
+ * CRM vs KHUB: split editorial, sem tabela.
  *
  * A V1 usava uma `<table>` de 3 colunas que estourava a largura em
  * 390–430px (overflow horizontal medido no QA). Aqui a comparação é uma
@@ -59,14 +59,14 @@ export function Differentiation() {
             />
             <h2 className="lp-h3 text-[var(--lp-ink)]">
               <Reveal variant="clip" as="span" delay={0.06} className="block">
-                Revenue OS
+                O KHUB
               </Reveal>
-              <Reveal variant="clip" as="span" delay={0.14} className="block text-[var(--lp-accent)]">
+              <Reveal variant="clip" as="span" delay={0.14} className="lp-serif block text-[var(--lp-accent)]">
                 faz andar.
               </Reveal>
             </h2>
             <ul className="mt-9 flex flex-col">
-              {REVENUE_OS.map((t, i) => (
+              {O_KHUB_FAZ.map((t, i) => (
                 <Reveal
                   key={t}
                   as="li"

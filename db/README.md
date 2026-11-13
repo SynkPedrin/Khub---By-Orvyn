@@ -33,23 +33,23 @@ psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/002_isolation_test.sql  # BL
 
 `002` deve terminar com `R0.2 OK — nenhum vazamento cross-tenant.` Qualquer vazamento faz `RAISE EXCEPTION` e o `psql` sai com código ≠ 0 (barra o merge no CI).
 
-O runner de `002` precisa ser **superuser** ou membro de `orvyn_service` e `orvyn_app` (no Postgres do docker o usuário `postgres` já basta).
+O runner de `002` precisa ser **superuser** ou membro de `khub_service` e `khub_app` (no Postgres do docker o usuário `postgres` já basta).
 
 ## Definir as senhas das roles (NUNCA no versionamento)
 
 `000_foundation.sql` cria as roles **sem senha** de propósito. Defina fora do git (secret manager / `.env` não versionado):
 
 ```bash
-psql "$DATABASE_URL" -c "ALTER ROLE orvyn_app     PASSWORD '<use um segredo>';"
-psql "$DATABASE_URL" -c "ALTER ROLE orvyn_service PASSWORD '<use um segredo>';"
+psql "$DATABASE_URL" -c "ALTER ROLE khub_app     PASSWORD '<use um segredo>';"
+psql "$DATABASE_URL" -c "ALTER ROLE khub_service PASSWORD '<use um segredo>';"
 ```
 
-A aplicação (`apps/api`) conecta como **`orvyn_app`** (NOBYPASSRLS). Jobs de ingestão/publicação de bases global/nicho/sub conectam como **`orvyn_service`** (BYPASSRLS) e nunca são expostos ao request web.
+A aplicação (`apps/api`) conecta como **`khub_app`** (NOBYPASSRLS). Jobs de ingestão/publicação de bases global/nicho/sub conectam como **`khub_service`** (BYPASSRLS) e nunca são expostos ao request web.
 
 ## Arquivos
 | Arquivo | Papel | Task |
 |---|---|---|
-| `000_foundation.sql` | `tenants` mínima (será estendida em F0-09) + roles `orvyn_app`/`orvyn_service` | pré-R0 |
+| `000_foundation.sql` | `tenants` mínima (será estendida em F0-09) + roles `khub_app`/`khub_service` | pré-R0 |
 | `001_rag_schema.sql` | Schema do RAG (fornecido, verbatim) — pgvector, tsvector pt, RLS, `rag_search_hybrid()` | R0.1 |
 | `001a_rls_harden.sql` | FORCE RLS, RLS de `nyro_guardrail_hits`, grants das roles | R0.2 |
 | `002_isolation_test.sql` | Teste de vazamento cross-tenant, self-cleaning (ROLLBACK), bloqueante no CI | R0.2 |

@@ -2,9 +2,13 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Badge, Button, Card, Field, Input } from '@/components/ui';
+import { Badge, Button, Field, Input } from '@/components/ui';
+import { Confirm, Drawer, SkeletonLines, Skeleton, useToast } from '@/components/kit';
 import { Icon } from '@/components/icons';
-import { crm, brl, type Negocio360 } from '@/lib/crm';
+import { crm, brl, type Atendente, type Negocio360 } from '@/lib/crm';
+import { CamposPersonalizados } from '@/components/crm/CamposPersonalizados';
+import { MotivoPerdaModal } from '@/components/crm/MotivoPerdaModal';
+import type { DadosPerda } from '@/lib/pipeline';
 
 interface Props {
   dealId: string;
@@ -18,31 +22,37 @@ export function DealDrawer({ dealId, stages, onClose, onChanged }: Props) {
   const [d, setD] = useState<Negocio360 | null>(null);
   const [erro, setErro] = useState('');
   const [editando, setEditando] = useState(false);
-  const [form, setForm] = useState({ titulo: '', valor: '', origem: '', stageId: '', status: 'aberto' });
+  const [form, setForm] = useState({ titulo: '', valor: '', origem: '', stageId: '', status: 'aberto', ownerId: '' });
+  // Marcar como perdido pede o motivo (Q2.1) antes de salvar.
+  const [pedindoMotivo, setPedindoMotivo] = useState(false);
+  const [donos, setDonos] = useState<Atendente[]>([]);
   const [nota, setNota] = useState('');
   const [tarefa, setTarefa] = useState('');
   const [confirmando, setConfirmando] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
+  const toast = useToast();
 
   const load = useCallback(async () => {
     try {
       const r = await crm.deal(dealId);
       setD(r);
-      setForm({ titulo: r.titulo, valor: String(r.valor || ''), origem: r.origem ?? '', stageId: r.stage?.id ?? '', status: r.status });
+      setForm({ titulo: r.titulo, valor: String(r.valor || ''), origem: r.origem ?? '', stageId: r.stage?.id ?? '', status: r.status, ownerId: r.ownerId ?? '' });
     } catch {
       setErro('Negócio não encontrado.');
     }
   }, [dealId]);
   useEffect(() => { load(); }, [load]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  useEffect(() => { if (editando && !donos.length) crm.atendentes().then(setDonos).catch(() => undefined); }, [editando, donos.length]);
 
   const salvar = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (form.status === 'perdido' && d?.status !== 'perdido') { setPedindoMotivo(true); return; }
+    await gravar();
+  };
+
+  /** PATCH do formulário; `perda` vem do modal quando o negócio está sendo marcado como perdido. */
+  const gravar = async (perda?: DadosPerda) => {
     setSalvando(true);
     try {
       await crm.updateDeal(dealId, {
@@ -51,61 +61,102 @@ export function DealDrawer({ dealId, stages, onClose, onChanged }: Props) {
         origem: form.origem,
         stageId: form.stageId || undefined,
         status: form.status,
+        ...(form.ownerId !== (d?.ownerId ?? '') ? { ownerId: form.ownerId || null } : {}),
+        ...(perda ?? {}),
       });
+      setPedindoMotivo(false);
       setEditando(false);
       await load();
       onChanged();
+      toast.success('Negócio atualizado.');
+    } catch (err) {
+      // com o modal aberto, o erro aparece nele (ex.: motivo desativado entre abrir e salvar)
+      if (perda) throw err;
+      toast.error('Não foi possível salvar o negócio.', { description: 'Confira os campos e tente de novo.' });
     } finally {
       setSalvando(false);
     }
   };
 
-  const excluir = async () => { await crm.deleteDeal(dealId); onChanged(); onClose(); };
+  const excluir = async () => {
+    setExcluindo(true);
+    try {
+      await crm.deleteDeal(dealId);
+      toast.success('Negócio excluído.');
+      onChanged();
+      onClose();
+    } catch {
+      toast.error('Não foi possível excluir o negócio.');
+      setExcluindo(false);
+      setConfirmando(false);
+    }
+  };
 
   const addNota = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nota.trim()) return;
-    await crm.createNote({ corpo: nota, dealId });
-    setNota('');
-    await load();
+    try {
+      await crm.createNote({ corpo: nota, dealId });
+      setNota('');
+      await load();
+    } catch {
+      toast.error('Não foi possível salvar a nota.');
+    }
   };
 
   const addTarefa = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tarefa.trim()) return;
-    await crm.createTask({ titulo: tarefa, dealId });
-    setTarefa('');
-    await load();
+    try {
+      await crm.createTask({ titulo: tarefa, dealId });
+      setTarefa('');
+      await load();
+    } catch {
+      toast.error('Não foi possível criar a tarefa.');
+    }
   };
 
-  const toggleTarefa = async (id: string) => { await crm.toggleTask(id); await load(); };
+  const toggleTarefa = async (id: string) => {
+    try {
+      await crm.toggleTask(id);
+      await load();
+    } catch {
+      toast.error('Não foi possível atualizar a tarefa.');
+    }
+  };
 
   return (
-    <div className="lg-backdrop fixed inset-0 z-[60] flex justify-end" onClick={onClose}>
-      <div
-        className="lg-sheet lg-sheet-side w-full max-w-lg animate-fade-in overflow-y-auto p-5 scrollbar-thin"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wide text-muted">Negócio</span>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-muted hover:bg-surface2 hover:text-fg" aria-label="Fechar"><Icon name="close" size={16} /></button>
-        </div>
-
+    // Kit Drawer (Q1.8): role="dialog", foco preso, Esc fecha, foco volta ao card, rolagem travada.
+    <Drawer open onClose={onClose} title="Negócio" ariaLabel={d ? `Negócio ${d.titulo}` : 'Negócio'}>
         {erro && <p className="py-10 text-center text-sm text-muted">{erro}</p>}
-        {!d && !erro && <p className="py-10 text-center text-sm text-muted">Carregando…</p>}
+        {!d && !erro && (
+          <div className="space-y-5">
+            <div className="flex items-start justify-between gap-3">
+              <Skeleton className="h-6 w-3/5 rounded-sm" />
+              <Skeleton className="h-6 w-24 rounded-sm" />
+            </div>
+            <SkeletonLines lines={4} label="Carregando negócio" />
+          </div>
+        )}
 
         {d && (
           <div className="space-y-5">
             <div>
               <div className="flex items-start justify-between gap-3">
                 <h2 className="text-lg font-semibold leading-tight text-fg">{d.titulo}</h2>
-                <span className="shrink-0 text-lg font-bold text-brand">{brl(d.valor)}</span>
+                <span className="shrink-0 text-lg font-semibold tabular text-fg">{brl(d.valor)}</span>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 {d.stage && <Badge tone="brand">{d.stage.nome}</Badge>}
                 <Badge tone={d.status === 'ganho' ? 'green' : d.status === 'perdido' ? 'amber' : 'neutral'}>{d.status}</Badge>
                 {d.origem && <Badge tone="neutral">{d.origem}</Badge>}
               </div>
+              {d.status === 'perdido' && (d.motivoPerda || d.motivoPerdaObs) && (
+                <p className="mt-2 text-sm text-muted">
+                  <span className="font-medium text-fg">Motivo da perda:</span> {d.motivoPerda?.nome ?? 'não informado'}
+                  {d.motivoPerdaObs && <span className="mt-0.5 block whitespace-pre-wrap">{d.motivoPerdaObs}</span>}
+                </p>
+              )}
               {d.contato && (
                 <Link href={`/contatos/${d.contato.id}`} className="mt-3 flex items-center gap-2 rounded-xl border border-line px-3 py-2 hover:bg-surface2">
                   <Icon name="contacts" size={15} className="text-muted" />
@@ -120,7 +171,7 @@ export function DealDrawer({ dealId, stages, onClose, onChanged }: Props) {
 
             <div className="flex gap-2">
               <Button variant="ghost" onClick={() => setEditando((v) => !v)} className="flex-1"><Icon name="settings" size={15} /> {editando ? 'Cancelar' : 'Editar'}</Button>
-              <Button variant="ghost" onClick={() => setConfirmando(true)} className="text-red-600 hover:bg-red-500/10 dark:text-red-400">Excluir</Button>
+              <Button variant="ghost" onClick={() => setConfirmando(true)} className="btn-danger"><Icon name="trash" size={15} /> Excluir</Button>
             </div>
 
             {editando && (
@@ -142,9 +193,24 @@ export function DealDrawer({ dealId, stages, onClose, onChanged }: Props) {
                     </select>
                   </Field>
                 </div>
+                <Field label="Dono">
+                  <select className="input" value={form.ownerId} onChange={(e) => setForm({ ...form, ownerId: e.target.value })}>
+                    <option value="">Sem dono</option>
+                    {form.ownerId && !donos.some((m) => m.identityId === form.ownerId) && <option value={form.ownerId}>Responsável atual</option>}
+                    {donos.map((m) => <option key={m.identityId} value={m.identityId}>{m.nome}</option>)}
+                  </select>
+                </Field>
                 <Button type="submit" className="w-full" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar alterações'}</Button>
               </form>
             )}
+
+            <CamposPersonalizados
+              compacto
+              entidade="deal"
+              valores={d.camposCustom}
+              className="rounded-2xl border border-line p-4"
+              onSalvar={async (camposCustom) => { await crm.updateDeal(dealId, { camposCustom }); await load(); }}
+            />
 
             <div>
               <h3 className="mb-2 text-sm font-bold text-fg">Tarefas</h3>
@@ -182,21 +248,22 @@ export function DealDrawer({ dealId, stages, onClose, onChanged }: Props) {
           </div>
         )}
 
-        {confirmando && d && (
-          <div className="lg-backdrop fixed inset-0 z-[70] flex items-center justify-center px-4" onClick={() => setConfirmando(false)}>
-            <Card className="lg-sheet w-full max-w-sm animate-scale-in p-6">
-              <div onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-lg font-bold text-fg">Excluir “{d.titulo}”?</h2>
-                <p className="mt-2 text-sm text-muted">O negócio, suas tarefas e notas somem. O contato continua no CRM. Não dá para desfazer.</p>
-                <div className="mt-5 flex justify-end gap-2">
-                  <Button variant="ghost" onClick={() => setConfirmando(false)}>Cancelar</Button>
-                  <Button onClick={excluir} className="bg-red-600 hover:bg-red-700">Excluir</Button>
-                </div>
-              </div>
-            </Card>
-          </div>
-        )}
-      </div>
-    </div>
+        <MotivoPerdaModal
+          open={pedindoMotivo}
+          alvo={d ? `"${d.titulo}"` : 'o negócio'}
+          onClose={() => setPedindoMotivo(false)}
+          onConfirm={gravar}
+        />
+
+        <Confirm
+          open={confirmando && !!d}
+          onClose={() => setConfirmando(false)}
+          onConfirm={excluir}
+          loading={excluindo}
+          title={`Excluir “${d?.titulo ?? ''}”?`}
+          description="O negócio, suas tarefas e notas somem. O contato continua no CRM. Não dá para desfazer."
+          confirmLabel="Excluir negócio"
+        />
+    </Drawer>
   );
 }

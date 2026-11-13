@@ -6,6 +6,7 @@ import { Icon } from '@/components/icons';
 import { ConfigRequired } from '@/components/app/ConfigRequired';
 import { ApiError } from '@/lib/api-error';
 import { financeiro, type Cobranca, type ResumoFinanceiro } from '@/lib/financeiro';
+import { SkeletonRows } from '@/components/kit';
 
 const money = (centavos: number) => (centavos / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -69,7 +70,7 @@ export default function FinanceiroPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="t-display">Financeiro</h1>
-          <p className="mt-1 text-sm text-muted">Cobranças do seu tenant. O link de pagamento usa a Stripe, conecte para cobrar de verdade.</p>
+          <p className="mt-1 text-sm text-muted">Acompanhe cobranças e recebimentos. Conecte a Stripe para gerar links de pagamento.</p>
         </div>
         <Button onClick={() => setNovo((v) => !v)}><Icon name="plus" size={16} /> Nova cobrança</Button>
       </div>
@@ -135,7 +136,7 @@ export default function FinanceiroPage() {
             );
           })}
           {cobrancas && cobrancas.length === 0 && <p className="px-5 py-10 text-center text-sm text-muted">Nenhuma cobrança ainda. Crie a primeira acima.</p>}
-          {!cobrancas && <p className="px-5 py-10 text-center text-sm text-muted">Carregando…</p>}
+          {!cobrancas && <SkeletonRows rows={4} label="Carregando cobranças" />}
         </div>
       </Card>
     </div>

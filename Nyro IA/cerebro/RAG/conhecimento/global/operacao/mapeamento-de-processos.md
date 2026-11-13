@@ -35,8 +35,8 @@ Quando algo está quebrando na operação, há retrabalho, atrasos ou tarefas ma
 - Trabalho manual: tarefas que deveriam ser automatizadas.
 - Troca de contexto: pessoas fazendo coisas demais ao mesmo tempo.
 
-## Aplicação no Orvyn
-O motor de automações do Orvyn é o "redesenhar/implementar" na prática: um gargalo de confirmação manual de consulta vira um workflow. A Nyro deve mapear e medir antes de sugerir a automação — automatizar um processo ruim só acelera o problema.
+## Aplicação no KHUB
+O motor de automações do KHUB é o "redesenhar/implementar" na prática: um gargalo de confirmação manual de consulta vira um workflow. A Nyro deve mapear e medir antes de sugerir a automação — automatizar um processo ruim só acelera o problema.
 
 ## Princípio-chave
 Simplifique antes de automatizar. Processo não é burocracia — é como você escala sem virar caos.

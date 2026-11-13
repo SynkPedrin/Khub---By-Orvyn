@@ -8,7 +8,7 @@ export async function GET() {
   const info = cerebroInfo();
   return NextResponse.json({
     status: 'ok',
-    service: 'orvyn-web',
+    service: 'khub-web',
     backend: 'cerebro-obsidian',
     cerebroExists: info.exists,
     docs: info.exists ? listDocs().length : 0,

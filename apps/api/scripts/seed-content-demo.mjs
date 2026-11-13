@@ -134,7 +134,7 @@ async function provisionarTenant(nome, nicho, demoScenario, senhaDemo, stagesCus
       await prisma.user.create({
         data: {
           tenantId: tenant.id, identityId: i === 0 ? identity.id : null,
-          email: i === 0 ? emailDemo : `${nomeOwner.split(' ')[0].toLowerCase()}@${demoScenario.toLowerCase()}.demo.orvyn`,
+          email: i === 0 ? emailDemo : `${nomeOwner.split(' ')[0].toLowerCase()}@${demoScenario.toLowerCase()}.demo.khub`,
           nome: nomeOwner, role: i === 0 ? 'owner' : 'member',
         },
       }),

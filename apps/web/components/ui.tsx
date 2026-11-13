@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, ReactNode } from 'react';
 
 export function cx(...c: (string | false | null | undefined)[]): string {
@@ -18,21 +19,22 @@ export function Button({
   );
 }
 
-export function Card({ className, children, ...rest }: { className?: string; children: ReactNode } & HTMLAttributes<HTMLDivElement>) {
-  return <div className={cx('card', className)} {...rest}>{children}</div>;
-}
+export const Card = forwardRef<HTMLDivElement, { className?: string; children: ReactNode } & HTMLAttributes<HTMLDivElement>>(function Card({ className, children, ...rest }, ref) {
+  return <div ref={ref} className={cx('card', className)} {...rest}>{children}</div>;
+});
 
 export function Badge({ children, tone = 'brand', className }: { children: ReactNode; tone?: 'brand' | 'green' | 'amber' | 'neutral'; className?: string }) {
+  // Tokens de status (Q1.9): claro e escuro vêm de globals.css, sem cor literal.
   const tones: Record<string, string> = {
     brand: 'text-brand',
-    green: 'text-emerald-600 dark:text-emerald-400',
-    amber: 'text-amber-600 dark:text-amber-400',
+    green: 'text-success',
+    amber: 'text-warning',
     neutral: 'text-muted',
   };
   const bg: Record<string, string> = {
-    brand: 'bg-brand/10',
-    green: 'bg-emerald-500/12',
-    amber: 'bg-amber-500/14',
+    brand: 'bg-brand-soft',
+    green: 'bg-success-soft',
+    amber: 'bg-warning-soft',
     neutral: 'bg-surface3',
   };
   return (
@@ -48,12 +50,12 @@ export function Badge({ children, tone = 'brand', className }: { children: React
  * pelo nome: a mesma pessoa tem sempre a mesma cor, em qualquer tela.
  */
 const AV_COLORS = ['#6c2bff', '#b45309', '#0284c7', '#047857', '#7c3aed', '#be123c', '#0f766e', '#a16207'];
-export function Avatar({ name, size = 36, src }: { name: string; size?: number; src?: string }) {
+export function Avatar({ name, size = 36, src, onError }: { name: string; size?: number; src?: string; onError?: () => void }) {
   const initials = name.split(' ').filter(Boolean).slice(0, 2).map((n) => n[0]?.toUpperCase()).join('');
   const color = AV_COLORS[[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % AV_COLORS.length];
   if (src) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={src} alt={name} width={size} height={size} className="rounded-full object-cover" style={{ width: size, height: size }} />;
+    return <img src={src} alt={name} width={size} height={size} onError={onError} className="shrink-0 rounded-full object-cover" style={{ width: size, height: size }} />;
   }
   return (
     <span
@@ -75,8 +77,8 @@ export function Field({ label, children, hint }: { label: string; children: Reac
   );
 }
 
-export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className="input" {...props} />;
+export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
+  return <input className={cx('input', className)} {...props} />;
 }
 
 export function SectionTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {

@@ -2,7 +2,7 @@
 
 > **F2 destravado.** Playbooks estruturados por nicho: **fato e regra de nicho, versionado** (nunca dado de cliente). Um playbook por nicho. Fonte da verdade em código: **`apps/api/src/blueprints/playbooks.ts`** (tipado). Este doc é o mapa.
 >
-> **Diferença vs. o modelo GHL (snapshot+delta):** o ORVYN é plataforma **nativa** — o provisionamento cria pipeline/etapas/automações **no próprio CRM** (`BlueprintService.aplicar`), não injeta numa subconta externa. Não existe camada "GHL API vs snapshot vs manual" aqui.
+> **Diferença vs. o modelo GHL (snapshot+delta):** o KHUB é plataforma **nativa** — o provisionamento cria pipeline/etapas/automações **no próprio CRM** (`BlueprintService.aplicar`), não injeta numa subconta externa. Não existe camada "GHL API vs snapshot vs manual" aqui.
 
 ## Arquitetura (4 camadas, fronteiras rígidas)
 1. **Conhecimento** — os playbooks (`playbooks.ts`). O moat: cada nicho novo curado compõe.

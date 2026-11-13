@@ -19,13 +19,13 @@ const enviado = (f: ReturnType<typeof apiResponde>) => {
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe('proxy público do webhook de workflow (regressão: a API exige Idempotency-Key e o proxy não repassava, então respondia sempre 400)', () => {
-  it('sem Idempotency-Key do remetente: gera uma e encaminha à API', async () => {
+describe('proxy público do webhook de workflow (W5: Idempotency-Key opcional, assinatura repassada)', () => {
+  it('sem Idempotency-Key do remetente: encaminha SEM inventar chave (W5: a API deduplica pelo conteúdo em 10 min)', async () => {
     const f = apiResponde();
     const r = await chamada();
     const { url, headers } = enviado(f);
     expect(url).toMatch(/\/v1\/hooks\/abc123$/);
-    expect(headers['idempotency-key']).toMatch(/^[0-9a-f-]{36}$/);
+    expect(headers['idempotency-key']).toBeUndefined();
     expect(r.status).toBe(202);
   });
 
@@ -35,17 +35,24 @@ describe('proxy público do webhook de workflow (regressão: a API exige Idempot
     expect(enviado(f).headers['idempotency-key']).toBe('pedido-991');
   });
 
-  it('duas requisições sem chave recebem chaves diferentes (dois formulários iguais não colapsam)', async () => {
+  it('W5: repassa X-KHUB-Signature e o corpo byte a byte (o HMAC é sobre ele)', async () => {
     const f = apiResponde();
-    await chamada(); await chamada();
-    const [a, b] = f.mock.calls.map((c) => ((c as unknown as [string, RequestInit])[1].headers as Record<string, string>)['idempotency-key']);
-    expect(a).not.toBe(b);
+    await chamada({ headers: { 'x-khub-signature': 'sha256=' + 'a'.repeat(64) } });
+    const { init, headers } = enviado(f);
+    expect(headers['x-khub-signature']).toBe('sha256=' + 'a'.repeat(64));
+    expect(init.body).toBe('{"nome":"Ana"}');
   });
 
-  it('trunca chave do remetente acima de 200 caracteres (limite da API)', async () => {
+  it('repassa o 401 da API quando a assinatura não confere', async () => {
+    apiResponde(401, { title: 'assinatura X-KHUB-Signature ausente ou inválida' });
+    const r = await chamada({ headers: { 'x-khub-signature': 'sha256=errada' } });
+    expect(r.status).toBe(401);
+  });
+
+  it('preserva chave longa para a API validar sem criar colisões', async () => {
     const f = apiResponde();
     await chamada({ headers: { 'idempotency-key': 'x'.repeat(500) } });
-    expect(enviado(f).headers['idempotency-key']).toHaveLength(200);
+    expect(enviado(f).headers['idempotency-key']).toHaveLength(500);
   });
 
   it('encaminha o corpo e o content-type sem alterar', async () => {
@@ -62,11 +69,12 @@ describe('proxy público do webhook de workflow (regressão: a API exige Idempot
     expect(enviado(f).url).toContain('/v1/hooks/a%2Fb%3Fc');
   });
 
-  it('API fora do ar: ainda responde 202 (o remetente não deve ficar reenviando por problema nosso)', async () => {
+  it('API fora do ar: retorna 503 sem confirmar recebimento inexistente', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('ECONNREFUSED'); }));
     const r = await chamada();
-    expect(r.status).toBe(202);
-    expect(await r.json()).toEqual({ recebido: true });
+    expect(r.status).toBe(503);
+    expect(r.headers.get('retry-after')).toBe('30');
+    expect(await r.json()).toMatchObject({ recebido: false });
   });
 
   it('repassa o status e o corpo de erro da API (ex.: 400 de payload inválido)', async () => {

@@ -39,11 +39,11 @@ export function DynamicIsland({ onMobileMenu }: { onMobileMenu: () => void }) {
             <span className="lg:hidden"><Icon name="menu" size={19} /></span>
             <span className="hidden lg:block"><Icon name="dashboard" size={18} /></span>
           </button>
-          <button aria-label="Buscar" onClick={() => window.dispatchEvent(new Event('orvyn:cmdk'))} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-white/40 hover:text-fg dark:hover:bg-white/10">
+          <button aria-label="Buscar" onClick={() => window.dispatchEvent(new Event('khub:cmdk'))} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-white/40 hover:text-fg dark:hover:bg-white/10">
             <Icon name="search" size={18} />
           </button>
-          <button onClick={() => window.dispatchEvent(new Event('orvyn:cmdk'))} className="ml-0.5 flex shrink-0 items-center rounded-full bg-white/25 px-3.5 py-1.5 text-xs text-muted dark:bg-white/5">
-            Buscar contatos, negócios… <kbd className="ml-2 rounded border border-line px-1 text-[10px]">⌘K</kbd>
+          <button onClick={() => window.dispatchEvent(new Event('khub:cmdk'))} className="ml-0.5 flex shrink-0 items-center rounded-full bg-white/25 px-3.5 py-1.5 text-xs text-muted dark:bg-white/5">
+            Buscar contatos, negócios… <kbd className="ml-2 rounded border border-line px-1 text-2xs">⌘K</kbd>
           </button>
         </div>
       </div>

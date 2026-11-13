@@ -1,6 +1,6 @@
-# ORVYN Revenue OS — Relatório da Semana 1
+# KHUB Revenue OS — Relatório da Semana 1
 
-> Transformação `ORVYN OS → ORVYN Revenue OS`.
+> Transformação `KHUB OS → KHUB Revenue OS`.
 > Base: `main @ 51edbf0`. Data: 2026-09-20.
 
 ---
@@ -84,13 +84,13 @@ para "limpar o menu" destruiria funcionalidade real e testada.
 - `ai/provider.contract.ts` — interface `AIProvider`, token, erros classificados
 - `ai/provider.registry.ts` — seleção de provedor por env
 - `ai/openai.provider.ts` — segundo adaptador real (OpenAI **e** Ollama)
-- `crm/lead-score.ts` — Score ORVYN v0 determinístico
+- `crm/lead-score.ts` — Score KHUB v0 determinístico
 - `crm/lead-score.spec.ts` — 15 testes
 - `crm/messaging/provider.contract.ts` — contrato completo de mensageria
 - `db/023_revenue_os.sql` — migration aditiva
 
 **Frontend**
-- `components/shell/` — `Sidebar`, `Topbar`, `OrvynMark`, `PlanCard`, `nav`
+- `components/shell/` — `Sidebar`, `Topbar`, `KhubMark`, `PlanCard`, `nav`
 - `components/revenue/` — `Page`, `Kpi`, `States`, `Quando`, `SeloDemo`, `charts`, `lead-ui`
 - `lib/format.ts` — formatação pt-BR centralizada
 - `lib/revenue/` — tipos de visualização e fonte de dados
@@ -126,7 +126,7 @@ serviço consumidor seriam código morto. Entram com o `CampaignsService`.
 
 ## 7. Arquitetura atual
 
-Ver `ORVYN_REVENUE_ARCHITECTURE.md`. Em uma frase: monólito modular NestJS com
+Ver `KHUB_REVENUE_ARCHITECTURE.md`. Em uma frase: monólito modular NestJS com
 isolamento no banco, camada de IA independente de fornecedor, motor de automação
 próprio e frontend Next.js sobre um design system tokenizado.
 
@@ -165,7 +165,7 @@ Test Suites: 5 failed, 24 passed, 29 total
 Tests:      34 failed, 210 passed, 244 total
 ```
 
-**Novos:** 15 testes do Score ORVYN — todos passando.
+**Novos:** 15 testes do Score KHUB — todos passando.
 
 **Corrigidos:** 4 testes de `acceptInvite` (mock de `invite.updateMany`).
 
@@ -218,7 +218,7 @@ Ver §9. 210 passando (era 205), 34 falhando (era 39).
 Tasks: 2 successful, 2 total   ·   27s
 ```
 
-✅ `@orvyn/api` e `@orvyn/web` compilam. 23 rotas geradas.
+✅ `@khub/api` e `@khub/web` compilam. 23 rotas geradas.
 
 ---
 
@@ -259,7 +259,7 @@ Tasks: 2 successful, 2 total   ·   27s
 
 **Ligar as telas aos dados reais**
 3. `LeadsService`: listagem paginada com filtros, KPIs e score calculado.
-4. Persistir o Score ORVYN (job periódico + recálculo por evento).
+4. Persistir o Score KHUB (job periódico + recálculo por evento).
 5. Ligar `/conversas` ao `MessagesService` existente.
 6. `CampaignsService` + models Prisma das 4 tabelas novas.
 7. Ligar `/pipeline` ao `crm.pipeline()` com persistência de etapa + audit event.
@@ -273,7 +273,7 @@ Tasks: 2 successful, 2 total   ·   27s
 11. `helmet` + CSP.
 12. Primeiros testes de frontend (shell, estados de dado, fronteira do demo).
 13. Tabela de histórico de migrations.
-14. Falhar build de produção se `NEXT_PUBLIC_ORVYN_DEMO` estiver ligada.
+14. Falhar build de produção se `NEXT_PUBLIC_KHUB_DEMO` estiver ligada.
 
 ---
 
@@ -293,7 +293,7 @@ Commits sugeridos:
 ```
 refactor(design-system): substitui cristal por identidade Revenue OS
 feat(revenue-shell): sidebar fixa, topbar e navegação de receita
-feat(crm): Score ORVYN v0 determinístico + testes
+feat(crm): Score KHUB v0 determinístico + testes
 feat(ai): abstração AIProvider + registry + adaptador OpenAI/Ollama
 feat(revenue): Dashboard, Leads, Pipeline, Conversas, Campanhas, Agenda, Analytics, IA
 feat(db): migration 023 — score, campanhas, provedor de IA

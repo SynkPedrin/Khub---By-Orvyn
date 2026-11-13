@@ -1,6 +1,7 @@
 import { CrmService } from './crm.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { DomainEventsService } from '../events/domain-events.service';
+import type { AvatarContatoService } from './messaging/avatar-contato.service';
 
 const TENANT = '11111111-1111-1111-1111-111111111111';
 
@@ -10,7 +11,8 @@ function fakeEventos() {
   const svc = { publicar: (tenantId: string, evento: string, dados: unknown) => { publicados.push({ tenantId, evento, dados }); } } as unknown as DomainEventsService;
   return { svc, publicados };
 }
-const crm = (prisma: PrismaService, ev?: DomainEventsService) => new CrmService(prisma, ev ?? fakeEventos().svc);
+const crm = (prisma: PrismaService, ev?: DomainEventsService) =>
+  new CrmService(prisma, ev ?? fakeEventos().svc, { revalidarSeVencido: () => undefined } as unknown as AvatarContatoService);
 const UUID = (n: number) => `100a1015-2cbd-44a7-872c-9b285ade0${String(n).padStart(3, '0')}`;
 
 /** Lote de importação: TODOS com o mesmo created_at (o caso que quebrou de verdade). */
@@ -110,7 +112,8 @@ describe('CrmService.listContacts (D1 — paginação por cursor)', () => {
     const svc = crm(fakePrisma(contatosFake(26), captura));
     const p1 = await svc.listContacts(TENANT, { q: 'mar', limit: 25 });
     await svc.listContacts(TENANT, { q: 'mar', limit: 25, cursor: p1.nextCursor! });
-    expect(captura[1].where.OR).toBeDefined(); // filtro de busca preservado
+    // filtro de busca preservado (desde a Q2.2 o `where` é `{ AND: [...] }` do filtro único)
+    expect(JSON.stringify(captura[1].where)).toContain('"OR"');
     expect(captura[1].cursor).toBeDefined();   // + cursor
   });
 });

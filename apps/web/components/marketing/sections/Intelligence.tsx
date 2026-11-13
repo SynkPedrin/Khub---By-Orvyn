@@ -9,7 +9,7 @@ import { SCREENS } from '@/lib/marketing/screens';
  * NICO — apresentada pelo que ela produz dentro da tela de um lead real:
  * contexto lido, risco apontado, próxima ação sugerida. Sem cérebro, sem
  * robô, sem "IA" como enfeite: as três anotações apontam para regiões que
- * existem de fato na captura (`lead-detail-flat.png`).
+ * existem de fato na captura (`lead-detail-dark.png`).
  *
  * As anotações vivem em colunas de grade (não posicionadas em absoluto
  * por cima do print): assim nunca cobrem a interface nem colidem entre si

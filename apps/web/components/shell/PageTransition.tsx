@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { pageVariants } from '@/lib/motion';
 
 /**
- * Entrada suave do conteúdo de rota — fade + leve subida + blur sutil.
+ * Entrada suave do conteúdo de rota: fade + leve subida (sem blur, Q1.7).
  *
  * Deliberadamente SEM `AnimatePresence`/`exit`: isso exigiria desmontar a
  * página anterior antes de montar a próxima, o que conflita com streaming,

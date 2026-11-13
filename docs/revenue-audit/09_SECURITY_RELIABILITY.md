@@ -1,4 +1,4 @@
-# 09 — Segurança, multitenancy e confiabilidade (ORVYN Revenue OS)
+# 09 — Segurança, multitenancy e confiabilidade (KHUB Revenue OS)
 
 Auditoria somente leitura, 2026-10-14. Base: código em `apps/api/src`, `apps/web`, `db/*.sql`.
 Sem Postgres/Redis em execução: tudo abaixo é leitura estática. Itens marcados **[inferido]** não foram exercitados.
@@ -15,12 +15,12 @@ Contradições com `docs/SECURITY_REVIEW.md` (verificadas):
 
 | Camada | Como funciona | Evidência |
 |---|---|---|
-| Role da app | `orvyn_app` NOBYPASSRLS; `orvyn_service` BYPASSRLS só para funções SECURITY DEFINER e seeds | `db/000_foundation.sql:43-51`; checagem no boot de produção `prisma.service.ts:19-23` |
+| Role da app | `khub_app` NOBYPASSRLS; `khub_service` BYPASSRLS só para funções SECURITY DEFINER e seeds | `db/000_foundation.sql:43-51`; checagem no boot de produção `prisma.service.ts:19-23` |
 | Tenant por request | `JwtAuthGuard` extrai `tenant_id` do JWT, revalida `membership` + `tenant.status` no banco; serviços chamam `withTenant(tenantId)` -> `set_config(..., true)` parametrizado, UUID validado | `jwt-auth.guard.ts:56-66`, `prisma.service.ts:42-53` |
 | Tenant por job | o job carrega `tenantId` no payload e o processor chama `withTenant` (`OperationsService.event/reconcile`); não há `AsyncLocalStorage` de tenant para jobs (o `request-context.ts` guarda só `correlationId`/`tenantId` opcional) | `operations.service.ts:32,59` |
 | RLS | `ENABLE`+`FORCE` + policy `tenant_rw` na grande maioria; teste SQL `002_isolation_test.sql` cobre rag, audit, integrações, CRM F2, automações, nyro, partições, funções de roteamento | seção 4 |
 | Cross-tenant controlado | 5 funções SECURITY DEFINER que devolvem só `tenant_id`/`workflow_id`/`key_id` | seção 4.3 |
-| Cross-referência | triggers `orvyn_check_tenant_reference` impedem FK apontando para linha de outro tenant | `022_production_foundation.sql:81-112` |
+| Cross-referência | triggers `khub_check_tenant_reference` impedem FK apontando para linha de outro tenant | `022_production_foundation.sql:81-112` |
 
 Resultado: para tabelas com RLS, cross-tenant por código de aplicação é improvável (varredura: só auth, agency, tenants, rag e o reconciliador usam `prisma.<model>` fora de `withTenant`). Os problemas abaixo estão nas **bordas**: tabelas globais, agência, webhooks, SSRF, sessões.
 
@@ -40,7 +40,7 @@ Resultado: para tabelas com RLS, cross-tenant por código de aplicação é impr
 ### SEC-02
 - ISSUE: Rotas e tabelas de agência sem RLS dependem só de filtros de aplicação; sem teste de isolamento entre agências.
 - SEVERITY: P1
-- ROOT CAUSE: migration 026 declara `agencies`, `agency_members`, `agency_client_accounts`, `agency_member_client_access`, `agency_invites` como globais sem RLS (grant total a `orvyn_app`). Todo isolamento A x B está em `membroDe(identityId)` + `where agencyId`. `002_isolation_test.sql` e `test-isolation-api-keys.mjs` não cobrem agência. `agency.service.spec.ts` usa mocks.
+- ROOT CAUSE: migration 026 declara `agencies`, `agency_members`, `agency_client_accounts`, `agency_member_client_access`, `agency_invites` como globais sem RLS (grant total a `khub_app`). Todo isolamento A x B está em `membroDe(identityId)` + `where agencyId`. `002_isolation_test.sql` e `test-isolation-api-keys.mjs` não cobrem agência. `agency.service.spec.ts` usa mocks.
 - FILES: `db/026_agency.sql:19-70`; `db/027_account_settings.sql:7-20`; `apps/api/src/agency/agency.service.ts:30-64`; `apps/api/src/agency/agency-admin.service.ts:16-19,30-33`.
 - IMPACT: um `where` esquecido numa rota nova vaza dados entre agências sem rede de proteção do banco. Hoje, por leitura, `invites()`/`revoke()` filtram por `agencyId`, `detalheCliente` filtra por `clientesVisiveis`, `invite()` valida que `clientIds` pertencem à agência. Isolamento A x B **parece correto no código atual [inferido]**, mas não é provado.
 - RECOMMENDED FIX: policy RLS por `agency_id` usando uma GUC (`app.current_agency_id`) setada em `withAgency()`, ou ao menos teste SQL/integração A x B para cada rota de agência.
@@ -104,7 +104,7 @@ Resultado: para tabelas com RLS, cross-tenant por código de aplicação é impr
 ### SEC-09
 - ISSUE: Auditoria com lacunas (só mutações bem-sucedidas, silenciosa em falha, sem negações nem leituras sensíveis; ator de API key registrado como `humano`).
 - SEVERITY: P2
-- ROOT CAUSE: `AuditInterceptor` grava só em `tap` de sucesso, `void this.gravar(...)` com `catch` que só loga; `@SkipAudit()` em settings/agency/crm depende de cada serviço auditar (`agency.service.ts:169-174` engole erros com `.catch(() => undefined)`). `actor_type` fixo `'humano'`. Não há auditoria de 401/403, exportação, leitura de audit, nem de `api_keys` no uso. `audit_logs` não tem retenção nem particionamento. O trigger imutável impede UPDATE/DELETE, mas o GRANT remove DELETE/UPDATE também do `orvyn_service` (sem expurgo LGPD possível por essa role).
+- ROOT CAUSE: `AuditInterceptor` grava só em `tap` de sucesso, `void this.gravar(...)` com `catch` que só loga; `@SkipAudit()` em settings/agency/crm depende de cada serviço auditar (`agency.service.ts:169-174` engole erros com `.catch(() => undefined)`). `actor_type` fixo `'humano'`. Não há auditoria de 401/403, exportação, leitura de audit, nem de `api_keys` no uso. `audit_logs` não tem retenção nem particionamento. O trigger imutável impede UPDATE/DELETE, mas o GRANT remove DELETE/UPDATE também do `khub_service` (sem expurgo LGPD possível por essa role).
 - FILES: `apps/api/src/common/audit.interceptor.ts:44-70`; `apps/api/src/agency/agency.service.ts:169-174`; `db/004_auth_tenants.sql:78-92,152-155`.
 - IMPACT: perda silenciosa de trilha de auditoria; chave de API indistinguível de humano nos logs.
 - RECOMMENDED FIX: auditoria transacional na mesma tx da mutação para ações sensíveis; `actor_type` derivado de `user.role==='api'`; registrar negações; política de retenção.
@@ -163,7 +163,7 @@ Resultado: para tabelas com RLS, cross-tenant por código de aplicação é impr
 ### SEC-15 (RLS: lacunas e fragilidades)
 - ISSUE: (a) Tabelas sem `FORCE ROW LEVEL SECURITY`; (b) `tenants` sem RLS e com UPDATE para a role da app; (c) `invites`/`refresh_tokens`/`memberships` sem RLS; (d) tabelas novas sem caso no teste de isolamento.
 - SEVERITY: P2
-- ROOT CAUSE: `meta_pages` e as demais usam `FORCE`; mas `002_isolation_test.sql` cobre só rag, audit/webhook, integrações, CRM F2, automações, nyro e partições. Sem teste SQL: `outbox_events`, `api_keys` (há script `.mjs` à parte), `agenda_compromissos`, `financeiro_cobrancas`, `crm_tags`, `campaigns*`, `meta_pages`, agência. `rag_documents`/`rag_chunks` não têm `FORCE`? Têm (001a). `automation_templates` com `FORCE` e leitura global (016). `tenants`: `GRANT INSERT, UPDATE ... TO orvyn_app` sem RLS (`004:155`): `UPDATE tenants` sem `WHERE id` por bug futuro atingiria todos os tenants.
+- ROOT CAUSE: `meta_pages` e as demais usam `FORCE`; mas `002_isolation_test.sql` cobre só rag, audit/webhook, integrações, CRM F2, automações, nyro e partições. Sem teste SQL: `outbox_events`, `api_keys` (há script `.mjs` à parte), `agenda_compromissos`, `financeiro_cobrancas`, `crm_tags`, `campaigns*`, `meta_pages`, agência. `rag_documents`/`rag_chunks` não têm `FORCE`? Têm (001a). `automation_templates` com `FORCE` e leitura global (016). `tenants`: `GRANT INSERT, UPDATE ... TO khub_app` sem RLS (`004:155`): `UPDATE tenants` sem `WHERE id` por bug futuro atingiria todos os tenants.
 - FILES: `db/002_isolation_test.sql` (seções 1-15); `db/004_auth_tenants.sql:154-155`; `db/020_financeiro.sql:33-39`; `db/021_agenda.sql:27-33`.
 - IMPACT: regressão de RLS nessas tabelas não é detectada; `tenants` é ponto único de dano em massa por erro de código.
 - RECOMMENDED FIX: um teste genérico que percorre `pg_tables` e falha se tabela com `tenant_id` não tiver RLS+FORCE+policy; policy em `tenants` por `id = current tenant` ou função SECURITY DEFINER para UPDATE; ampliar `002`.
@@ -206,7 +206,7 @@ Resultado: para tabelas com RLS, cross-tenant por código de aplicação é impr
 | `ads-sync` | fila + processor | sem política de retry/backoff declarada, sem DLQ |
 | Ingestão RAG | in-process, fire-and-forget | quebrada por RLS (ARQ-03), perdida em restart |
 | Rate limit | Redis, janela fixa por tenant/IP | ver SEC-06; janela fixa permite 2x burst na virada |
-| Heartbeat | `orvyn:worker:heartbeat` EX 30; exposto em `GET /operations` (`workerOnline`) | `snapshot` retorna contagem de fila global `getJobCounts` internamente mas expõe só dados do tenant (comentário no código) |
+| Heartbeat | `khub:worker:heartbeat` EX 30; exposto em `GET /operations` (`workerOnline`) | `snapshot` retorna contagem de fila global `getJobCounts` internamente mas expõe só dados do tenant (comentário no código) |
 | Observabilidade | JSON logger, correlation-id, `error-reporter.service.ts` | `SENTRY_DSN` sem integração real (comentário em `env.ts`: "só falta plugar") |
 
 EXTERNAL_BLOCKER (não é defeito de código): Redis/worker precisam estar rodando para qualquer automação; WhatsApp (Stevo/Evolution) exige instância e QR reais; Meta exige app review e `META_APP_SECRET`; Anthropic/Voyage exigem chaves; SMTP/Resend para e-mails de convite (sem SMTP o link volta manual por desenho).
@@ -228,7 +228,7 @@ Exceções por desenho: RAG (leitura global/nicho; escrita só tenant — e ver 
 | `resolve_tenant_by_stevo_instance`, `..._evolution_instance` | `tenant_id` | `STABLE`, índice único de instância conectada (024) |
 | `resolve_tenant_by_meta_page` | `tenant_id` | `UNIQUE(page_id)` |
 | `resolve_workflow_by_webhook_key` | `(tenant_id, workflow_id)` | só workflows `ativo` |
-Todas: `SET search_path = public`, owner `orvyn_service`, `REVOKE ALL FROM PUBLIC`, `GRANT EXECUTE` à app. Bom padrão. Risco residual: a verificação é por segredo/identificador adivinhável (instância Stevo previsível) — ver SEC-05.
+Todas: `SET search_path = public`, owner `khub_service`, `REVOKE ALL FROM PUBLIC`, `GRANT EXECUTE` à app. Bom padrão. Risco residual: a verificação é por segredo/identificador adivinhável (instância Stevo previsível) — ver SEC-05.
 
 ## 5. Isolamento: matriz A x B
 

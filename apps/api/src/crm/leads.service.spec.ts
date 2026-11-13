@@ -49,6 +49,12 @@ describe('LeadsService (D1 — lead externo → contato)', () => {
     expect(f.criados[0].camposCustom).toMatchObject({ lead_origem: 'Meta Lead Ads', lead_external_id: 'lead-1' });
   });
 
+  it('BUG-029: contato novo grava a coluna `origem` (é dela que o outbox monta o gatilho)', async () => {
+    const f = fakePrisma([]);
+    await new LeadsService(f.prisma, f.eventos).upsertFromLead(TENANT, { nome: 'Bia', email: 'bia@x.com', origem: 'Meta Ads', externalId: 'lead-o' });
+    expect(f.criados[0]).toMatchObject({ origem: 'Meta Ads' });
+  });
+
   it('NÃO duplica: e-mail já existente enriquece o contato', async () => {
     const f = fakePrisma([{ id: 'c1', nome: 'Ana', email: 'ana@x.com', telefone: null, camposCustom: {} }]);
     const svc = new LeadsService(f.prisma, f.eventos);

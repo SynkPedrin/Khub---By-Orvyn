@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '../../config/config.service';
 import { CircuitBreaker } from '../../common/circuit-breaker';
 import { DeliveryError } from './stevo.provider';
+import type { MidiaSaida } from './provider.contract';
 
 /**
  * EVOLUTION API — WhatsApp NÃO OFICIAL (Baileys), self-hosted.
@@ -14,7 +15,7 @@ import { DeliveryError } from './stevo.provider';
  * Duas chaves, dois papéis — este é o ponto que mais gera bug em integrações
  * Evolution (Brief de recuperação, Fase 5):
  *   - `EVOLUTION_API_KEY` (env, "chave global"): dona do servidor. Cria,
- *     conecta, apaga instância. Só o backend do ORVYN a conhece.
+ *     conecta, apaga instância. Só o backend do KHUB a conhece.
  *   - token por-instância (devolvido por `/instance/create`, no campo
  *     `hash`): identifica UMA instância. É o que fica cifrado em
  *     `integrations.credentials_encrypted` por tenant. A chave global
@@ -94,7 +95,7 @@ export class EvolutionProvider {
   /**
    * Cria ou reaproveita a instância do tenant.
    *
-   * Nome determinístico (`orvyn-<tenantId>`): clicar "Conectar" várias vezes
+   * Nome determinístico (`khub-<tenantId>`): clicar "Conectar" várias vezes
    * não cria instância nova — a rota que chama isto primeiro checa
    * `integrations.external_business_id` e só cai aqui se ainda não existir.
    * `POST /instance/create` com a instância já existente devolve 403; nesse
@@ -159,7 +160,7 @@ export class EvolutionProvider {
     return { estado: mapearEstado(j.instance?.state) };
   }
 
-  /** Registra o webhook ORVYN na instância, para eventos de conexão e mensagem. */
+  /** Registra o webhook KHUB na instância, para eventos de conexão e mensagem. */
   async configureWebhook(instanceName: string, url: string): Promise<void> {
     this.config.require('evolution');
     const r = await fetch(`${this.baseUrl()}/webhook/set/${encodeURIComponent(instanceName)}`, {
@@ -225,8 +226,53 @@ export class EvolutionProvider {
     }
   }
 
+  /** A Evolution aceita `media` como URL OU base64 (fonte abaixo): dá para enviar sem storage. */
+  readonly aceitaBase64 = true;
+
+  /**
+   * Envio de mídia (Q2.5). Contrato tirado do código-fonte oficial da
+   * Evolution API v2 (github.com/EvolutionAPI/evolution-api):
+   * `src/api/routes/sendMessage.router.ts` → `POST /message/sendMedia/{instance}`;
+   * `src/api/dto/sendMessage.dto.ts` (`SendMediaDto`: `number`, `mediatype`,
+   * `mimetype?`, `caption?`, `fileName?`, `media` = "url or base64");
+   * `src/validate/message.schema.ts` (`mediatype` ∈ image|document|video|audio).
+   * Áudio vai como `mediatype: 'audio'` (arquivo); nota de voz (PTT) é outro
+   * endpoint e não é usado aqui. Mesma semântica de erro/circuito do texto.
+   */
+  async sendMedia(number: string, midia: MidiaSaida, instanceName?: string): Promise<{ providerId?: string }> {
+    this.config.require('evolution');
+    if (!instanceName) throw new DeliveryError(400);
+    const media = midia.url ?? midia.base64;
+    if (!media) throw new DeliveryError(400, { retryable: false, uncertain: false, codigo: 'sem_midia' });
+    const mediatype = midia.tipo === 'imagem' ? 'image' : midia.tipo === 'audio' ? 'audio' : 'document';
+    try {
+      return await this.envioCircuito.run(async () => {
+        const res = await fetch(`${this.baseUrl()}/message/sendMedia/${encodeURIComponent(instanceName)}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', apikey: this.globalKey() },
+          body: JSON.stringify({
+            number: number.replace(/\D/g, ''),
+            mediatype,
+            mimetype: midia.mime,
+            media,
+            fileName: midia.nome,
+            ...(midia.legenda ? { caption: midia.legenda } : {}),
+          }),
+          signal: AbortSignal.timeout(60_000),
+          redirect: 'error',
+        });
+        const j = await res.json().catch(() => ({}) as Record<string, unknown>);
+        if (!res.ok) throw new DeliveryError(res.status);
+        return { providerId: (j as { key?: { id?: string } }).key?.id };
+      });
+    } catch (e) {
+      if (e instanceof DeliveryError) throw e;
+      throw new DeliveryError(429); // circuito aberto: nada saiu (ver sendText)
+    }
+  }
+
   private nomeInstancia(tenantId: string): string {
-    return `orvyn-${tenantId}`;
+    return `khub-${tenantId}`;
   }
 }
 

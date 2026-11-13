@@ -69,23 +69,72 @@ describe('RunsService (Sprint E — orquestração)', () => {
     expect(a.run.noAtual).toBe('wait');
   });
 
-  it('espera de 1 dia vira delay na fila — nada de timer na memória', async () => {
-    // Relógio congelado: `avancar` grava `scheduledAt = Date.now() + delay` e
-    // `enfileirar` recalcula `scheduledAt - Date.now()` logo em seguida — com
-    // relógio real, o trabalho assíncrono entre as duas chamadas introduz um
-    // desvio de alguns ms (comportamento correto para sobreviver a restart,
-    // mas não determinístico no teste).
-    jest.useFakeTimers({ now: new Date('2026-01-01T12:00:00Z') });
-    try {
-      const a = ambiente({ noAtual: 'wait' });
-      const svc = new RunsService(a.prisma, executorQue({ esperarMs: 86_400_000 }), a.eventos, a.fila);
-      await svc.processarPasso({ tenantId: TENANT, runId: 'run1', noId: 'wait' }, 1);
+  it('espera de 1 dia vira delay na fila — nada de timer na memória (relógio real)', async () => {
+    // BUG-021: sem relógio congelado. O delay pedido é o piso do job; antes, o
+    // recálculo `scheduledAt - agora` encolhia alguns ms sob carga.
+    const a = ambiente({ noAtual: 'wait' });
+    const svc = new RunsService(a.prisma, executorQue({ esperarMs: 86_400_000 }), a.eventos, a.fila);
+    await svc.processarPasso({ tenantId: TENANT, runId: 'run1', noId: 'wait' }, 1);
 
-      expect(a.enfileirados[0].opts).toMatchObject({ delay: 86_400_000 });
-      expect(a.run.status).toBe('esperando'); // o estado está no banco: sobrevive a restart
+    expect(a.enfileirados[0].opts).toMatchObject({ delay: 86_400_000 });
+    expect(a.run.status).toBe('esperando'); // o estado está no banco: sobrevive a restart
+  });
+
+  it('REGRESSÃO BUG-021: latência entre agendar e enfileirar não encolhe o delay', async () => {
+    const a = ambiente({ noAtual: 'wait' });
+    // simula 250 ms de latência do banco entre `avancar` e `enfileirar`
+    const real = Date.now;
+    let desvio = 0;
+    const spy = jest.spyOn(Date, 'now').mockImplementation(() => real() + desvio);
+    try {
+      const executor = { executar: jest.fn(async () => ({ esperarMs: 86_400_000 })) } as unknown as ExecutorService;
+      const fila = { add: jest.fn(async (_n: string, dados: unknown, opts: unknown) => { a.enfileirados.push({ dados, opts }); }) } as unknown as Queue;
+      const svc = new RunsService(a.prisma, executor, a.eventos, fila);
+      const update = (a.prisma.withTenant as jest.Mock).getMockImplementation()!;
+      (a.prisma.withTenant as jest.Mock).mockImplementation(async (t: string, work: (tx: unknown) => Promise<unknown>) => {
+        const r = await update(t, work);
+        if (a.run.status === 'esperando') desvio = 250; // depois de gravar scheduledAt
+        return r;
+      });
+      await svc.processarPasso({ tenantId: TENANT, runId: 'run1', noId: 'wait' }, 1);
+      expect(a.enfileirados[0].opts.delay).toBe(86_400_000);
     } finally {
-      jest.useRealTimers();
+      spy.mockRestore();
     }
+  });
+
+  it('run de teste do rascunho executa o grafo congelado nele (Q1.3), não a versão', async () => {
+    const rascunho: Grafo = {
+      nos: [...GRAFO.nos, { id: 'nota', tipo: 'acao.criar_nota', posicao: { x: 5, y: 0 }, config: { corpo: 'só no rascunho' } }],
+      arestas: [{ id: 'a1', de: 'g', para: 'sms' }, { id: 'ax', de: 'sms', para: 'nota' }],
+    };
+    const a = ambiente({ teste: true, grafoTeste: rascunho });
+    const svc = new RunsService(a.prisma, executorQue({}), a.eventos, a.fila);
+    await svc.processarPasso({ tenantId: TENANT, runId: 'run1', noId: 'sms' }, 1);
+    expect(a.enfileirados[0].dados).toMatchObject({ noId: 'nota' }); // aresta que só existe no rascunho
+  });
+
+  it('iniciar com teste + grafoTeste grava o grafo congelado no run', async () => {
+    const a = ambiente();
+    const criados: any[] = [];
+    const withTenant = (a.prisma.withTenant as jest.Mock).getMockImplementation()!;
+    (a.prisma.withTenant as jest.Mock).mockImplementation(async (t: string, work: (tx: any) => Promise<unknown>) =>
+      withTenant(t, async (tx: any) => {
+        tx.workflowRun.create = jest.fn(async ({ data }: any) => { criados.push(data); return { id: 'run-novo' }; });
+        return work(tx);
+      }),
+    );
+    const svc = new RunsService(a.prisma, executorQue({}), a.eventos, a.fila);
+    await svc.iniciar({ tenantId: TENANT, workflowId: 'wf1', versionId: 'v1', gatilho: 'teste', grafo: GRAFO, noInicial: 'g', contexto: {}, teste: true, grafoTeste: GRAFO });
+    expect(criados[0]).toMatchObject({ teste: true, grafoTeste: GRAFO });
+  });
+
+  it('condição sem ramo casado e só saídas de ramo: encerra (não segue o 1º ramo)', async () => {
+    const a = ambiente({ noAtual: 'cond' });
+    const svc = new RunsService(a.prisma, executorQue({ ramo: undefined }), a.eventos, a.fila);
+    await svc.processarPasso({ tenantId: TENANT, runId: 'run1', noId: 'cond' }, 1);
+    expect(a.enfileirados).toHaveLength(0);
+    expect(a.run.status).toBe('concluido');
   });
 
   it('IDEMPOTÊNCIA: job reentregue para um nó que já passou é ignorado', async () => {

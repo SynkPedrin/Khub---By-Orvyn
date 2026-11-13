@@ -32,7 +32,7 @@ function sql(q) {
   return r.stdout.trim().split('\n')[0];
 }
 async function signup(label, empresa) {
-  const email = `qa-${label}-${RUN}@orvyn-qa.test`;
+  const email = `qa-${label}-${RUN}@khub-qa.test`;
   const r = await api('POST', '/auth/signup', null, { email, password: PASS, nome: `QA ${label}`, empresa });
   if (r.status >= 300) throw new Error(`signup ${label}: ${r.status} ${JSON.stringify(r.body)}`);
   const me = await api('GET', '/auth/me', r.body.access);

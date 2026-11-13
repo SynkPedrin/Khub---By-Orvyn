@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { BrandLogo, type BrandKey } from '../brand/BrandLogo';
 import { Icon, type IconName } from '../icons';
 import { cx } from '../ui';
 import type { Canal, FaixaScore, StatusLead } from '@/lib/revenue/types';
@@ -13,13 +14,13 @@ import type { Canal, FaixaScore, StatusLead } from '@/lib/revenue/types';
 
 /* ---------------------------- Canal ---------------------------- */
 
-const CANAL: Record<Canal, { rotulo: string; icone: IconName; cor: string }> = {
-  whatsapp: { rotulo: 'WhatsApp', icone: 'whatsapp', cor: 'var(--ch-whatsapp)' },
-  instagram: { rotulo: 'Instagram', icone: 'instagram', cor: 'var(--ch-instagram)' },
+const CANAL: Record<Canal, { rotulo: string; icone: IconName; cor: string; brand?: BrandKey }> = {
+  whatsapp: { rotulo: 'WhatsApp', icone: 'whatsapp', cor: 'var(--ch-whatsapp)', brand: 'whatsapp' },
+  instagram: { rotulo: 'Instagram', icone: 'instagram', cor: 'var(--ch-instagram)', brand: 'instagram' },
   email: { rotulo: 'E-mail', icone: 'mail', cor: 'var(--ch-email)' },
   linkedin: { rotulo: 'LinkedIn', icone: 'linkedin', cor: 'var(--ch-linkedin)' },
   site: { rotulo: 'Site', icone: 'globe', cor: 'var(--ch-site)' },
-  google: { rotulo: 'Google Ads', icone: 'search', cor: '#ea4335' },
+  google: { rotulo: 'Google Ads', icone: 'search', cor: '#ea4335', brand: 'google_ads' },
   indicacao: { rotulo: 'Indicação', icone: 'users', cor: '#f59e0b' },
   forms: { rotulo: 'Formulário', icone: 'file', cor: '#0284c7' },
   parceria: { rotulo: 'Parceria', icone: 'link', cor: '#7c3aed' },
@@ -29,7 +30,11 @@ export function CanalBadge({ canal, comRotulo = true }: { canal: Canal; comRotul
   const c = CANAL[canal] ?? CANAL.site;
   return (
     <span className="inline-flex items-center gap-1.5 text-[13px] text-fg">
-      <Icon name={c.icone} size={15} style={{ color: c.cor }} className="shrink-0" />
+      {c.brand ? (
+        <BrandLogo brand={c.brand} size={16} className="shrink-0" />
+      ) : (
+        <Icon name={c.icone} size={15} style={{ color: c.cor }} className="shrink-0" />
+      )}
       {comRotulo && <span className="truncate">{c.rotulo}</span>}
     </span>
   );

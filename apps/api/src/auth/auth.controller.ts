@@ -2,6 +2,7 @@ import { BadRequestException, Body, Controller, Get, Headers, HttpCode, Param, P
 import { IsEmail, IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { AuthService } from './auth.service';
 import { OAuthService } from './oauth.service';
+import { PasswordResetService } from './password-reset.service';
 import { ehProvider, type OAuthProvider } from './oauth.providers';
 import { CurrentUser, Public, type AuthUser } from './decorators';
 
@@ -19,10 +20,20 @@ class LoginDto {
 class RefreshDto {
   @IsString() refresh!: string;
 }
+class PreviewInviteDto {
+  @IsString() @MinLength(10) @MaxLength(200) token!: string;
+}
 class AcceptInviteDto {
   @IsString() @MinLength(10) token!: string;
   @IsOptional() @IsString() @MaxLength(160) nome?: string;
   @IsOptional() @IsString() @MinLength(8) @MaxLength(200) password?: string;
+}
+class ForgotPasswordDto {
+  @IsEmail() @MaxLength(200) email!: string;
+}
+class ResetPasswordDto {
+  @IsString() @MinLength(20) @MaxLength(200) token!: string;
+  @IsString() @MinLength(8) @MaxLength(200) password!: string;
 }
 class OAuthCallbackDto {
   @IsIn(['google', 'github']) provider!: OAuthProvider;
@@ -34,7 +45,31 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly oauth: OAuthService,
+    private readonly senhas: PasswordResetService,
   ) {}
+
+  /** A tela de login só oferece o fluxo por e-mail se o envio estiver configurado. */
+  @Public()
+  @Get('password/status')
+  passwordStatus() {
+    return this.senhas.disponivel();
+  }
+
+  /** Sempre 200 com a mesma resposta: não revela se o e-mail tem conta. */
+  @Public()
+  @Post('password/forgot')
+  @HttpCode(200)
+  forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.senhas.solicitar(dto.email);
+  }
+
+  /** Token de uso único do e-mail + nova senha. Encerra todas as sessões. */
+  @Public()
+  @Post('password/reset')
+  @HttpCode(200)
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.senhas.redefinir(dto.token, dto.password);
+  }
 
   @Public()
   @Post('signup')
@@ -62,6 +97,14 @@ export class AuthController {
   async logout(@Body() dto: RefreshDto) {
     await this.auth.logout(dto.refresh);
     return { ok: true };
+  }
+
+  /** Dados do convite para a tela de aceite (público; token no corpo, nunca na URL de log). */
+  @Public()
+  @Post('invites/preview')
+  @HttpCode(200)
+  previewInvite(@Body() dto: PreviewInviteDto) {
+    return this.auth.previewInvite(dto.token);
   }
 
   /** Aceite de convite — público (o token do link é a credencial). */

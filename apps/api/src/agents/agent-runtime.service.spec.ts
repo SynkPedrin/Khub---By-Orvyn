@@ -1,239 +1,232 @@
 import { Prisma } from '@prisma/client';
-import { AgentRuntimeService, historicoParaModelo, montarPrompt, type ConfigAgente } from './agent-runtime.service';
+import { AgentRuntimeService, ATRASO_RESPOSTA_MS } from './agent-runtime.service';
 import type { PrismaService } from '../prisma/prisma.service';
-import type { AnthropicProvider, RespostaLLM } from '../ai/anthropic.provider';
-import type { AgentToolsService } from './agent-tools.service';
-import type { MessagesService } from '../crm/messaging/messages.service';
 import type { AtendimentoService } from '../crm/messaging/atendimento.service';
+import type { DeliveryService } from './delivery/delivery.service';
+import type { FollowupService } from './followup/followup.service';
+import type { IntelligenceCoreService, ResultadoCore } from './intelligence/intelligence-core.service';
+import type { MemoryService } from './intelligence/memory.service';
+import { perfilVazio, type ProfileService } from './intelligence/profile.service';
+import type { KnowledgeService } from './knowledge/knowledge.service';
+import type { LearningService } from './learning/learning.service';
+import type { VersioningService } from './versioning/versioning.service';
+import type { MessagesService } from '../crm/messaging/messages.service';
+import type { ConfigHorario } from './config/horario';
+import { configPadrao } from './config/agent-config';
+import { analisarHeuristica } from './engines/analysis';
 
 const TENANT = '11111111-1111-1111-1111-111111111111';
+const AGENTE = { id: 'ag1', nome: 'Lia', status: 'ativo', modelo: 'claude-opus-5-5', config: {}, versaoPublicadaId: null };
 
-const AGENTE = {
-  id: 'ag1',
-  tenantId: TENANT,
-  nome: 'Lia',
-  descricao: null,
-  status: 'ativo',
-  modelo: 'claude-opus-5-5',
-  instrucoes: 'Atenda pacientes da Clínica Aurora e qualifique para consulta.',
-  tom: 'cordial',
-  personalidade: '',
-  ferramentas: ['buscar_conhecimento', 'adicionar_nota'],
-  conhecimentoAtivo: true,
-  conhecimentoEscopos: ['tenant'],
-  maxRespostasConversa: 20,
-  maxCaracteres: 600,
-  canais: ['WhatsApp'],
-  padrao: true,
-};
-
-function resp(texto: string, toolCalls: RespostaLLM['toolCalls'] = [], pararPor = 'end_turn', extras: unknown[] = []): RespostaLLM {
+function resultado(o: Partial<ResultadoCore> = {}): ResultadoCore {
+  const analise = analisarHeuristica('quanto custa a consulta?');
   return {
-    texto,
-    toolCalls,
-    pararPor,
+    decisao: 'responder',
+    motivo: null,
+    analise,
+    regras: { disparadas: [], instrucoes: [], acoes: [], iniciarFollowup: null },
+    conhecimento: { consulta: null, fontes: [], confianca: null, conflitos: [], latenciaMs: 0 },
+    memoria: { resumo: false, longoPrazo: 0, operacional: 0 },
+    extracoes: [],
+    ferramentas: [],
+    textoBruto: 'Olá!\n\nA consulta custa R$ 350.',
+    texto: 'Olá!\n\nA consulta custa R$ 350.',
+    validacao: [],
+    guardrail: null,
+    fragmentacao: { blocos: [{ ordem: 1, texto: 'Olá!', atrasoMs: 1200 }, { ordem: 2, texto: 'A consulta custa R$ 350.', atrasoMs: 1200 }], estrategia: 'semantica', ajustes: [] },
     modelo: 'claude-opus-5-5',
-    uso: { entrada: 100, saida: 20, cache: 0, custoUsd: 0.0008 },
-    blocos: [...extras, ...(texto ? [{ type: 'text', text: texto }] : []), ...toolCalls.map((c) => ({ type: 'tool_use', id: c.id, name: c.nome, input: c.args }))],
+    modelos: ['claude-opus-5-5'],
+    tokensEntrada: 100,
+    tokensSaida: 20,
+    custoUsd: 0.001,
+    tempos: { analiseMs: 1, conhecimentoMs: 1, geracaoMs: 1, totalMs: 3 },
+    ...o,
   };
 }
 
 function ambiente(o: {
   atendimento?: 'ia' | 'humano';
   autorTipo?: string;
-  agente?: Partial<typeof AGENTE> | null;
-  configurado?: boolean;
+  agente?: Record<string, unknown> | null;
   respostasIa?: number;
   maisNova?: boolean;
   runExiste?: boolean;
   optout?: boolean;
-  respostas?: (RespostaLLM | Error)[];
+  custoConversa?: number;
+  core?: ResultadoCore | Error;
+  horario?: Partial<ConfigHorario>;
 } = {}) {
   const runs: Record<string, unknown>[] = [];
   const tx = {
     message: {
       findUnique: jest.fn(async () => ({ id: 'm1', autorTipo: o.autorTipo ?? 'contato', conversationId: 'cv1', createdAt: new Date('2026-11-06T10:00:00Z') })),
       findFirst: jest.fn(async () => (o.maisNova ? { id: 'm2' } : null)),
-      count: jest.fn(async () => o.respostasIa ?? 0),
       findMany: jest.fn(async () => [{ autorTipo: 'contato', corpo: 'Oi, quanto custa a consulta?' }]),
     },
     conversation: { findUnique: jest.fn(async () => ({ id: 'cv1', atendimento: o.atendimento ?? 'ia', agentId: 'ag1', contactId: 'c1' })) },
     agent: { findUnique: jest.fn(async () => (o.agente === null ? null : { ...AGENTE, ...o.agente })) },
     contact: { findUnique: jest.fn(async () => ({ nome: 'Marina', optedOutAt: o.optout ? new Date() : null })) },
     tenant: { findUnique: jest.fn(async () => ({ nome: 'Clínica Aurora', nicho: null, subespecialidade: null })) },
+    agentIntentCategory: { findMany: jest.fn(async () => []) },
+    agentFollowupRule: { findMany: jest.fn(async () => [{ id: 'regra-resp' }]) },
+    agentFollowup: { updateMany: jest.fn(async () => ({ count: 1 })) },
     agentRun: {
       create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => {
         if (o.runExiste) throw new Prisma.PrismaClientKnownRequestError('Unique constraint failed', { code: 'P2002', clientVersion: '5.22.0' });
         runs.push({ id: 'r1', ...data });
         return { id: 'r1' };
       }),
+      count: jest.fn(async () => o.respostasIa ?? 0),
+      findMany: jest.fn(async () => (o.custoConversa ? [{ trace: {}, custoUsd: new Prisma.Decimal(o.custoConversa) }] : [])),
+      aggregate: jest.fn(async () => ({ _sum: { custoUsd: null } })),
       update: jest.fn(async ({ data }: { data: Record<string, unknown> }) => Object.assign(runs[0], data)),
     },
-    aiUsageEvent: { create: jest.fn(async () => ({})) },
-    nyroGuardrailHit: { create: jest.fn(async () => ({})) },
   };
   const prisma = { withTenant: jest.fn(async (_t: string, work: (t: unknown) => Promise<unknown>) => work(tx)) } as unknown as PrismaService;
-  const fila = [...(o.respostas ?? [resp('Olá, Marina! A consulta custa R$ 350.')])];
-  const llm = {
-    configured: () => o.configurado ?? true,
-    missing: () => (o.configurado === false ? ['ANTHROPIC_API_KEY'] : []),
-    conversar: jest.fn(async () => {
-      const r = fila.shift();
-      if (r instanceof Error) throw r;
-      return r ?? resp('');
+  const core = {
+    processar: jest.fn(async () => {
+      if (o.core instanceof Error) throw o.core;
+      return o.core ?? resultado();
     }),
-  } as unknown as AnthropicProvider;
-  const tools = {
-    executar: jest.fn(async (nome: string) =>
-      nome === 'transferir_para_humano'
-        ? { ok: true, dados: { transferindo: true }, transferir: { motivo: 'contato pediu uma pessoa' } }
-        : { ok: true, dados: { trechos: [{ fonte: 'Tabela', texto: 'Consulta: R$ 350' }] }, fontes: [{ chunkId: 'k1', titulo: 'Tabela', escopo: 'tenant' }] },
-    ),
-  } as unknown as AgentToolsService;
-  const mensagens = { send: jest.fn(async () => ({ id: 'resp1' })) } as unknown as MessagesService;
+    registrarUso: jest.fn(async () => undefined),
+  } as unknown as IntelligenceCoreService;
   const atendimento = { transferirParaHumano: jest.fn(async () => ({})) } as unknown as AtendimentoService;
-  const svc = new AgentRuntimeService(prisma, llm, tools, mensagens, atendimento);
-  return { svc, tx, llm, tools, mensagens, atendimento, runs };
+  const entregas = { enfileirar: jest.fn(async () => ({ sequenciaId: 'seq1', blocos: 2, duplicado: false })), cancelarPendentes: jest.fn(async () => 2) } as unknown as DeliveryService;
+  const followups = { agendarAposResposta: jest.fn(async () => ({ agendado: true })) } as unknown as FollowupService;
+  const memoria = { contexto: jest.fn(async () => ({ resumoConversa: null, longoPrazo: [], operacional: [] })), registrarOperacional: jest.fn(async () => undefined), atualizarResumo: jest.fn(async () => ({ atualizado: false, custoUsd: 0 })) } as unknown as MemoryService;
+  const perfis = { carregar: jest.fn(async () => perfilVazio('c1')) } as unknown as ProfileService;
+  const conhecimento = { documentosDoAgente: jest.fn(async () => null) } as unknown as KnowledgeService;
+  const versoes = {
+    efetivo: jest.fn(async () => ({ id: 'ag1', nome: 'Lia', modelo: 'claude-opus-5-5', instrucoes: 'x'.repeat(30), tom: 'cordial', personalidade: '', ferramentas: [], conhecimentoAtivo: true, conhecimentoEscopos: ['tenant'], maxCaracteres: 600, maxRespostasConversa: 20, config: { ...configPadrao(), horario: { ...configPadrao().horario, ...o.horario } }, versionId: 'v3' })),
+  } as unknown as VersioningService;
+  const aprendizado = { registrar: jest.fn(async () => undefined) } as unknown as LearningService;
+  const mensagens = { send: jest.fn(async () => ({ id: 'msg-aviso', status: 'sent' })) } as unknown as MessagesService;
+  const svc = new AgentRuntimeService(prisma, core, atendimento, entregas, followups, memoria, perfis, conhecimento, versoes, aprendizado, mensagens);
+  return { svc, tx, runs, core, atendimento, entregas, followups, aprendizado, mensagens };
 }
 
 const JOB = { tenantId: TENANT, messageId: 'm1' };
 
-describe('AgentRuntimeService.responder — quando o agente NÃO fala', () => {
-  it('conversa com humano: não chama o modelo nem abre run', async () => {
-    const a = ambiente({ atendimento: 'humano' });
-    await expect(a.svc.responder(JOB)).resolves.toBe('nada');
-    expect(a.llm.conversar).not.toHaveBeenCalled();
-    expect(a.tx.agentRun.create).not.toHaveBeenCalled();
-  });
-
-  it('mensagem que não é do contato (resposta da IA/humano) nunca dispara o agente — sem loop', async () => {
+describe('AgentRuntimeService — orquestração do atendimento', () => {
+  it('mensagem que não é do contato não dispara nada', async () => {
     const a = ambiente({ autorTipo: 'ia' });
-    await expect(a.svc.responder(JOB)).resolves.toBe('nada');
-    expect(a.llm.conversar).not.toHaveBeenCalled();
+    expect(await a.svc.responder(JOB)).toBe('nada');
+    expect(a.core.processar).not.toHaveBeenCalled();
   });
 
-  it('mesma mensagem entregue duas vezes: o segundo job não responde (idempotência)', async () => {
+  it('nova mensagem do contato INTERROMPE blocos e follow-ups pendentes, mesmo com humano no comando', async () => {
+    const a = ambiente({ atendimento: 'humano' });
+    expect(await a.svc.responder(JOB)).toBe('nada');
+    expect(a.entregas.cancelarPendentes).toHaveBeenCalledWith(TENANT, 'cv1', expect.stringContaining('nova mensagem'));
+    expect(a.tx.agentFollowup.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ contactId: 'c1', status: 'agendado', ruleId: { in: ['regra-resp'] } }) }));
+  });
+
+  it('mesma mensagem entregue duas vezes não gera segunda resposta', async () => {
     const a = ambiente({ runExiste: true });
-    await expect(a.svc.responder(JOB)).resolves.toBe('duplicado');
-    expect(a.llm.conversar).not.toHaveBeenCalled();
-    expect(a.mensagens.send).not.toHaveBeenCalled();
+    expect(await a.svc.responder(JOB)).toBe('duplicado');
+    expect(a.core.processar).not.toHaveBeenCalled();
   });
 
-  it('rajada: se já chegou mensagem mais nova do contato, esta é ignorada sem ir ao modelo', async () => {
+  it('rajada: só a mensagem mais nova responde', async () => {
     const a = ambiente({ maisNova: true });
-    await expect(a.svc.responder(JOB)).resolves.toBe('ignorado');
-    expect(a.llm.conversar).not.toHaveBeenCalled();
+    expect(await a.svc.responder(JOB)).toBe('ignorado');
+    expect(a.core.processar).not.toHaveBeenCalled();
   });
 
-  it('contato que optou por sair não recebe resposta', async () => {
-    const a = ambiente({ optout: true });
-    await expect(a.svc.responder(JOB)).resolves.toBe('ignorado');
-    expect(a.mensagens.send).not.toHaveBeenCalled();
-    expect(a.atendimento.transferirParaHumano).not.toHaveBeenCalled();
-  });
-});
-
-describe('AgentRuntimeService.responder — o lead nunca fica sem dono', () => {
-  it('sem ANTHROPIC_API_KEY: transfere para humano com o motivo explícito, sem resposta simulada', async () => {
-    const a = ambiente({ configurado: false });
-    await expect(a.svc.responder(JOB)).resolves.toBe('transferido');
-    expect(a.llm.conversar).not.toHaveBeenCalled();
-    expect(a.mensagens.send).not.toHaveBeenCalled();
-    expect(a.atendimento.transferirParaHumano).toHaveBeenCalledWith(TENANT, 'cv1', expect.stringContaining('ANTHROPIC_API_KEY'), { tipo: 'ia', agentId: 'ag1' });
-    expect(a.runs[0]).toMatchObject({ status: 'transferido' });
-  });
-
-  it('agente pausado: transfere', async () => {
+  it('agente pausado → humano', async () => {
     const a = ambiente({ agente: { status: 'pausado' } });
-    await expect(a.svc.responder(JOB)).resolves.toBe('transferido');
-    expect(a.atendimento.transferirParaHumano).toHaveBeenCalledWith(TENANT, 'cv1', expect.stringContaining('indisponível'), expect.anything());
+    expect(await a.svc.responder(JOB)).toBe('transferido');
+    expect(a.atendimento.transferirParaHumano).toHaveBeenCalled();
   });
 
-  it('limite de respostas da IA atingido: transfere', async () => {
-    const a = ambiente({ agente: { maxRespostasConversa: 3 }, respostasIa: 3 });
-    await expect(a.svc.responder(JOB)).resolves.toBe('transferido');
-    expect(a.llm.conversar).not.toHaveBeenCalled();
-    expect(a.atendimento.transferirParaHumano).toHaveBeenCalledWith(TENANT, 'cv1', expect.stringContaining('limite de 3'), expect.anything());
+  it('opt-out → não responde', async () => {
+    const a = ambiente({ optout: true });
+    expect(await a.svc.responder(JOB)).toBe('ignorado');
   });
 
-  it('recusa do modelo (stop_reason refusal): transfere sem enviar nada', async () => {
-    const a = ambiente({ respostas: [resp('', [], 'refusal')] });
-    await expect(a.svc.responder(JOB)).resolves.toBe('transferido');
-    expect(a.mensagens.send).not.toHaveBeenCalled();
-    expect(a.atendimento.transferirParaHumano).toHaveBeenCalledWith(TENANT, 'cv1', expect.stringContaining('recusou'), expect.anything());
+  it('limite de respostas → humano', async () => {
+    const a = ambiente({ respostasIa: 20 });
+    expect(await a.svc.responder(JOB)).toBe('transferido');
   });
 
-  it('erro do provedor: marca erro e transfere', async () => {
-    const a = ambiente({ respostas: [new Error('Anthropic 529: overloaded')] });
-    await expect(a.svc.responder(JOB)).resolves.toBe('erro');
+  it('orçamento de IA da conversa esgotado → humano com motivo', async () => {
+    const a = ambiente({ custoConversa: 1.5 });
+    expect(await a.svc.responder(JOB)).toBe('transferido');
+    expect(a.atendimento.transferirParaHumano).toHaveBeenCalledWith(TENANT, 'cv1', expect.stringContaining('orçamento'), expect.anything());
+  });
+
+  it('resposta: blocos vão para a FILA (idempotente pela mensagem), run grava a decisão e follow-up é agendado', async () => {
+    const a = ambiente();
+    expect(await a.svc.responder(JOB)).toBe('respondido');
+    expect(a.entregas.enfileirar).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'cv1', runId: 'r1', chaveBase: 'agent:m1', blocos: expect.arrayContaining([expect.objectContaining({ ordem: 2 })]) }));
+    expect(a.runs[0]).toMatchObject({ status: 'respondido', versionId: 'v3', intencao: 'orcamento', blocos: 2 });
+    expect((a.runs[0].trace as { fragmentacao: { blocos: unknown[] } }).fragmentacao.blocos).toHaveLength(2);
+    expect(a.followups.agendarAposResposta).toHaveBeenCalledWith(TENANT, expect.objectContaining({ agentId: 'ag1', contactId: 'c1', intencao: 'orcamento' }));
+    expect(a.aprendizado.registrar).toHaveBeenCalled();
+  });
+
+  it('transferência decidida pelo agente: avisa (blocos) e passa para humano, sem follow-up', async () => {
+    const a = ambiente({ core: resultado({ decisao: 'transferir', motivo: 'contato pediu uma pessoa' }) });
+    expect(await a.svc.responder(JOB)).toBe('transferido');
+    expect(a.entregas.enfileirar).toHaveBeenCalled();
+    expect(a.atendimento.transferirParaHumano).toHaveBeenCalledWith(TENANT, 'cv1', 'contato pediu uma pessoa', expect.anything());
+    expect(a.followups.agendarAposResposta).not.toHaveBeenCalled();
+  });
+
+  it('regra de silêncio: não envia nada', async () => {
+    const a = ambiente({ core: resultado({ decisao: 'silenciar', motivo: 'regra: fora do escopo', fragmentacao: { blocos: [], estrategia: 'unica', ajustes: [] } }) });
+    expect(await a.svc.responder(JOB)).toBe('ignorado');
+    expect(a.entregas.enfileirar).not.toHaveBeenCalled();
+  });
+
+  it('falha do core → lead vai para humano e o run registra erro', async () => {
+    const a = ambiente({ core: new Error('Anthropic 529: overloaded') });
+    expect(await a.svc.responder(JOB)).toBe('erro');
     expect(a.atendimento.transferirParaHumano).toHaveBeenCalledWith(TENANT, 'cv1', expect.stringContaining('falha ao gerar resposta'), expect.anything());
     expect(a.runs[0]).toMatchObject({ status: 'erro' });
   });
-});
 
-describe('AgentRuntimeService.responder — resposta', () => {
-  it('envia como IA, com idempotência agent:<messageId>, effort low e fallback de recusa', async () => {
-    const a = ambiente();
-    await expect(a.svc.responder(JOB)).resolves.toBe('respondido');
-    expect(a.mensagens.send).toHaveBeenCalledWith(TENANT, 'cv1', 'Olá, Marina! A consulta custa R$ 350.', 'agent:m1', undefined, { tipo: 'ia', agentId: 'ag1' });
-    expect(a.llm.conversar).toHaveBeenCalledWith(expect.objectContaining({ modelo: 'claude-opus-5-5', effort: 'low', fallbackRecusa: true }));
-    expect(a.runs[0]).toMatchObject({ status: 'respondido', respostaMessageId: 'resp1', modelo: 'claude-opus-5-5' });
-    expect(a.tx.aiUsageEvent.create).toHaveBeenCalled();
-  });
+  describe('horário de atendimento (ADR-0042)', () => {
+    // Terça 2026-11-10 às 23:00 em São Paulo = 02:00 UTC de quarta.
+    const NOITE = new Date('2026-11-11T02:00:00Z');
+    const fechado = { ativo: true, fuso: 'America/Sao_Paulo' } as const;
+    beforeEach(() => jest.useFakeTimers({ now: NOITE, doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'] }));
+    afterEach(() => jest.useRealTimers());
 
-  it('corta a mensagem no limite de caracteres do agente', async () => {
-    const longo = 'A consulta custa R$ 350 e inclui retorno em 30 dias. '.repeat(10);
-    const a = ambiente({ agente: { maxCaracteres: 100 }, respostas: [resp(longo)] });
-    await a.svc.responder(JOB);
-    const enviado = (a.mensagens.send as jest.Mock).mock.calls[0][2] as string;
-    expect(enviado.length).toBeLessThanOrEqual(101);
-  });
+    it('desligado (padrão): responde a qualquer hora', async () => {
+      const a = ambiente();
+      expect(await a.svc.responderOuAdiar(JOB)).toEqual({ desfecho: 'respondido' });
+    });
 
-  it('no loop de tools, o turno do assistente volta INTACTO (thinking incluso)', async () => {
-    const pensamento = { type: 'thinking', thinking: '', signature: 'sig-abc' };
-    const primeira = resp('', [{ id: 'tu1', nome: 'buscar_conhecimento', args: { pergunta: 'preço da consulta' } }], 'tool_use', [pensamento]);
-    const a = ambiente({ respostas: [primeira, resp('A consulta custa R$ 350.')] });
-    await a.svc.responder(JOB);
-    const segunda = (a.llm.conversar as jest.Mock).mock.calls[1][0] as { mensagens: { role: string; content: unknown }[] };
-    const turnoAssistente = segunda.mensagens.find((m) => m.role === 'assistant');
-    expect(turnoAssistente?.content).toEqual(primeira.blocos);
-    expect((turnoAssistente?.content as unknown[])[0]).toEqual(pensamento);
-    expect(a.runs[0]).toMatchObject({ fontes: [{ chunkId: 'k1', titulo: 'Tabela', escopo: 'tenant' }] });
-  });
+    it('fora do horário: adia para a abertura sem abrir run nem chamar o modelo', async () => {
+      const a = ambiente({ horario: { ...fechado, foraDoHorario: 'responder_na_abertura' } });
+      const r = await a.svc.responderOuAdiar(JOB);
+      expect(r.desfecho).toBe('adiado');
+      // Quarta 08:00 em SP = 11:00 UTC (+ folga de rajada).
+      expect(r.adiarAte!.getTime()).toBe(new Date('2026-11-11T11:00:00Z').getTime() + ATRASO_RESPOSTA_MS);
+      expect(a.runs).toHaveLength(0);
+      expect(a.core.processar).not.toHaveBeenCalled();
+      expect(a.mensagens.send).not.toHaveBeenCalled();
+    });
 
-  it('pedido de transferência: envia o aviso e depois transfere', async () => {
-    const pedido = resp('Vou te passar para alguém da equipe.', [{ id: 'tu1', nome: 'transferir_para_humano', args: { motivo: 'pediu pessoa' } }], 'tool_use');
-    const a = ambiente({ respostas: [pedido, resp('')] });
-    await expect(a.svc.responder(JOB)).resolves.toBe('transferido');
-    expect(a.mensagens.send).toHaveBeenCalledWith(TENANT, 'cv1', 'Vou te passar para alguém da equipe.', 'agent:m1', undefined, expect.anything());
-    expect(a.atendimento.transferirParaHumano).toHaveBeenCalledWith(TENANT, 'cv1', 'contato pediu uma pessoa', { tipo: 'ia', agentId: 'ag1' });
-  });
-});
+    it('avisar e responder na abertura: manda UM aviso idempotente pela abertura', async () => {
+      const a = ambiente({ horario: { ...fechado, foraDoHorario: 'avisar_e_responder_na_abertura' } });
+      const r = await a.svc.responderOuAdiar(JOB);
+      expect(r.desfecho).toBe('adiado');
+      expect(a.mensagens.send).toHaveBeenCalledWith(TENANT, 'cv1', expect.stringContaining('amanhã às 08:00'), 'agent-fora:cv1:2026-11-11T11:00:00.000Z', undefined, { tipo: 'ia', agentId: 'ag1' });
+    });
 
-describe('montarPrompt / historicoParaModelo', () => {
-  const cfg = { ...AGENTE } as unknown as ConfigAgente;
+    it('transferir para a equipe: passa para humano com motivo explícito', async () => {
+      const a = ambiente({ horario: { ...fechado, foraDoHorario: 'transferir_para_equipe' } });
+      expect(await a.svc.responderOuAdiar(JOB)).toEqual({ desfecho: 'transferido' });
+      expect(a.atendimento.transferirParaHumano).toHaveBeenCalledWith(TENANT, 'cv1', 'fora do horário de atendimento do agente', expect.anything());
+      expect(a.core.processar).not.toHaveBeenCalled();
+    });
 
-  it('regras fixas vêm ANTES das instruções do cliente, que ficam delimitadas', () => {
-    const p = montarPrompt(cfg, { empresa: 'Clínica Aurora', nicho: null, contatoNome: 'Marina' });
-    expect(p.indexOf('REGRAS FIXAS')).toBeGreaterThan(-1);
-    expect(p.indexOf('REGRAS FIXAS')).toBeLessThan(p.indexOf('<instrucoes>'));
-    expect(p).toContain('Atenda pacientes da Clínica Aurora');
-    expect(p).toContain('no máximo 600 caracteres');
-    expect(p).toContain('CONTATO: Marina');
-  });
-
-  it('histórico começa e termina no contato e junta autores consecutivos', () => {
-    const h = historicoParaModelo([
-      { autorTipo: 'ia', corpo: 'Olá! Sou a Lia.' },
-      { autorTipo: 'contato', corpo: 'oi' },
-      { autorTipo: 'contato', corpo: 'quanto custa?' },
-      { autorTipo: 'humano', corpo: 'Já te respondo' },
-      { autorTipo: 'contato', corpo: 'ok' },
-    ]);
-    expect(h).toEqual([
-      { role: 'user', content: 'oi\nquanto custa?' },
-      { role: 'assistant', content: '(atendente da equipe) Já te respondo' },
-      { role: 'user', content: 'ok' },
-    ]);
+    it('dentro do horário: responde normalmente', async () => {
+      jest.setSystemTime(new Date('2026-11-10T15:00:00Z')); // terça 12:00 em SP
+      const a = ambiente({ horario: fechado });
+      expect(await a.svc.responderOuAdiar(JOB)).toEqual({ desfecho: 'respondido' });
+    });
   });
 });

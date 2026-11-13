@@ -1,0 +1,314 @@
+{
+  "executadoEm": "2026-11-09T12:18:10.947Z",
+  "api": "http://localhost:4020/v1",
+  "total": 51,
+  "falhas": 0,
+  "results": [
+    {
+      "etapa": "0",
+      "nome": "canário: integração externa sem credencial responde 501 (env de dev não vazou)",
+      "status": "PASS",
+      "detalhe": "501"
+    },
+    {
+      "etapa": "1",
+      "nome": "catálogo expõe ferramentas, estratégias, personas e IA configurada (stub)",
+      "status": "PASS",
+      "detalhe": "ferr=20 ia={\"configurada\":true,\"faltando\":[]}"
+    },
+    {
+      "etapa": "1",
+      "nome": "agente criado como rascunho com config estendida validada",
+      "status": "PASS",
+      "detalhe": "{\"id\":\"bc7b2938-8b13-449e-b7f3-9f5dc2c06fb0\",\"nome\":\"Lia\",\"descricao\":null,\"status\":\"rascunho\",\"modelo\":\"claude-opus-5-5\",\"instrucoes\":\"Atenda leads da Clínica Aurora (tratamento capilar). Entenda a q"
+    },
+    {
+      "etapa": "1",
+      "nome": "config inválida → 400 com o campo",
+      "status": "PASS",
+      "detalhe": "{\"type\":\"https://orvyn.dev/errors/400\",\"title\":\"configuração inválida\",\"status\":400,\"instance\":\"/v1/agents/bc7b2938-8b13-449e-b7f3-9f5dc2c06fb0\",\"correlationId\":\"92ae692f-4748-40f5-9c42-af16d30cb17e\","
+    },
+    {
+      "etapa": "1",
+      "nome": "cenários de regressão padrão semeados",
+      "status": "PASS",
+      "detalhe": "5"
+    },
+    {
+      "etapa": "2",
+      "nome": "fonte de texto aceita e enviada para indexação",
+      "status": "PASS",
+      "detalhe": "{\"id\":\"240175a9-12bb-4019-9515-e0ca0487b7d9\",\"documentId\":\"ed67e81b-7273-4050-aaf9-89aa74a95283\",\"status\":\"pending\",\"duplicado\":false,\"caracteres\":187}"
+    },
+    {
+      "etapa": "2",
+      "nome": "documento indexado (sem Voyage: indexação lexical declarada)",
+      "status": "PASS",
+      "detalhe": "{\"id\":\"240175a9-12bb-4019-9515-e0ca0487b7d9\",\"documentId\":\"ed67e81b-7273-4050-aaf9-89aa74a95283\",\"titulo\":\"Tabela de preços 2026\",\"tipo\":\"texto\",\"uri\":null,\"mime\":\"text/markdown\",\"status\":\"published\",\"erro\":null,\"indexacao\":\"lexical\",\"tamanhoBytes\":198,\"caracteres\":187,\"chunks\":2,\"categoria\":\"comercial\",\"ativo\":true,\"versao\":1,\"createdAt\":\"2026-11-09T12:17:02.509Z\",\"atualizadoEm\":\"2026-11-09T12:17"
+    },
+    {
+      "etapa": "2",
+      "nome": "testador recupera o trecho com confiança",
+      "status": "PASS",
+      "detalhe": "{\"nivel\":\"alta\",\"motivo\":\"75% dos termos no melhor trecho\"}"
+    },
+    {
+      "etapa": "2",
+      "nome": "tenant B não acessa a base do agente de A (404)",
+      "status": "PASS",
+      "detalhe": "404"
+    },
+    {
+      "etapa": "3",
+      "nome": "estratégias de follow-up salvas",
+      "status": "PASS",
+      "detalhe": "{\"id\":\"2441352e-08c4-46e1-bf11-10fbf472510a\",\"tenantId\":\"9f38ffb2-31b1-473c-bd76-6fabc6f77da9\",\"agentId\":\"bc7b2938-8b13-449e-b7f3-9f5dc2c06fb0\",\"nome\""
+    },
+    {
+      "etapa": "3",
+      "nome": "agente ativado e versão 1 publicada",
+      "status": "PASS",
+      "detalhe": "{\"versao\":{\"id\":\"d510d18b-6756-421f-8ae9-d4bfdac85d26\",\"numero\":1,\"origem\":\"publicacao\",\"createdAt\":\"2026-11-09T12:17:04.153Z\"},\"avaliado\":false,\"regressaoIgnorada\":false}"
+    },
+    {
+      "etapa": "4",
+      "nome": "webhook aceita a mensagem do lead",
+      "status": "PASS",
+      "detalhe": "201"
+    },
+    {
+      "etapa": "4",
+      "nome": "agente processou a mensagem (run respondido)",
+      "status": "PASS",
+      "detalhe": "6d596d11-5090-4baf-a8ef-066bb048d6f3 | respondido | orcamento | 3"
+    },
+    {
+      "etapa": "4",
+      "nome": "intenção identificada = orçamento",
+      "status": "PASS",
+      "detalhe": "orcamento"
+    },
+    {
+      "etapa": "4",
+      "nome": "problema identificado e registrado no perfil (fato declarado confirmado)",
+      "status": "PASS",
+      "detalhe": ""
+    },
+    {
+      "etapa": "4",
+      "nome": "conhecimento consultado com fonte citável no trace",
+      "status": "PASS",
+      "detalhe": "{\"fontes\":[{\"titulo\":\"Tabela de preços 2026\",\"chunkId\":\"82ba573a-b7f5-4b0b-b79f-2061d508cf19\"},{\"titulo\":\"Tabela de preços 2026\",\"chunkId\":\"b1e65925-4639-4908-8d41-4868747c9b4c\"}],\"consulta\":\"preço av"
+    },
+    {
+      "etapa": "4",
+      "nome": "Action Engine: nota de qualificação gravada pelo CrmService",
+      "status": "PASS",
+      "detalhe": ""
+    },
+    {
+      "etapa": "4",
+      "nome": "execução da ferramenta registrada no log",
+      "status": "PASS",
+      "detalhe": ""
+    },
+    {
+      "etapa": "4",
+      "nome": "resposta fragmentada em ≥2 blocos, todos processados pela fila",
+      "status": "PASS",
+      "detalhe": "[[\"1\",\"falhou\",\"Oi! Tudo bem?\"],[\"2\",\"falhou\",\"Para queda de cabelo, começamos com uma avaliação capilar, que custa R$ 250,00.\"],[\"3\",\"falhou\",\"Quer que eu veja um horário para você?\"]]"
+    },
+    {
+      "etapa": "4",
+      "nome": "blocos gravados no Inbox NA ORDEM (mesmo texto, mesma sequência)",
+      "status": "PASS",
+      "detalhe": "[\"Oi! Tudo bem?\",\"Para queda de cabelo, começamos com uma avaliação capilar, que custa R$ 250,00.\",\"Quer que eu veja um horário para você?\"]"
+    },
+    {
+      "etapa": "4",
+      "nome": "envio externo travado fora de produção (nada saiu da máquina)",
+      "status": "PASS",
+      "detalhe": ""
+    },
+    {
+      "etapa": "4",
+      "nome": "preço veio da base (R$ 250,00)",
+      "status": "PASS",
+      "detalhe": "Oi! Tudo bem? / Para queda de cabelo, começamos com uma avaliação capilar, que custa R$ 250,00. / Quer que eu veja um horário para você?"
+    },
+    {
+      "etapa": "4",
+      "nome": "follow-up agendado após a resposta (sem_resposta)",
+      "status": "PASS",
+      "detalhe": ""
+    },
+    {
+      "etapa": "5",
+      "nome": "objeção identificada (intenção objeção)",
+      "status": "PASS",
+      "detalhe": "acc945ac-0292-41ef-8ffc-aec4757dccb8 | respondido | objecao"
+    },
+    {
+      "etapa": "5",
+      "nome": "follow-up anterior interrompido porque o contato respondeu",
+      "status": "PASS",
+      "detalhe": ""
+    },
+    {
+      "etapa": "5",
+      "nome": "regra SE objeção=preço ENTÃO tag: tag aplicada no CRM",
+      "status": "PASS",
+      "detalhe": ""
+    },
+    {
+      "etapa": "5",
+      "nome": "objeção registrada no perfil",
+      "status": "PASS",
+      "detalhe": ""
+    },
+    {
+      "etapa": "5",
+      "nome": "follow-up de objeção de preço agendado (estratégia contextual)",
+      "status": "PASS",
+      "detalhe": ""
+    },
+    {
+      "etapa": "6",
+      "nome": "worker executou o follow-up vencido",
+      "status": "PASS",
+      "detalhe": "397afaa2-15f6-4426-8968-55e592c4ec84 | enviado | Oi! Passando para retomar sobre queda de cabelo."
+    },
+    {
+      "etapa": "6",
+      "nome": "mensagem gerada a partir do CONTEXTO real (cita o problema do perfil)",
+      "status": "PASS",
+      "detalhe": "Oi! Passando para retomar sobre queda de cabelo."
+    },
+    {
+      "etapa": "6",
+      "nome": "follow-up entregue pela mesma fila (blocos com followup_id)",
+      "status": "PASS",
+      "detalhe": ""
+    },
+    {
+      "etapa": "6",
+      "nome": "tentativa 2 agendada no mesmo ciclo",
+      "status": "PASS",
+      "detalhe": ""
+    },
+    {
+      "etapa": "7",
+      "nome": "agente retomou a conversa",
+      "status": "PASS",
+      "detalhe": "respondido | interesse"
+    },
+    {
+      "etapa": "7",
+      "nome": "tentativa 2 do follow-up cancelada (contato respondeu)",
+      "status": "PASS",
+      "detalhe": ""
+    },
+    {
+      "etapa": "7",
+      "nome": "o modelo recebeu o PERFIL do contato no contexto (memória)",
+      "status": "PASS",
+      "detalhe": "{\"em\":\"2026-11-09T12:18:06.112Z\",\"model\":\"claude-opus-5-5\",\"temSchema\":false,\"effort\":\"low\",\"tools\":[\"buscar_conhecimento\",\"ver_contato\",\"adicionar_nota\",\"adicionar_tag\",\"transferir_para_humano\"],\"stop\":\"end_turn\",\"systemTemDocumento\":false,\"systemTemPerfil\":true}"
+    },
+    {
+      "etapa": "7",
+      "nome": "análise usou structured outputs com effort explícito",
+      "status": "PASS",
+      "detalhe": ""
+    },
+    {
+      "etapa": "7",
+      "nome": "resposta retoma o contexto (cita queda de cabelo)",
+      "status": "PASS",
+      "detalhe": "Que bom te ver de volta!"
+    },
+    {
+      "etapa": "8",
+      "nome": "Customer Intelligence Profile com fatos, extrações e follow-ups",
+      "status": "PASS",
+      "detalhe": "fatos=4 extr=6 fu=4"
+    },
+    {
+      "etapa": "8",
+      "nome": "tenant B não lê o perfil do contato de A (404)",
+      "status": "PASS",
+      "detalhe": "404"
+    },
+    {
+      "etapa": "8",
+      "nome": "tenant B não lê o agente de A (404)",
+      "status": "PASS",
+      "detalhe": "404"
+    },
+    {
+      "etapa": "8",
+      "nome": "lista de B não contém agentes de A",
+      "status": "PASS",
+      "detalhe": "0"
+    },
+    {
+      "etapa": "8",
+      "nome": "dashboard com dados reais (conversas, mensagens, follow-ups, custo)",
+      "status": "PASS",
+      "detalhe": "{\"c\":1,\"m\":10,\"f\":1,\"usd\":0.0465}"
+    },
+    {
+      "etapa": "8",
+      "nome": "analytics do agente: intenções, objeções, versão",
+      "status": "PASS",
+      "detalhe": "{\"i\":[{\"intencao\":\"interesse\",\"n\":1},{\"intencao\":\"objecao\",\"n\":1},{\"intencao\":\"orcamento\",\"n\":1}],\"v\":{\"versionId\":\"d510d18b-6756-421f-8ae9-d4bfdac85d26\",\"numero\":1,\"publicadaEm\":\"2026-11-09T12:17:04.153Z\",\"execucoes\":3,\"taxaTransferencia\":0,\"taxaErro\":0,\"taxaGuardrail\":0,\"confiancaMedia\":0.9,\"piorou\":false}}"
+    },
+    {
+      "etapa": "8",
+      "nome": "execution logs paginados com trace estruturado",
+      "status": "PASS",
+      "detalhe": "3"
+    },
+    {
+      "etapa": "9",
+      "nome": "simulador: turno com trace técnico (intenção, fontes, blocos, tempo, tokens)",
+      "status": "PASS",
+      "detalhe": "{\"resposta\":[{\"de\":\"ia\",\"texto\":\"Entendo, o investimento é uma decisão importante.\",\"em\":\"2026-11-09T12:18:08.254Z\"},{\"de\":\"ia\",\"texto\":\"A avaliação sai por R$ 250,00 e já define o plano certo para você.\",\"em\":\"2026-11-09T12:18:08.254Z\"},{\"de\":\"ia\",\"texto\":\"Posso te mostrar as condições de pagamento"
+    },
+    {
+      "etapa": "9",
+      "nome": "simulador NÃO executou ação real (nenhuma tag nova em contato)",
+      "status": "PASS",
+      "detalhe": ""
+    },
+    {
+      "etapa": "10",
+      "nome": "rascunho alterado aparece como \"não publicado\"",
+      "status": "PASS",
+      "detalhe": ""
+    },
+    {
+      "etapa": "10",
+      "nome": "rollback para v1 cria v3 (restauração) e o rascunho volta ao conteúdo de v1",
+      "status": "PASS",
+      "detalhe": "[[3,\"restauracao\"],[2,\"publicacao\"],[1,\"publicacao\"]]"
+    },
+    {
+      "etapa": "10",
+      "nome": "avaliação de regressão concluída com nota e métricas",
+      "status": "PASS",
+      "detalhe": "{\"s\":\"concluida\",\"nota\":\"82\",\"erro\":null,\"m\":{\"hash\":\"22a4cc214d9840c7d82b9f242c187dd2\",\"nota\":82,\"falhas\":0,\"cenarios\":5,\"precisao\":4,\"aprovados\":3,\"qualidade\":4,\"resolucao\":4,\"naturalidade\":5,\"aderenciaBase\":4,\"taxaAlucinacao\":0,\"publicarSeAprovada\":false,\"ferramentasCorretas\":null,\"transferenciaC"
+    },
+    {
+      "etapa": "10",
+      "nome": "learning engine analisou eventos reais",
+      "status": "PASS",
+      "detalhe": "{\"correcoesColetadas\":0,\"padroes\":1,\"propostasCriadas\":0,\"propostasAtualizadas\":0,\"custoUsd\":0}"
+    },
+    {
+      "etapa": "10",
+      "nome": "eventos de aprendizado registrados (objeção)",
+      "status": "PASS",
+      "detalhe": "{\"objecao\":1}"
+    }
+  ]
+}

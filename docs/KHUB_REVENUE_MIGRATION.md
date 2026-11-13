@@ -1,6 +1,6 @@
-# ORVYN Revenue OS — Guia de Migração
+# KHUB Revenue OS — Guia de Migração
 
-> Como sair do ORVYN OS e chegar ao ORVYN Revenue OS sem perder dado, usuário
+> Como sair do KHUB OS e chegar ao KHUB Revenue OS sem perder dado, usuário
 > ou funcionalidade.
 
 ---
@@ -72,7 +72,7 @@ consumidor cria código morto. Entra junto com o `CampaignsService` (Semana 2).
 
 ### Mapa
 
-| ORVYN OS | ORVYN Revenue OS | Estado |
+| KHUB OS | KHUB Revenue OS | Estado |
 |---|---|---|
 | `/` | `/` | refatorado — Dashboard de Receita |
 | `/contatos` | `/leads` | **ambas ativas** |
@@ -110,7 +110,7 @@ lugar para adicioná-los está marcado em `apps/web/next.config.mjs`.
 necessário: ele está no histórico do git (`main @ 51edbf0`).
 
 **Nomes de classe foram preservados** — `.card`, `.btn`, `.btn-primary`,
-`.input`, `.glass`, `.crystal-edge`, `.scrollbar-thin`, `.prose-orvyn` e as
+`.input`, `.glass`, `.crystal-edge`, `.scrollbar-thin`, `.prose-khub` e as
 demais continuam existindo, redefinidas para a estética nova. As ~200 chamadas
 existentes não foram tocadas e herdaram a identidade.
 
@@ -181,7 +181,7 @@ pnpm install
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/023_revenue_os.sql
 
 # 3. conferir isolamento de tenant
-pnpm --filter @orvyn/api db:isolation-test
+pnpm --filter @khub/api db:isolation-test
 
 # 4. gates
 pnpm typecheck && pnpm lint && pnpm build
@@ -193,7 +193,7 @@ pnpm dev
 Para ver a interface com densidade realista antes de haver dados:
 
 ```bash
-echo "NEXT_PUBLIC_ORVYN_DEMO=1" >> apps/web/.env.local
+echo "NEXT_PUBLIC_KHUB_DEMO=1" >> apps/web/.env.local
 ```
 
 O selo "Dados de demonstração" aparece em toda tela enquanto a flag estiver

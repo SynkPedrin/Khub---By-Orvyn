@@ -9,7 +9,7 @@ import { Reveal } from '@/components/marketing/ui/Reveal';
 import { Wordmark } from '@/components/marketing/ui/Wordmark';
 import { LP_EASE } from '@/lib/marketing/motion';
 
-/** Entradas: canais que a ORVYN conecta. Logo real onde existe arquivo de
+/** Entradas: canais que a KHUB conecta. Logo real onde existe arquivo de
  *  marca no repositório; nome tipográfico onde não existe — nenhuma marca
  *  é redesenhada nem aproximada. */
 const ENTRADAS = [
@@ -19,7 +19,7 @@ const ENTRADAS = [
   { nome: 'Google Ads', logo: null, x: '93%' },
 ] as const;
 
-/** Saídas: o que a ORVYN devolve para a operação. Deslocadas em relação
+/** Saídas: o que a KHUB devolve para a operação. Deslocadas em relação
  *  às entradas para que as descidas nunca caiam no mesmo x (dois pontos
  *  colados na linha viram ruído, não diagrama). */
 const SAIDAS = [
@@ -34,7 +34,7 @@ const SAIDAS = [
  *
  * A própria Revenue Spine é o eixo: a linha atravessa a seção de ponta a
  * ponta, os canais descem até ela e o que a operação recebe sai dela. A
- * ORVYN fica no centro, sobre a linha.
+ * KHUB fica no centro, sobre a linha.
  */
 export function Integrations() {
   const reduced = useReducedMotionSafe();

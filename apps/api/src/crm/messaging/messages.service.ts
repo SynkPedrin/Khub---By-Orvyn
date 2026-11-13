@@ -1,6 +1,6 @@
-import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { StevoProvider } from './stevo.provider';
+import { StevoProvider, type MessagingProvider } from './stevo.provider';
 import { EvolutionProvider } from './evolution.provider';
 import { ConfigService } from '../../config/config.service';
 import { DomainEventsService } from '../../events/domain-events.service';
@@ -9,6 +9,8 @@ import { DeliveryError } from './stevo.provider';
 import { acharContatoPorTelefone } from '../telefone';
 import { AtendimentoService, type EstadoAtendimento } from './atendimento.service';
 import { StevoApiProvider } from './stevo-api.provider';
+import type { MidiaSaida } from './provider.contract';
+import { CanaisService } from './canais/canais.service';
 
 /**
  * Autoria do envio. `humano` com `identityId` = alguém digitou no Inbox (e por
@@ -17,6 +19,18 @@ import { StevoApiProvider } from './stevo-api.provider';
  * 036 — antes caía em `humano` genérico, indistinguível de atendente de verdade).
  */
 export type AutorEnvio = { tipo: 'humano'; identityId?: string } | { tipo: 'ia'; agentId: string } | { tipo: 'automacao'; workflowId: string };
+
+/**
+ * Mídia de saída já preparada pelo Inbox (Q2.5): transporte decidido
+ * (`url` do storage ou `base64` ≤ 5 MB) + o que vai para `messages.anexo`.
+ */
+export interface MidiaEnvio extends MidiaSaida {
+  tamanho: number;
+  /** Chave do objeto no storage (nunca a URL assinada). */
+  storageKey?: string;
+  /** Variáveis que faltam ao storage — para o 501 dizer o que configurar. */
+  storageFaltando?: string[];
+}
 
 export interface InboundInput {
   tenantId: string;
@@ -38,10 +52,12 @@ export class MessagesService {
     private readonly eventos: DomainEventsService,
     private readonly atendimento: AtendimentoService,
     private readonly stevoApi: StevoApiProvider,
+    // Opcional só para os testes antigos que montam o serviço à mão; no Nest sempre existe.
+    @Optional() private readonly canais?: CanaisService,
   ) {}
 
   /** Implementação por nome (o nome é decidido POR TENANT dentro da transação). */
-  private impl(nome: 'stevo_api' | 'evolution' | 'stevo'): StevoApiProvider | EvolutionProvider | StevoProvider {
+  private impl(nome: 'stevo_api' | 'evolution' | 'stevo'): MessagingProvider {
     return nome === 'stevo_api' ? this.stevoApi : nome === 'evolution' ? this.evolution : this.stevo;
   }
 
@@ -102,7 +118,13 @@ export class MessagesService {
   }
 
   /** Reserve before sending. An uncertain provider acceptance is NEVER retried. */
-  async send(tenantId: string, conversationId: string, texto: string, idempotencyKey: string = randomUUID(), runStartedAt?: string, autor: AutorEnvio = { tipo: 'humano' }) {
+  async send(tenantId: string, conversationId: string, texto: string, idempotencyKey: string = randomUUID(), runStartedAt?: string, autor: AutorEnvio = { tipo: 'humano' }, midia?: MidiaEnvio) {
+    // Conversa de Instagram/Messenger/Facebook/YouTube com id na rede (db/063):
+    // a resposta sai pela rede dela, não pelo WhatsApp do tenant.
+    const canalConv = this.canais ? await this.prisma.withTenant(tenantId, (tx) => tx.conversation.findUnique({ where: { id: conversationId }, select: { canal: true, externoId: true } })) : null;
+    if (this.canais && canalConv && canalConv.canal !== 'WhatsApp' && this.canais.atende(canalConv)) {
+      return this.canais.enviar(tenantId, conversationId, texto, idempotencyKey, autor, !!midia);
+    }
     let assumiu: EstadoAtendimento | null = null;
     const ctx = await this.prisma.withTenant(tenantId, async tx => {
       // $executeRaw: pg_advisory_xact_lock devolve `void`, que o Prisma não desserializa em $queryRaw (P2010).
@@ -111,7 +133,7 @@ export class MessagesService {
       if (!conv) throw new NotFoundException('conversa inexistente');
       const previous = await tx.message.findUnique({where:{tenantId_idempotencyKey:{tenantId,idempotencyKey}}});
       if (previous && (previous.corpo!==texto || previous.conversationId!==conversationId)) throw new ConflictException('chave de idempotência já usada com outro conteúdo');
-      if (previous && previous.deliveryStatus!=='pending') return {msg:previous,send:false,phone:null,instance:undefined,providerNome:this.provider().nome as 'stevo_api'|'evolution'|'stevo'};
+      if (previous && previous.deliveryStatus!=='pending') return {msg:previous,send:false,phone:null,instance:undefined,providerNome:this.provider().nome as 'stevo_api'|'evolution'|'stevo',gateStorage:false};
       if (conv.contactId) await tx.$queryRaw`SELECT id FROM contacts WHERE id=${conv.contactId}::uuid AND tenant_id=${tenantId}::uuid FOR UPDATE`;
       const contact=conv.contactId ? await tx.contact.findUnique({where:{id:conv.contactId,tenantId}}) : null;
       // Provedor POR TENANT (doc 18 / ADR-0031): instância Stevo vinculada ao
@@ -128,19 +150,29 @@ export class MessagesService {
       // TRAVA DE DEV (doc 18, B-3): fora de produção nada sai para o telefone real
       // do contato. Só para STEVO_TEST_NUMBER; sem ele, a mensagem é gravada e bloqueada.
       if (status==='sending' && !this.emProducao() && !this.config.get('STEVO_TEST_NUMBER')) status='bloqueado_dev';
+      // Mídia (Q2.5): o canal precisa ter endpoint de mídia documentado, e o
+      // transporte tem de caber nele — URL do storage, ou base64 só para quem
+      // aceita (Evolution). Senão, grava e devolve gated, sem tentar.
+      let gateStorage=false;
+      if (midia && ['sending','bloqueado_dev'].includes(status)) {
+        const impl: MessagingProvider=this.impl(providerNome);
+        if (!impl.sendMedia) status='midia_nao_suportada';
+        else if (!midia.url && !(midia.base64 && impl.aceitaBase64)) { status='config_required'; gateStorage=true; }
+      }
       const hora=this.hora();
       const data={deliveryStatus:status,deliveryError:status==='bloqueado_dev'?'envio externo bloqueado fora de produção: defina STEVO_TEST_NUMBER':null};
       const autoria = autor.tipo==='ia' ? {autorTipo:'ia',agentId:autor.agentId}
         : autor.tipo==='automacao' ? {autorTipo:'automacao',workflowId:autor.workflowId}
         : {autorTipo:'humano',enviadoPorId:autor.identityId};
-      const msg=previous ? await tx.message.update({where:{id:previous.id,tenantId},data}) : await tx.message.create({data:{tenantId,conversationId,...autoria,corpo:texto,hora,idempotencyKey,...data}});
+      const anexo=midia ? {tipo:midia.tipo,mime:midia.mime,nome:midia.nome,tamanho:midia.tamanho,...(midia.legenda?{legenda:midia.legenda}:{}),...(midia.storageKey?{storageKey:midia.storageKey}:{})} : undefined;
+      const msg=previous ? await tx.message.update({where:{id:previous.id,tenantId},data}) : await tx.message.create({data:{tenantId,conversationId,...autoria,corpo:texto,hora,idempotencyKey,...data,...(anexo?{anexo}:{})}});
       await tx.conversation.update({where:{id:conversationId,tenantId},data:{ultimaPrevia:texto.slice(0,140),ultimaHora:hora,updatedAt:new Date()}});
       // Humano digitou no Inbox numa conversa da IA: ele assumiu (ADR-0030).
       if (autor.tipo==='humano' && autor.identityId) assumiu = await this.atendimento.aoHumanoEnviar(tx, tenantId, conversationId, autor.identityId);
       const actorType = autor.tipo==='ia' ? 'nyro' : autor.tipo==='automacao' ? 'sistema' : 'humano';
       const actorId = autor.tipo==='ia' ? autor.agentId : autor.tipo==='automacao' ? autor.workflowId : autor.identityId ?? null;
       await tx.$executeRaw`INSERT INTO audit_logs(tenant_id,actor_type,actor_id,acao,entidade,entidade_id) VALUES(${tenantId}::uuid,${actorType},${actorId},'message.reserve','message',${msg.id})`;
-      return {msg,send:status==='sending',phone:contact?.telefone,instance:integration?.externalBusinessId ?? undefined,providerNome};
+      return {msg,send:status==='sending',phone:contact?.telefone,instance:integration?.externalBusinessId ?? undefined,providerNome,gateStorage};
     });
     let status=ctx.msg.deliveryStatus;
     let erro=ctx.msg.deliveryError;
@@ -148,7 +180,8 @@ export class MessagesService {
       try {
         // Nunca cai para o telefone real fora de produção (a trava acima garante que existe).
         const destination=this.emProducao() ? ctx.phone : this.config.get('STEVO_TEST_NUMBER')!;
-        const result=await this.impl(ctx.providerNome).sendText(destination,texto,ctx.instance,idempotencyKey);
+        const impl: MessagingProvider=this.impl(ctx.providerNome);
+        const result=midia && impl.sendMedia ? await impl.sendMedia(destination,midia,ctx.instance,idempotencyKey) : await impl.sendText(destination,texto,ctx.instance,idempotencyKey);
         await this.prisma.withTenant(tenantId,tx=>tx.message.update({where:{id:ctx.msg.id,tenantId},data:{deliveryStatus:'sent',providerId:result.providerId,sentAt:new Date()}}));
         status='sent';
       } catch(error) {
@@ -162,7 +195,8 @@ export class MessagesService {
     this.eventos.publicar(tenantId,'message.created',{conversationId,id:ctx.msg.id,de:autor.tipo==='ia'?'ia':'humano',texto,hora:ctx.msg.hora ?? this.hora(),agentId:autor.tipo==='ia'?autor.agentId:null});
     this.eventos.publicar(tenantId,'conversation.updated',{id:conversationId,ultimaPrevia:texto.slice(0,140),ultimaHora:ctx.msg.hora ?? this.hora(),naoLidas:0});
     if (assumiu) this.atendimento.publicar(tenantId, assumiu);
-    return {id:ctx.msg.id,hora:ctx.msg.hora ?? this.hora(),status,erro,missing:status==='config_required'?this.impl(ctx.providerNome).missing():[]};
+    const gated=status==='config_required' ? (ctx.gateStorage ? {provider:'storage',missing:midia?.storageFaltando ?? []} : {provider:ctx.providerNome,missing:this.impl(ctx.providerNome).missing()}) : null;
+    return {id:ctx.msg.id,hora:ctx.msg.hora ?? this.hora(),status,erro,missing:gated?.missing ?? [],...(gated?{provider:gated.provider}:{})};
   }
 
   /** Recebe mensagem de entrada (webhook STEVO): dedup + acha/cria contato+conversa. */
@@ -193,7 +227,9 @@ export class MessagesService {
       let contact = achadoId ? await tx.contact.findUnique({ where: { id: achadoId } }) : null;
       const contatoNovo = !contact;
       if (!contact) {
-        contact = await tx.contact.create({ data: { tenantId: input.tenantId, nome: input.fromName || input.fromNumber, telefone: input.fromNumber, tag: 'Lead', ultimoContatoAt: new Date() } });
+        // `origem` = canal da entrada (a conversa abaixo é sempre de WhatsApp). Antes ficava
+        // nula e o outbox (db/050, que lê `contacts.origem`) publicava "Manual".
+        contact = await tx.contact.create({ data: { tenantId: input.tenantId, nome: input.fromName || input.fromNumber, telefone: input.fromNumber, tag: 'Lead', origem: 'WhatsApp', ultimoContatoAt: new Date() } });
       }
       await tx.$queryRaw`SELECT id FROM contacts WHERE id=${contact.id}::uuid FOR UPDATE`;
       const optout=/^(stop|parar|sair|cancelar|remover|não quero|nao quero)\b/i.test(input.text.trim());
@@ -206,7 +242,8 @@ export class MessagesService {
         const inicial = await this.atendimento.estadoInicial(tx, 'WhatsApp');
         conv = await tx.conversation.create({ data: { tenantId: input.tenantId, contactId: contact.id, nome: contact.nome, canal: 'WhatsApp', ultimaPrevia: input.text.slice(0, 140), naoLidas: 1, ultimaHora: hora, ...inicial } });
       } else {
-        conv = await tx.conversation.update({ where: { id: conv.id }, data: { ultimaPrevia: input.text.slice(0, 140), naoLidas: { increment: 1 }, ultimaHora: hora, updatedAt: new Date() } });
+        // Mensagem nova reabre conversa resolvida ("Marcar como", db/063).
+        conv = await tx.conversation.update({ where: { id: conv.id }, data: { ultimaPrevia: input.text.slice(0, 140), naoLidas: { increment: 1 }, ultimaHora: hora, status: 'aberta', updatedAt: new Date() } });
       }
       const msg = await tx.message.create({ data: { tenantId: input.tenantId, conversationId: conv.id, autorTipo: 'contato', corpo: input.text, hora }, select: { id: true } });
       return {

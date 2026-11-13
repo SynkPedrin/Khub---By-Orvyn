@@ -12,7 +12,7 @@ node scripts/seed-content-demo-clean.mjs # remove só os tenants is_demo=true de
 
 Requer `ADMIN_DATABASE_URL` (padrão: `postgresql://postgres:postgres@localhost:5432/orvyn`) — os scripts conectam como superuser pra criar tenant do zero (RLS não filtra; todo INSERT seta `tenantId` explicitamente).
 
-**Importante para ver os dados reais no navegador**: `apps/web/.env.local` precisa ter `NEXT_PUBLIC_ORVYN_DEMO=0`. Com `=1`, o app inteiro mostra o dataset de vitrine estático (`lib/demo/dataset`) em vez de consultar qualquer tenant real — inclusive os 3 tenants desta seed.
+**Importante para ver os dados reais no navegador**: `apps/web/.env.local` precisa ter `NEXT_PUBLIC_KHUB_DEMO=0`. Com `=1`, o app inteiro mostra o dataset de vitrine estático (`lib/demo/dataset`) em vez de consultar qualquer tenant real — inclusive os 3 tenants desta seed.
 
 ## Login de cada operação
 

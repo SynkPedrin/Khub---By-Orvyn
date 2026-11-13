@@ -16,7 +16,7 @@ Varredura por operações destrutivas em `db/000` a `db/027`:
 | Registro verificável | tabela `schema_migrations(filename, checksum sha256, applied_at)`, **28 linhas** (mesmo formato do runner `apps/api/scripts/apply-sql.mjs`) |
 | Reaplicação completa (idempotência) | **0 de 28** arquivos falharam (`evidence/migrations-reapply.log`) |
 | Extensões | `vector`, `pg_trgm`, `unaccent`, `uuid-ossp`, `plpgsql` |
-| Roles | `orvyn_app` (LOGIN, **NOBYPASSRLS**, não-superuser), `orvyn_service` (**BYPASSRLS**) |
+| Roles | `khub_app` (LOGIN, **NOBYPASSRLS**, não-superuser), `khub_service` (**BYPASSRLS**) |
 
 Observação: o repositório tem 3 mecanismos para aplicar migrations (psql manual, `apply-sql.mjs` só para arquivos com `==SPLIT==`, CI desativado). Não existe um comando único oficial que aplique tudo e registre. O registro de checksums acima foi criado nesta sprint **apenas no banco de QA**; adotá-lo no fluxo oficial é decisão pendente (ver 17).
 
@@ -39,7 +39,7 @@ Tabelas **com** `tenant_id` mas **sem** RLS: `memberships`, `invites`, `agency_c
 Tabelas **sem** `tenant_id` e **sem** RLS: `tenants`, `identities`, `agencies`, `agency_members`, `agency_invites`, `agency_member_client_access` (+ `schema_migrations`).
 
 A migration 026 documenta isso como decisão (tabelas "globais" sobre a relação entre tenants e identidades). Consequências verificadas:
-- `orvyn_app` tem `SELECT/INSERT/UPDATE/DELETE` em `memberships`, `refresh_tokens`, `agencies`, `agency_client_accounts` e `SELECT/INSERT/UPDATE` em `tenants`. O isolamento dessas tabelas depende **só do código da aplicação**.
+- `khub_app` tem `SELECT/INSERT/UPDATE/DELETE` em `memberships`, `refresh_tokens`, `agencies`, `agency_client_accounts` e `SELECT/INSERT/UPDATE` em `tenants`. O isolamento dessas tabelas depende **só do código da aplicação**.
 - Em runtime o código se comportou (14/15 verificações de isolamento entre agências e clientes passaram), **mas** o banco não protegeria um bug futuro de filtragem. É o `SEC-02` da auditoria estática, agora confirmado no catálogo.
 - `SEC-01` (revogação de acesso) é consequência: não há `DELETE` de `memberships` em nenhum fluxo e nada impede o acesso depois da remoção do membro.
 
@@ -47,14 +47,14 @@ A migration 026 documenta isso como decisão (tabelas "globais" sobre a relaçã
 **PASS** ("R0.2 OK — nenhum vazamento cross-tenant"). Cobre **apenas o RAG** (`rag_*`, `nyro_guardrail_hits`).
 
 ### 4.3 Matriz criada nesta sprint (`apps/api/scripts/qa/rls-matrix.sql`)
-Roda **conectado como `orvyn_app`** (senha real, NOBYPASSRLS, não-superuser; a role foi confirmada por `pg_roles` antes). Self-cleaning (`ROLLBACK`). Três tenants (A1, A2, B1), uma linha semeada por tenant e por tabela, sempre sob o contexto do próprio tenant, como a aplicação faz.
+Roda **conectado como `khub_app`** (senha real, NOBYPASSRLS, não-superuser; a role foi confirmada por `pg_roles` antes). Self-cleaning (`ROLLBACK`). Três tenants (A1, A2, B1), uma linha semeada por tenant e por tabela, sempre sob o contexto do próprio tenant, como a aplicação faz.
 
 13 tabelas × (controle positivo + SELECT, UPDATE e DELETE cruzados de A2→A1 e B1→A1 + SELECT sem contexto + linha intacta ao final) + 5 testes de `INSERT`/`UPDATE` que tentam gravar com `tenant_id` alheio:
 
 `contacts`, `deals`, `pipelines`, `conversations`, `messages`, `workflows`, `crm_tags`, `agenda_compromissos`, `outbox_events`, `financeiro_cobrancas`, `tasks`, `notes`, `meta_pages`.
 
 **Resultado: 122 PASS · 0 FAIL.** Os controles positivos garantem que o teste não é vazio (cada tenant enxerga a própria linha).
-Registrado: `orvyn_app` **não tem `DELETE` em `outbox_events`** (bloqueio por GRANT, tratado como "bloqueado").
+Registrado: `khub_app` **não tem `DELETE` em `outbox_events`** (bloqueio por GRANT, tratado como "bloqueado").
 
 Cobertura que **não** existe nesta matriz (declarada, não escondida): `leads`/`opportunities` têm nomes próprios (`contacts`/`deals`), `conversations` está coberta; **memberships de agência, tabelas de agência e `meta_pages` por usuário de agência** só foram testados **pela API** (cenário 6), não por SQL, porque não têm RLS para testar. Também não cobertas: `ad_*`, `campaign*`, `nyro_*`, `workflow_*` (runs, steps, DLQ), `integrations`, `api_keys`, `audit_logs`, `webhook_events`, `ai_usage_events`.
 
@@ -72,4 +72,4 @@ Cobertura que **não** existe nesta matriz (declarada, não escondida): `leads`/
 - Banco com dados sintéticos mínimos: não há prova de comportamento de planos de execução, `EXPLAIN` com volume nem bloqueios sob concorrência.
 - Não foram testados backup/restore, `pg_upgrade`, nem migrations contra um dump de produção.
 - A matriz de RLS cobre 13 das 51 tabelas com `tenant_id`; as demais 38 são protegidas por política de mesmo padrão (`tenant_rw`), mas **sem prova individual**.
-- Isolamento de `orvyn_service` (BYPASSRLS) não foi testado: ele existe para jobs de ingestão e não deve ser exposto a requisição web.
+- Isolamento de `khub_service` (BYPASSRLS) não foi testado: ele existe para jobs de ingestão e não deve ser exposto a requisição web.

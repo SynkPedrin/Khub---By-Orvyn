@@ -121,6 +121,65 @@ const TEMPLATES = [
       ],
     },
   },
+  // ---- Agenda (Q2.4 / RV-07.1 / RV-07.2) ----
+  {
+    slug: 'lembrete-agendamento-d1', name: 'Lembrete D-1 com confirmação',
+    description: 'Na véspera do compromisso, manda um lembrete no WhatsApp. Se o contato responder "sim", "ok" ou 👍, a agenda confirma sozinha; se pedir para remarcar ou não responder, a equipe recebe uma tarefa.',
+    category: 'Agenda', icon: 'calendar', difficulty: 'facil', estimatedMin: 3,
+    tags: ['agenda', 'lembrete', 'confirmação', 'no-show', 'whatsapp'], featured: true, requirements: ['stevo'],
+    variables: [
+      { chave: 'mensagem', label: 'Mensagem do lembrete', tipo: 'texto', obrigatorio: true, default: 'Oi {{contato.primeiroNome}}! Passando para lembrar do seu horário: {{agendamento.titulo}}, {{agendamento.dataExtenso}} às {{agendamento.hora}}. Responda SIM para confirmar ou avise aqui se precisar remarcar.' },
+    ],
+    workflow: {
+      nos: [
+        { id: 'g', tipo: 'gatilho.lembrete_agendamento', posicao: pos(0, 0), config: {} },
+        { id: 's', tipo: 'acao.enviar_sms', posicao: pos(260, 0), config: { texto: '{{var.mensagem}}' } },
+        { id: 'er', tipo: 'controle.esperar_resposta', posicao: pos(520, 0), config: { duracao: 12, unidade: 'horas' } },
+        { id: 'c', tipo: 'controle.condicao', posicao: pos(800, -90), config: { ramos: [{ id: 'remarcar', rotulo: 'Quer remarcar', juncao: 'OR', regras: [
+          { campo: 'mensagem.texto', operador: 'contem', valor: 'remarc' },
+          { campo: 'mensagem.texto', operador: 'contem', valor: 'desmarc' },
+          { campo: 'mensagem.texto', operador: 'contem', valor: 'cancel' },
+          { campo: 'mensagem.texto', operador: 'contem', valor: 'não' },
+          { campo: 'mensagem.texto', operador: 'contem', valor: 'nao' },
+        ] }] } },
+        { id: 'tr', tipo: 'acao.criar_tarefa', posicao: pos(1080, -90), config: { titulo: 'Remarcar {{agendamento.titulo}} com {{contato.nome}} ({{agendamento.data}} às {{agendamento.hora}})', prioridade: 'alta', emDias: 0 } },
+        { id: 'tt', tipo: 'acao.criar_tarefa', posicao: pos(800, 100), config: { titulo: 'Confirmar por telefone: {{agendamento.titulo}} com {{contato.nome}} ({{agendamento.data}} às {{agendamento.hora}})', prioridade: 'media', emDias: 0 } },
+      ],
+      arestas: [
+        { id: 'e1', de: 'g', para: 's' }, { id: 'e2', de: 's', para: 'er' },
+        { id: 'e3', de: 'er', para: 'c', ramo: 'resposta' }, { id: 'e4', de: 'er', para: 'tt', ramo: 'timeout' },
+        { id: 'e5', de: 'c', para: 'tr', ramo: 'remarcar' },
+      ],
+    },
+  },
+  {
+    slug: 'recuperacao-de-falta', name: 'Recuperação de falta (reagendar)',
+    description: 'Quando o compromisso é marcado como falta, espera 30 min e convida o contato a remarcar. Quem responde vira tarefa de reagendamento; quem some recebe um segundo convite e a tag faltou-sem-retorno.',
+    category: 'Agenda', icon: 'calendar', difficulty: 'facil', estimatedMin: 3,
+    tags: ['agenda', 'falta', 'no-show', 'reagendar', 'recuperação', 'whatsapp'], featured: true, requirements: ['stevo'],
+    variables: [
+      { chave: 'convite', label: 'Mensagem de recuperação', tipo: 'texto', obrigatorio: true, default: 'Oi {{contato.primeiroNome}}, sentimos sua falta em {{agendamento.titulo}} hoje. Quer remarcar? Responda com o melhor dia e horário que a gente encaixa.' },
+      { chave: 'segundo_convite', label: 'Segundo convite (se não responder)', tipo: 'texto', obrigatorio: true, default: '{{contato.primeiroNome}}, ainda dá para remarcar seu horário. É só responder esta mensagem. 😊' },
+    ],
+    workflow: {
+      nos: [
+        { id: 'g', tipo: 'gatilho.faltou', posicao: pos(0, 0), config: {} },
+        { id: 'w', tipo: 'controle.esperar', posicao: pos(260, 0), config: { duracao: 30, unidade: 'minutos' } },
+        { id: 't1', tipo: 'acao.adicionar_tag', posicao: pos(520, 0), config: { tag: 'faltou' } },
+        { id: 's1', tipo: 'acao.enviar_sms', posicao: pos(780, 0), config: { texto: '{{var.convite}}' } },
+        { id: 'er', tipo: 'controle.esperar_resposta', posicao: pos(1040, 0), config: { duracao: 2, unidade: 'dias' } },
+        { id: 'tr', tipo: 'acao.criar_tarefa', posicao: pos(1320, -90), config: { titulo: 'Reagendar {{contato.nome}} (respondeu à recuperação de falta)', prioridade: 'alta', emDias: 0 } },
+        { id: 's2', tipo: 'acao.enviar_sms', posicao: pos(1320, 100), config: { texto: '{{var.segundo_convite}}' } },
+        { id: 't2', tipo: 'acao.adicionar_tag', posicao: pos(1580, 100), config: { tag: 'faltou-sem-retorno' } },
+      ],
+      arestas: [
+        { id: 'e1', de: 'g', para: 'w' }, { id: 'e2', de: 'w', para: 't1' }, { id: 'e3', de: 't1', para: 's1' },
+        { id: 'e4', de: 's1', para: 'er' },
+        { id: 'e5', de: 'er', para: 'tr', ramo: 'resposta' }, { id: 'e6', de: 'er', para: 's2', ramo: 'timeout' },
+        { id: 'e7', de: 's2', para: 't2' },
+      ],
+    },
+  },
 ];
 
 const dry = process.argv.includes('--dry-run');
@@ -140,7 +199,7 @@ async function main() {
         tenantId: null, slug: t.slug, name: t.name, description: t.description,
         category: t.category, icon: t.icon ?? null, segment: t.segment ?? null,
         difficulty: t.difficulty ?? 'facil', estimatedMin: t.estimatedMin ?? null,
-        tags: t.tags ?? [], author: 'Orvyn', isOfficial: true, isPremium: !!t.isPremium,
+        tags: t.tags ?? [], author: 'KHUB', isOfficial: true, isPremium: !!t.isPremium,
         isPublished: true, featured: !!t.featured, requirements: t.requirements ?? [],
         workflow: t.workflow, variables: t.variables ?? [],
       },

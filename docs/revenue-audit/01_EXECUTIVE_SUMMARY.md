@@ -1,8 +1,8 @@
 # 01 — Resumo Executivo
 
-> Auditoria do ORVYN Revenue OS. Data: 2026-10-14. Método: leitura estática do código por 5 auditorias paralelas + gates de baseline rodados de fato.
+> Auditoria do KHUB Revenue OS. Data: 2026-10-14. Método: leitura estática do código por 5 auditorias paralelas + gates de baseline rodados de fato.
 > **Atualização (Sprint 0):** o runtime foi validado depois desta auditoria. Notas, achados e correções novos estão em `13` a `17`; o scorecard atualizado está no fim de `17`. O texto abaixo é o retrato da auditoria estática original.
-> **Limite da evidência original:** Postgres e Redis do Orvyn não estavam no ar. Nenhum fluxo foi validado em runtime nem no navegador. Todo achado abaixo é "lido no código", não "observado rodando", salvo os gates de baseline. Nenhum domínio recebe `PRODUCTION_VERIFIED`.
+> **Limite da evidência original:** Postgres e Redis do KHUB não estavam no ar. Nenhum fluxo foi validado em runtime nem no navegador. Todo achado abaixo é "lido no código", não "observado rodando", salvo os gates de baseline. Nenhum domínio recebe `PRODUCTION_VERIFIED`.
 
 ## Status final
 

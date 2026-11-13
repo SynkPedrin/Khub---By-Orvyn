@@ -61,7 +61,7 @@ try {
   } else if (cmd === 'webhook') {
     const url = arg('url');
     if (!url?.startsWith('https://')) throw new Error('--url https://… obrigatório (a Stevo exige HTTPS público)');
-    const { id, secret } = await stevo.criarWebhookConta(url, [...EVENTOS_STEVO], 'ORVYN Revenue OS');
+    const { id, secret } = await stevo.criarWebhookConta(url, [...EVENTOS_STEVO], 'KHUB Revenue OS');
     const env = readFileSync('.env', 'utf8');
     const linha = `STEVO_WEBHOOK_SECRET=${secret}`;
     writeFileSync('.env', /^STEVO_WEBHOOK_SECRET=.*$/m.test(env) ? env.replace(/^STEVO_WEBHOOK_SECRET=.*$/m, linha) : `${env.replace(/\n?$/, '\n')}# Segredo do webhook de conta Stevo (whsec_), criado em ${new Date().toISOString()} — webhook ${id}\n${linha}\n`);

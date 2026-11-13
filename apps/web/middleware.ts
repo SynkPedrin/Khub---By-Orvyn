@@ -9,7 +9,9 @@ import { ACCESS, API, REFRESH, clearSession, setSession } from './lib/server-aut
 // "/" é a landing page pública (marketing) — não é mais o dashboard, então
 // entra em PUBLIC como qualquer visitante anônimo pode ver. O dashboard real
 // mora em "/dashboard" (protegido, como qualquer outra rota fora de PUBLIC).
-const PUBLIC = ['/', '/login', '/signup', '/agency-invite', '/esqueci-senha', '/redefinir-senha', '/termos', '/privacidade'];
+// "/f" (formulário público, Q4.1) e "/b" (agendamento público, Q4.2) são
+// páginas que o VISITANTE do cliente abre sem conta; o tenant sai do slug.
+const PUBLIC = ['/', '/login', '/signup', '/agency-invite', '/esqueci-senha', '/redefinir-senha', '/termos', '/privacidade', '/f', '/b', '/r'];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

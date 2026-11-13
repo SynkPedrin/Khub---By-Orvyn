@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AnthropicProvider } from './anthropic.provider';
+import { OllamaProvider } from './ollama.provider';
 import { OpenAiProvider } from './openai.provider';
 import type { AIProvider } from './provider.contract';
 
@@ -20,10 +21,15 @@ export class AiProviderRegistry {
   private readonly log = new Logger('AiProviderRegistry');
   private readonly porNome: Map<string, AIProvider>;
 
-  constructor(anthropic: AnthropicProvider, openai: OpenAiProvider) {
+  constructor(anthropic: AnthropicProvider, openai: OpenAiProvider, ollama: OllamaProvider) {
     this.porNome = new Map<string, AIProvider>([
       [anthropic.nome, anthropic],
       [openai.nome, openai],
+      // Ollama tem adapter PRÓPRIO que fala a API nativa (/api/chat): modelos
+      // "thinking" (qwen3.5) só desligam o raciocínio lá (`think: false`) —
+      // pelo endpoint OpenAI-compatível o flag é ignorado, a resposta vinha
+      // vazia (raciocínio comia o teto de tokens) e cada turno levava minutos.
+      ['ollama', ollama],
     ]);
   }
 

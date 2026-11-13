@@ -6,20 +6,57 @@
  * rag_documents/rag_chunks com escopo='global'.
  *
  * Bases global/nicho são conhecimento COMPARTILHADO: escritas fora do request path
- * (invariante 2). Aplicar como orvyn_service/superuser:
+ * (invariante 2). Aplicar como khub_service/superuser:
  *   node apps/api/scripts/seed-global-rag.mjs | docker exec -i orvyn-postgres psql -U postgres -d orvyn -v ON_ERROR_STOP=1
  *
  * embedding fica NULL (busca por BM25/tsvector já funciona). Backfill dos vetores
  * quando VOYAGE_API_KEY existir (job rag.reembed / R4.4).
  */
 import { readdir, readFile } from 'node:fs/promises';
-import { join, dirname, basename } from 'node:path';
+import { join, dirname, basename, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..', '..', 'Nyro IA', 'cerebro', 'RAG', 'conhecimento', 'global');
-const DOMAINS = ['marketing', 'operacao'];
+
+/**
+ * Fontes de conhecimento global. O vault Obsidian de marketing da operação
+ * (brain da NICO) entra como fonte extra de dominio 'marketing' quando existe
+ * — sobrescrever o caminho com BRAIN_MARKETING_DIR.
+ *
+ * Do brain ficam FORA: dados de clientes/projetos da agência e estado
+ * operacional (06_CLIENTS, 07_PROJECTS, 08_EXPERIMENTS, 09_MEMORY, 10_LEARNING)
+ * — escopo 'global' é lido por agentes de TODOS os tenants, e esse conteúdo
+ * é interno da agência (vazaria entre clientes). Também ficam fora templates,
+ * índices de sistema e notas diárias/sem título.
+ */
+const BRAIN_DIR = process.env.BRAIN_MARKETING_DIR ?? '/Users/pedro/DesigualOS/Brain-Marketing';
+const BRAIN_DIRS_EXCLUIDOS = new Set(['.obsidian', '_TEMPLATES', '99_SYSTEM_INDEX', '06_CLIENTS', '07_PROJECTS', '08_EXPERIMENTS', '09_MEMORY', '10_LEARNING']);
+const BRAIN_ARQUIVO_EXCLUIDO = (nome) =>
+  nome.startsWith('_') || nome.startsWith('Sem título') || /^\d{4}-\d{2}-\d{2}\.md$/.test(nome) || nome === 'CHANGELOG.md';
+
+/** *.md recursivo; no brain, aplica as exclusões acima. */
+async function coletarMarkdown(dir, { brain = false } = {}) {
+  const achados = [];
+  async function andar(atual) {
+    let entradas = [];
+    try { entradas = await readdir(atual, { withFileTypes: true }); } catch { return; }
+    for (const e of entradas) {
+      const caminho = join(atual, e.name);
+      if (e.isDirectory()) {
+        if (brain && (BRAIN_DIRS_EXCLUIDOS.has(e.name) || e.name.startsWith('.'))) continue;
+        await andar(caminho);
+      } else if (e.isFile() && e.name.endsWith('.md')) {
+        if (brain && BRAIN_ARQUIVO_EXCLUIDO(e.name)) continue;
+        achados.push(caminho);
+      }
+    }
+  }
+  await andar(dir);
+  return achados.sort();
+}
 const DOLLAR = '$ORV$'; // dollar-quote tag (o conteúdo não contém esta sequência)
 
 const dq = (s) => `${DOLLAR}${s ?? ''}${DOLLAR}`;
@@ -69,22 +106,28 @@ function chunkBySection(body, titulo) {
 async function main() {
   const out = [];
   out.push('-- Gerado por seed-global-rag.mjs — inteligência global da Nyro (marketing/operação)');
-  out.push('SET ROLE orvyn_service;'); // escrita de base compartilhada (BYPASSRLS)
+  out.push('SET ROLE khub_service;'); // escrita de base compartilhada (BYPASSRLS)
 
   let docs = 0;
   let chunks = 0;
-  for (const dominio of DOMAINS) {
-    let files = [];
-    try { files = (await readdir(join(ROOT, dominio))).filter((f) => f.endsWith('.md')); } catch { continue; }
-    for (const file of files.sort()) {
-      const raw = await readFile(join(ROOT, dominio, file), 'utf8');
+  const fontes = [
+    { dir: join(ROOT, 'marketing'), dominio: 'marketing', brain: false },
+    { dir: join(ROOT, 'operacao'), dominio: 'operacao', brain: false },
+  ];
+  if (existsSync(BRAIN_DIR)) fontes.push({ dir: BRAIN_DIR, dominio: 'marketing', brain: true });
+
+  for (const fonte of fontes) {
+    const files = await coletarMarkdown(fonte.dir, { brain: fonte.brain });
+    for (const file of files) {
+      const raw = await readFile(file, 'utf8');
       const { fm, body } = parseFrontmatter(raw);
-      const slug = fm.id || basename(file, '.md');
-      const titulo = fm.titulo || slug;
+      const rel = relative(fonte.dir, file).split(sep).join('/').replace(/\.md$/, '');
+      const slug = fm.id || rel.replace(/\//g, '-');
+      const titulo = fm.titulo || basename(file, '.md');
       const hash = sha256(raw);
       const metadados = {
         slug,
-        dominio: fm.dominio || dominio,
+        dominio: fm.dominio || fonte.dominio,
         framework: fm.framework || null,
         persona_owner: fm.persona_owner || null,
         comando_relacionado: fm.comando_relacionado || null,

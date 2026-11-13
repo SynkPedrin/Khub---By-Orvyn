@@ -33,7 +33,7 @@ function setup() {
 
 const eventoAssinatura = {
   id: 'evt_1', type: 'checkout.session.completed',
-  data: { object: { customer: 'cus_1', subscription: 'sub_1', metadata: { kind: 'orvyn_subscription', tenant_id: 'tenant-a', plano: 'growth' } } },
+  data: { object: { customer: 'cus_1', subscription: 'sub_1', metadata: { kind: 'khub_subscription', tenant_id: 'tenant-a', plano: 'growth' } } },
 };
 const eventoFinanceiro = {
   id: 'evt_2', type: 'checkout.session.completed',
@@ -63,7 +63,7 @@ describe('Stripe webhook — fronteira HTTP', () => {
     expect(s.sincronizarAssinatura).not.toHaveBeenCalled();
   });
 
-  it('kind=orvyn_subscription roteia pro BillingService, nunca pro FinanceiroService', async () => {
+  it('kind=khub_subscription roteia pro BillingService, nunca pro FinanceiroService', async () => {
     const s = setup();
     await s.controller.receive(s.request(eventoAssinatura), s.response);
     expect(s.sincronizarAssinatura).toHaveBeenCalledWith(expect.objectContaining({ tenantId: 'tenant-a', plano: 'growth', status: 'ativa' }));

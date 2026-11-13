@@ -13,6 +13,8 @@ const GRAFO: Grafo = {
     { id: 'sms', tipo: 'acao.enviar_sms', posicao: { x: 1, y: 0 }, config: { texto: 'oi' } },
     { id: 'tag', tipo: 'acao.adicionar_tag', posicao: { x: 2, y: 0 }, config: { tag: 'x' } },
     { id: 'espera', tipo: 'controle.esperar_resposta', posicao: { x: 3, y: 0 }, config: { duracao: 1, unidade: 'dias' } },
+    { id: 'email', tipo: 'acao.enviar_email', posicao: { x: 4, y: 0 }, config: { assunto: 'Oi', corpo: 'Olá' } },
+    { id: 'equipe', tipo: 'acao.notificar_equipe', posicao: { x: 5, y: 0 }, config: { telefone: '5511999990000', texto: 'novo lead' } },
   ],
   arestas: [
     { id: 'a1', de: 'g', para: 'sms' },
@@ -98,6 +100,29 @@ describe('Janela de envio (E.2) — não mandar mensagem de madrugada', () => {
     const a = ambiente('tag', JANELA_COMERCIAL);
     await a.svc.processarPasso({ tenantId: TENANT, runId: 'run1', noId: 'tag' }, 1);
     expect(a.executor.executar).toHaveBeenCalled(); // tag não incomoda ninguém às 3h
+  });
+
+  it('Q1.2: e-mail ao contato também respeita a janela', async () => {
+    congelar('2026-07-15T06:00:00Z'); // 3h da manhã
+    const a = ambiente('email', JANELA_COMERCIAL);
+    await a.svc.processarPasso({ tenantId: TENANT, runId: 'run1', noId: 'email' }, 1);
+    expect(a.executor.executar).not.toHaveBeenCalled();
+    expect(a.enfileirados[0].dados).toMatchObject({ noId: 'email' });
+  });
+
+  it('Q1.2: "Notificar equipe" roda a qualquer hora por padrão (aviso interno é urgente)', async () => {
+    congelar('2026-07-15T06:00:00Z');
+    const a = ambiente('equipe', JANELA_COMERCIAL);
+    await a.svc.processarPasso({ tenantId: TENANT, runId: 'run1', noId: 'equipe' }, 1);
+    expect(a.executor.executar).toHaveBeenCalled();
+  });
+
+  it('Q1.2: "Notificar equipe" espera a janela quando o fluxo marca janelaIncluiEquipe', async () => {
+    congelar('2026-07-15T06:00:00Z');
+    const a = ambiente('equipe', { ...JANELA_COMERCIAL, janelaIncluiEquipe: true });
+    await a.svc.processarPasso({ tenantId: TENANT, runId: 'run1', noId: 'equipe' }, 1);
+    expect(a.executor.executar).not.toHaveBeenCalled();
+    expect(a.run.status).toBe('esperando');
   });
 
   it('janela desligada: manda a qualquer hora', async () => {

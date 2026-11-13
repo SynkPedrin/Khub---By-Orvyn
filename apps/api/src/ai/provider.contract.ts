@@ -2,7 +2,7 @@
  * CONTRATO DE PROVEDOR DE IA
  * ==========================
  *
- * O domínio da ORVYN não pode depender de um fornecedor. Antes desta camada,
+ * O domínio da KHUB não pode depender de um fornecedor. Antes desta camada,
  * `AiService` e `NyroService` injetavam `AnthropicProvider` diretamente: trocar
  * de modelo, adicionar um provedor local ou reagir a uma indisponibilidade
  * exigiria mexer no núcleo do produto.
@@ -112,10 +112,86 @@ export interface AIProvider {
    * cair para resposta única, o que é degradação aceitável.
    */
   stream?(input: EntradaGeracao): AsyncIterable<{ delta: string }>;
+
+  /**
+   * Conversa multi-turno com tools (módulo de agentes). Opcional no contrato
+   * geral, mas todo provedor selecionável no criador de agentes implementa.
+   */
+  conversar?(input: EntradaConversa): Promise<RespostaConversa>;
+
+  /**
+   * Modelos selecionáveis no criador de agentes. Opcional: provedor sem lista
+   * própria deixa o módulo de agentes usar o catálogo padrão.
+   */
+  modelosDisponiveis?(): Promise<ModeloCatalogo[]>;
 }
 
 /** Token de injeção do Nest — o domínio injeta isto, nunca uma classe concreta. */
 export const AI_PROVIDER = Symbol('AI_PROVIDER');
+
+/* ------------------------------------------------------------------ */
+/* Conversa multi-turno com tools (usada pelo módulo de agentes)       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Entrada da conversa multi-turno. `effort`/`fallbackRecusa` são recursos
+ * específicos da Anthropic: adapters que não os têm simplesmente ignoram.
+ * `jsonSchema` pede saída estruturada; cada adapter usa o mecanismo do seu
+ * dialeto (`output_config` na Anthropic, `response_format` no OpenAI).
+ */
+export interface EntradaConversa {
+  modelo: string;
+  system: string;
+  mensagens: { role: 'user' | 'assistant'; content: unknown }[];
+  tools?: { name: string; description: string; input_schema: Record<string, unknown> }[];
+  maxTokens?: number;
+  temperatura?: number;
+  effort?: 'low' | 'medium' | 'high';
+  fallbackRecusa?: boolean;
+  jsonSchema?: Record<string, unknown>;
+  timeoutMs?: number;
+}
+
+/** Resposta da conversa multi-turno, normalizada entre provedores. */
+export interface RespostaConversa {
+  texto: string;
+  toolCalls: ChamadaTool[];
+  pararPor: string;
+  uso: UsoIA;
+  modelo: string;
+  /**
+   * Conteúdo bruto do turno do assistente. No loop de tools ele volta intacto
+   * ao histórico; cada adapter gera blocos no formato que o próprio tradutor
+   * de mensagens reconhece.
+   */
+  blocos: unknown[];
+}
+
+/** Entrada de modelo no catálogo do criador de agentes. */
+export interface ModeloCatalogo {
+  id: string;
+  nome: string;
+  descricao: string;
+  entradaUsdPorMilhao: number;
+  saidaUsdPorMilhao: number;
+}
+
+/**
+ * Superfície que o módulo de agentes consome. Resolve o provedor ativo a cada
+ * chamada: trocar `AI_PROVIDER` na env muda o criador de agentes inteiro sem
+ * tocar nos serviços de domínio.
+ */
+export interface AgentLlm {
+  configured(): boolean;
+  missing(): string[];
+  exigirCredencial(): void;
+  conversar(input: EntradaConversa): Promise<RespostaConversa>;
+  /** Nome do provedor ativo (`anthropic`, `openai`, …) — para diagnóstico/UI. */
+  provedor(): string;
+}
+
+/** Token de injeção do Nest para a superfície de agentes. */
+export const AGENT_LLM = Symbol('AGENT_LLM');
 
 /**
  * Erro de provedor com causa classificada.

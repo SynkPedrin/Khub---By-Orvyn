@@ -1,12 +1,27 @@
 /**
- * Logos reais dos aplicativos que o Orvyn integra — SVG inline (sem URL externa:
- * a CSP bloquearia e cairia em fallback silencioso). Marcas oficiais reproduzidas
- * apenas para identificar a integração ao operador. viewBox 0 0 24 24 em todas.
+ * Logos dos aplicativos que o KHUB integra. Meta, Instagram, WhatsApp,
+ * Google Ads, TikTok e YouTube usam os ARQUIVO OFICIAIS da marca
+ * (`public/logos/*.webp`); os demais seguem em SVG inline (sem URL externa:
+ * a CSP bloquearia e cairia em fallback silencioso). Marcas reproduzidas
+ * apenas para identificar a integração ao operador.
  */
+import Image from 'next/image';
+
 export type BrandKey =
   | 'meta' | 'meta_ads' | 'instagram' | 'whatsapp' | 'messenger'
   | 'google' | 'google_ads' | 'google_calendar' | 'gmail'
-  | 'tiktok' | 'stripe' | 'claude' | 'slack' | 'webhook';
+  | 'tiktok' | 'youtube' | 'stripe' | 'claude' | 'slack' | 'webhook';
+
+/** Marcas com arquivo oficial em public/logos. */
+const LOGO_FILE: Partial<Record<BrandKey, string>> = {
+  meta: '/logos/meta.webp',
+  meta_ads: '/logos/meta.webp',
+  instagram: '/logos/instagram.webp',
+  whatsapp: '/logos/whatsapp.webp',
+  google_ads: '/logos/google-ads.webp',
+  tiktok: '/logos/tiktok.webp',
+  youtube: '/logos/youtube.webp',
+};
 
 function G() {
   return (
@@ -22,46 +37,24 @@ function G() {
 export function BrandLogo({ brand, size = 26, className }: { brand: BrandKey; size?: number; className?: string }) {
   const p = { width: size, height: size, viewBox: '0 0 24 24', className, 'aria-hidden': true, role: 'img' as const };
 
+  // Arquivos oficiais da marca (meta, instagram, whatsapp, google_ads, tiktok, youtube).
+  const file = LOGO_FILE[brand];
+  if (file) {
+    return (
+      <Image
+        src={file}
+        alt=""
+        width={size}
+        height={size}
+        unoptimized
+        aria-hidden
+        className={className}
+        style={{ width: size, height: size, objectFit: 'contain', borderRadius: size * 0.24 }}
+      />
+    );
+  }
+
   switch (brand) {
-    case 'meta':
-    case 'meta_ads':
-      return (
-        <svg {...p}>
-          <defs>
-            <linearGradient id="mt" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stopColor="#0081FB" />
-              <stop offset="1" stopColor="#0064E1" />
-            </linearGradient>
-          </defs>
-          <path fill="none" stroke="url(#mt)" strokeWidth="3.1" strokeLinecap="round"
-            d="M3.2 15.4C3.2 9.6 5.3 6.4 8 6.4c2.1 0 3.4 1.7 5 4.6 1.6 2.9 2.6 4.6 4.4 4.6 2 0 3.4-2.1 3.4-5.5 0-3.5-1.5-5.7-3.6-5.7-2.2 0-4 2.3-6 5.9-1.6 2.8-3 5.1-5 5.1-2 0-3.4-1.9-3.4-4.5" />
-        </svg>
-      );
-    case 'instagram':
-      return (
-        <svg {...p}>
-          <defs>
-            <radialGradient id="ig" cx="0.3" cy="1" r="1.1">
-              <stop offset="0" stopColor="#FFD776" />
-              <stop offset="0.25" stopColor="#F5A623" />
-              <stop offset="0.5" stopColor="#E1306C" />
-              <stop offset="0.8" stopColor="#8A3AB9" />
-              <stop offset="1" stopColor="#4C68D7" />
-            </radialGradient>
-          </defs>
-          <rect x="1.5" y="1.5" width="21" height="21" rx="6.5" fill="url(#ig)" />
-          <circle cx="12" cy="12" r="5" fill="none" stroke="#fff" strokeWidth="2" />
-          <circle cx="17.6" cy="6.4" r="1.4" fill="#fff" />
-        </svg>
-      );
-    case 'whatsapp':
-      return (
-        <svg {...p}>
-          <rect x="1" y="1" width="22" height="22" rx="6.5" fill="#25D366" />
-          <path fill="#fff" d="M12 5.4a6.55 6.55 0 0 0-5.6 9.9L5.3 19l3.8-1a6.55 6.55 0 1 0 2.9-12.6zm0 1.75a4.8 4.8 0 0 1 2.4 8.95l-.3.17-2.1.55.56-2.05-.2-.32A4.8 4.8 0 0 1 12 7.15z" />
-          <path fill="#fff" d="M9.9 9.2c-.14-.32-.28-.32-.42-.33h-.36c-.12 0-.33.05-.5.25-.17.2-.66.64-.66 1.57s.68 1.82.77 1.95c.1.13 1.32 2.1 3.26 2.87 1.6.63 1.93.5 2.28.47.35-.03 1.12-.46 1.28-.9.16-.44.16-.82.11-.9-.05-.08-.17-.13-.36-.22-.19-.1-1.12-.55-1.29-.61-.17-.06-.3-.1-.42.1-.12.19-.48.6-.59.73-.11.13-.22.14-.4.05-.19-.1-.8-.3-1.52-.94-.56-.5-.94-1.12-1.05-1.31-.11-.19-.01-.3.08-.39.09-.09.19-.22.29-.34.1-.12.13-.2.19-.33.06-.13.03-.25-.02-.34-.05-.1-.42-1.05-.57-1.4z" />
-        </svg>
-      );
     case 'messenger':
       return (
         <svg {...p}>
@@ -95,22 +88,6 @@ export function BrandLogo({ brand, size = 26, className }: { brand: BrandKey; si
           <path fill="#34A853" d="M20 17v1a2 2 0 0 1-2 2h-1v-4h3z" />
           <path fill="#FBBC05" d="M7 20H6a2 2 0 0 1-2-2v-1h3z" />
           <text x="12" y="16" textAnchor="middle" fontSize="7.5" fontWeight="700" fill="#4285F4" fontFamily="Arial, sans-serif">31</text>
-        </svg>
-      );
-    case 'google_ads':
-      return (
-        <svg {...p}>
-          <rect x="7.3" y="1.8" width="5" height="15" rx="2.5" transform="rotate(-30 9.8 9.3)" fill="#FBBC04" />
-          <rect x="11.7" y="7.2" width="5" height="15" rx="2.5" transform="rotate(-30 14.2 14.7)" fill="#4285F4" />
-          <circle cx="6.2" cy="18" r="2.9" fill="#34A853" />
-        </svg>
-      );
-    case 'tiktok':
-      return (
-        <svg {...p}>
-          <path fill="#25F4EE" d="M15.8 3c.3 1.9 1.4 3.5 3.2 4.1v3.1a6.9 6.9 0 0 1-3.6-1.1v5.6a5.6 5.6 0 1 1-5.6-5.6c.3 0 .6 0 .9.1v3.2a2.5 2.5 0 1 0 1.7 2.3V3z" transform="translate(-1.2 .6)" />
-          <path fill="#FE2C55" d="M15.8 3c.3 1.9 1.4 3.5 3.2 4.1v3.1a6.9 6.9 0 0 1-3.6-1.1v5.6a5.6 5.6 0 1 1-5.6-5.6c.3 0 .6 0 .9.1v3.2a2.5 2.5 0 1 0 1.7 2.3V3z" transform="translate(1.2 -.6)" />
-          <path fill="#000" d="M15.8 3c.3 1.9 1.4 3.5 3.2 4.1v3.1a6.9 6.9 0 0 1-3.6-1.1v5.6a5.6 5.6 0 1 1-5.6-5.6c.3 0 .6 0 .9.1v3.2a2.5 2.5 0 1 0 1.7 2.3V3z" />
         </svg>
       );
     case 'stripe':

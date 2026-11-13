@@ -1,8 +1,8 @@
 {
-  "name": "orvyn",
+  "name": "khub",
   "version": "0.0.1",
   "private": true,
-  "description": "Orvyn — CRM vertical configurado por IA (monorepo).",
+  "description": "KHUB — CRM vertical configurado por IA (monorepo).",
   "packageManager": "pnpm@9.12.3",
   "engines": {
     "node": ">=20.11.0"

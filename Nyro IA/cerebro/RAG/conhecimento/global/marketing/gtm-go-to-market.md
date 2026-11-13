@@ -33,7 +33,7 @@ Ao lançar um serviço novo (um procedimento, uma área de atuação, um plano a
 - **Paid (pago):** anúncios, patrocínios, parcerias, influenciadores.
 - **Shared (compartilhado):** redes sociais, conteúdo gerado por usuário, co-marketing.
 
-## Aplicação no Orvyn
+## Aplicação no KHUB
 Para uma clínica lançando um novo procedimento, o "pré-lançamento" é aquecer a base atual (pacientes inativos, lista de espera) antes de abrir agenda. A Nyro pode montar a automação de pré-lançamento e conectar o canal pago (Meta Lead Ads) na fase de lançamento, medindo velocidade de agendamento na primeira semana.
 
 ## Princípio-chave

@@ -21,17 +21,6 @@ const MARKS = {
     left: 0,
     top: 0,
   },
-  orvyn: {
-    src: '/lp-revenue/brand/orvyn-revenue-wordmark.png',
-    alt: 'ORVYN Revenue OS',
-    natural: [2172, 724] as const,
-    // caixa de tinta: x 370→1802, y 224→518 de 2172×724
-    ratio: 1432 / 294,
-    width: (2172 / 1432) * 100,
-    height: (724 / 294) * 100,
-    left: (-370 / 1432) * 100,
-    top: (-224 / 294) * 100,
-  },
   nyro: {
     src: '/lp-revenue/brand/nyro-wordmark.png',
     alt: 'NYRO',

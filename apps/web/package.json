@@ -1,8 +1,8 @@
 {
-  "name": "@orvyn/web",
+  "name": "@khub/web",
   "version": "0.0.1",
   "private": true,
-  "description": "Orvyn — front-end Next.js com o cérebro Obsidian atuando como backend.",
+  "description": "KHUB — front-end Next.js com o cérebro Obsidian atuando como backend.",
   "scripts": {
     "dev": "next dev -p 3210",
     "build": "next build",
@@ -12,7 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@orvyn/types": "workspace:^",
+    "@khub/types": "workspace:^",
     "framer-motion": "^11.11.17",
     "jose": "^5.9.6",
     "next": "14.2.35",

@@ -6,12 +6,14 @@ import { Icon } from '../icons';
 import { Avatar, cx } from '../ui';
 import { useAuth } from '@/lib/auth';
 import { useAgency } from '@/components/agency/AgencyProvider';
+import { NotificationsBell } from '@/components/app/NotificationsBell';
+import { usePersonalization } from '@/components/app/PersonalizationProvider';
 
 /**
  * Topbar global: busca à esquerda, notificações e conta à direita.
  *
  * A busca aqui é o **gatilho** da paleta de comandos, não um campo de texto:
- * clicar (ou ⌘K / Ctrl+K) dispara o evento `orvyn:command` que a CommandBar
+ * clicar (ou ⌘K / Ctrl+K) dispara o evento `khub:command` que a CommandBar
  * escuta. Evita dois campos concorrentes e mantém um único caminho de busca.
  */
 export function Topbar({ onMobileMenu }: { onMobileMenu?: () => void }) {
@@ -45,10 +47,43 @@ export function Topbar({ onMobileMenu }: { onMobileMenu?: () => void }) {
       <SearchTrigger />
 
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
-        <NotificationsButton />
+        <ThemeToggle />
+        <NotificationsBell />
         <AccountMenu />
       </div>
     </header>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Tema claro/escuro                                                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Atalho do tema: alterna claro ↔ escuro e grava em `users.prefs` (mesma
+ * preferência de Configurações › Tema). Lê o tema efetivo do documento,
+ * que já vem certo do script anti-flash do layout raiz.
+ */
+function ThemeToggle() {
+  const { prefs, update } = usePersonalization();
+  const [claro, setClaro] = useState(false);
+  useEffect(() => {
+    setClaro(document.documentElement.getAttribute('data-theme') === 'light');
+  }, [prefs.theme]);
+
+  return (
+    <button
+      type="button"
+      className="btn btn-ghost btn-icon"
+      onClick={() => {
+        update({ theme: claro ? 'dark' : 'light' });
+        setClaro(!claro);
+      }}
+      aria-label={claro ? 'Mudar para o tema escuro' : 'Mudar para o tema claro'}
+      title={claro ? 'Tema escuro' : 'Tema claro'}
+    >
+      <Icon name={claro ? 'moon' : 'sun'} size={19} />
+    </button>
   );
 }
 
@@ -58,11 +93,11 @@ export function Topbar({ onMobileMenu }: { onMobileMenu?: () => void }) {
 
 /**
  * A CommandBar já registra o atalho ⌘K/Ctrl+K globalmente e escuta
- * `orvyn:cmdk`. Aqui só emitimos o evento — registrar um segundo listener
+ * `khub:cmdk`. Aqui só emitimos o evento — registrar um segundo listener
  * de teclado faria os dois competirem pelo mesmo atalho.
  */
 function openCommandBar() {
-  window.dispatchEvent(new CustomEvent('orvyn:cmdk'));
+  window.dispatchEvent(new CustomEvent('khub:cmdk'));
 }
 
 function SearchTrigger() {
@@ -93,48 +128,7 @@ function SearchTrigger() {
 /* Notificações                                                        */
 /* ------------------------------------------------------------------ */
 
-function NotificationsButton() {
-  // Ainda não existe fonte de notificações no backend. O botão não finge
-  // atividade (sem badge) e não fica sem ação: abre um aviso honesto.
-  const [aberto, setAberto] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!aberto) return;
-    const fora = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setAberto(false);
-    };
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setAberto(false);
-    document.addEventListener('mousedown', fora);
-    document.addEventListener('keydown', esc);
-    return () => {
-      document.removeEventListener('mousedown', fora);
-      document.removeEventListener('keydown', esc);
-    };
-  }, [aberto]);
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        className="btn btn-ghost btn-icon"
-        aria-label="Notificações"
-        aria-haspopup="dialog"
-        aria-expanded={aberto}
-        onClick={() => setAberto((v) => !v)}
-      >
-        <Icon name="bell" size={19} />
-      </button>
-      {aberto && (
-        <div role="dialog" aria-label="Notificações" className="lg-popover absolute right-0 top-[calc(100%+8px)] z-dropdown w-72 animate-scale-in p-4">
-          <p className="text-[13.5px] font-semibold text-fg">Notificações</p>
-          <p className="mt-1 text-[13px] leading-snug text-muted">
-            A central de notificações ainda não está disponível. Conversas novas aparecem com contador no menu Conversas.
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
+// Central de notificações (Q2.6): `components/app/NotificationsBell.tsx`.
 
 /* ------------------------------------------------------------------ */
 /* Conta / workspace                                                   */
@@ -142,7 +136,7 @@ function NotificationsButton() {
 
 function AccountMenu() {
   const { user, ready, signOut } = useAuth();
-  const { contexto, clientes, clienteAtivo, entrarNoCliente } = useAgency();
+  const { contexto, subcontas, clienteAtivo, entrarNoCliente } = useAgency();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -217,7 +211,7 @@ function AccountMenu() {
               <hr className="divider my-1.5" />
               <p className="px-2.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-faint">Clientes</p>
               <div className="max-h-56 overflow-y-auto">
-                {clientes.map((c) => (
+                {subcontas.map((c) => (
                   <button
                     key={c.id}
                     type="button"
@@ -235,7 +229,7 @@ function AccountMenu() {
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[13px] font-medium text-fg">{c.nome}</span>
                     </span>
-                    {c.isDemo && <span className="pill shrink-0 text-[9px]">DEMO</span>}
+                    {c.isDemo && <span className="pill shrink-0 text-2xs">DEMO</span>}
                     {c.id === clienteAtivo?.id && <Icon name="check" size={15} className="shrink-0 text-brand" />}
                   </button>
                 ))}

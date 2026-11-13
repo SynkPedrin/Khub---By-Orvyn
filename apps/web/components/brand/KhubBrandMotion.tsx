@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { cx } from '../ui';
 
 /**
- * Assinatura visual em movimento da ORVYN — vídeo de cristal usado com
+ * Assinatura visual em movimento da KHUB — vídeo de cristal usado com
  * moderação em superfícies estratégicas (login, hero do Dashboard,
  * Biblioteca), nunca como decoração repetida em toda tela.
  *
@@ -26,7 +26,7 @@ import { cx } from '../ui';
  * Reexportar com `ffmpeg -movflags +faststart` resolveria na raiz; não há
  * ffmpeg neste ambiente para fazer isso agora — ver docs/BRAND_ASSETS.md.
  */
-export function OrvynBrandMotion({
+export function KhubBrandMotion({
   poster,
   className,
   overlay,

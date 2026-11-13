@@ -8,7 +8,7 @@
 - Cada arquivo tem **frontmatter** (`dominio`, `framework`, `scope_fit_min_plano`, `intencoes`, `comando_relacionado`, `persona_owner`) → vira `metadados` na ingestão.
 
 ## Ingestão (escopo global — fora do request path, invariante 2)
-Bases compartilhadas são escritas por **script como `orvyn_service`**, nunca pela API (`orvyn_app`):
+Bases compartilhadas são escritas por **script como `khub_service`**, nunca pela API (`khub_app`):
 ```bash
 node apps/api/scripts/seed-global-rag.mjs | docker exec -i orvyn-postgres psql -U postgres -d orvyn -v ON_ERROR_STOP=1
 ```

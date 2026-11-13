@@ -16,7 +16,7 @@ const nextConfig = {
   },
 
   /**
-   * Compatibilidade de URLs — ORVYN OS → ORVYN Revenue OS.
+   * Compatibilidade de URLs — KHUB OS → KHUB Revenue OS.
    *
    * DELIBERADAMENTE SEM REDIRECT das rotas antigas de módulo.
    *
@@ -29,7 +29,7 @@ const nextConfig = {
    * As antigas seguem acessíveis e já herdaram a nova identidade visual
    * (o design system foi trocado preservando os nomes de classe). Os
    * redirects entram quando as novas telas tiverem paridade de dados
-   * reais; o mapeamento está em `docs/ORVYN_REVENUE_MIGRATION.md`.
+   * reais; o mapeamento está em `docs/KHUB_REVENUE_MIGRATION.md`.
    */
 };
 

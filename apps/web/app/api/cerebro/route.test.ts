@@ -24,12 +24,12 @@ describe('vault interno /api/cerebro exige sessão (regressão: servia PRD e Bug
 
   it('com token inválido (API responde 401): 401', async () => {
     apiMe(401);
-    expect((await GET(req('orvyn_access=forjado'))).status).toBe(401);
+    expect((await GET(req('khub_access=forjado'))).status).toBe(401);
   });
 
   it('API fora do ar: falha fechada (401)', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('ECONNREFUSED'); }));
-    expect((await GET(req('orvyn_access=qualquer'))).status).toBe(401);
+    expect((await GET(req('khub_access=qualquer'))).status).toBe(401);
   });
 
   it('documento individual também exige sessão', async () => {
@@ -40,7 +40,7 @@ describe('vault interno /api/cerebro exige sessão (regressão: servia PRD e Bug
 
   it('sessão válida: valida o token na API com Bearer e libera', async () => {
     const f = apiMe(200);
-    const r = await GET(req('orvyn_access=token-ok'));
+    const r = await GET(req('khub_access=token-ok'));
     expect(r.status).toBe(200);
     const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toMatch(/\/v1\/auth\/me$/);

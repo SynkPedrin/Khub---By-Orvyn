@@ -9,7 +9,7 @@ export default function TermosPage() {
     <LegalShell titulo="Termos de Uso" atualizadoEm="[PREENCHER: data da última revisão]">
       <Secao titulo="1. Quem somos e o que este documento cobre">
         <p>
-          O KHUB (&ldquo;KHUB&rdquo;, &ldquo;nós&rdquo;), desenvolvido e operado pela ORVYN ai, é uma plataforma
+          O KHUB (&ldquo;KHUB&rdquo;, &ldquo;nós&rdquo;), desenvolvido e operado pela KHUB ai, é uma plataforma
           de CRM, atendimento, automação e inteligência artificial para operações de vendas e marketing. Este
           documento rege o uso do software por qualquer pessoa ou empresa (&ldquo;Cliente&rdquo;, &ldquo;você&rdquo;)
           que crie uma conta ou utilize a plataforma.

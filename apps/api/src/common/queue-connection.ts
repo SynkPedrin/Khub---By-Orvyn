@@ -9,4 +9,5 @@ export function queueConnection() {
     maxRetriesPerRequest: null,
   };
 }
-export const isWorker = () => process.env.ORVYN_PROCESS_ROLE === 'worker';
+// ORVYN_PROCESS_ROLE: nome legado (ADR-0041), aceito até os ambientes migrarem.
+export const isWorker = () => (process.env.KHUB_PROCESS_ROLE ?? process.env.ORVYN_PROCESS_ROLE) === 'worker';

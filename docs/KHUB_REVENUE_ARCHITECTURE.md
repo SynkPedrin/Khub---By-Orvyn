@@ -1,7 +1,7 @@
-# ORVYN Revenue OS — Arquitetura
+# KHUB Revenue OS — Arquitetura
 
-> Estado após a Semana 1 da transformação. Complementa `ORVYN_REVENUE_AUDIT.md`
-> (o que existia) e `ORVYN_REVENUE_MIGRATION.md` (como sair de um para o outro).
+> Estado após a Semana 1 da transformação. Complementa `KHUB_REVENUE_AUDIT.md`
+> (o que existia) e `KHUB_REVENUE_MIGRATION.md` (como sair de um para o outro).
 
 ---
 
@@ -176,7 +176,7 @@ inscrição na mesma cadência.
 
 ---
 
-## 7. Score ORVYN
+## 7. Score KHUB
 
 `apps/api/src/crm/lead-score.ts` · versão `v0_rules` · 15 testes.
 
@@ -255,7 +255,7 @@ em um destes quatro, nunca em área em branco sem explicação.
 
 ### Modo demonstração
 
-`NEXT_PUBLIC_ORVYN_DEMO=1`. Nada em `lib/demo/` é lido com a flag desligada, e a
+`NEXT_PUBLIC_KHUB_DEMO=1`. Nada em `lib/demo/` é lido com a flag desligada, e a
 flag nunca liga sozinha. Com ela ativa, toda tela mostra o selo "Dados de
 demonstração" — número de vitrine exibido como real destrói a confiança no
 produto inteiro.

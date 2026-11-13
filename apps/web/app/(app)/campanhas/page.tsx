@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Icon, type IconName } from '@/components/icons';
 import { cx } from '@/components/ui';
 import { PageShell, PageHeader, KpiGrid, Section } from '@/components/revenue/Page';
@@ -12,18 +12,20 @@ import { CanalBadge } from '@/components/revenue/lead-ui';
 import { numero, percentual } from '@/lib/format';
 import { modoDemo } from '@/lib/demo/flag';
 import { CAMPANHAS, CAMPANHAS_KPIS, INSIGHTS_CAMPANHA } from '@/lib/demo/dataset';
+import { ads, type AdsOverview, type Campaign as AdsCampaign } from '@/lib/ads';
+import { brl } from '@/lib/crm';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import type { Campanha } from '@/lib/revenue/types';
+import { Tabs, TabPanel } from '@/components/kit';
+import { ListaDisparos } from '@/components/disparos/ListaDisparos';
 
 /**
  * CAMPANHAS — prospecção multicanal.
  *
- * Módulo novo: não existia no ORVYN OS. Nesta fase entrega **arquitetura,
- * interface e modelo de dados**; o disparo real fica desligado.
- *
- * Isso é deliberado. Ligar envio em massa antes de haver opt-out, janela de
- * envio, limite por tenant e trilha de auditoria transforma o produto em
- * ferramenta de spam — e queima o domínio do cliente junto. O botão de
- * publicar existe, mas diz o que falta em vez de disparar.
+ * Modo real (Q4.3): aba Disparos com envio em massa de verdade, agora que
+ * existem opt-out, janela de envio, limite diário por tenant, aprovação humana
+ * e trilha de auditoria (DisparosService). A aba Anúncios mostra a Meta Ads.
+ * O modo demo continua com o dataset ilustrativo.
  */
 export default function CampanhasPage() {
   const demo = modoDemo();
@@ -37,7 +39,7 @@ export default function CampanhasPage() {
         actions={<SeloDemo />}
       />
 
-      {demo ? <CampanhasComDados /> : <CampanhasVazio />}
+      {demo ? <CampanhasComDados /> : <CampanhasReais />}
     </PageShell>
   );
 }
@@ -421,7 +423,7 @@ function PainelCampanha({ campanha }: { campanha: Campanha }) {
         <p className="flex items-center gap-2 text-[13.5px] font-semibold text-fg">
           <Icon name="ai" size={16} className="text-brand" />
           Otimização com IA
-          <span className="pill pill-brand ml-auto h-[20px] px-2 text-[10.5px]">Beta</span>
+          <span className="pill pill-brand ml-auto h-[20px] px-2 text-2xs">Beta</span>
         </p>
         <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
           Deixe a IA analisar o desempenho e sugerir melhorias para sua campanha.
@@ -445,20 +447,135 @@ function PainelCampanha({ campanha }: { campanha: Campanha }) {
   );
 }
 
-function CampanhasVazio() {
+/**
+ * Campanhas com dados reais: as campanhas de ANÚNCIOS conectadas (Meta Ads
+ * hoje) aparecem aqui — antes, a tela era só o estado vazio de prospecção e
+ * quem conectava a Meta não via nada. A gestão completa fica em
+ * Marketing → Ads; esta seção é a vitrine do que já está rodando.
+ */
+/**
+ * Modo real: duas abas. "Disparos" é o disparo em massa por segmento (Q4.3),
+ * com aprovação, lotes, janela e opt-out; "Anúncios" mantém os dados da Meta Ads.
+ */
+function CampanhasReais() {
+  const [aba, setAba] = useState<'disparos' | 'anuncios'>('disparos');
   return (
-    <div className="card">
-      <EmptyState
-        icon="send"
-        title="Campanhas ainda não estão disponíveis"
-        description="Enquanto isso, cadências de contato (WhatsApp, e-mail, esperas e follow-ups) são montadas em Automações, já funcionando."
-        action={
-          <Link href="/automacoes" className="btn btn-primary btn-sm">
-            <Icon name="zap" size={15} />
-            Ir para Automações
-          </Link>
-        }
+    <div className="space-y-4">
+      <Tabs
+        idBase="campanhas-abas"
+        label="Tipo de campanha"
+        value={aba}
+        onChange={setAba}
+        items={[{ value: 'disparos', label: 'Disparos' }, { value: 'anuncios', label: 'Anúncios (Meta Ads)' }]}
       />
+      <TabPanel idBase="campanhas-abas" value="disparos" active={aba === 'disparos'}>
+        <ListaDisparos />
+      </TabPanel>
+      <TabPanel idBase="campanhas-abas" value="anuncios" active={aba === 'anuncios'}>
+        <AnunciosReais />
+      </TabPanel>
     </div>
   );
 }
+
+function AnunciosReais() {
+  const [ov, setOv] = useState<AdsOverview | null>(null);
+  const [camps, setCamps] = useState<AdsCampaign[]>([]);
+  const [carregando, setCarregando] = useState(true);
+
+  useEffect(() => {
+    Promise.all([ads.overview(), ads.campaigns()])
+      .then(([o, c]) => { setOv(o); setCamps(c); })
+      .catch(() => { setOv(null); setCamps([]); })
+      .finally(() => setCarregando(false));
+  }, []);
+
+  const temAds = camps.length > 0;
+  const t = ov?.totals;
+
+  return (
+    <div className="space-y-4">
+      {carregando && (
+        <div className="card space-y-3 p-5" aria-busy="true">
+          <div className="skeleton h-6 w-48 rounded-md" />
+          <div className="skeleton h-24 w-full rounded-md" />
+        </div>
+      )}
+
+      {!carregando && temAds && t && (
+        <section className="card overflow-hidden p-0" aria-label="Campanhas de anúncios conectadas">
+          <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4">
+            <BrandLogo brand="meta_ads" size={22} />
+            <div>
+              <h2 className="text-[15px] font-semibold text-fg">Campanhas de anúncios</h2>
+              <p className="text-xs text-muted">Meta Ads conectada · últimos 30 dias</p>
+            </div>
+            <Link href="/marketing/ads" className="btn btn-soft btn-sm ml-auto">
+              Abrir análise completa
+              <Icon name="arrowRight" size={14} />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 px-5 py-4 lg:grid-cols-4">
+            {[
+              { l: 'Investido', v: brl(t.spend) },
+              { l: 'Leads', v: numero(t.leads) },
+              { l: 'CPL médio', v: t.leads > 0 ? brl(t.cpl) : '-' },
+              { l: 'ROAS', v: `${t.roas.toFixed(2)}x` },
+            ].map((k) => (
+              <div key={k.l} className="card-inset p-3.5">
+                <p className="text-xs text-muted">{k.l}</p>
+                <p className="mt-1 text-xl font-semibold tabular text-fg">{k.v}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="overflow-x-auto scrollbar-thin">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-y border-line text-left text-xs uppercase tracking-wide text-muted">
+                  <th className="px-5 py-2.5 font-semibold">Campanha</th>
+                  <th className="px-3 py-2.5 font-semibold">Status</th>
+                  <th className="px-3 py-2.5 text-right font-semibold">Invest.</th>
+                  <th className="px-3 py-2.5 text-right font-semibold">Leads</th>
+                  <th className="px-5 py-2.5 text-right font-semibold">ROAS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {camps.slice(0, 8).map((c) => (
+                  <tr key={c.id} className="border-b border-line last:border-0 hover:bg-surface2">
+                    <td className="px-5 py-2.5">
+                      <p className="font-medium text-fg">{c.nome}</p>
+                      <p className="text-[11px] text-muted">{c.objetivo ?? '-'}</p>
+                    </td>
+                    <td className="px-3 py-2.5 text-muted">{c.status}</td>
+                    <td className="px-3 py-2.5 text-right tabular text-fg">{brl(c.spend)}</td>
+                    <td className="px-3 py-2.5 text-right tabular text-fg">{c.leads}</td>
+                    <td className="px-5 py-2.5 text-right font-semibold tabular text-brand">{c.roas.toFixed(2)}x</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {!carregando && !temAds && (
+        <div className="card">
+          <EmptyState
+            icon="marketing"
+            title="Nenhuma campanha de anúncios conectada"
+            description="Conecte a Meta Ads para ver investimento, leads e ROAS das campanhas aqui. Disparos de WhatsApp e e-mail ficam na aba Disparos."
+            action={
+              <Link href="/configuracoes?tab=integracoes" className="btn btn-primary btn-sm">
+                <Icon name="link" size={15} />
+                Conectar Meta Ads
+              </Link>
+            }
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+

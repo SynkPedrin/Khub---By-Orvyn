@@ -31,7 +31,7 @@ Quando há mais iniciativas do que capacidade e é preciso escolher no que inves
 - Resolva dependências entre áreas antes de comprometer recursos.
 - Custo de oportunidade é real — escolher X significa não escolher Y.
 
-## Aplicação no Orvyn
+## Aplicação no KHUB
 A Nyro pode usar a matriz para priorizar recomendações ao cliente: em vez de sugerir dez ações, ela ranqueia por impacto x esforço com base nos dados do CRM e entrega as 2–3 de maior retorno primeiro (os "ganhos rápidos").
 
 ## Princípio-chave

@@ -39,7 +39,7 @@ Quando o dono está em toda reunião, a coordenação entre pessoas está quebra
 - Qualidade caindo → precisa de processo de revisão.
 - Novos contratados perdidos → precisa de onboarding e documentação.
 
-## Aplicação no Orvyn
+## Aplicação no KHUB
 Para um escritório crescendo, a Nyro pode usar os gatilhos de escala para recomendar quando criar uma função de atendimento dedicada — cruzando volume de conversas no inbox com tempo de resposta (SLA) do CRM.
 
 ## Princípio-chave

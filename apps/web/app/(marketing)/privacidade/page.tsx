@@ -8,7 +8,7 @@ export default function PrivacidadePage() {
     <LegalShell titulo="Política de Privacidade" atualizadoEm="[PREENCHER: data da última revisão]">
       <Secao titulo="1. Escopo e papéis sob a LGPD">
         <p>
-          Esta política explica como o KHUB (&ldquo;KHUB&rdquo;), desenvolvido e operado pela ORVYN ai, trata dados pessoais, nos termos
+          Esta política explica como o KHUB (&ldquo;KHUB&rdquo;), desenvolvido e operado pela KHUB ai, trata dados pessoais, nos termos
           da Lei Geral de Proteção de Dados (Lei 13.709/2018 · LGPD). Distinguimos dois papéis:
         </p>
         <ul className="list-disc space-y-1.5 pl-5">

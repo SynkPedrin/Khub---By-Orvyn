@@ -7,7 +7,7 @@
 | Tipo | O que é | Neste projeto |
 |---|---|---|
 | `MOCK_TEST` | Jest/Vitest com Prisma/HTTP simulados | 304 (API) + 18 (web). **Não provam integração.** Três defeitos P1 de runtime passaram por eles (ver 16) |
-| `INTEGRATION_TEST` | Contra Postgres real, role `orvyn_app` | `db/002_isolation_test.sql` (RAG) + `scripts/qa/rls-matrix.sql` (122 verificações) |
+| `INTEGRATION_TEST` | Contra Postgres real, role `khub_app` | `db/002_isolation_test.sql` (RAG) + `scripts/qa/rls-matrix.sql` (122 verificações) |
 | `REAL_RUNTIME_TEST` | API + worker + Redis + Postgres reais, e navegador real | `scripts/qa/scenarios.mjs` (52), `webhook-proxy.mjs` (12), `browser.mjs` (10) |
 | Integração externa real | WhatsApp, Meta, Anthropic, SMTP | **Nenhuma.** Não é validada por mock nem por este baseline |
 
@@ -19,14 +19,14 @@ Stack isolada (nomes, volume e portas exclusivos; nada compartilhado com o dev):
 | Redis 7 | container `orvyn-qa-redis`, `127.0.0.1:6395`, volume `orvyn_qa_redis` | idem |
 | API NestJS | `:4010` | `cd apps/api && set -a && . ./.env.qa && set +a && node dist/main.js` |
 | Worker BullMQ | processo `node dist/worker.js` | idem, com `dist/worker.js` |
-| Front Next (build de produção) | `:3220` | `cd apps/web && env -u NODE_ENV NEXT_DIST_DIR=.next-qa ORVYN_API_URL=http://localhost:4010 NEXT_PUBLIC_ORVYN_DEMO=0 npx next build && ... npx next start -p 3220` |
+| Front Next (build de produção) | `:3220` | `cd apps/web && env -u NODE_ENV NEXT_DIST_DIR=.next-qa KHUB_API_URL=http://localhost:4010 NEXT_PUBLIC_KHUB_DEMO=0 npx next build && ... npx next start -p 3220` |
 
 Segredos do QA ficam só em `apps/api/.env.qa` (ignorado pelo git, permissão 600), gerados aleatoriamente. **Nenhum segredo está em log ou documento.**
 
 Para parar só o QA: `docker compose -p orvyn-qa -f docker-compose.qa.yml stop` e matar os PIDs das portas 4010/3220 e o `node dist/worker.js`. **Nunca** `down -v`, `prune` ou `pkill` genérico.
 
 ### Infraestrutura pré-existente (não tocada)
-`orvyn-postgres`/`orvyn-redis` (5432/6379, dev), containers `orvyn-audit-*`, `orvyn-finance-*`, `orvyn-evolution`, `evolution_*`, e os volumes `orvyn_pg`, `orvyn-os_orvyn_*`, `nyroia_orvyn_*`. Nenhum foi alterado, parado ou apagado.
+`orvyn-postgres`/`orvyn-redis` (5432/6379, dev), containers `orvyn-audit-*`, `orvyn-finance-*`, `orvyn-evolution`, `evolution_*`, e os volumes `orvyn_pg`, `orvyn-os_orvyn_*`, `nyroia_khub_*`. Nenhum foi alterado, parado ou apagado.
 
 ## 3. Incidente de isolamento durante o baseline (relato honesto)
 Na primeira subida, a API de QA **leu o `apps/api/.env` de desenvolvimento**: o Prisma carrega esse arquivo ao ser importado e preenche, sem sobrescrever, toda variável que o ambiente não definiu. Isso injetou chaves reais (`META_APP_ID`, `STEVO_*`, `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `EVOLUTION_*`) no processo de QA.
@@ -46,7 +46,7 @@ Classe: `INFRASTRUCTURE_DEFECT` (carga implícita de `.env`). Recomendação em 
 | WEB tests (vitest) | **PASS** 18/18, 4 arquivos (antes: não existiam) | `gate-WEB_tests_(vitest).log` |
 | WEB build | **PASS** | `gate-WEB_build.log` |
 | Migrations 000–027 | **PASS** (28 arquivos, idempotentes) | `migrations-apply.log`, `migrations-reapply.log` |
-| RLS isolamento (002 + matriz como `orvyn_app`) | **PASS** 122/122 | `rls-002.log`, `rls-matrix.log` |
+| RLS isolamento (002 + matriz como `khub_app`) | **PASS** 122/122 | `rls-002.log`, `rls-matrix.log` |
 | Worker startup | **PASS** (heartbeat Redis + job repetível `reconcile`) | `worker-run.log` |
 | Browser smoke | **PASS** 10/10, 55 páginas | `browser-report.json` |
 | Cenários de runtime | **PASS 48/52** (4 FAIL = lacunas de produto confirmadas) | `scenarios-results.json` |
@@ -59,7 +59,7 @@ Classe: `INFRASTRUCTURE_DEFECT` (carga implícita de `.env`). Recomendação em 
 |---|---|
 | `GET /v1/health` | `200 {status:ok}` |
 | `GET /v1/ready` | `200 {database:true, redis:true}` |
-| Worker no ar | heartbeat `orvyn:worker:heartbeat` (TTL 30 s) e `bull:orvyn-maintenance:repeat:reconcile` ativo |
+| Worker no ar | heartbeat `khub:worker:heartbeat` (TTL 30 s) e `bull:khub-maintenance:repeat:reconcile` ativo |
 | Execução de job, persistência | outbox → reconcile (5 s) → run → passos persistidos em `workflow_run_steps` |
 | Retry | observado: passo falho reexecutado 4× (1/4…4/4) com backoff, depois `falhou` (ver RT-02, RT-03) |
 | Reinício do worker no meio de uma espera | **PASS**: espera de 90 s sobreviveu ao `kill` e ao novo processo; ação pós-espera executou **1 vez** |

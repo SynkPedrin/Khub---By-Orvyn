@@ -26,7 +26,7 @@ describe('ProblemDetailsFilter (RFC 7807)', () => {
     const { h, enviado } = host();
     filtro.catch(new NotFoundException('contato inexistente'), h);
     expect(enviado.status).toBe(404);
-    expect(enviado.body).toMatchObject({ type: 'https://orvyn.dev/errors/404', title: 'contato inexistente', status: 404, instance: '/v1/teste' });
+    expect(enviado.body).toMatchObject({ type: 'urn:khub:error:404', title: 'contato inexistente', status: 404, instance: '/v1/teste' });
     expect(enviado.body.correlationId).toBeTruthy();
     expect(enviado.header!['x-correlation-id']).toBe(enviado.body.correlationId);
   });

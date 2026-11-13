@@ -28,12 +28,30 @@ export class IngestionService {
     return createHash('sha256').update(content, 'utf8').digest('hex');
   }
 
+  /**
+   * Reindexação (db/034): reenvia para a fila o texto guardado em
+   * `rag_documents.texto_fonte`. Usado quando a chave de embedding chega depois
+   * (documento lexical → híbrido) ou quando o chunking muda.
+   */
+  async reprocessar(tenantId: string, documentId: string): Promise<{ id: string; status: string }> {
+    const doc = await this.prisma.withTenant(tenantId, async (tx) => {
+      const d = await tx.ragDocument.findUnique({ where: { id: documentId }, select: { id: true, tenantId: true, textoFonte: true } });
+      if (!d || d.tenantId !== tenantId) return null;
+      await tx.ragDocument.update({ where: { id: documentId }, data: { status: 'pending', erro: null, updatedAt: new Date() } });
+      return d;
+    });
+    if (!doc) throw new Error('documento inexistente');
+    if (!doc.textoFonte) throw new Error('documento sem texto de origem guardado: envie a fonte de novo');
+    await this.queue.enqueue(doc.id, doc.textoFonte, tenantId);
+    return { id: doc.id, status: 'pending' };
+  }
+
   async register(input: IngestionInput): Promise<IngestionResult> {
     assertEscopoCoerente(input);
     const contentHash = IngestionService.contentHash(input.content);
 
     // BUG-022: base de TENANT só é gravável com `app.current_tenant_id` setado
-    // (RLS FORCE em rag_documents; orvyn_app não tem BYPASSRLS). Sem isso a
+    // (RLS FORCE em rag_documents; khub_app não tem BYPASSRLS). Sem isso a
     // escrita falhava na policy. Bases compartilhadas seguem pela role de serviço.
     const gravar = async (db: Prisma.TransactionClient | PrismaService) => {
       const existing = await db.ragDocument.findFirst({

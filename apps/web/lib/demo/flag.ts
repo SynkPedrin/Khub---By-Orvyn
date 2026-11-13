@@ -9,7 +9,7 @@
  * exibido como número real é pior do que uma tela vazia: destrói a confiança
  * no produto inteiro.
  *
- * Ligar: `NEXT_PUBLIC_ORVYN_DEMO=1` no `.env.local`.
+ * Ligar: `NEXT_PUBLIC_KHUB_DEMO=1` no `.env.local`.
  *
  * Quando ligado, toda tela mostra o selo "DEMO" — o operador precisa saber,
  * sem clicar em nada, que está olhando dado fabricado.
@@ -19,7 +19,8 @@ export function modoDemo(): boolean {
   // acidente num bundle de produção. Produção deve refletir exclusivamente
   // dados persistidos e estados reais de integração.
   if (process.env.NODE_ENV === 'production') return false;
-  return process.env.NEXT_PUBLIC_ORVYN_DEMO === '1';
+  // NEXT_PUBLIC_ORVYN_DEMO: nome legado (ADR-0041), aceito até os ambientes migrarem.
+  return (process.env.NEXT_PUBLIC_KHUB_DEMO ?? process.env.NEXT_PUBLIC_ORVYN_DEMO) === '1';
 }
 
 /**

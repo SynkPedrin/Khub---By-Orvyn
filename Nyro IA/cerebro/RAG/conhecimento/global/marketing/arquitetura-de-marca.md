@@ -31,8 +31,8 @@ Quando o negócio tem (ou vai ter) mais de uma marca, produto ou linha e precisa
 - A associação ajuda ou prejudica cada marca?
 - Qual o custo de construir marca nova versus estender a existente?
 
-## Aplicação no Orvyn
-Relevante quando uma agência opera várias contas/clínicas no white-label do Orvyn, ou quando um grupo médico tem submarcas por unidade. A Nyro deve recomendar casa de marca por padrão até o portfólio ficar realmente complexo.
+## Aplicação no KHUB
+Relevante quando uma agência opera várias contas/clínicas no white-label do KHUB, ou quando um grupo médico tem submarcas por unidade. A Nyro deve recomendar casa de marca por padrão até o portfólio ficar realmente complexo.
 
 ## Recomendação
 Negócios em estágio inicial quase sempre devem usar casa de marca única, até atingirem complexidade de portfólio que justifique o custo de manter marcas separadas.

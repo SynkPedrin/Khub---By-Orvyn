@@ -5,7 +5,7 @@ import { cx } from '../ui';
 import { moeda, moedaCurta, numero } from '@/lib/format';
 
 /**
- * GRÁFICOS DO REVENUE OS
+ * GRÁFICOS DO KHUB
  * ======================
  *
  * SVG inline, sem biblioteca: os formatos aqui são poucos e fixos, e uma
@@ -66,7 +66,7 @@ export function AreaReceita({
 
   if (!dados.length) return <SemDados altura={altura} />;
 
-  const idx = ativo ?? dados.length - 1;
+  const idx = Math.min(ativo ?? dados.length - 1, dados.length - 1);
   const ponto = dados[idx];
   const xPct = (idx / Math.max(1, dados.length - 1)) * 100;
 
@@ -75,7 +75,7 @@ export function AreaReceita({
       <div className="flex gap-3">
         {/* Eixo Y — recessivo, tabular para alinhar os dígitos */}
         <div
-          className="flex shrink-0 flex-col-reverse justify-between py-0.5 text-[10px] tabular text-faint"
+          className="flex shrink-0 flex-col-reverse justify-between py-0.5 text-2xs tabular text-faint"
           style={{ height: altura }}
           aria-hidden
         >
@@ -95,10 +95,13 @@ export function AreaReceita({
           >
             <defs>
               <linearGradient id={`g-${id}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.22" />
-                <stop offset="55%" stopColor="var(--brand-2)" stopOpacity="0.07" />
+                <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.26" />
+                <stop offset="55%" stopColor="var(--brand-2)" stopOpacity="0.09" />
                 <stop offset="100%" stopColor="var(--brand-2)" stopOpacity="0" />
               </linearGradient>
+              <filter id={`glow-${id}`} x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="var(--brand)" floodOpacity="0.4" />
+              </filter>
             </defs>
 
             {/* Grade: fina e apagada — referência, não protagonista */}
@@ -115,6 +118,7 @@ export function AreaReceita({
               strokeLinejoin="round"
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"
+              filter={`url(#glow-${id})`}
             />
 
             {/* Crosshair do ponto em foco. Linha vertical sobrevive ao
@@ -149,6 +153,7 @@ export function AreaReceita({
                 className="h-full flex-1 cursor-default"
                 onMouseEnter={() => setAtivo(i)}
                 onFocus={() => setAtivo(i)}
+                onClick={() => setAtivo(i)}
                 aria-label={`${d.rotulo}: ${formatar(d.valor)}`}
               />
             ))}
@@ -159,12 +164,12 @@ export function AreaReceita({
             className="pointer-events-none absolute -top-1 z-sticky -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-line bg-surface px-2.5 py-1.5 shadow-md"
             style={{ left: `${Math.min(92, Math.max(8, xPct))}%` }}
           >
-            <p className="text-[13px] font-semibold tabular text-fg">{moeda(ponto.valor)}</p>
+            <p className="text-[13px] font-semibold tabular text-fg">{formatar(ponto.valor)}</p>
             <p className="text-[11px] text-muted">{ponto.rotulo}</p>
           </div>
 
           {/* Eixo X: só extremos e marcos — nunca um rótulo por ponto */}
-          <div className="mt-2 flex justify-between text-[10px] text-faint" aria-hidden>
+          <div className="mt-2 flex justify-between text-2xs text-faint" aria-hidden>
             {[0, Math.floor(dados.length / 4), Math.floor(dados.length / 2), Math.floor((dados.length * 3) / 4), dados.length - 1].map(
               (i) => (
                 <span key={i}>{dados[i]?.rotulo}</span>
@@ -260,7 +265,7 @@ export function BarrasHorizontais({
         const intensidade = menorEhMelhor ? 100 - pct : pct;
         return (
           <li key={d.rotulo} className="flex items-center gap-3">
-            <div className="flex w-36 shrink-0 items-center gap-2">
+            <div className="flex w-24 shrink-0 items-center gap-2 sm:w-36">
               {d.extra}
               <span className="truncate text-[13px] text-fg">{d.rotulo}</span>
             </div>
@@ -268,14 +273,14 @@ export function BarrasHorizontais({
               <div
                 className="h-full rounded-full"
                 style={{
-                  width: `${Math.max(4, pct)}%`,
+                  width: `${pct > 0 ? Math.max(1, pct) : 0}%`,
                   background: `linear-gradient(90deg, color-mix(in srgb, var(--brand) ${Math.round(30 + (intensidade / 100) * 55)}%, var(--brand-soft)), color-mix(in srgb, var(--brand-2) ${Math.round(30 + (intensidade / 100) * 55)}%, var(--brand-soft)))`,
                 }}
                 role="img"
                 aria-label={`${d.rotulo}: ${formatar(d.valor)}`}
               />
             </div>
-            <span className="w-14 shrink-0 text-right text-[12px] font-medium tabular text-muted">{formatar(d.valor)}</span>
+            <span className="min-w-12 max-w-[40%] shrink-0 break-words text-right text-[12px] font-medium tabular text-muted">{formatar(d.valor)}</span>
           </li>
         );
       })}

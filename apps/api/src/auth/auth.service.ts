@@ -4,6 +4,8 @@ import { hash, verify } from '@node-rs/argon2';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantsService } from '../tenants/tenants.service';
 import { TokenService } from './token.service';
+import { Prisma } from '@prisma/client';
+import { modulosDe, papelRestringivel } from './modulos';
 
 export interface SignupInput {
   email: string;
@@ -53,6 +55,7 @@ export class AuthService {
     }
 
     let identity = await this.prisma.identity.findFirst({ where: { email: { equals: invite.email, mode: 'insensitive' } } });
+    const contaNova = !identity;
     if (!identity) {
       if (!password || password.length < 8) throw new BadRequestException('senha obrigatória (mínimo 8 caracteres) para criar a conta');
       identity = await this.prisma.identity.create({ data: { email: invite.email, passwordHash: await hash(password), emailVerifiedAt: new Date() } });
@@ -67,15 +70,21 @@ export class AuthService {
     // membership no tenant do convite (idempotente)
     await this.prisma.membership.upsert({
       where: { identityId_tenantId: { identityId, tenantId: invite.tenantId } },
-      create: { identityId, tenantId: invite.tenantId, role: invite.role, isDefault: false },
+      // Conta nova: esta subaccount é a única, então é a padrão (o login cai direto nela).
+      create: { identityId, tenantId: invite.tenantId, role: invite.role, isDefault: contaNova },
       update: {},
     });
 
     const displayName = nome?.trim() || invite.email.split('@')[0];
     await this.prisma.withTenant(invite.tenantId, async (tx) => {
       const existing = await tx.user.findFirst({ where: { identityId }, select: { id: true } });
+      // Acesso por módulo escolhido no convite (ADR-0045) entra junto: o
+      // colaborador já chega restrito, sem janela com acesso total.
+      const permissoes = (invite.permissoes ?? {}) as Prisma.InputJsonValue;
       if (!existing) {
-        await tx.user.create({ data: { tenantId: invite.tenantId, identityId, email: invite.email, nome: displayName, role: invite.role } });
+        await tx.user.create({ data: { tenantId: invite.tenantId, identityId, email: invite.email, nome: displayName, role: invite.role, permissoes } });
+      } else if (modulosDe(invite.permissoes) !== null) {
+        await tx.user.update({ where: { id: existing.id }, data: { permissoes } });
       }
       await tx.$executeRaw`INSERT INTO audit_logs (tenant_id, actor_type, actor_id, acao, entidade, entidade_id)
         VALUES (${invite.tenantId}::uuid, 'humano', ${identityId}, 'invite.accept', 'invite', ${invite.id})`;
@@ -85,6 +94,24 @@ export class AuthService {
     await this.prisma.invite.update({ where: { id: invite.id }, data: { acceptedAt: new Date() } });
 
     return this.issue(identityId, invite.email, displayName, invite.tenantId, invite.role, userAgent);
+  }
+
+  /**
+   * Pré-visualização pública do convite (ADR-0042): a tela de aceite mostra
+   * para qual empresa e com qual e-mail a pessoa vai entrar, e se ela já tem
+   * conta (aí pede a senha atual em vez de criar uma). Não revela nada além do
+   * que o próprio link já dá direito; token inválido → a mesma mensagem genérica.
+   */
+  async previewInvite(token: string) {
+    const invite = await this.prisma.invite.findUnique({ where: { tokenHash: createHash('sha256').update(token).digest('hex') } });
+    if (!invite || invite.acceptedAt || invite.expiresAt.getTime() < Date.now()) {
+      throw new BadRequestException('convite inválido, expirado ou já utilizado');
+    }
+    const [tenant, identity] = await Promise.all([
+      this.prisma.withTenant(invite.tenantId, (tx) => tx.tenant.findUnique({ where: { id: invite.tenantId }, select: { nome: true } })),
+      this.prisma.identity.findFirst({ where: { email: { equals: invite.email, mode: 'insensitive' } }, select: { passwordHash: true } }),
+    ]);
+    return { email: invite.email, empresa: tenant?.nome ?? 'KHUB', papel: invite.role, contaExistente: !!identity?.passwordHash, expiraEm: invite.expiresAt };
   }
 
   async login(email: string, password: string, userAgent?: string): Promise<Tokens> {
@@ -130,8 +157,11 @@ export class AuthService {
       this.tenants.myTenant(tenantId),
       this.tenants.membershipsOf(identityId),
     ]);
-    const profile = await this.prisma.withTenant(tenantId, (tx) => tx.user.findFirst({ where: { identityId }, select: { nome: true, role: true } }));
-    return { identityId, email: identity?.email, nome: profile?.nome, role: profile?.role, tenant, memberships };
+    const profile = await this.prisma.withTenant(tenantId, (tx) => tx.user.findFirst({ where: { identityId }, select: { nome: true, role: true, permissoes: true } }));
+    // Módulos efetivos (ADR-0045): owner/admin nunca são restritos.
+    const role = memberships.find((m) => m.tenantId === tenantId)?.role ?? profile?.role ?? '';
+    const modulos = papelRestringivel(role) ? modulosDe(profile?.permissoes) : null;
+    return { identityId, email: identity?.email, nome: profile?.nome, role: profile?.role, modulos, tenant, memberships };
   }
 
   /**

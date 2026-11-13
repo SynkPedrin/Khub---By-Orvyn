@@ -1,4 +1,4 @@
-# RAG.md — Especificação Mestre do RAG da Nyro IA (Orvyn)
+# RAG.md — Especificação Mestre do RAG da Nyro IA (KHUB)
 
 > Fonte única de verdade do subsistema de conhecimento. O Claude Code deve ler este arquivo **antes** de escrever qualquer linha de código do módulo `rag`. Versão 1.0 — Julho/2026.
 > Documento fornecido pelo product owner e integrado ao cérebro. Ver [[PRD]] §6 · [[Arquitetura]] · [[Banco]] · [[RegrasNegocio]] · [[Tasks]].

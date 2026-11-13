@@ -6,7 +6,7 @@ Legenda de origem: REAL_DATABASE (lido do banco, rótulo fiel), DERIVED (calcula
 
 ## 1. Separação demo vs real
 
-- `modoDemo()` (`lib/demo/flag.ts:17-23`) retorna `false` sempre que `NODE_ENV === 'production'` e só liga com `NEXT_PUBLIC_ORVYN_DEMO=1`. O dataset (`lib/demo/dataset.ts`, 976 linhas, "R$ 284.500, 432 leads, 92%") é importado diretamente por 8 páginas, apesar do comentário em `dataset.ts:21` dizer que só `lib/revenue/source.ts` o acessa. Em build de produção o bundler ainda inclui o dataset no bundle cliente dessas páginas (peso morto, não vazamento de dado ao usuário).
+- `modoDemo()` (`lib/demo/flag.ts:17-23`) retorna `false` sempre que `NODE_ENV === 'production'` e só liga com `NEXT_PUBLIC_KHUB_DEMO=1`. O dataset (`lib/demo/dataset.ts`, 976 linhas, "R$ 284.500, 432 leads, 92%") é importado diretamente por 8 páginas, apesar do comentário em `dataset.ts:21` dizer que só `lib/revenue/source.ts` o acessa. Em build de produção o bundler ainda inclui o dataset no bundle cliente dessas páginas (peso morto, não vazamento de dado ao usuário).
 - `lib/revenue/source.ts` (`useFonte`) não é usado por nenhuma página (grep em `app` e `components` sem ocorrência). O mecanismo documentado como "único lugar" é código morto; cada página decide por `modoDemo()` isoladamente.
 - Dados "demo" também existem no banco real: o seed `seed-content-demo.mjs` cria tenants com `isDemo=true` e `ClientCard` exibe selo DEMO (`ClientCard.tsx:25`). Isso é separação por dado, correta.
 - Resultado prático: em produção, 6 das 10 telas do menu principal só mostram estado vazio (seção 3). A separação é honesta, porém deixa o produto aparentar incompleto.
@@ -25,7 +25,7 @@ Legenda de origem: REAL_DATABASE (lido do banco, rótulo fiel), DERIVED (calcula
 | Atividade recente | REAL_DATABASE | tabela `activity`, 6 últimas; `tone` ignorado, ícone sempre "info" (`dashboard/page.tsx:183-185`) |
 | Tarefas de hoje | REAL_DATABASE | `crm.tasks('hoje')` |
 | Crescimento de Receita | Estado vazio honesto | sem série histórica (`dashboard/page.tsx:158-164`); não há agregação diária no backend |
-| Insights da IA ORVYN (selo "Beta") | Estado vazio honesto | nenhum dado, apenas link |
+| Insights da IA KHUB (selo "Beta") | Estado vazio honesto | nenhum dado, apenas link |
 | Frase de cabeçalho "Mais conversas. Mais oportunidades. Mais receita." | HARDCODED (copy de marca) | `dashboard/page.tsx:54`; repetida com variações em 7 páginas |
 | Cartão "Plano Pro" na sidebar | HARDCODED | `Sidebar.tsx:133`; plano real do tenant é `starter` (`schema.prisma:47`) |
 
@@ -91,7 +91,7 @@ Conclusão: um dono de agência não entende o produto em 60 segundos; ele só s
 - Nenhum `lorem` ou `TODO` visível ao usuário. `TODO(meta-capabilities)` em `IntegrationsMarketplace.tsx:51` (comentário).
 - Alvo de link falso: `<a href="https://" onClick={preventDefault}>Como ativar o modo demo</a>` (`dashboard/page.tsx:458-466`), em produção, onde o modo demo não pode ligar.
 - `<a href="#">Esqueci a senha</a>` (`LoginForm.tsx:81`); `middleware.ts:12` libera `/esqueci-senha` e `/redefinir-senha`, que não existem em `app/` (404).
-- Texto de desenvolvedor em UI: "Defina NEXT_PUBLIC_ORVYN_DEMO=1" (tooltip), "ligue o modo de demonstração" no vazio do Dashboard, "Configure uma chave em Configurações › IA" (aba inexistente), "a arquitetura de canais já está pronta para eles" (`conversas/page.tsx:574`), nomes de variável de ambiente exibidos ao operador em `ConfigRequiredState`.
+- Texto de desenvolvedor em UI: "Defina NEXT_PUBLIC_KHUB_DEMO=1" (tooltip), "ligue o modo de demonstração" no vazio do Dashboard, "Configure uma chave em Configurações › IA" (aba inexistente), "a arquitetura de canais já está pronta para eles" (`conversas/page.tsx:574`), nomes de variável de ambiente exibidos ao operador em `ConfigRequiredState`.
 - Seletores decorativos: período (Dashboard demo), "Últimos 30 dias", "Todos os Canais", filtros "Todos os owners/valores" no Pipeline demo.
 - Features expostas sem estar prontas: Campanhas, Agenda, Conversas, IA, Perfil do lead, Anúncios com simulador (ver seção 2).
 

@@ -38,8 +38,8 @@ Ao alinhar toda a operação a poucos objetivos claros por trimestre, conectando
 - Sem check-in regular — "definiu e esqueceu".
 - Usar OKR para decisão de remuneração.
 
-## Aplicação no Orvyn
-Para uma clínica, um objetivo trimestral ("ocupar a agenda do procedimento X") vira resultados-chave rastreáveis no dashboard do Orvyn: taxa de ocupação, no-show, ticket médio. A Nyro pode propor os OKRs a partir dos KPIs do template e acompanhar no check-in semanal.
+## Aplicação no KHUB
+Para uma clínica, um objetivo trimestral ("ocupar a agenda do procedimento X") vira resultados-chave rastreáveis no dashboard do KHUB: taxa de ocupação, no-show, ticket médio. A Nyro pode propor os OKRs a partir dos KPIs do template e acompanhar no check-in semanal.
 
 ## Princípio-chave
 Foco é o objetivo do sistema. Poucos objetivos, bem medidos, batem uma lista infinita de metas mornas.

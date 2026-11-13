@@ -1,4 +1,5 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { AtribuicaoService } from '../crm/atribuicao.service';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
 import { CryptoService } from './crypto.service';
@@ -31,6 +32,7 @@ export class MetaLeadsService {
     private readonly crypto: CryptoService,
     private readonly leads: LeadsService,
     @Inject(META_GRAPH) private readonly graph: GraphClient,
+    @Optional() private readonly atribuicao?: AtribuicaoService,
   ) {}
 
   /** Extrai os leadgens do payload do webhook (formato `entry[].changes[]`). */
@@ -77,12 +79,15 @@ export class MetaLeadsService {
       const pageToken = cred.pages?.find(p => p.pageId === ev.pageId)?.accessToken;
       if (!pageToken) return { ok: false, motivo: 'page_token_missing' };
       const lead = await this.buscarLead(ev.leadgenId, pageToken);
-      await this.leads.upsertFromLead(tenantId, {
-        ...lead,
+      const { adId, ...dadosLead } = lead;
+      const r = await this.leads.upsertFromLead(tenantId, {
+        ...dadosLead,
         origem: 'Meta Lead Ads',
         externalId: ev.leadgenId,
         criadoEm: ev.createdTime ? new Date(ev.createdTime * 1000) : undefined,
       });
+      // Origem confirmada: o próprio lead traz o anúncio (db/066).
+      await this.atribuicao?.registrar(tenantId, r.contactId, { fonte: 'meta_ads', canal: 'Formulário Meta', confianca: 'confirmada', em: new Date((ev.createdTime ?? Date.now() / 1000) * 1000).toISOString(), adId, sinal: 'Lead Ads' });
       await this.marcarProcessado(tenantId, ev.leadgenId);
       return { ok: true };
     } catch (e) {
@@ -148,6 +153,7 @@ export class MetaLeadsService {
       email: achar('email', 'e-mail'),
       telefone: achar('phone', 'telefone', 'celular'),
       campos,
+      adId: typeof j.ad_id === 'string' ? j.ad_id : j.ad_id != null ? String(j.ad_id) : undefined,
     };
   }
 }

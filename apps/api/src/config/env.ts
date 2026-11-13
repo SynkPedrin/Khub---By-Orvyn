@@ -4,7 +4,7 @@ import { z } from 'zod';
  *  chave obrigatória (invariante 6). Ver RegrasNegocio.md §6. */
 const schema = z.object({
   NODE_ENV: z.string().default('development'),
-  ORVYN_PROCESS_ROLE: z.enum(['api','worker']).default('api'),
+  KHUB_PROCESS_ROLE: z.enum(['api','worker']).default('api'),
   PORT: z.coerce.number().int().positive().default(3333),
   DATABASE_URL: z.string().url().optional(),
   REDIS_URL: z.string().url().optional(),
@@ -15,7 +15,11 @@ const schema = z.object({
 
   // IA (opcionais — ausência degrada limpo: Nyro 501 / RAG cai p/ BM25)
   ANTHROPIC_API_KEY: z.string().optional(),
+  /** Base da Messages API (padrão https://api.anthropic.com). Só https em produção. */
+  ANTHROPIC_BASE_URL: z.string().url().optional(),
   VOYAGE_API_KEY: z.string().optional(),
+  /** Firecrawl (busca e leitura de páginas da NICO). Ausente = a NICO avisa para conectar. */
+  FIRECRAWL_API_KEY: z.string().optional(),
 
   // Cripto dos tokens OAuth por tenant (AES-256-GCM, 32 bytes base64)
   INTEGRATIONS_ENCRYPTION_KEY: z.string().optional(),
@@ -37,6 +41,10 @@ const schema = z.object({
   GOOGLE_OAUTH_REDIRECT_URI: z.string().optional(),
   TIKTOK_APP_ID: z.string().optional(),
   TIKTOK_APP_SECRET: z.string().optional(),
+  // Conversas omnichannel (db/063): fora de produção, resposta por Instagram,
+  // Messenger e YouTube só sai com isto em 'true' (mesma trava de dev do
+  // WhatsApp: nada vai a pessoa real sem decisão explícita).
+  CANAIS_ENVIO_DEV: z.enum(['true', 'false']).default('false'),
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   STRIPE_PUBLISHABLE_KEY: z.string().optional(),
@@ -51,6 +59,9 @@ const schema = z.object({
   STEVO_WEBHOOK_TOKEN: z.string().optional(),
   STEVO_FALLBACK_TENANT_ID: z.string().optional(), // dev: roteia entrada quando não há integração mapeada
   STEVO_TEST_NUMBER: z.string().optional(), // dev: manda toda saída para este número
+  // Número que recebe TODA mensagem de execução de teste de automação (Testar e
+  // modo simples da NICO). Vale também em produção: teste nunca fala com contato real.
+  AUTOMATION_TEST_PHONE: z.string().optional(),
   // Stevo — API de GESTÃO (https://openapi.stevo.chat/v1): instâncias, envio,
   // webhooks de conta assinados. Chave de conta `stevo_sk_…` (sem restrição de
   // instância, exigida para webhook de conta). Nunca vai ao browser.
@@ -65,6 +76,17 @@ const schema = z.object({
   // anterior vale durante a rotação (overlap).
   STEVO_WEBHOOK_SECRET: z.string().optional(),
   STEVO_WEBHOOK_SECRET_PREVIOUS: z.string().optional(),
+
+  // Storage S3-compatible (R2/AWS/MinIO): anexos do Inbox. Sem as quatro
+  // primeiras, envio de mídia > 5 MB (ou pela Stevo, que só aceita URL)
+  // responde config_required. Endpoint path-style: https://<conta>.r2.cloudflarestorage.com
+  S3_ENDPOINT: z.string().url().optional(),
+  S3_BUCKET: z.string().optional(),
+  S3_ACCESS_KEY_ID: z.string().optional(),
+  S3_SECRET_ACCESS_KEY: z.string().optional(),
+  S3_REGION: z.string().default('auto'),
+  // Base pública do bucket (CDN). Vazio = URLs assinadas (bucket privado).
+  S3_PUBLIC_BASE_URL: z.string().url().optional(),
 
   // E-mail transacional (convites). Sem SMTP_URL o convite volta com link manual.
   SMTP_URL: z.string().optional(),
@@ -87,6 +109,10 @@ const schema = z.object({
   RATE_LIMIT_WINDOW_SEC: z.coerce.number().int().positive().default(60),
   RATE_LIMIT_TENANT_MAX: z.coerce.number().int().positive().default(600), // req/janela por tenant
   RATE_LIMIT_IP_MAX: z.coerce.number().int().positive().default(120),     // req/janela por IP (rotas públicas)
+  // Segredo compartilhado com o web (Next): só com ele a API confia no IP do
+  // visitante repassado pelo proxy das páginas públicas /f e /b (rate limit
+  // por IP real). Sem ele, vale o IP do socket (o do servidor web).
+  KHUB_PROXY_SECRET: z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), z.string().min(16, 'KHUB_PROXY_SECRET deve ter pelo menos 16 caracteres').optional()),
 
   // Observabilidade — só falta plugar o DSN para o Sentry entrar (pacote à parte).
   SENTRY_DSN: z.string().optional(),

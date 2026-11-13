@@ -8,7 +8,7 @@
 3. Depois operação diária (UI que funciona), depois motor, depois polimento.
 
 ## Sprint 0 — Baseline em runtime (pré-requisito)
-- Subir Postgres (pgvector) + Redis dedicados do Orvyn via `docker-compose.yml` do repo, aplicar migrations 000 a 027 em banco novo (nada destrutivo; **requer aprovação**, mexe em infra local).
+- Subir Postgres (pgvector) + Redis dedicados do KHUB via `docker-compose.yml` do repo, aplicar migrations 000 a 027 em banco novo (nada destrutivo; **requer aprovação**, mexe em infra local).
 - Rodar `002_isolation_test.sql`, API, worker, web; smoke no navegador dos 8 cenários.
 - Estender o teste de isolamento a outbox, agenda, financeiro, tags, meta_pages e tabelas de agência (SEC-15, SEC-02).
 - Criar registro de migrations aplicadas.

@@ -98,7 +98,7 @@ async function googleProfile(accessToken: string): Promise<OAuthProfile> {
 }
 
 async function githubProfile(accessToken: string): Promise<OAuthProfile> {
-  const headers = { authorization: `Bearer ${accessToken}`, 'user-agent': 'OrvynOS', accept: 'application/vnd.github+json' };
+  const headers = { authorization: `Bearer ${accessToken}`, 'user-agent': 'KHUB', accept: 'application/vnd.github+json' };
   const u = (await fetch('https://api.github.com/user', { headers }).then((r) => r.json()).catch(() => null)) as { name?: string; login?: string; email?: string } | null;
   let email = u?.email ?? undefined;
   let verified = true;

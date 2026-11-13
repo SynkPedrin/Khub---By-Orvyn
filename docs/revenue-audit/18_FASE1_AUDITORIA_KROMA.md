@@ -1,6 +1,6 @@
 # 18 — Fase 1: auditoria para a operação KROMA
 
-> Data: 2026-11-06. Pedido: "Prompt master — auditoria, hardening e implementação do ORVYN Revenue OS" (Fase 1: diagnóstico e plano antes de alterar código).
+> Data: 2026-11-06. Pedido: "Prompt master — auditoria, hardening e implementação do KHUB Revenue OS" (Fase 1: diagnóstico e plano antes de alterar código).
 > Método: releitura das auditorias 01–17 (14/10) + reverificação do **código atual** em 4 frentes (agência/RBAC/isolamento; WhatsApp/webhooks/credenciais/GHL; CRM/comercial/dashboards; segurança/observabilidade/testes) + checagens diretas feitas nesta sessão (git, banco de dev em modo leitura, API da Stevo com `GET /v1/me`).
 > Convenção de estado: **COMPROVADO** (evidência de runtime ou teste real) · **POR LEITURA** (código existe e parece correto, sem prova de ponta a ponta) · **PARCIAL** · **SÓ UI** · **DEMO** · **INEXISTENTE** · **DEFEITO**.
 
@@ -39,8 +39,8 @@ Browser ──► Next.js 14 (apps/web, :3210)
            PostgreSQL 16 + pgvector (RLS FORCE nas tabelas de negócio; agência SEM RLS)
                   │ triggers SQL → outbox_events
                   ▼
-           Worker (mesmo código, ORVYN_PROCESS_ROLE=worker) ── BullMQ/Redis
-             filas: orvyn-maintenance (reconcile 5 s), automation-triggers, automation-steps,
+           Worker (mesmo código, KHUB_PROCESS_ROLE=worker) ── BullMQ/Redis
+             filas: khub-maintenance (reconcile 5 s), automation-triggers, automation-steps,
              agent-replies, ads-sync, rag-ingestion
                   │
                   ▼
@@ -236,12 +236,12 @@ Limites: 100 req/10 s por PIT por location; 200 mil/dia por location; 429 sem `R
 ### 12.1 Resultado do inventário (2026-11-06, só leitura)
 - Location ID recebido; `GET /locations/{id}` com `Version: v3` → **200**: subconta **"Studio da Beleza"**, fuso `America/Sao_Paulo`.
 - `POST /contacts/search` → **401** "The token is not authorized for this scope". `GET /conversations/messages/export` → **401** (mesmo motivo). O PIT só tem o escopo de location.
-- Observação técnica: o Cloudflare do GHL bloqueia clientes HTTP sem User-Agent de navegador/cliente (erro 1010); o extrator usa `User-Agent: orvyn-migracao/1.0`.
+- Observação técnica: o Cloudflare do GHL bloqueia clientes HTTP sem User-Agent de navegador/cliente (erro 1010); o extrator usa `User-Agent: khub-migracao/1.0`.
 - **Para seguir:** editar o PIT no GHL (Settings → Private Integrations) e liberar **somente leitura**: `contacts.readonly`, `conversations/message.readonly` (confirmados na documentação) e, conforme a documentação de cada rota, os de leitura de conversas, oportunidades, funis, campos/tags, usuários, workflows e Conversation AI. Nenhum escopo de escrita.
 
 ### 12.2 Limpeza e estado de partida (2026-11-06)
 - **Contas demo apagadas** (pedido do product owner): 3 tenants `is_demo` (Vitta Prime, Helios, Forma Casa), a conta de demonstração `demo@orvyn.local` (Clínica Aurora) e 2 contas de QA `@teste.invalido` — 6 tenants, 6 identidades, 583 eventos de fila. Backup completo do banco antes (`pg_dump -Fc`, fora do repositório). Trigger de imutabilidade do `audit_logs` desligado só dentro da transação e religado (verificado ATIVO).
-- Ficam: `Sua Empresa` (tenant de fallback do webhook Stevo), `Destino Ads`, `ORVYN Revenue OS`, `Orvyn IA` + agência "Pedro Gabriel".
+- Ficam: `Sua Empresa` (tenant de fallback do webhook Stevo), `Destino Ads`, `KHUB Revenue OS`, `KHUB IA` + agência "Pedro Gabriel".
 - **Stevo (`GET /v1/instances`, leitura):** 2 instâncias SM v2 na conta — `studio-da-beleza` (**conectada**, perfil "Studio da Beleza") e `dra-barbara-lopes` (inativa, desconectada). O WhatsApp do cliente que opera no GHL **já está pareado na Stevo**: não é preciso QR.
 
 ### 12.3 Corte do inbox sem derrubar o GHL

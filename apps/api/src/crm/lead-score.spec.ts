@@ -2,7 +2,7 @@ import { calcularScore, faixaDoScore, PESOS, SCORE_VERSION, type SinaisLead } fr
 
 const AGORA = new Date('2026-09-20T12:00:00Z');
 
-describe('Score ORVYN v0', () => {
+describe('Score KHUB v0', () => {
   it('lead sem nenhum sinal não é "frio": é "sem_sinal"', () => {
     // Regra de produto: lead recém-criado não pode ser punido por ausência de
     // dado. Pintar de frio faria o vendedor despriorizar quem acabou de chegar.

@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import { Icon, type IconName } from '@/components/icons';
 import { Avatar, cx } from '@/components/ui';
 import { PageShell } from '@/components/revenue/Page';
@@ -42,30 +43,26 @@ const ABAS = [
 
 type Aba = (typeof ABAS)[number]['chave'];
 
+function RedirecionarParaContato() {
+  const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  useEffect(() => {
+    router.replace(`/contatos/${encodeURIComponent(id)}`);
+  }, [id, router]);
+  return (
+    <PageShell>
+      <p className="py-16 text-center text-sm text-muted" role="status">Abrindo o perfil do contato…</p>
+    </PageShell>
+  );
+}
+
 export default function LeadPerfilPage() {
   const [aba, setAba] = useState<Aba>('visao');
   const demo = modoDemo();
 
-  if (!demo) {
-    return (
-      <PageShell>
-        <Migalhas nome="Lead" />
-        <div className="card mt-4">
-          <EmptyState
-            icon="leads"
-            title="Lead não encontrado"
-            description="Este perfil ainda não tem dados. Conecte um canal de entrada ou cadastre o lead para vê-lo aqui."
-            action={
-              <Link href="/leads" className="btn btn-sm">
-                <Icon name="arrowLeft" size={15} />
-                Voltar para Leads
-              </Link>
-            }
-          />
-        </div>
-      </PageShell>
-    );
-  }
+  // Modo real: o lead É o contato (mesmo id). O perfil 360 real vive em
+  // /contatos/[id]; aqui só havia "Lead não encontrado" (Q2.2).
+  if (!demo) return <RedirecionarParaContato />;
 
   const lead = LEAD_PERFIL;
 

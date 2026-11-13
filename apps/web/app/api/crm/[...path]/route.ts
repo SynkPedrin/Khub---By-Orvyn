@@ -16,7 +16,8 @@ async function forward(req: NextRequest, path: string[]) {
     method: req.method,
     headers: { 'content-type': 'application/json', authorization: `Bearer ${at}`, ...(req.headers.get('idempotency-key') ? {'idempotency-key': req.headers.get('idempotency-key')!} : {}) },
     cache: 'no-store',
-    signal: AbortSignal.timeout(25_000),
+    // Mídia do Inbox (até 15 MB: storage + provedor) leva mais que uma chamada comum.
+    signal: AbortSignal.timeout(path[path.length - 1] === 'midia' ? 120_000 : 25_000),
   };
   if (req.method !== 'GET' && req.method !== 'HEAD') init.body = await req.text();
 

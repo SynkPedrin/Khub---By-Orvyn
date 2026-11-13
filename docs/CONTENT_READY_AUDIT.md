@@ -65,7 +65,7 @@ explicitamente.
   dado que não há snapshot histórico de receita; não é um bug, é um empty
   state genuíno. Fora de escopo desta rodada (exigiria um novo modelo de
   série temporal, não coberto pelo brief).
-- "Insights da IA ORVYN" vazio — idem, não inventar.
+- "Insights da IA KHUB" vazio — idem, não inventar.
 
 ## Pipeline (Helios, amostra)
 

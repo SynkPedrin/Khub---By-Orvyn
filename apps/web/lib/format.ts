@@ -53,6 +53,7 @@ export function percentual(valor: number | null | undefined, casas = 0, jaEmPont
 export function duracao(minutos: number | null | undefined): string {
   if (minutos == null || !Number.isFinite(minutos) || minutos < 0) return '-';
   if (minutos < 1) return 'menos de 1 min';
+  minutos = Math.round(minutos);
   if (minutos < 60) return `${Math.round(minutos)} min`;
   if (minutos < 60 * 24) {
     const h = Math.floor(minutos / 60);
@@ -135,4 +136,10 @@ export function saudacao(agora = new Date()): string {
 export function primeiroNome(nome: string | null | undefined): string {
   if (!nome) return '';
   return nome.trim().split(/\s+/)[0] ?? '';
+}
+
+/** Custos do provedor são em USD; não aplicar conversão implícita para BRL. */
+export function dolar(valor: number | null | undefined): string {
+  if (valor == null || !Number.isFinite(valor)) return '-';
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(valor);
 }

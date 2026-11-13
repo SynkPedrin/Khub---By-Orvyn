@@ -28,6 +28,21 @@ export interface ClienteAgencia {
   ultimaAtividadeEm: string | null;
 }
 
+/** Item do seletor de subcontas da sidebar (leve, sem métricas — `GET /agency/switcher`). */
+export interface SubcontaSeletor {
+  id: string;
+  tenantId: string;
+  nome: string;
+  status: 'active' | 'paused' | 'archived';
+  isDemo: boolean;
+  /** Endereço cadastrado no tenant (linha de baixo do card, como no GHL). */
+  endereco: string | null;
+  /** Fixada pelo próprio usuário: vai para o topo de "Todas as contas". */
+  fixado: boolean;
+  /** Último "entrar" desta pessoa na subconta: alimenta "Recentes". */
+  ultimoAcessoEm: string | null;
+}
+
 export interface DetalheClienteAgencia extends ClienteAgencia {
   tenant: { id: string; nome: string; nicho: string | null; status: string; createdAt: string } | null;
   overview: unknown;
@@ -45,6 +60,8 @@ export interface MembroAgencia {
   email: string;
   role: string;
   createdAt: string;
+  /** Restrições de subconta. [] = acesso global (todas as subcontas). */
+  clientIds: string[];
 }
 
 export const agency = {
@@ -56,8 +73,15 @@ export const agency = {
   /** `null` se a identidade não pertence a nenhuma agência — caminho normal pra cliente direto (seção 28). */
   meuContexto: () => req<MeuContextoAgencia | null>('agency'),
   listarClientes: () => req<ClienteAgencia[]>('agency/clients'),
+  /** Lista leve do seletor de subcontas (com fixadas e recentes do usuário). */
+  seletor: () => req<SubcontaSeletor[]>('agency/switcher'),
+  fixar: (id: string, fixado: boolean) => req<{ ok: true; fixado: boolean }>(`agency/clients/${id}/pin`, { method: 'PATCH', body: JSON.stringify({ fixado }) }),
   overview: () => req<AgenciaOverview>('agency/overview'),
   listarMembros: () => req<MembroAgencia[]>('agency/members'),
+  /** Edita papel e/ou visibilidade de subcontas do membro (estilo GHL). */
+  atualizarMembro: (id: string, input: { role?: 'admin' | 'member' | 'viewer'; clientIds?: string[] }) =>
+    req<{ ok: true }>(`agency/members/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  removerMembro: (id: string) => req<{ ok: true }>(`agency/members/${id}`, { method: 'DELETE' }),
   detalheCliente: (id: string) => req<DetalheClienteAgencia>(`agency/clients/${id}`),
   criarCliente: (input: { nome: string; nicho?: string }) =>
     req<{ id: string; tenantId: string }>('agency/clients', { method: 'POST', body: JSON.stringify(input) }),

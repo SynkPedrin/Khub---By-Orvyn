@@ -67,4 +67,4 @@ Notas antigas em 01. Escala 0 a 5.
 4. **Stack de QA no CI:** posso transformar `docker-compose.qa.yml` + `scripts/qa/*` em job de CI?
 
 ## Como reproduzir tudo
-`docker compose -p orvyn-qa -f docker-compose.qa.yml up -d` → aplicar migrations em ordem (ver 14 §2) → criar `apps/api/.env.qa` (ver 13 §2) → subir API/worker/front → `node apps/api/scripts/qa/scenarios.mjs main` → `webhook-proxy.mjs` → `browser.mjs` (exige `playwright-core` e Chrome) → `psql ... -f apps/api/scripts/qa/rls-matrix.sql` como `orvyn_app`. Evidências em `docs/revenue-audit/evidence/` (tokens de QA em `*-state.json` são ignorados pelo git).
+`docker compose -p orvyn-qa -f docker-compose.qa.yml up -d` → aplicar migrations em ordem (ver 14 §2) → criar `apps/api/.env.qa` (ver 13 §2) → subir API/worker/front → `node apps/api/scripts/qa/scenarios.mjs main` → `webhook-proxy.mjs` → `browser.mjs` (exige `playwright-core` e Chrome) → `psql ... -f apps/api/scripts/qa/rls-matrix.sql` como `khub_app`. Evidências em `docs/revenue-audit/evidence/` (tokens de QA em `*-state.json` são ignorados pelo git).

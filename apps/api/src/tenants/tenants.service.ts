@@ -23,7 +23,7 @@ export class TenantsService {
 
   /** Cria tenant + membership owner + perfil + funil default. Atômico por tenant. */
   async provision(input: ProvisionInput): Promise<{ id: string; nome: string }> {
-    // tenants não tem RLS; INSERT liberado ao orvyn_app (db/004).
+    // tenants não tem RLS; INSERT liberado ao khub_app (db/004).
     const tenant = await this.prisma.tenant.create({
       data: { nome: input.empresa?.trim() || 'Minha Empresa', plano: 'starter', status: 'active', nicho: input.nicho ?? null },
       select: { id: true, nome: true },

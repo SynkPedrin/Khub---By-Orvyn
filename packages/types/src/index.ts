@@ -1,4 +1,4 @@
-// Contratos compartilhados do Orvyn. Espelham os enums/entidades de db/*.sql.
+// Contratos compartilhados do KHUB. Espelham os enums/entidades de db/*.sql.
 // Fonte da verdade do schema: db/001_rag_schema.sql. Ver Nyro IA/cerebro/Banco.md.
 
 export type RagEscopo = 'global' | 'nicho' | 'sub' | 'tenant';
@@ -49,6 +49,18 @@ export interface ProblemDetails {
 /** Quem responde a conversa agora: um agente de IA ou um humano (ADR-0030). */
 export type AtendimentoConversa = 'ia' | 'humano';
 
+/** Payload dos eventos de agenda (outbox, migration 054). */
+export interface AppointmentEvent {
+  id: string;
+  contactId: string | null;
+  responsavelId: string | null;
+  tipo: string;
+  status: string;
+  inicio: string;
+  fim: string;
+  statusAnterior?: string;
+}
+
 export interface RealtimeEvents {
   'message.created': {
     conversationId: string;
@@ -78,6 +90,31 @@ export interface RealtimeEvents {
   'deal.status_changed': { id: string; status: string; contactId: string | null };
   'contact.created': { id: string; nome: string; origem: string };
   'contact.tagged': { id: string; tag: string };
+  /** Estrutura do funil mudou (funil/etapa criada, renomeada, reordenada ou apagada). */
+  'pipeline.updated': { id: string };
+  /** Proposta criada/alterada (ADR-0042). `status` = rascunho|enviada|aceita|recusada|expirada|cancelada. */
+  'proposal.updated': { id: string; status: string; dealId: string | null; contactId: string | null };
+  /** Nota interna criada numa conversa (db/055 · Q2.5). Só ids: o corpo vem pela API. */
+  'conversation.note_created': { conversationId: string; id: string };
+  /** Notificação persistida para UM membro (db/055 · Q2.6). O cliente filtra pelo próprio id. */
+  'notification.created': { id: string; paraIdentityId: string };
+  /**
+   * Agenda (migration 054): nascem no outbox pelo trigger `khub_agenda_outbox`.
+   * `reminder_due` = a varredura D-1 marcou o lembrete do compromisso.
+   */
+  'appointment.created': AppointmentEvent;
+  'appointment.confirmed': AppointmentEvent;
+  'appointment.no_show': AppointmentEvent;
+  'appointment.cancelled': AppointmentEvent;
+  'appointment.reminder_due': AppointmentEvent;
+  /**
+   * Formulário enviado (Q3.2 · contrato para a Q4.1): o módulo de formulários
+   * publica no outbox com o contato já criado/atualizado. `respostas` vira
+   * `{{formulario.<campo>}}` no fluxo.
+   */
+  'form.submitted': { formId: string; contactId: string; respostas: Record<string, unknown> };
+  /** Cobrança virou paga (db/057, trigger `khub_cobranca_outbox`). Valor em centavos. */
+  'payment.received': { id: string; contactId: string | null; dealId: string | null; valorCentavos: number; moeda: string; descricao: string; pagoEm: string };
   /** Execução de automação ao vivo (Sprint E): alimenta a timeline da run. */
   'automation.run': { runId: string; workflowId: string; nodeId: string; status: string };
 }

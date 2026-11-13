@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { camposDe, validarCamposNaTransacao } from './custom-fields.service';
 
 export interface CompanyInput {
   nome: string;
@@ -10,6 +11,8 @@ export interface CompanyInput {
   segmento?: string;
   tamanho?: string;
   site?: string;
+  /** Campos personalizados (Q2.3): validados pelas definições; no update, mesclados. */
+  camposCustom?: Record<string, unknown>;
 }
 
 const num = (d: Prisma.Decimal | number | null | undefined): number => (d == null ? 0 : Number(d));
@@ -61,6 +64,7 @@ export class CompaniesService {
       return {
         id: c.id, nome: c.nome, dominio: c.dominio, telefone: c.telefone, endereco: c.endereco,
         segmento: c.segmento, tamanho: c.tamanho, site: c.site, createdAt: c.createdAt,
+        camposCustom: camposDe(c.camposCustom),
         contatos: c.contacts,
         negocios: deals.map((d) => ({ id: d.id, titulo: d.titulo, valor: num(d.valor), status: d.status, stage: d.stage?.nome ?? '', cor: d.stage?.cor ?? '#8b5cf6', contato: d.contact?.nome ?? null })),
         valorAberto: deals.filter((d) => d.status === 'aberto').reduce((s, d) => s + num(d.valor), 0),
@@ -74,9 +78,13 @@ export class CompaniesService {
     return this.prisma.withTenant(tenantId, async (tx) => {
       const dup = await tx.company.findFirst({ where: { nome: { equals: input.nome, mode: 'insensitive' } }, select: { id: true } });
       if (dup) throw new ConflictException('já existe uma empresa com esse nome');
+      const camposCustom = input.camposCustom
+        ? await validarCamposNaTransacao(tx, 'company', input.camposCustom, { exigirObrigatorios: true })
+        : undefined;
       const c = await tx.company.create({
         data: {
           tenantId,
+          ...(camposCustom ? { camposCustom: camposCustom as Prisma.InputJsonValue } : {}),
           nome: input.nome,
           dominio: input.dominio ?? null,
           telefone: input.telefone ?? null,
@@ -94,8 +102,11 @@ export class CompaniesService {
 
   async update(tenantId: string, id: string, input: Partial<CompanyInput>) {
     return this.prisma.withTenant(tenantId, async (tx) => {
-      const atual = await tx.company.findUnique({ where: { id }, select: { nome: true } });
+      const atual = await tx.company.findUnique({ where: { id }, select: { nome: true, camposCustom: true } });
       if (!atual) throw new NotFoundException('empresa inexistente');
+      const camposCustom = input.camposCustom
+        ? await validarCamposNaTransacao(tx, 'company', input.camposCustom, { atuais: camposDe(atual.camposCustom), exigirObrigatorios: true })
+        : undefined;
       if (input.nome && input.nome.toLowerCase() !== atual.nome.toLowerCase()) {
         const dup = await tx.company.findFirst({ where: { nome: { equals: input.nome, mode: 'insensitive' } }, select: { id: true } });
         if (dup) throw new ConflictException('já existe uma empresa com esse nome');
@@ -110,6 +121,7 @@ export class CompaniesService {
           segmento: input.segmento === undefined ? undefined : input.segmento || null,
           tamanho: input.tamanho === undefined ? undefined : input.tamanho || null,
           site: input.site === undefined ? undefined : input.site || null,
+          camposCustom: (camposCustom as Prisma.InputJsonValue | undefined) ?? undefined,
           updatedAt: new Date(),
         },
       });

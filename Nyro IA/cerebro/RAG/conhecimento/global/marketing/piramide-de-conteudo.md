@@ -28,7 +28,7 @@ Ao montar uma máquina de conteúdo eficiente, sem cair na armadilha de "produzi
 - Crie uma vez, distribua em todo lugar: cada peça-pilar deve gerar 10+ derivadas nos canais.
 - Regra da distribuição: gaste 20% do esforço criando e 80% distribuindo. O melhor conteúdo do mundo é inútil se ninguém vê.
 
-## Aplicação no Orvyn
+## Aplicação no KHUB
 Para uma clínica, uma peça-pilar (ex.: vídeo do médico explicando um procedimento) vira dezenas de cortes para Reels, trechos para e-mail de nutrição e imagens para o funil de consideração. A Nyro pode gerar as derivadas a partir do pilar e agendar a distribuição.
 
 ## Princípio-chave

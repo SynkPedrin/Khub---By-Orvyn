@@ -2,7 +2,7 @@
  * CONTRATO DE PROVEDOR DE MENSAGERIA
  * ==================================
  *
- * O domínio da ORVYN fala "enviar mensagem para este contato". Ele não sabe
+ * O domínio da KHUB fala "enviar mensagem para este contato". Ele não sabe
  * — e não pode saber — se por trás está Evolution/Stevo, Meta Cloud API,
  * Instagram ou e-mail.
  *
@@ -30,6 +30,21 @@ export interface MensagemSaida {
   /** Chave de idempotência: o mesmo valor NUNCA deve gerar dois envios. */
   idempotencyKey?: string;
   anexos?: { url: string; tipo: string; nome?: string }[];
+}
+
+/**
+ * Mídia de saída (Q2.5). Exatamente UM transporte: `url` (o provedor baixa —
+ * vem do storage, assinada) ou `base64` (sem prefixo `data:`; só para quem
+ * declara `aceitaBase64`). O provedor nunca recebe os dois.
+ */
+export type TipoMidia = 'imagem' | 'documento' | 'audio';
+export interface MidiaSaida {
+  tipo: TipoMidia;
+  mime: string;
+  nome: string;
+  legenda?: string;
+  url?: string;
+  base64?: string;
 }
 
 export interface ResultadoEnvio {
@@ -88,6 +103,14 @@ export interface MessagingProviderV2 {
 
   /** Traduz o payload do provedor para o formato do domínio. */
   receiveWebhook(corpo: unknown): ResultadoWebhook;
+
+  /**
+   * Envia mídia. Opcional: só implementa quem tem o endpoint DOCUMENTADO
+   * (Evolution: `POST /message/sendMedia/{instância}`; Stevo API:
+   * `POST /v1/instances/{id}/messages` com `media_url`). Ausente = o canal
+   * não envia mídia e o domínio recusa antes de gravar.
+   */
+  sendMedia?(destino: DestinoMensagem, midia: MidiaSaida, idempotencyKey?: string): Promise<ResultadoEnvio>;
 
   /** Marca como lida no provedor. Opcional: nem todo canal suporta. */
   markAsRead?(destino: DestinoMensagem, providerId: string): Promise<void>;

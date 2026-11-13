@@ -33,3 +33,7 @@ apps/web/.next-*/
 # Os relatórios .md em docs/revenue-audit/ são versionados.
 docs/revenue-audit/evidence/
 apps/web/docs/lp-qa/
+
+# Builds de verificação locais (QA/simulador/deploy): artefato, não código.
+apps/api/dist-*/
+apps/api/.dist-*/

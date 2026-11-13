@@ -2,7 +2,7 @@
 
 ## Evidências e causa
 
-- Evolution local v2.3.7 respondeu HTTP 200 e gerou QR PNG real para a instância ORVYN existente. Nenhum token ou QR foi gravado neste relatório.
+- Evolution local v2.3.7 respondeu HTTP 200 e gerou QR PNG real para a instância KHUB existente. Nenhum token ou QR foi gravado neste relatório.
 - A integração afetada estava persistida como `conectando`. O marketplace considerava a existência do registro suficiente para mostrar `Conectado`.
 - O modal buscava QR uma única vez. Se a primeira resposta não contivesse imagem, os polls seguintes buscavam apenas estado; a imagem não poderia chegar à tela.
 - O backend descartava o QR de criação e anunciava `aguardando_qr` mesmo com QR vazio.

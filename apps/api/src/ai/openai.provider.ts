@@ -5,8 +5,11 @@ import {
   causaPorStatus,
   ErroProvedorIA,
   type AIProvider,
+  type EntradaConversa,
   type EntradaGeracao,
+  type ModeloCatalogo,
   type PapelModelo,
+  type RespostaConversa,
   type RespostaIA,
   type ToolIA,
 } from './provider.contract';
@@ -19,9 +22,9 @@ import {
  *   - OpenAI:  https://api.openai.com/v1
  *   - Ollama:  http://localhost:11434/v1  (modelos locais, sem custo por token)
  *
- * Existe para provar que a abstração `AIProvider` é real: o domínio roda
- * igual com Anthropic ou com isto, sem uma linha alterada. Não é o caminho
- * padrão do produto — o padrão segue sendo Anthropic.
+ * Além do contrato `AIProvider` (`generate`/`toolCall`), implementa
+ * `conversar` (multi-turno com tools) e `modelosDisponiveis`: com
+ * `AI_PROVIDER=openai`, o criador de agentes inteiro roda neste adapter.
  *
  * Env:
  *   OPENAI_API_KEY   obrigatório (Ollama aceita qualquer valor, ex.: "ollama")
@@ -55,24 +58,46 @@ export class OpenAiProvider implements AIProvider {
       : process.env.OPENAI_MODEL_AGENTE || 'gpt-4o';
   }
 
-  async generate(input: EntradaGeracao): Promise<RespostaIA> {
+  /**
+   * Modelo efetivo para uma conversa. Ids de outro fornecedor (ex.: agentes
+   * criados com `claude-*` antes da troca para Ollama) caem no modelo padrão
+   * configurado — pedir um id que o servidor local não tem seria 400/404
+   * garantido em toda mensagem.
+   */
+  private resolverModelo(modelo: string): string {
+    if (!modelo || modelo.startsWith('claude')) {
+      const padrao = this.modeloPara('agente');
+      if (modelo) this.log.warn(`modelo "${modelo}" não existe neste provedor; usando ${padrao}`);
+      return padrao;
+    }
+    return modelo;
+  }
+
+  async conversar(input: EntradaConversa): Promise<RespostaConversa> {
     if (!this.configured()) {
       throw new ErroProvedorIA('OPENAI_API_KEY ausente', 'credencial', this.nome);
     }
 
-    const modelo = this.modeloPara(input.papel);
+    const modelo = this.resolverModelo(input.modelo);
 
     const corpo: Record<string, unknown> = {
       model: modelo,
-      max_tokens: input.maxTokens ?? 2048,
+      // Modelos locais com "thinking" (qwen, etc.) consomem o raciocínio
+      // DENTRO do teto de tokens: tetos baixos (ex.: 400) voltam com texto
+      // vazio. Token local é grátis — o piso garante resposta sem mudar o
+      // comportamento para APIs pagas.
+      max_tokens: this.ehLocal() ? Math.max(input.maxTokens ?? 2048, 2000) : input.maxTokens ?? 2048,
       temperature: input.temperatura ?? 0.3,
       // O dialeto OpenAI trata o system prompt como a primeira mensagem.
-      messages: [{ role: 'system', content: input.system }, ...input.mensagens.map(paraMensagemOpenAI)],
+      messages: [{ role: 'system', content: input.system }, ...input.mensagens.flatMap(paraMensagensOpenAI)],
     };
 
     if (input.tools?.length) {
       corpo.tools = input.tools.map(paraToolOpenAI);
       corpo.tool_choice = 'auto';
+    }
+    if (input.jsonSchema) {
+      corpo.response_format = { type: 'json_schema', json_schema: { name: 'saida', schema: input.jsonSchema } };
     }
 
     const res = await this.circuito.run(async () => {
@@ -83,6 +108,7 @@ export class OpenAiProvider implements AIProvider {
           authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         },
         body: JSON.stringify(corpo),
+        ...(input.timeoutMs ? { signal: AbortSignal.timeout(input.timeoutMs) } : {}),
       });
       // Só 5xx abre o circuito: 4xx é problema da requisição, não do serviço.
       if (r.status >= 500) {
@@ -109,15 +135,70 @@ export class OpenAiProvider implements AIProvider {
     const entrada = j.usage?.prompt_tokens ?? 0;
     const saida = j.usage?.completion_tokens ?? 0;
     const cache = j.usage?.prompt_tokens_details?.cached_tokens ?? 0;
+    const modeloUsado = j.model ?? modelo;
+
+    // Blocos no formato neutro (Anthropic-like): o loop de tools do domínio
+    // devolve isto intacto como turno do assistente, e o tradutor acima
+    // reconhece esse formato na próxima volta.
+    const blocos: unknown[] = [];
+    const texto = (escolha?.message?.content ?? '').trim();
+    if (texto) blocos.push({ type: 'text', text: texto });
+    for (const t of toolCalls) blocos.push({ type: 'tool_use', id: t.id, name: t.nome, input: t.args });
 
     return {
-      texto: (escolha?.message?.content ?? '').trim(),
+      texto,
       toolCalls,
       pararPor: normalizarParada(escolha?.finish_reason),
-      modelo: j.model ?? modelo,
-      provedor: this.nome,
-      uso: { entrada, saida, cache, custoUsd: this.custo(j.model ?? modelo, entrada, saida, cache) },
+      modelo: modeloUsado,
+      uso: { entrada, saida, cache, custoUsd: this.custo(modeloUsado, entrada, saida, cache) },
+      blocos,
     };
+  }
+
+  /**
+   * Modelos selecionáveis no criador de agentes. Com base URL local (Ollama),
+   * lista o que está instalado de verdade (`/api/tags`); sem isso, devolve os
+   * modelos OpenAI padrão. Local = sem custo por token: preço 0, nunca
+   * inventado.
+   */
+  async modelosDisponiveis(): Promise<ModeloCatalogo[]> {
+    if (!this.ehLocal()) return MODELOS_OPENAI;
+
+    try {
+      const origem = this.baseUrl.replace(/\/v1\/?$/, '');
+      const r = await fetch(`${origem}/api/tags`, { signal: AbortSignal.timeout(2_000) });
+      if (!r.ok) throw new Error(`Ollama /api/tags ${r.status}`);
+      const j = (await r.json()) as { models?: { name: string }[] };
+      const instalados = (j.models ?? []).map((m) => m.name).filter(Boolean);
+      if (!instalados.length) throw new Error('Ollama sem modelos instalados');
+      return instalados.map((id) => ({
+        id,
+        nome: id,
+        descricao: 'Modelo local via Ollama — sem custo por token.',
+        entradaUsdPorMilhao: 0,
+        saidaUsdPorMilhao: 0,
+      }));
+    } catch (e) {
+      this.log.warn(`não foi possível listar modelos do Ollama: ${(e as Error).message}; usando env`);
+      const id = this.modeloPara('agente');
+      return [{ id, nome: id, descricao: 'Modelo local via Ollama (configurado por env) — sem custo por token.', entradaUsdPorMilhao: 0, saidaUsdPorMilhao: 0 }];
+    }
+  }
+
+  private ehLocal(): boolean {
+    return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?\//.test(this.baseUrl);
+  }
+
+  async generate(input: EntradaGeracao): Promise<RespostaIA> {
+    const r = await this.conversar({
+      modelo: this.modeloPara(input.papel),
+      system: input.system,
+      mensagens: input.mensagens,
+      tools: input.tools,
+      maxTokens: input.maxTokens,
+      temperatura: input.temperatura,
+    });
+    return { ...r, provedor: this.nome };
   }
 
   toolCall(input: EntradaGeracao & { tools: ToolIA[] }): Promise<RespostaIA> {
@@ -140,12 +221,66 @@ const PRECO: Record<string, { entrada: number; saida: number; cache: number }> =
   'gpt-4o-mini': { entrada: 0.15, saida: 0.6, cache: 0.075 },
 };
 
+const MODELOS_OPENAI: ModeloCatalogo[] = [
+  { id: 'gpt-4o', nome: 'GPT-4o', descricao: 'O mais capaz da OpenAI. Para venda consultiva e casos que exigem julgamento.', entradaUsdPorMilhao: 2.5, saidaUsdPorMilhao: 10 },
+  { id: 'gpt-4o-mini', nome: 'GPT-4o mini', descricao: 'Rápido e econômico. Para triagem e perguntas frequentes.', entradaUsdPorMilhao: 0.15, saidaUsdPorMilhao: 0.6 },
+];
+
 /* ------------------------------------------------------------------ */
 /* Tradução entre o formato neutro e o dialeto OpenAI                  */
 /* ------------------------------------------------------------------ */
 
-function paraMensagemOpenAI(m: { role: string; content: unknown }): Record<string, unknown> {
-  return { role: m.role, content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) };
+interface BlocoNeutro {
+  type?: string;
+  text?: string;
+  id?: string;
+  name?: string;
+  input?: Record<string, unknown>;
+  tool_use_id?: string;
+  is_error?: boolean;
+  content?: unknown;
+}
+
+/**
+ * Uma mensagem neutra pode virar VÁRIAS mensagens OpenAI (cada `tool_result`
+ * vira uma mensagem `role: 'tool'` própria). Por isso o tradutor devolve um
+ * array e quem chama usa `flatMap`.
+ *
+ * Formatos reconhecidos no `content`:
+ * - string → repassada como está;
+ * - turno do assistente com blocos neutros (text + tool_use) → mensagem
+ *   `assistant` com `tool_calls`;
+ * - turno `user` com blocos `tool_result` → uma mensagem `tool` por bloco.
+ */
+function paraMensagensOpenAI(m: { role: string; content: unknown }): Record<string, unknown>[] {
+  if (typeof m.content === 'string' || !Array.isArray(m.content)) {
+    return [{ role: m.role, content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }];
+  }
+
+  const blocos = m.content as BlocoNeutro[];
+  const resultadosTool = blocos.filter((b) => b?.type === 'tool_result');
+  if (resultadosTool.length) {
+    return resultadosTool.map((b) => ({
+      role: 'tool',
+      tool_call_id: b.tool_use_id,
+      content: typeof b.content === 'string' ? b.content : JSON.stringify(b.content ?? ''),
+    }));
+  }
+
+  if (m.role === 'assistant') {
+    const texto = blocos.filter((b) => b?.type === 'text').map((b) => b.text ?? '').join('\n');
+    const toolCalls = blocos
+      .filter((b) => b?.type === 'tool_use')
+      .map((b, i) => ({
+        id: b.id ?? `call_${i}`,
+        type: 'function',
+        function: { name: b.name, arguments: JSON.stringify(b.input ?? {}) },
+      }));
+    return [{ role: 'assistant', content: texto || null, ...(toolCalls.length ? { tool_calls: toolCalls } : {}) }];
+  }
+
+  const texto = blocos.map((b) => b?.text ?? '').filter(Boolean).join('\n');
+  return [{ role: m.role, content: texto }];
 }
 
 function paraToolOpenAI(t: ToolIA): Record<string, unknown> {

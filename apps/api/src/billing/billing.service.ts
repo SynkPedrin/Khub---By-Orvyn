@@ -7,7 +7,7 @@ export type Plano = 'starter' | 'growth' | 'scale';
 const PLANOS: Plano[] = ['starter', 'growth', 'scale'];
 
 /**
- * Assinatura do PRÓPRIO Orvyn (billing da plataforma) — não confundir com
+ * Assinatura do PRÓPRIO KHUB (billing da plataforma) — não confundir com
  * `FinanceiroService` (o tenant cobrando OS CLIENTES dele).
  *
  * Preço não é decisão de engenharia: o PRD (§17) marca LACUNA explícita —
@@ -83,7 +83,7 @@ export class BillingService {
     form.set('cancel_url', `${webUrl}/configuracoes/plano?cancelado=1`);
     form.set('line_items[0][quantity]', '1');
     form.set('line_items[0][price]', price);
-    form.set('metadata[kind]', 'orvyn_subscription');
+    form.set('metadata[kind]', 'khub_subscription');
     form.set('metadata[tenant_id]', tenantId);
     form.set('metadata[plano]', plano);
     // Replicado na subscription pela própria Stripe — assim TODO evento de

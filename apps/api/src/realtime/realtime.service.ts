@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { RealtimeEvent, RealtimeEvents } from '@orvyn/types';
+import type { RealtimeEvent, RealtimeEvents } from '@khub/types';
 import { EventsGateway } from './events.gateway';
 
 /**

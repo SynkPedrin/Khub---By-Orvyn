@@ -14,23 +14,26 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest, { params }: { params: { chave: string } }) {
   const corpo = await req.text();
 
+  // Repasse fiel (W5): a API deduplica pela Idempotency-Key do remetente e, sem
+  // ela, pelo conteúdo numa janela de 10 min — por isso NÃO inventamos uma chave
+  // aqui. A assinatura X-KHUB-Signature vai junto e o corpo segue byte a byte
+  // (o HMAC é calculado sobre ele).
+  const headers: Record<string, string> = { 'content-type': req.headers.get('content-type') ?? 'application/json' };
+  const chave = req.headers.get('idempotency-key');
+  // Sem cortar: a API recusa > 200 com 400; cortar aqui faria chaves longas diferentes colidirem.
+  if (chave) headers['idempotency-key'] = chave;
+  const assinatura = req.headers.get('x-khub-signature');
+  if (assinatura) headers['x-khub-signature'] = assinatura;
+
   const r = await fetch(`${API}/v1/hooks/${encodeURIComponent(params.chave)}`, {
     method: 'POST',
-    headers: {
-      'content-type': req.headers.get('content-type') ?? 'application/json',
-      // A API deduplica por Idempotency-Key. Se o remetente manda a dele, ela vale
-      // (retries não duplicam); sem ela geramos uma por requisição, pois dois
-      // envios idênticos legítimos (ex.: 2 formulários iguais) não podem colapsar.
-      'idempotency-key': req.headers.get('idempotency-key')?.slice(0, 200) || crypto.randomUUID(),
-    },
+    headers,
     body: corpo,
     cache: 'no-store',
   }).catch(() => null);
 
-  // 202 mesmo quando a API está fora: quem chama (site/ERP) não deve ficar
-  // tentando de novo por um problema nosso, e o evento não some — o remetente
-  // recebe confirmação e o erro fica no nosso log.
-  if (!r) return NextResponse.json({ recebido: true }, { status: 202 });
+  // Sem confirmação durável, o remetente deve poder tentar novamente.
+  if (!r) return NextResponse.json({ recebido: false, erro: 'Serviço temporariamente indisponível' }, { status: 503, headers: { 'Retry-After': '30' } });
 
   const dados = await r.json().catch(() => ({ recebido: true }));
   return NextResponse.json(dados, { status: r.status });

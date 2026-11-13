@@ -46,7 +46,7 @@ export function TopRight() {
           <Avatar name={user?.name ?? 'Você'} size={34} />
           <div className="hidden text-left leading-tight sm:block">
             <p className="text-sm font-bold text-fg">{user?.name?.split(' ')[0] ?? 'Você'}</p>
-            <p className="text-[10px] text-muted">{user?.email}</p>
+            <p className="text-2xs text-muted">{user?.email}</p>
           </div>
           <Icon name="chevronDown" size={15} className="hidden text-muted sm:block" />
         </button>

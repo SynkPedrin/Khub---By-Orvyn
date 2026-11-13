@@ -41,7 +41,7 @@ export function FinalCTA() {
               <Reveal variant="clip" as="span" delay={0.1} className="block">
                 acontece depois
               </Reveal>
-              <Reveal variant="clip" as="span" delay={0.2} className="block text-[var(--lp-accent)]">
+              <Reveal variant="clip" as="span" delay={0.2} className="lp-serif block text-[var(--lp-accent)]">
                 do lead.
               </Reveal>
             </h2>

@@ -19,7 +19,7 @@ export function Founder() {
             <div className="relative aspect-[4/5] w-full overflow-hidden rounded-[4px] bg-[var(--lp-bg-warm)]">
               <Image
                 src="/lp-revenue/founder/pedro.jpeg"
-                alt="Retrato de Pedro, fundador da ORVYN"
+                alt="Retrato de Pedro, fundador da KHUB"
                 width={1122}
                 height={1402}
                 sizes="(max-width: 1023px) 92vw, 32vw"
@@ -31,7 +31,7 @@ export function Founder() {
 
           <div>
             <Reveal>
-              <p className="lp-label mb-8">Por que a ORVYN existe</p>
+              <p className="lp-label lp-eyebrow mb-8">Por que a KHUB existe</p>
             </Reveal>
             <div className="flex max-w-[58ch] flex-col gap-6">
               <Reveal delay={0.06}>
@@ -43,7 +43,7 @@ export function Founder() {
               </Reveal>
               <Reveal delay={0.12}>
                 <p className="text-[16px] leading-[1.62] text-[var(--lp-ink-2)]">
-                  A ORVYN foi construída para fechar essa distância: um sistema só, onde a conversa, o negócio,
+                  A KHUB foi construída para fechar essa distância: um sistema só, onde a conversa, o negócio,
                   a automação e a leitura de receita compartilham o mesmo registro. É menos software novo e
                   mais operação inteira em um lugar.
                 </p>
@@ -52,7 +52,7 @@ export function Founder() {
                 <div className="mt-2 flex items-center gap-4 border-t border-[var(--lp-rule-soft)] pt-6">
                   <span className="h-px w-8 bg-[var(--lp-accent)]" aria-hidden />
                   <span className="text-[14px] font-semibold text-[var(--lp-ink)]">Pedro</span>
-                  <span className="text-[13px] text-[var(--lp-ink-3)]">Fundador, ORVYN</span>
+                  <span className="text-[13px] text-[var(--lp-ink-3)]">Fundador, KHUB</span>
                 </div>
               </Reveal>
             </div>

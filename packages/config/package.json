@@ -1,5 +1,5 @@
 {
-  "name": "@orvyn/config",
+  "name": "@khub/config",
   "version": "0.0.1",
   "private": true,
   "description": "Config compartilhada do monorepo (tsconfig base).",

@@ -1,11 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '../../config/config.service';
+import type { MidiaSaida } from './provider.contract';
 
 export interface MessagingProvider {
   configured(): boolean;
   missing(): string[];
   /** `idempotencyKey`: usado por quem suporta (API de gestão da Stevo); os demais ignoram. */
   sendText(number: string, text: string, tenantInstance?: string, idempotencyKey?: string): Promise<{ providerId?: string }>;
+  /**
+   * Mídia (Q2.5 · contrato em provider.contract.ts). Opcional: este
+   * provedor legado (API de instância) NÃO implementa — o endpoint de mídia
+   * dele não está documentado no repositório nem verificado, e não se inventa
+   * endpoint. `aceitaBase64` diz se dá para mandar sem storage.
+   */
+  sendMedia?(number: string, midia: MidiaSaida, tenantInstance?: string, idempotencyKey?: string): Promise<{ providerId?: string }>;
+  readonly aceitaBase64?: boolean;
 }
 
 /**

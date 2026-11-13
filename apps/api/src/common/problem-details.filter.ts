@@ -1,6 +1,6 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import type { ProblemDetails } from '@orvyn/types';
+import type { ProblemDetails } from '@khub/types';
 import { correlationId as currentCorrelationId } from './request-context';
 import { ErrorReporter } from './error-reporter.service';
 import { urlSegura } from './url-segura';
@@ -29,7 +29,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     }
 
     const body: ProblemDetails & Record<string, unknown> = {
-      type: `https://orvyn.dev/errors/${status}`,
+      type: `urn:khub:error:${status}`,
       title,
       status,
       instance: urlSegura(req.url),

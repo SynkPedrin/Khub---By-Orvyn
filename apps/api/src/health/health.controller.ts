@@ -8,7 +8,7 @@ import { SkipRateLimit } from '../common/rate-limit.guard';
 @Controller()
 export class HealthController {
  constructor(private readonly prisma:PrismaService) {}
- @Get('health') health(){return {status:'ok',service:'orvyn-api'};}
+ @Get('health') health(){return {status:'ok',service:'khub-api'};}
  @Get('ready') async ready(){
    const client=new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379',{lazyConnect:true,maxRetriesPerRequest:1,enableOfflineQueue:false,connectTimeout:1500,retryStrategy:()=>null,commandTimeout:1500});
    client.on('error',()=>undefined);

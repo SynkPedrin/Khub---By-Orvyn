@@ -21,7 +21,7 @@ export function Conversations() {
       <Container>
         <div className="grid items-center gap-[clamp(40px,5vw,72px)] lg:grid-cols-[minmax(280px,30%)_1fr]">
           <div>
-            <p className="lp-label mb-6">Conversas</p>
+            <p className="lp-label lp-eyebrow mb-6">Conversas</p>
             <h2 className="lp-h3 max-w-[13ch] text-[var(--lp-ink)]">
               <Reveal variant="clip" as="span" className="block">
                 O lead não

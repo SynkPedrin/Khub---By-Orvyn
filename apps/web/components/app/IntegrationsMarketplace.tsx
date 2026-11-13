@@ -41,7 +41,7 @@ const CATS: { key: Categoria; label: string; icon: Parameters<typeof Icon>[0]['n
   { key: 'ia', label: 'Inteligência', icon: 'sparkles' },
 ];
 
-// Catálogo real: o que o Orvyn integra. Conexão passa pelo fluxo do servidor
+// Catálogo real: o que o KHUB integra. Conexão passa pelo fluxo do servidor
 // (OAuth Meta hoje; demais degradam com config_required nomeando a variável).
 const APPS: App[] = [
   // capability:'ads' — não pede leads_retrieval junto, então Ads conecta

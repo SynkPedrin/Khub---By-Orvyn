@@ -23,15 +23,15 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Prisma generate
-        run: pnpm --filter @orvyn/api exec prisma generate
+        run: pnpm --filter @khub/api exec prisma generate
       - name: Lint
-        run: pnpm --filter @orvyn/web lint
+        run: pnpm --filter @khub/web lint
       - name: Typecheck (API + Web)
         run: |
-          pnpm --filter @orvyn/api exec tsc --noEmit -p tsconfig.json
-          pnpm --filter @orvyn/web exec tsc --noEmit -p tsconfig.json
+          pnpm --filter @khub/api exec tsc --noEmit -p tsconfig.json
+          pnpm --filter @khub/web exec tsc --noEmit -p tsconfig.json
       - name: Testes (API)
-        run: pnpm --filter @orvyn/api exec jest --ci --silent
+        run: pnpm --filter @khub/api exec jest --ci --silent
       - name: Build (API + Web)
         run: pnpm build
 
@@ -64,7 +64,7 @@ jobs:
           node-version: "${{ env.NODE_VERSION }}"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @orvyn/api exec prisma generate
+      - run: pnpm --filter @khub/api exec prisma generate
       - name: Instalar psql
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - name: Aplicar migrações (ordem numérica, sem os arquivos de teste)

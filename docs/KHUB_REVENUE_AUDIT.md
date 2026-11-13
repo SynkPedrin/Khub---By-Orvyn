@@ -1,6 +1,6 @@
-# ORVYN Revenue OS — Auditoria do Repositório
+# KHUB Revenue OS — Auditoria do Repositório
 
-> Documento gerado na Fase 0 da transformação `ORVYN OS → ORVYN Revenue OS`.
+> Documento gerado na Fase 0 da transformação `KHUB OS → KHUB Revenue OS`.
 > Base: `main @ 51edbf0` + working tree com alterações não commitadas (preservadas).
 > Data da auditoria: 2026-09-20.
 
@@ -11,7 +11,7 @@
 Monorepo **pnpm workspaces + Turborepo**, com dois aplicativos e dois pacotes:
 
 ```
-Orvyn-OS/
+KHUB-OS/
 ├── apps/
 │   ├── api/     NestJS 10 (monólito modular) + Prisma 5 + Postgres/pgvector + BullMQ + Socket.IO
 │   └── web/     Next.js 14 (App Router) + Tailwind 3 + React 18 + ReactFlow
@@ -31,8 +31,8 @@ RAG com pgvector, agente de IA com tool-calling fechado e integração Meta Ads 
 
 | Gate | Resultado |
 |---|---|
-| `pnpm typecheck` @orvyn/web | ✅ limpo |
-| `pnpm typecheck` @orvyn/api | ❌ **2 erros pré-existentes** |
+| `pnpm typecheck` @khub/web | ✅ limpo |
+| `pnpm typecheck` @khub/api | ❌ **2 erros pré-existentes** |
 | Testes | 28 arquivos `.spec.ts` (100% na API; web sem testes) |
 
 Os 2 erros são anteriores a esta execução, em código **não commitado**:
@@ -94,7 +94,7 @@ evoluir · **BROKEN** = quebrado/bloqueante · **MISSING** = não existe.
 | Notas | READY | model `Note` |
 | Atividades / timeline | READY | model `Activity` |
 | **Leads como entidade de 1ª classe** | PARTIAL | existe `leads.service.spec.ts` e `Contact.tag='Lead'`, mas **não há módulo Leads** com listagem, filtros, score e perfil do mockup |
-| **Score ORVYN** | MISSING | nenhuma referência no schema ou serviços |
+| **Score KHUB** | MISSING | nenhuma referência no schema ou serviços |
 | Agenda / compromissos | PARTIAL | model `AgendaCompromisso` + página (145 linhas), simples |
 | Financeiro / cobranças | READY | fora do escopo do nav alvo — **preservar** |
 
@@ -177,10 +177,10 @@ de domínio existente é sólida e não deve ser reescrita.
 | # | Item | Motivo |
 |---|---|---|
 | R1 | **Design system** (`globals.css` + `tailwind.config.ts`) | Identidade atual é glassmorphism + "studio-bg" com gradientes, radius 24px, off-white quente `#f8f6f2`. O alvo é flat, cool grays `#FAFAFC/#F7F7FA`, radius 8–16, sombras quase nulas. Conflito direto com o briefing ("evitar glassmorphism exagerado, gradientes agressivos, radius excessivo"). |
-| R2 | **Shell global** (`(app)/layout.tsx`) | Hoje: sidebar de vidro flutuante + "dynamic island" + logo no topo-centro + TopRight separado. Alvo: sidebar fixa branca com logo ORVYN Revenue OS + rodapé de plano, e topbar única com busca `⌘K` + notificações + avatar + workspace. |
+| R2 | **Shell global** (`(app)/layout.tsx`) | Hoje: sidebar de vidro flutuante + "dynamic island" + logo no topo-centro + TopRight separado. Alvo: sidebar fixa branca com logo KHUB Revenue OS + rodapé de plano, e topbar única com busca `⌘K` + notificações + avatar + workspace. |
 | R3 | **Navegação** | Hoje 12 itens (Dashboard, Pipeline, Contatos, Empresas, Tarefas, Inbox, Automações, Agenda, Anúncios, Biblioteca, Financeiro, Análises). Alvo: 10 itens (Dashboard, Leads, Pipeline, Conversas, Automações, Campanhas, Agenda, Analytics, IA, Configurações). |
 | R4 | **`AiService` → `AIProvider`** | Injeção direta de `AnthropicProvider` cria vendor lock-in. Extrair interface (`generate`/`stream`/`structuredOutput`/`toolCall`) + registry de providers. |
-| R5 | **Nomenclatura Nyro → ORVYN AI** | Marca do produto novo. Rota `/nyro` → `/ia`, mantendo alias. |
+| R5 | **Nomenclatura Nyro → KHUB AI** | Marca do produto novo. Rota `/nyro` → `/ia`, mantendo alias. |
 | R6 | **`Contact` → Lead com score** | Adicionar `score`, `scoreVersion`, `scoreAt`, `ownerId`, `origem`, `cargo`, `proximaAcaoAt` — sem quebrar `Contact` existente. |
 | R7 | **Dashboard** | Hoje 279 linhas genéricas; alvo é dashboard de receita (KPIs de leads/resposta/follow-up/receita + funil + crescimento + insights de IA). |
 | R8 | **Analytics** | 118 linhas → 6 KPIs + receita por canal + funil + tempo de resposta por equipe + meta vs realizado + evolução + leads por status + insights. |
@@ -208,7 +208,7 @@ Muito pouco. A estratégia é **preservar**.
 | **Design System** (`lib/design`/tokens) | colors, spacing, radius, typography, shadow, border, motion, breakpoints, z-index |
 | **Shell** (`components/shell/`) | `Sidebar`, `Topbar`, `GlobalSearch`, `WorkspaceMenu`, `PlanCard` |
 | **Leads** | `/leads` (listagem com KPIs, filtros, tabela, painel lateral) e `/leads/[id]` (perfil 8 tabs) |
-| **Score ORVYN v0** | motor determinístico de regras (`score_version = "v0_rules"`) |
+| **Score KHUB v0** | motor determinístico de regras (`score_version = "v0_rules"`) |
 | **Campanhas** | schema (`campaigns`, `campaign_steps`, `campaign_metrics`) + `/campanhas` |
 | **`AIProvider`** | interface + `AnthropicProvider` adaptado + registry |
 | **`MessagingProvider`** | interface + `StevoProvider` adaptado |
@@ -260,11 +260,11 @@ O detalhamento e as ações vão para `/docs/SECURITY_REVIEW.md`.
 
 ---
 
-## 10. Plano de transformação — ORVYN OS → ORVYN Revenue OS
+## 10. Plano de transformação — KHUB OS → KHUB Revenue OS
 
 ### Mapa EXISTENTE → DESTINO
 
-| ORVYN OS (hoje) | ORVYN Revenue OS (alvo) | Estratégia |
+| KHUB OS (hoje) | KHUB Revenue OS (alvo) | Estratégia |
 |---|---|---|
 | `/` Dashboard genérico | `/` Dashboard de Receita | Refatorar |
 | `/contatos` | `/leads` + `/leads/[id]` | Expandir (contatos preservado como alias) |
@@ -280,7 +280,7 @@ O detalhamento e as ações vão para `/docs/SECURITY_REVIEW.md`.
 | `Tenant` | `Organization` (conceito) | **Manter `tenantId`** — renomear tabela seria migration destrutiva sem ganho real |
 | `AnthropicProvider` direto | `AIProvider` + registry | Refatorar |
 | `stevo.provider.ts` direto | `MessagingProvider` + `StevoProvider` | Refatorar |
-| glass/island/studio-bg | design system flat ORVYN | Substituir |
+| glass/island/studio-bg | design system flat KHUB | Substituir |
 
 ### Decisões arquiteturais tomadas nesta auditoria
 
@@ -310,7 +310,7 @@ O detalhamento e as ações vão para `/docs/SECURITY_REVIEW.md`.
 4. Módulos, na ordem: Dashboard → Leads → Lead profile → Pipeline → Conversas →
    Automações → Campanhas → Agenda → Analytics → IA → Configurações.
 5. `AIProvider` + `MessagingProvider`.
-6. Score ORVYN v0.
+6. Score KHUB v0.
 7. Demo seed separado.
 8. Hardening + testes + build gate.
 9. Documentação final.

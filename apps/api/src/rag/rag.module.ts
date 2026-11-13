@@ -3,6 +3,7 @@ import { ChunkingService } from './chunking.service';
 import { EmbeddingsService } from './embeddings/embeddings.service';
 import { EMBEDDING_PROVIDER, type EmbeddingProvider } from './embeddings/embedding-provider';
 import { VoyageEmbeddingProvider } from './embeddings/voyage.provider';
+import { OllamaEmbeddingProvider } from './embeddings/ollama.provider';
 import { RAG_CACHE } from './cache/rag-cache';
 import { InMemoryRagCache } from './cache/rag-cache';
 import { RERANKER } from './reranker/reranker';
@@ -19,7 +20,16 @@ import { RagController } from './rag.controller';
   controllers: [RagController],
   providers: [
     ChunkingService,
-    { provide: EMBEDDING_PROVIDER, useClass: VoyageEmbeddingProvider },
+    VoyageEmbeddingProvider,
+    OllamaEmbeddingProvider,
+    // Embeddings seguem o backend de IA: AI_PROVIDER=ollama → vetores locais
+    // via Ollama (mxbai-embed-large, 1024 dims); caso contrário, Voyage.
+    {
+      provide: EMBEDDING_PROVIDER,
+      inject: [VoyageEmbeddingProvider, OllamaEmbeddingProvider],
+      useFactory: (voyage: EmbeddingProvider, ollama: EmbeddingProvider): EmbeddingProvider =>
+        ['ollama', 'openai'].includes((process.env.AI_PROVIDER || '').toLowerCase().trim()) ? ollama : voyage,
+    },
     {
       provide: EmbeddingsService,
       inject: [EMBEDDING_PROVIDER],

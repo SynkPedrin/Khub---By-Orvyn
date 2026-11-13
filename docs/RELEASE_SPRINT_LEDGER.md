@@ -1,4 +1,4 @@
-# RELEASE SPRINT LEDGER — ORVYN Revenue OS
+# RELEASE SPRINT LEDGER — KHUB Revenue OS
 
 > Criado em 2026-09-22 em resposta ao "AUTONOMOUS FINALIZATION & RELEASE SPRINT ENGINE".
 > **Antes de qualquer sprint desta ledger, ver a nota de conflito de contrato no topo do relatório desta sessão.**
@@ -161,16 +161,16 @@ O plano novo usa numeração/escopo próprios (Sprint 1–22) que **não corresp
 **FILES_CHANGED:** `apps/web/app/(app)/analytics/page.tsx` (+`AnalyticsReal`), `apps/api/src/analytics/analytics.service.spec.ts` (novo, 0 testes → 8 testes).
 
 **BUGS_FOUND (real, não hipotético):**
-`/analytics` tinha **dois caminhos, nenhum real**: `modoDemo()` verdadeiro → `AnalyticsComDados()` renderizando 100% de `lib/demo/dataset` (incluindo um painel "Insights da IA ORVYN" com recomendações que são texto estático, não geradas por IA nenhuma); `modoDemo()` falso → `AnalyticsVazio()` sempre, pra sempre, não importa quantos dados reais o tenant acumulasse. Existia um client `lib/analytics.ts` **completo, tipado, correto** e um backend **honesto** (`AnalyticsService.aiUsage()`/`automacoes()` — sem dado fabricado, `taxaSucesso: null` quando não há amostra) — mas **nada no app chamava esse client**. Confirmado dead code (`grep` não achou nenhum import).
+`/analytics` tinha **dois caminhos, nenhum real**: `modoDemo()` verdadeiro → `AnalyticsComDados()` renderizando 100% de `lib/demo/dataset` (incluindo um painel "Insights da IA KHUB" com recomendações que são texto estático, não geradas por IA nenhuma); `modoDemo()` falso → `AnalyticsVazio()` sempre, pra sempre, não importa quantos dados reais o tenant acumulasse. Existia um client `lib/analytics.ts` **completo, tipado, correto** e um backend **honesto** (`AnalyticsService.aiUsage()`/`automacoes()` — sem dado fabricado, `taxaSucesso: null` quando não há amostra) — mas **nada no app chamava esse client**. Confirmado dead code (`grep` não achou nenhum import).
 
-Achado colateral: `NEXT_PUBLIC_ORVYN_DEMO` é hard-travado a `false` sempre que `NODE_ENV==='production'` (`lib/demo/flag.ts`) — **cliente real nunca vê dado de demonstração**, então isto não era um risco de confiança do tipo "mostra número fake pro cliente"; era um bug de "funcionalidade real existe e nunca aparece pra ninguém, nem em prod".
+Achado colateral: `NEXT_PUBLIC_KHUB_DEMO` é hard-travado a `false` sempre que `NODE_ENV==='production'` (`lib/demo/flag.ts`) — **cliente real nunca vê dado de demonstração**, então isto não era um risco de confiança do tipo "mostra número fake pro cliente"; era um bug de "funcionalidade real existe e nunca aparece pra ninguém, nem em prod".
 
 **BUGS_FIXED:**
 Adicionado `AnalyticsReal()`: busca `analytics.aiUsage()`+`analytics.automacoes()` reais, estados de loading/erro/vazio honestos, mostra só o que tem fonte de dado real hoje (custo/execuções de IA, taxa de sucesso de automação, fila de DLQ) — e **deliberadamente não fabrica** CAC/ROI/receita-por-canal/funil/comparecimento (não existe cálculo definido pra eles no produto; nota explicativa no lugar, sem inventar fórmula).
 
 **TESTS:**
 - `analytics.service.spec.ts` (novo, 8/8 verde): cobre tenant vazio (zeros reais, `taxaSucesso: null`), agregação com dado real, e o caso específico "runs 'rodando' não entram no denominador da taxa de sucesso" (70% = 7 concluídas / 10 finalizadas, ignorando 5 rodando) — a mesma conta que a KPI real do frontend usa.
-- Funcional (Playwright, tenant novo via signup real): `/analytics` com `NEXT_PUBLIC_ORVYN_DEMO=0` → mostra corretamente o estado vazio honesto (`"Ainda não há dados"`), sem selo demo, zero erro de página.
+- Funcional (Playwright, tenant novo via signup real): `/analytics` com `NEXT_PUBLIC_KHUB_DEMO=0` → mostra corretamente o estado vazio honesto (`"Ainda não há dados"`), sem selo demo, zero erro de página.
 - **Não verificado ao vivo**: o caminho "tenant COM dado real" — consultei o Postgres real e **não existe nenhuma linha em `ai_usage_events` nem `workflow_runs` em nenhum tenant** neste ambiente agora. Coberto pelo teste unitário (que prova a agregação certa), não por screenshot com número real na tela.
 - Typecheck ✅ · Lint ✅ · Testes API **275/275** (era 267) ✅ · Build ✅ (dev server parado antes, reiniciado limpo depois).
 

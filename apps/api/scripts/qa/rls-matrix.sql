@@ -1,6 +1,6 @@
--- QA Sprint 0: matriz de isolamento RLS. Rodar COMO orvyn_app (NOBYPASSRLS), nunca superuser.
+-- QA Sprint 0: matriz de isolamento RLS. Rodar COMO khub_app (NOBYPASSRLS), nunca superuser.
 -- Self-cleaning (ROLLBACK). Falha (exit != 0) se houver qualquer vazamento ou se um controle positivo falhar.
---   PGPASSWORD=... psql -h 127.0.0.1 -p 55440 -U orvyn_app -d orvyn_qa -v ON_ERROR_STOP=1 -f rls-matrix.sql
+--   PGPASSWORD=... psql -h 127.0.0.1 -p 55440 -U khub_app -d orvyn_qa -v ON_ERROR_STOP=1 -f rls-matrix.sql
 BEGIN;
 CREATE TEMP TABLE qa_rows (tbl text, tenant text, id uuid);
 CREATE TEMP TABLE qa_result (tbl text, test text, ok boolean, detail text);
@@ -12,7 +12,7 @@ DECLARE
   tbls text[] := ARRAY['contacts','deals','conversations','messages','workflows','crm_tags','agenda_compromissos','outbox_events','financeiro_cobrancas','tasks','notes','meta_pages','pipelines'];
   tb text; other text; cnt int; blocked boolean; why text;
 BEGIN
-  -- tenants (orvyn_app tem INSERT em tenants)
+  -- tenants (khub_app tem INSERT em tenants)
   FOREACH k IN ARRAY tenants LOOP
     INSERT INTO tenants(nome) VALUES ('QA-'||k) RETURNING id INTO tid;
     ids := ids || jsonb_build_object(k, tid);

@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import * as Sentry from '@sentry/node';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { json, urlencoded } from 'body-parser';
 import { AppModule } from './app.module';
 import { ProblemDetailsFilter } from './common/problem-details.filter';
 import { RedisIoAdapter } from './realtime/redis-io.adapter';
@@ -25,14 +26,48 @@ function corsOrigins(env: ReturnType<typeof loadEnv>): true | string[] {
 
 async function bootstrap(): Promise<void> {
   const env = loadEnv();
-  // rawBody: exigido para validar a assinatura HMAC do webhook da Meta sobre o
-  // corpo CRU (o JSON re-serializado não bate com a assinatura original).
+  // Body parsing 100% manual (bodyParser: false): o parser global do Nest
+  // (100 kb) é registrado ANTES dos app.use daqui e matava todo webhook de
+  // mensageria com mídia em base64 (PayloadTooLargeError) — mensagens
+  // recebidas nunca chegavam ao Inbox. O rawBody é capturado no `verify` de
+  // cada parser: os webhooks da Meta (HMAC) e do Stripe precisam do corpo cru.
   const app = await NestFactory.create(AppModule, {
     cors: { origin: corsOrigins(env), credentials: true },
-    rawBody: true,
+    bodyParser: false,
     logger: makeLogger(env.LOG_FORMAT, env.NODE_ENV),
   });
   app.use(securityHeaders(env.NODE_ENV));
+  const capturaRaw = (req: unknown, _res: unknown, buf: Buffer) => {
+    (req as { rawBody?: Buffer }).rawBody = buf;
+  };
+  // Ordem importa: específicos primeiro (body-parser pula corpo já lido).
+  // 1) Webhooks de mensageria (Stevo/Evolution/Meta): mídia em base64 e
+  //    histórico de sync — limite alto. (Produção: mover mídia p/ storage.)
+  const parserWebhook = json({ limit: '100mb', verify: capturaRaw });
+  app.use(/^\/v1\/(webhooks|hooks)\//, function webhookJson(req: Parameters<typeof parserWebhook>[0], res: Parameters<typeof parserWebhook>[1], next: Parameters<typeof parserWebhook>[2]) {
+    parserWebhook(req, res, next);
+  });
+  // 2) Upload de fonte de conhecimento (PDF/DOCX em base64, até 15 MB), anexos do chat da NICO e
+  //    lote de importação de contatos (até 500 linhas por chamada).
+  const parserUpload = json({ limit: '22mb', verify: capturaRaw });
+  app.use(/^\/v1\/(agents\/[0-9a-f-]{36}\/conhecimento|crm\/import\/contacts|nyro\/chat|nyro\/chat\/stream)$/, function uploadConhecimentoJson(req: Parameters<typeof parserUpload>[0], res: Parameters<typeof parserUpload>[1], next: Parameters<typeof parserUpload>[2]) {
+    parserUpload(req, res, next);
+  });
+  // 2b) Mídia de saída do Inbox (Q2.5): arquivo em base64, até 15 MB.
+  app.use(/^\/v1\/crm\/conversations\/[0-9a-f-]{36}\/midia$/, function midiaInboxJson(req: Parameters<typeof parserUpload>[0], res: Parameters<typeof parserUpload>[1], next: Parameters<typeof parserUpload>[2]) {
+    parserUpload(req, res, next);
+  });
+  // 2c) Simulador de anúncios: imagem/frames do vídeo em base64 para a análise da IA (até 4 × ~1,5 MB).
+  app.use(/^\/v1\/ads\/simulador\/analisar$/, function simuladorJson(req: Parameters<typeof parserUpload>[0], res: Parameters<typeof parserUpload>[1], next: Parameters<typeof parserUpload>[2]) {
+    parserUpload(req, res, next);
+  });
+  // 3) Resto da API: limites padrão do Express, com rawBody preservado.
+  //    urlencoded TAMBÉM precisa do limite alto: a Evolution/Stevo posta o
+  //    webhook como form-urlencoded, e o default (100 kb) derrubava cada
+  //    mensagem com mídia (achado real: requests de ~170 kb falhavam mesmo
+  //    com o parser de webhook em 100 mb, porque caíam NESTE parser).
+  app.use(json({ verify: capturaRaw }));
+  app.use(urlencoded({ extended: true, limit: '100mb', verify: capturaRaw }));
   app.enableShutdownHooks();
   app.setGlobalPrefix('v1');
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
@@ -44,7 +79,7 @@ async function bootstrap(): Promise<void> {
   app.useWebSocketAdapter(io);
 
   await app.listen(env.PORT);
-  new Logger('Bootstrap').log(`Orvyn API on :${env.PORT} (REST /v1 · socket /rt)`);
+  new Logger('Bootstrap').log(`KHUB API on :${env.PORT} (REST /v1 · socket /rt)`);
 }
 
 void bootstrap();

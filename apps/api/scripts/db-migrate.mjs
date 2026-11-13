@@ -36,9 +36,17 @@ function rodarPsql(adminUrl, caminhoSql) {
     execFileSync('psql', [adminUrl, '-v', 'ON_ERROR_STOP=1', '-f', caminhoSql], { stdio: 'inherit' });
     return;
   }
+  const target = new URL(adminUrl);
+  if (!['localhost', '127.0.0.1', '[::1]'].includes(target.hostname)) {
+    throw new Error('Instale psql para executar migrações em um banco remoto. O fallback Docker é somente local.');
+  }
+  if (target.port && target.port !== '5432' && !process.env.PSQL_DOCKER_CONTAINER) {
+    throw new Error('Defina PSQL_DOCKER_CONTAINER explicitamente para uma porta local alternativa.');
+  }
   const container = process.env.PSQL_DOCKER_CONTAINER ?? 'orvyn-postgres';
+  const database = decodeURIComponent(target.pathname.slice(1));
   const sql = readFileSync(caminhoSql);
-  execFileSync('docker', ['exec', '-i', container, 'psql', '-U', 'postgres', '-d', 'orvyn', '-v', 'ON_ERROR_STOP=1'], {
+  execFileSync('docker', ['exec', '-i', container, 'psql', '-U', decodeURIComponent(target.username || 'postgres'), '-d', database, '-v', 'ON_ERROR_STOP=1'], {
     input: sql,
     stdio: ['pipe', 'inherit', 'inherit'],
   });

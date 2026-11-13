@@ -1,6 +1,6 @@
-# @orvyn/web — Front-end + cérebro Obsidian como backend
+# @khub/web — Front-end + cérebro Obsidian como backend
 
-App Next.js 14 (App Router) do Orvyn. O **backend é o cérebro Obsidian**: as notas markdown em `Nyro IA/cerebro/` são a fonte de dados, lidas pelo filesystem em `lib/cerebro.ts` e servidas por Route Handlers (`app/api/...`). Ver **ADR-0005** em `Nyro IA/cerebro/Arquitetura.md`.
+App Next.js 14 (App Router) do KHUB. O **backend é o cérebro Obsidian**: as notas markdown em `Nyro IA/cerebro/` são a fonte de dados, lidas pelo filesystem em `lib/cerebro.ts` e servidas por Route Handlers (`app/api/...`). Ver **ADR-0005** em `Nyro IA/cerebro/Arquitetura.md`.
 
 ## Rodar (dev)
 
@@ -20,7 +20,7 @@ Verificação usada nesta entrega (tudo verde na porta 3221):
 ```bash
 npm run typecheck && npm run build
 npx next start -p 3221
-curl -s localhost:3221/api/health           # {service:"orvyn-web", backend:"cerebro-obsidian", docs:10}
+curl -s localhost:3221/api/health           # {service:"khub-web", backend:"cerebro-obsidian", docs:10}
 curl -s localhost:3221/api/cerebro           # índice do cérebro
 curl -s localhost:3221/api/cerebro/RAG/RAG   # doc aninhado
 ```

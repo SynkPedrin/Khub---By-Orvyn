@@ -1,7 +1,7 @@
-# 02 — Arquitetura e status por domínio (ORVYN Revenue OS)
+# 02 — Arquitetura e status por domínio (KHUB Revenue OS)
 
 Auditoria somente leitura, 2026-10-14. Nada foi alterado, nenhuma migration foi executada, nenhum teste de banco foi rodado.
-Única execução: `tsc --noEmit` em `apps/api` (saída limpa, exit 0), o que contradiz os "2 erros de typecheck" citados em `docs/ORVYN_REVENUE_AUDIT.md` (já corrigidos).
+Única execução: `tsc --noEmit` em `apps/api` (saída limpa, exit 0), o que contradiz os "2 erros de typecheck" citados em `docs/KHUB_REVENUE_AUDIT.md` (já corrigidos).
 
 Método: leitura de código, SQL e specs. "Existe código" não foi tratado como "funciona". Nenhum domínio recebe
 `PRODUCTION_VERIFIED`, porque não há evidência de execução em produção/staging neste repositório (ver §6).
@@ -14,7 +14,7 @@ Legenda: PRODUCTION_VERIFIED / FUNCTIONAL_NOT_E2E_VERIFIED (código + testes uni
 ## 1. Mapa do sistema
 
 ### 1.1 Monorepo
-- `apps/api` NestJS 10 + Prisma 5.22 (`prisma/schema.prisma`, 1003 linhas, 53 models). Dois entrypoints: `src/main.ts` (HTTP + Socket.IO) e `src/worker.ts` (contexto Nest sem HTTP, `ORVYN_PROCESS_ROLE=worker`). Processors BullMQ só são registrados quando `isWorker()` (`common/queue-connection.ts:12`).
+- `apps/api` NestJS 10 + Prisma 5.22 (`prisma/schema.prisma`, 1003 linhas, 53 models). Dois entrypoints: `src/main.ts` (HTTP + Socket.IO) e `src/worker.ts` (contexto Nest sem HTTP, `KHUB_PROCESS_ROLE=worker`). Processors BullMQ só são registrados quando `isWorker()` (`common/queue-connection.ts:12`).
 - `apps/web` Next 14 App Router. Proxies: `app/api/v1/[...path]/route.ts` (cookie httpOnly -> Bearer), `app/api/crm`, `app/api/auth/*`, `app/api/agency/*`, `app/api/hooks/[chave]`, `app/api/cerebro`.
 - `db/*.sql`: 30 arquivos (000..027 + 001a, 002 teste). Aplicados manualmente com psql/`apps/api/scripts/apply-sql.mjs`. Não há tabela de histórico de migrations (confirmado: nenhum `schema_migrations`).
 - `packages/types` (contratos de realtime), `packages/config`.
@@ -43,22 +43,22 @@ Legenda: PRODUCTION_VERIFIED / FUNCTIONAL_NOT_E2E_VERIFIED (código + testes uni
 ### 1.4 Banco
 - 53 models Prisma. Tabelas com RLS (`tenant_id = current_setting('app.current_tenant_id')`): contacts, deals, stages, pipelines, conversations, messages, activities, users, companies, tasks, notes, workflows*, workflow_runs/steps/dlq/drip, nyro_*, ai_usage_events, integrations, ad_*, audit_logs, webhook_events, outbox_events, meta_pages, api_keys, agenda_compromissos, financeiro_cobrancas, crm_tags, campaigns*, rag_* (modelo próprio), automation_templates (leitura global).
 - Tabelas globais **sem RLS** por desenho (ADR-0006): tenants, identities, memberships, refresh_tokens, invites, **agencies, agency_members, agency_client_accounts, agency_member_client_access, agency_invites** (026/027). Isolamento entre agências depende só de filtros na aplicação.
-- Funções `SECURITY DEFINER` (owner `orvyn_service`, BYPASSRLS): `auth_lookup_api_key`, `resolve_tenant_by_stevo_instance`, `resolve_tenant_by_evolution_instance`, `resolve_tenant_by_meta_page`, `resolve_workflow_by_webhook_key`. Todas com `SET search_path = public`, `REVOKE ALL FROM PUBLIC`, retornam só o roteamento. Ver 09_SECURITY_RELIABILITY.md.
+- Funções `SECURITY DEFINER` (owner `khub_service`, BYPASSRLS): `auth_lookup_api_key`, `resolve_tenant_by_stevo_instance`, `resolve_tenant_by_evolution_instance`, `resolve_tenant_by_meta_page`, `resolve_workflow_by_webhook_key`. Todas com `SET search_path = public`, `REVOKE ALL FROM PUBLIC`, retornam só o roteamento. Ver 09_SECURITY_RELIABILITY.md.
 - Tenant por request: `PrismaService.withTenant()` (`prisma/prisma.service.ts`) abre `$transaction` e roda `set_config('app.current_tenant_id', $1, true)` com UUID validado. No boot de produção a role é checada (`rolsuper`/`rolbypassrls` derrubam o boot).
 - Divergência SQL x Prisma: as 4 tabelas de campanha (023) **não existem no `schema.prisma`** (nenhuma ocorrência de `campaign_steps`/`campaign_enrollments`/`campaign_metrics`; só `ad_campaigns`).
 
 ### 1.5 Filas e workers
 | Fila | Produtor | Consumidor | Observação |
 |---|---|---|---|
-| `orvyn-maintenance` | scheduler `reconcile` a cada 5 s + jobs `event` | `OperationsProcessor` (concurrency 4) | consome `outbox_events` (stevo/evolution inbound, meta.lead, workflow.hook, eventos de domínio) |
+| `khub-maintenance` | scheduler `reconcile` a cada 5 s + jobs `event` | `OperationsProcessor` (concurrency 4) | consome `outbox_events` (stevo/evolution inbound, meta.lead, workflow.hook, eventos de domínio) |
 | `automation-steps` | `reconcile()` + `RunsService` | `PassosProcessor` (8) | 4 tentativas, backoff exponencial, `paraDlq` na última falha |
 | `automation-triggers` | (ver nota) | `GatilhosProcessor` (8) | `DomainEventsService.publicar` **não enfileira mais** (comentário em `events/domain-events.service.ts:46`); a entrada durável é o outbox SQL |
 | `ads-sync` | `AdsSyncService` | `AdsSyncProcessor` | sem retry/DLQ configurados no processor |
 | ingestão RAG | `InProcessIngestionQueue` | in-process | fire-and-forget, não durável |
-Redis: BullMQ, rate limit (`RedisService`), adapter Socket.IO, heartbeat do worker (`orvyn:worker:heartbeat`, EX 30).
+Redis: BullMQ, rate limit (`RedisService`), adapter Socket.IO, heartbeat do worker (`khub:worker:heartbeat`, EX 30).
 
 ### 1.6 Auth, sessões, orgs, Agency Mode
-- Access JWT HS256 15 min (`JWT_ACCESS_TTL`), refresh opaco 30 d, hash sha256 em `refresh_tokens`, rotação com claim atômico (`token.service.ts:62-72`). Cookies httpOnly `orvyn_access`/`orvyn_refresh`, `SameSite=lax`, `secure` em produção (`web/lib/server-auth.ts`).
+- Access JWT HS256 15 min (`JWT_ACCESS_TTL`), refresh opaco 30 d, hash sha256 em `refresh_tokens`, rotação com claim atômico (`token.service.ts:62-72`). Cookies httpOnly `khub_access`/`khub_refresh`, `SameSite=lax`, `secure` em produção (`web/lib/server-auth.ts`).
 - A cada request o guard confere `membership` + `tenant.status` no banco (`jwt-auth.guard.ts:60-63`), então rebaixar papel vale na hora (access token não carrega o papel).
 - API keys `orv_live_*` (sha256, função SECURITY DEFINER), papel `api` com `scopes`.
 - RBAC: papéis owner/admin/manager/member/viewer; permissão derivada do **nome do controller + rota** (`permissions.guard.ts:6-22`), não de decorators por rota.
@@ -180,13 +180,13 @@ Controller com 2 rotas (`/analytics/ai-usage`, `/analytics/automacoes`). A pági
 - ACCEPTANCE CRITERIA: teste enumera todos os handlers e falha se algum não tiver permissão declarada; matriz papel x rota versionada em teste.
 
 ### ARQ-03
-- ISSUE: Ingestão RAG não grava sob as políticas de RLS da role `orvyn_app` [inferido, não executado contra Postgres].
+- ISSUE: Ingestão RAG não grava sob as políticas de RLS da role `khub_app` [inferido, não executado contra Postgres].
 - SEVERITY: P1
 - ROOT CAUSE: (a) `IngestionService.register` e `IngestionProcessor` chamam `this.prisma.ragDocument.*` fora de `withTenant`; com `current_setting` vazio a policy `rag_documents_write` (USING/WITH CHECK `tenant_id = NULLIF(...)::uuid`) nunca é verdadeira. (b) `rag_chunks` só tem policy `FOR SELECT` (`001_rag_schema.sql:176-180`); nenhuma migration posterior cria policy de INSERT/DELETE, e há `FORCE ROW LEVEL SECURITY` (`001a_rls_harden.sql:14`). Escrita em `rag_chunks` pela role da aplicação é negada.
 - FILES: `apps/api/src/rag/ingestion/ingestion.service.ts:34,43`; `apps/api/src/rag/ingestion/ingestion.processor.ts:32,62-66,87`; `db/001_rag_schema.sql:176-180`; `db/001a_rls_harden.sql:14`; `apps/api/src/rag/rag.controller.ts:18-33`.
-- IMPACT: `POST /v1/rag/documents` retorna 202 e o documento fica `failed`/ausente; base de conhecimento por tenant não popula. Os specs usam mocks e não pegam isso. Os seeds (`seed-rag.mjs`) provavelmente rodam como `orvyn_service` e mascaram o problema.
+- IMPACT: `POST /v1/rag/documents` retorna 202 e o documento fica `failed`/ausente; base de conhecimento por tenant não popula. Os specs usam mocks e não pegam isso. Os seeds (`seed-rag.mjs`) provavelmente rodam como `khub_service` e mascaram o problema.
 - RECOMMENDED FIX: envolver tudo em `withTenant(doc.tenantId)`, adicionar policy `FOR ALL` em `rag_chunks` restrita a `escopo='tenant'` e ao tenant, manter publicação global/nicho só pela role de serviço; mover ingestão para BullMQ.
-- ACCEPTANCE CRITERIA: teste de integração com Postgres real como `orvyn_app`: registrar documento -> chunks criados -> busca retorna só chunks do tenant; tenant B não vê; `002_isolation_test.sql` ganha caso de INSERT em `rag_chunks`.
+- ACCEPTANCE CRITERIA: teste de integração com Postgres real como `khub_app`: registrar documento -> chunks criados -> busca retorna só chunks do tenant; tenant B não vê; `002_isolation_test.sql` ganha caso de INSERT em `rag_chunks`.
 
 ### ARQ-04
 - ISSUE: `GET /v1/crm/conversations` devolve todas as conversas com todas as mensagens, sem limite.
@@ -265,7 +265,7 @@ Controller com 2 rotas (`/analytics/ai-usage`, `/analytics/automacoes`). A pági
 - SEVERITY: P2 (produto: promessa do Revenue OS não entregue)
 - ROOT CAUSE: migration 023 adiantada em relação ao código; models Prisma ausentes; `calcularScore` sem chamador; UI demo-only.
 - FILES: `db/023_revenue_os.sql:51-175`; `apps/api/src/crm/lead-score.ts`; `apps/web/app/(app)/campanhas/page.tsx:40`; `apps/web/app/(app)/leads/[id]/page.tsx:49`.
-- IMPACT: telas novas são vitrine; `docs/ORVYN_REVENUE_AUDIT.md` classifica várias dessas peças como READY/PARTIAL e isso superestima o estado real.
+- IMPACT: telas novas são vitrine; `docs/KHUB_REVENUE_AUDIT.md` classifica várias dessas peças como READY/PARTIAL e isso superestima o estado real.
 - RECOMMENDED FIX: ligar score no `LeadsService`/trigger; implementar módulo de campanhas (models, serviço, worker com opt-out e janela); rota `/leads/[id]` apontando para o contato real.
 - ACCEPTANCE CRITERIA: criar campanha via API persiste e respeita `opted_out_at`/janela; score preenchido ao criar/atualizar contato; `/leads/:id` abre dado real.
 
@@ -285,4 +285,4 @@ Controller com 2 rotas (`/analytics/ai-usage`, `/analytics/automacoes`). A pági
 - Typecheck da API limpo.
 
 ## 6. Limites desta auditoria
-Sem Postgres/Redis em execução: RLS, filas e fluxos foram lidos, não exercitados. Nenhum item deve ser promovido a PRODUCTION_VERIFIED sem: migrations aplicadas com `002_isolation_test.sql` verde como `orvyn_app`, e fluxo ponta a ponta (signup -> lead -> deal -> mensagem -> automação) em ambiente com Redis+Postgres reais.
+Sem Postgres/Redis em execução: RLS, filas e fluxos foram lidos, não exercitados. Nenhum item deve ser promovido a PRODUCTION_VERIFIED sem: migrations aplicadas com `002_isolation_test.sql` verde como `khub_app`, e fluxo ponta a ponta (signup -> lead -> deal -> mensagem -> automação) em ambiente com Redis+Postgres reais.

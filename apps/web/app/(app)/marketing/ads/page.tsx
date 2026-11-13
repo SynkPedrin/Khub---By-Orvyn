@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Badge, Button, Card } from '@/components/ui';
 import { Icon } from '@/components/icons';
 import { ConfigRequired } from '@/components/app/ConfigRequired';
+import { BrandLogo, type BrandKey } from '@/components/brand/BrandLogo';
 import { AdsSimulador } from '@/components/app/AdsSimulador';
 import { brl } from '@/lib/crm';
 import { ApiError } from '@/lib/api-error';
@@ -60,11 +61,14 @@ export default function AdsPage() {
             <Icon name="chevronRight" size={13} className="rotate-180" /> Biblioteca
           </Link>
           <h1 className="t-display">Anúncios · cross-plataforma</h1>
-          <p className="text-sm text-muted">Meta hoje · TikTok e Google chegam no Sprint B.</p>
+          <p className="text-sm text-muted">Acompanhe campanhas, investimento e resultados das contas conectadas.</p>
         </div>
         <div className="flex items-center gap-2">
           {ov?.connections.map((c) => (
-            <Badge key={c.id} tone={HEALTH[c.health] ?? 'neutral'}>● {c.provider} · {c.health}</Badge>
+            <Badge key={c.id} tone={HEALTH[c.health] ?? 'neutral'}>
+              <BrandLogo brand={(c.provider === 'meta' ? 'meta_ads' : c.provider) as BrandKey} size={16} className="mr-1 inline-block align-[-3px]" />
+              {c.provider} · {c.health}
+            </Badge>
           ))}
           <Button onClick={connect}><Icon name="plus" size={16} /> Conectar Meta</Button>
         </div>
@@ -166,10 +170,10 @@ export default function AdsPage() {
                       )}
                       <div className="absolute left-2 top-2 flex flex-col gap-1">
                         {cr.melhorCpl && (
-                          <span className="rounded-full bg-brand px-2 py-0.5 text-[10px] font-bold text-white shadow">★ Melhor CPL</span>
+                          <span className="rounded-full bg-brand px-2 py-0.5 text-2xs font-bold text-white shadow">★ Melhor CPL</span>
                         )}
                         {cr.maiorReceita && (
-                          <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white shadow">★ Maior receita atribuída</span>
+                          <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-2xs font-bold text-white shadow">★ Maior receita atribuída</span>
                         )}
                       </div>
                     </div>

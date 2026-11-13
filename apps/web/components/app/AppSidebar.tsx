@@ -9,7 +9,6 @@ const NAV: { href: string; label: string; icon: IconName }[] = [
   { href: '/', label: 'Dashboard', icon: 'dashboard' },
   { href: '/pipeline', label: 'Pipeline', icon: 'pipeline' },
   { href: '/contatos', label: 'Contatos', icon: 'contacts' },
-  { href: '/empresas', label: 'Empresas', icon: 'finance' },
   { href: '/tarefas', label: 'Tarefas', icon: 'check' },
   { href: '/inbox', label: 'Inbox', icon: 'inbox' },
   { href: '/automacoes', label: 'Automações', icon: 'sparkles' },

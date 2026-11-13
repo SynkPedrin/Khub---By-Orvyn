@@ -1,4 +1,4 @@
-# Sprint Atual — ORVYN OS
+# Sprint Atual — KHUB OS
 
 > Contrato vigente: [[Brief-Finalizacao]] (doc-first · gating por credencial · **uma sprint por sessão**). Ver [[Tasks]] · [[Bugs]] · [[PRD]].
 
@@ -64,7 +64,7 @@
 
 ## ✅ SPRINT W1 — Enviar e-mail como nó de workflow  *(CONCLUÍDA — 2026-07-21)*
 
-**Pedido do usuário:** "criar o sistema de workflow igual ao do GHL, mas com a identidade da Orvyn" (benchmark do motor do GHL anexado). Decisão de escopo em **ADR-0015**: igualar o **motor e a UX**, não clonar menu de módulo inexistente. É épico multi-sprint (trilha W); **W1 = o gap nº 1** — e-mail pelo canal oficial, que o SMS (STEVO não oficial) não cobre.
+**Pedido do usuário:** "criar o sistema de workflow igual ao do GHL, mas com a identidade da KHUB" (benchmark do motor do GHL anexado). Decisão de escopo em **ADR-0015**: igualar o **motor e a UX**, não clonar menu de módulo inexistente. É épico multi-sprint (trilha W); **W1 = o gap nº 1** — e-mail pelo canal oficial, que o SMS (STEVO não oficial) não cobre.
 
 ### Entregas
 1. **Nó `acao.enviar_email`** (nós: 21 → **22**) — assunto + corpo com `{{contato.nome}}`; entrega pelo `MailerService` (SMTP) que já existia para convites. **Gated (ADR-0008):** sem `SMTP_URL` o passo fica `config_required` (pendente, não quebra); falha REAL de SMTP levanta exceção **de propósito** para o retry/DLQ do BullMQ agir — gating ≠ erro.
@@ -109,7 +109,7 @@
 
 ## ✅ SPRINT E.2 — Workflow builder completo + UX  *(CONCLUÍDA — 2026-07-17)*
 
-**Pedido do usuário** com a referência do GHL (categorias de triggers/actions, waits, chaining, webhooks, workflow settings), **filtrado pelo que existe no Orvyn** — ver ADR-0013 para o que ficou de fora e por quê.
+**Pedido do usuário** com a referência do GHL (categorias de triggers/actions, waits, chaining, webhooks, workflow settings), **filtrado pelo que existe no KHUB** — ver ADR-0013 para o que ficou de fora e por quê.
 
 ### Entregas
 1. **21 nós** (era 15) agrupados por categoria: +`gatilho.negocio_criado` +`gatilho.webhook` +`controle.esperar_resposta` +`controle.encerrar` +`acao.criar_nota` +`acao.chamar_workflow`.
@@ -165,7 +165,7 @@ O inbox duplicava o contato a cada resposta (comparava dígitos crus com telefon
 **Fora de escopo:** automações (E), Nyro (F), conectores novos (B).
 
 ### Entregas
-1. **Decisão da LACUNA de [[APIs]] §6** — Socket.IO, namespace `/rt`, envelope `{evento,dados,emitidoEm}`, contrato tipado em `@orvyn/types`. **ADR-0011.**
+1. **Decisão da LACUNA de [[APIs]] §6** — Socket.IO, namespace `/rt`, envelope `{evento,dados,emitidoEm}`, contrato tipado em `@khub/types`. **ADR-0011.**
 2. **Auth do socket por ticket** — `POST /v1/auth/ws-ticket` (JWT `typ:'ws'`, 60s) + rota Next `/api/auth/ws-ticket`. O `JwtAuthGuard` recusa `typ:'ws'` no REST. O access token httpOnly nunca chega ao JS.
 3. **Gateway + isolamento** — socket entra só em `tenant:<id>`, tenant vindo **do ticket**; todo envio é `to(sala)`, nunca broadcast.
 4. **Emissores reais** — inbox (`message.created`, `conversation.updated`, `contact.created` na entrada do WhatsApp) e funil (`deal.created|moved|updated|deleted`), sempre **após o commit**.
@@ -267,7 +267,7 @@ Paginação por cursor keyset montada em JS **descartava lotes inteiros**: `time
 O product owner forneceu o pacote do RAG e mandou "iniciar o desenvolvimento". Decisão registrada em **ADR-0004**: entregar a **fundação de dados do RAG (R0)** já, por não depender de toolchain nem de chaves externas.
 
 ### Entregue nesta sessão (R0 — camada de banco)
-- [x] `db/000_foundation.sql` — `tenants` mínima + roles `orvyn_app` (NOBYPASSRLS) / `orvyn_service` (BYPASSRLS).
+- [x] `db/000_foundation.sql` — `tenants` mínima + roles `khub_app` (NOBYPASSRLS) / `khub_service` (BYPASSRLS).
 - [x] `db/001_rag_schema.sql` — schema RAG fornecido, transcrito verbatim (UTF-8 limpo).
 - [x] `db/001a_rls_harden.sql` — FORCE RLS + RLS de `nyro_guardrail_hits` + grants.
 - [x] `db/002_isolation_test.sql` — teste de vazamento cross-tenant, bloqueante, self-cleaning.
@@ -283,7 +283,7 @@ O product owner forneceu o pacote do RAG e mandou "iniciar o desenvolvimento". D
 - [x] Backend = cérebro Obsidian: `lib/cerebro.ts` + `/api/cerebro`, `/api/cerebro/[...slug]`, `/api/health`. Guard anti path-traversal.
 - [x] UI de marca (`#7B2FBE`, creme, dark mode, `logo.png`), mobile-first, painel Nyro, command bar `Cmd/Ctrl+K`, zero tela em branco.
 - [x] Cobre parcialmente F0-15/16 e fecha F0-17. Next fixado em 14.2.35 (patch de segurança).
-- Nota de ambiente: porta 3000 ocupada por outro projeto ("SmartFood"); rodar o Orvyn em outra porta.
+- Nota de ambiente: porta 3000 ocupada por outro projeto ("SmartFood"); rodar o KHUB em outra porta.
 
 ## Entregue nesta sessão (3) — Monorepo + API (ADR-0002)
 - [x] Monorepo **pnpm + Turborepo**: `apps/web`, `apps/api`, `packages/config`, `packages/types`. `pnpm build` → 2/2 apps (verificado).
@@ -328,7 +328,7 @@ Módulo `apps/api/src/rag/` com **24 unit tests verdes** (jest + ts-jest), sem d
 - [x] **Docker up**: Postgres 16 + pgvector + Redis (`docker-compose.yml`, sem initdb.d — migrations manuais).
 - [x] **R0.2 FECHADO**: `db/002_isolation_test.sql` passou contra Postgres real → *"R0.2 OK — nenhum vazamento cross-tenant"*.
 - [x] **CRM schema** `db/003_crm_schema.sql`: users, pipelines, stages, contacts, deals, conversations, messages, activities — todas com **RLS** (`app.current_tenant_id`) + grants; seed de 1 tenant com dados reais (8 contatos, 8 negócios, 3 conversas).
-- [x] **API CRM** (NestJS `crm` module): `/v1/crm/overview|contacts|pipeline|deals|conversations` — tudo via `withTenant` (RLS). Conecta como `orvyn_app` (NOBYPASSRLS). Isolamento provado via API (tenant errado → 0).
+- [x] **API CRM** (NestJS `crm` module): `/v1/crm/overview|contacts|pipeline|deals|conversations` — tudo via `withTenant` (RLS). Conecta como `khub_app` (NOBYPASSRLS). Isolamento provado via API (tenant errado → 0).
 - [x] **Front ligado ao banco**: proxy `/api/crm/*`, `lib/crm.ts`; Dashboard, Pipeline (drag **persiste**), Contatos (criar **persiste**), Inbox — **dados reais**, zero array demo. Verificado end-to-end.
 - Rodando: web **http://localhost:3210** · API **:3333** · Postgres **:5432**.
 
@@ -342,7 +342,7 @@ Módulo `apps/api/src/rag/` com **24 unit tests verdes** (jest + ts-jest), sem d
 
 ## Entregue nesta sessão (9) — Inteligência de marketing da Nyro (RAG global)
 - [x] Corpus "MARKETING NYRO" (12 frameworks C-Level: 6 marketing + 6 operação) integrado ao cérebro em `RAG/conhecimento/global/{marketing,operacao}/` (dup descartada, pasta solta removida).
-- [x] Seeder `apps/api/scripts/seed-global-rag.mjs` (frontmatter→metadados, chunk por seção, escopo=global via `orvyn_service`). **Ingerido: 12 docs / 73 chunks**; buscável por BM25 (STP p/ "posicionar", GTM p/ "lançar serviço"). Embeddings entram com `VOYAGE_API_KEY`.
+- [x] Seeder `apps/api/scripts/seed-global-rag.mjs` (frontmatter→metadados, chunk por seção, escopo=global via `khub_service`). **Ingerido: 12 docs / 73 chunks**; buscável por BM25 (STP p/ "posicionar", GTM p/ "lançar serviço"). Embeddings entram com `VOYAGE_API_KEY`.
 - [x] UI: `/marketing` vira a **Central de Marketing da Nyro** (lista os frameworks, abre no leitor de conhecimento). Verificado.
 - [x] Índice `RAG/conhecimento/global/_INDICE.md` (recuperação por dominio + plano + gate de intenção).
 

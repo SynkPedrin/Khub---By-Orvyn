@@ -1,4 +1,4 @@
-# 03 - Auditoria de Integracoes do ORVYN Revenue OS
+# 03 - Auditoria de Integracoes do KHUB Revenue OS
 
 Escopo: auditoria SOMENTE LEITURA (codigo, SQL, UI). Nenhuma chamada a API externa foi feita, nenhuma mensagem enviada, nenhum teste E2E real executado. Tudo que depende de comportamento vivo de Meta/Evolution/Stripe esta marcado como NAO VERIFICAVEL. Regra aplicada: existencia de codigo nao e funcionalidade.
 
@@ -48,7 +48,7 @@ Foco em Meta Ads/Lead Ads e Evolution (as duas com fluxo de conexao real). Demai
 
 | # | Ponto | Meta Ads / Lead Ads | Evolution (WhatsApp) |
 |---|---|---|---|
-| 1 | Iniciar conexao | `GET integrations/meta/auth-url?capability=ads|leads`; gating 501 `config_required` com nome das variaveis (bom). State HMAC com tenant, 10 min | `POST integrations/whatsapp/connect`: cria instancia `orvyn-<tenantId>`, registra webhook, devolve QR |
+| 1 | Iniciar conexao | `GET integrations/meta/auth-url?capability=ads|leads`; gating 501 `config_required` com nome das variaveis (bom). State HMAC com tenant, 10 min | `POST integrations/whatsapp/connect`: cria instancia `khub-<tenantId>`, registra webhook, devolve QR |
 | 2 | Auth | OAuth2 code. State sem vinculo com usuario/sessao e sem nonce de uso unico (ISSUE-05) | Chave global Evolution + token por instancia |
 | 3 | Armazenamento do token | AES-256-GCM, IV aleatorio 12B, tag GCM; chave 32B em env, sem versionamento/rotacao de chave | Token da instancia cifrado; chave global em env, usada para TUDO (token da instancia nunca e usado) |
 | 4 | Renovacao | NAO existe. Troca code->token devolve token CURTO; nao ha `fb_exchange_token` para long-lived (ISSUE-01) | Nao se aplica |
@@ -93,9 +93,9 @@ Modelo: cada cliente e um tenant (migration 026, `agency_client_accounts` aponta
 
 ### 5.1 WhatsApp: risco de enviar pela instancia do cliente errado
 
-- Envio (`messages.service.ts:46-73`): tenant vem do JWT; conversa e contato sao buscados com `tenantId`; instancia vem de `integrations WHERE tenantId = jwt AND provider AND status='connected'`. Nome da instancia deterministico `orvyn-<tenantId>`. RISCO BAIXO de enviar pela instancia errada pela via normal.
+- Envio (`messages.service.ts:46-73`): tenant vem do JWT; conversa e contato sao buscados com `tenantId`; instancia vem de `integrations WHERE tenantId = jwt AND provider AND status='connected'`. Nome da instancia deterministico `khub-<tenantId>`. RISCO BAIXO de enviar pela instancia errada pela via normal.
 - Recepcao: roteamento instancia->tenant pela funcao SECURITY DEFINER `resolve_tenant_by_evolution_instance` (024), com indice unico parcial (`status='connected'`). Correto em desenho e testavel por SQL, MAS:
-  - O segredo do webhook e UM so para todos os tenants (`EVOLUTION_WEBHOOK_TOKEN`) e vai no path (aparece em logs de proxy/Evolution). Quem tiver o token pode postar `instance=orvyn-<tenant-vitima>` e injetar mensagens/contatos/gatilhos de automacao em qualquer cliente (ISSUE-04).
+  - O segredo do webhook e UM so para todos os tenants (`EVOLUTION_WEBHOOK_TOKEN`) e vai no path (aparece em logs de proxy/Evolution). Quem tiver o token pode postar `instance=khub-<tenant-vitima>` e injetar mensagens/contatos/gatilhos de automacao em qualquer cliente (ISSUE-04).
   - O indice unico so vale para `connected`; instancias em `connecting` nao sao roteadas (ISSUE-03).
   - Nenhuma coluna guarda o numero do WhatsApp: o mesmo numero pode ser pareado em dois tenants (cliente A e B) e nada detecta.
   - Uma unica chave global da Evolution da acesso total a todas as instancias; vazamento = 10 clientes expostos.

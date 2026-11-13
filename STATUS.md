@@ -1,4 +1,4 @@
-# 📊 ORVYN OS — Status do Projeto
+# 📊 KHUB OS — Status do Projeto
 
 > Última atualização: **2026-07-27** · Fonte de verdade técnica: `Nyro IA/cerebro/` (ADRs, Tasks, Banco).
 > **Resumo em uma frase:** o produto está construído, verde e buildando para produção — **só falta plugar as credenciais (APIs) e fazer o deploy.**
@@ -67,7 +67,7 @@
 
 ### Auth & Infra
 - Login (e-mail/senha) + refresh + convites · tempo real (Socket.IO, sala por tenant, Redis adapter).
-- Multi-tenancy por **RLS no Postgres** (`orvyn_app` sem BYPASSRLS), testado.
+- Multi-tenancy por **RLS no Postgres** (`khub_app` sem BYPASSRLS), testado.
 
 ### Blindagem de produção (P4)
 - **Rate limit por tenant/IP** (Redis, fail-open) · **security headers** (helmet-equivalente) · **CORS allowlist**.
@@ -140,7 +140,7 @@ Tudo abaixo **já está implementado**. Sem a variável, a UI mostra "Conectar {
 
 1. **Infra:** Postgres 16 (+ pgvector) e Redis 7 (ex.: `docker-compose.yml` já provê os dois localmente).
 2. **Migrações:** aplicar `db/*.sql` em ordem numérica (via `psql` no CI, ou `node apps/api/scripts/apply-sql.mjs` para as novas) — rastreadas em `schema_migrations`.
-3. **Build:** `docker build -f apps/api/Dockerfile -t orvyn-api .` e `docker build -f apps/web/Dockerfile -t orvyn-web .`
+3. **Build:** `docker build -f apps/api/Dockerfile -t khub-api .` e `docker build -f apps/web/Dockerfile -t khub-web .`
 4. **Env:** preencher `apps/api/.env` (ver seção 4 + `docs/ENV.md`).
 5. **Deploy** e apontar o healthcheck para `GET /v1/health` (reporta db + redis).
 6. **CI** já roda a cada push: lint · typecheck · testes · build · isolamento RLS.

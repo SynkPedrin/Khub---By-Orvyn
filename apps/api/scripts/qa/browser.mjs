@@ -60,7 +60,7 @@ async function visitar(page, ev, rota, vp, extra = {}) {
 const D = await novoContexto(1440, 900);
 const { page, ev } = D;
 await page.goto(`${WEB}/login`, { waitUntil: 'networkidle' }); await page.screenshot({ path: resolve((mkdirSync(resolve(SHOTS, '1440'), { recursive: true }), SHOTS), '1440/login.png') });
-await login(page, `qa-agA-${RUN}@orvyn-qa.test`);
+await login(page, `qa-agA-${RUN}@khub-qa.test`);
 chk('login pela UI redireciona para fora de /login', !new URL(page.url()).pathname.startsWith('/login'), page.url());
 report.landing = new URL(page.url()).pathname;
 
@@ -177,7 +177,7 @@ const campos = await np.evaluate(() => [...document.querySelectorAll('input')].m
 jornada.push({ passo: 'abrir /signup', campos });
 try {
   const inputs = np.locator('input'); const n = await inputs.count();
-  for (let i = 0; i < n; i++) { const t = await inputs.nth(i).getAttribute('type'); const ph = ((await inputs.nth(i).getAttribute('placeholder')) ?? '') + ((await inputs.nth(i).getAttribute('name')) ?? ''); if (t === 'checkbox') await inputs.nth(i).check(); else if (t === 'email') await inputs.nth(i).fill(`novo-${RUN}-${Date.now().toString(36)}@orvyn-qa.test`); else if (t === 'password') await inputs.nth(i).fill(PASS); else if (/empresa|company/i.test(ph)) await inputs.nth(i).fill('Empresa Nova QA'); else await inputs.nth(i).fill('Usuário Novo QA'); }
+  for (let i = 0; i < n; i++) { const t = await inputs.nth(i).getAttribute('type'); const ph = ((await inputs.nth(i).getAttribute('placeholder')) ?? '') + ((await inputs.nth(i).getAttribute('name')) ?? ''); if (t === 'checkbox') await inputs.nth(i).check(); else if (t === 'email') await inputs.nth(i).fill(`novo-${RUN}-${Date.now().toString(36)}@khub-qa.test`); else if (t === 'password') await inputs.nth(i).fill(PASS); else if (/empresa|company/i.test(ph)) await inputs.nth(i).fill('Empresa Nova QA'); else await inputs.nth(i).fill('Usuário Novo QA'); }
   await Promise.all([np.waitForURL((u) => !u.pathname.startsWith('/signup'), { timeout: 20000 }).catch(() => {}), np.click('button[type=submit]')]);
   await np.waitForLoadState('networkidle').catch(() => {});
   jornada.push({ passo: 'cadastro concluído', url: new URL(np.url()).pathname });
@@ -202,7 +202,7 @@ await N.ctx.close();
 for (const [w, h, vp] of [[768, 1024, '768'], [390, 844, '390']]) {
   const R = await novoContexto(w, h);
   await R.page.goto(`${WEB}/login`, { waitUntil: 'networkidle' }); await R.page.screenshot({ path: resolve((mkdirSync(resolve(SHOTS, vp), { recursive: true }), SHOTS), `${vp}/login.png`) });
-  await login(R.page, `qa-agA-${RUN}@orvyn-qa.test`);
+  await login(R.page, `qa-agA-${RUN}@khub-qa.test`);
   for (const rota of ['/agency', '/agency/clients']) await visitar(R.page, R.ev, rota, vp);
   const list = await R.page.evaluate(async () => (await fetch('/api/v1/agency/clients')).json()).catch(() => null);
   const arr = Array.isArray(list) ? list : list?.clients ?? []; const a1 = arr.find((c) => (c.displayName ?? c.nome) === textoCliente);
@@ -211,7 +211,7 @@ for (const [w, h, vp] of [[768, 1024, '768'], [390, 844, '390']]) {
   await R.ctx.close();
 }
 for (const [w, h, vp] of [[1280, 800, '1280'], [1024, 768, '1024']]) {
-  const R = await novoContexto(w, h); await login(R.page, `qa-agA-${RUN}@orvyn-qa.test`);
+  const R = await novoContexto(w, h); await login(R.page, `qa-agA-${RUN}@khub-qa.test`);
   const list = await R.page.evaluate(async () => (await fetch('/api/v1/agency/clients')).json()).catch(() => null);
   const arr = Array.isArray(list) ? list : list?.clients ?? []; const a1 = arr.find((c) => (c.displayName ?? c.nome) === textoCliente);
   if (a1) await R.page.evaluate(async (id) => { await fetch(`/api/agency/clients/${id}/activate`, { method: 'POST' }); }, a1.id);

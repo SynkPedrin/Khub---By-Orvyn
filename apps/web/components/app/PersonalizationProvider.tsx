@@ -7,7 +7,7 @@ import { modoDemo } from '@/lib/demo/flag';
 
 interface Ctx {
   prefs: Prefs;
-  /** Logo da marca do cliente (ou vazio = padrão Orvyn). */
+  /** Logo da marca do cliente (ou vazio = padrão KHUB). */
   logo: string;
   /** Aplica na hora + persiste no perfil (`users.prefs`). */
   update: (patch: Prefs) => void;
@@ -47,6 +47,19 @@ export function PersonalizationProvider({ children }: { children: React.ReactNod
       .catch(() => undefined)
       .finally(() => setReady(true));
   }, []);
+
+  // O tema claro vale só para a área logada: ao sair do shell (logout, LP)
+  // o documento volta ao escuro, que é a identidade do login e da landing.
+  useEffect(() => () => document.documentElement.setAttribute('data-theme', 'dark'), []);
+
+  // "Sistema": acompanha a troca claro/escuro do SO sem recarregar.
+  useEffect(() => {
+    if (prefs.theme !== 'system') return;
+    const mq = window.matchMedia('(prefers-color-scheme: light)');
+    const seguir = () => document.documentElement.setAttribute('data-theme', mq.matches ? 'light' : 'dark');
+    mq.addEventListener('change', seguir);
+    return () => mq.removeEventListener('change', seguir);
+  }, [prefs.theme]);
 
   const update = useCallback((patch: Prefs) => {
     setPrefs((prev) => {

@@ -9,6 +9,7 @@ import { IconInput } from './IconInput';
 import { PasswordInput } from './PasswordInput';
 import { SocialAuth } from './SocialAuth';
 import { useAuth } from '@/lib/auth';
+import { AceiteConviteForm } from './AceiteConviteForm';
 
 const NICHOS = ['Clínica médica / estética', 'Advocacia', 'Contabilidade', 'Agência de marketing', 'Outro'];
 
@@ -60,6 +61,9 @@ export function SignupForm() {
       setLoading(false);
     }
   };
+
+  // Convite de subaccount: fluxo próprio (pré-visualização, confirmação de senha e popup de credenciais).
+  if (invite) return <AceiteConviteForm token={invite} />;
 
   return (
     <div>

@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { createHash } from 'node:crypto';
-import type { RealtimeEvent, RealtimeEvents } from '@orvyn/types';
+import type { RealtimeEvent, RealtimeEvents } from '@khub/types';
 import { RealtimeService } from '../realtime/realtime.service';
 
 export const FILA_GATILHOS = 'automation-triggers';

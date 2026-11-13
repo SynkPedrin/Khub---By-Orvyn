@@ -44,7 +44,7 @@
 | `/tarefas` | Tarefas | 200 | 0 | 0 | 1140 | — | `screenshots/1440/tarefas.png` |
 | `/financeiro` | Financeiro | 200 | 0 | 0 | 1163 | Nenhum | `screenshots/1440/financeiro.png` |
 | `/conhecimento` | Base de conhecimento | 200 | 0 | 0 | 1196 | — | `screenshots/1440/conhecimento.png` |
-| `/onboarding` | Vamos montar seu Orvyn | 200 | 0 | 0 | 1149 | — | `screenshots/1440/onboarding.png` |
+| `/onboarding` | Vamos montar seu KHUB | 200 | 0 | 0 | 1149 | — | `screenshots/1440/onboarding.png` |
 | `/leads/d8977ff8-43b6-4c17-abf5-1addfa04928d` | — | 200 | 0 | 0 | 1135 | não encontrado | `screenshots/1440/leads_d8977ff8_43b6_4c17_abf5_1addfa04928d.png` |
 | `/contatos/d8977ff8-43b6-4c17-abf5-1addfa04928d` | Lead inbound mv8dfbyd | 200 | 0 | 0 | 1183 | Nenhum | `screenshots/1440/contatos_d8977ff8_43b6_4c17_abf5_1addfa04928d.png` |
 | `/leads` | Leads | 200 | 0 | 0 | 1170 | Nenhum | `screenshots/1440/leads.png` |
@@ -128,7 +128,7 @@ Impedimentos de UX nessa jornada: o cadastro exige confirmar senha e aceitar os 
 | `/inbox` | Inbox | 200 | 0 | 0 | 1115 | — | `screenshots/1440/novo_inbox.png` |
 | `/automacoes` | Automações | 200 | 0 | 0 | 1133 | Nenhum | `screenshots/1440/novo_automacoes.png` |
 | `/configuracoes` | Configurações | 200 | 0 | 0 | 1133 | — | `screenshots/1440/novo_configuracoes.png` |
-| `/onboarding` | Vamos montar seu Orvyn | 200 | 0 | 0 | 1159 | — | `screenshots/1440/novo_onboarding.png` |
+| `/onboarding` | Vamos montar seu KHUB | 200 | 0 | 0 | 1159 | — | `screenshots/1440/novo_onboarding.png` |
 
 ## 7. Problemas visuais e de produto observados (por inspeção das telas)
 **O que está bom:** identidade ametista/off-white consistente em toda a aplicação, hierarquia tipográfica clara, espaçamento regular, estados vazios com orientação e CTA, mobile com menu hambúrguer e sem quebra de layout, cadastro/login bem acabados.

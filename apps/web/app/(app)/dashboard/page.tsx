@@ -23,6 +23,7 @@ import {
 } from '@/lib/demo/dataset';
 import { EmptyState, ErrorState } from '@/components/revenue/States';
 import { crm, type Overview, type Tarefa } from '@/lib/crm';
+import { conversaoHonesta } from '@/lib/revenue/conversao';
 
 /**
  * DASHBOARD DE RECEITA
@@ -117,7 +118,7 @@ function DashboardReal() {
 
   if (!overview) return <DashboardVazio />;
 
-  const semNada = overview.kpis.contatos === 0 && overview.kpis.negocios === 0;
+  const semNada = overview.kpis.contatos === 0 && overview.kpis.negocios === 0 && overview.kpis.ganho === 0;
   if (semNada) return <DashboardVazio />;
 
   return (
@@ -126,31 +127,24 @@ function DashboardReal() {
         <KpiCard label="Contatos" value={numero(overview.kpis.contatos)} icon="leads" />
         <KpiCard label="Negócios Abertos" value={numero(overview.kpis.negocios)} icon="briefcase" />
         <KpiCard label="Valor em Pipeline" value={moeda(overview.kpis.valorFunil)} icon="dollar" tom="success" />
-        <KpiCard
-          label="Taxa de Conversão"
-          value={percentual(overview.kpis.conversao, 0, true)}
-          icon="chart"
-          comparacao={overview.kpis.conversaoBase === 'fechados' ? 'ganhos sobre negócios fechados' : overview.kpis.conversaoBase === 'etapa_final' ? 'abertos na etapa final (sem fechamentos ainda)' : 'sem negócios para calcular'}
-        />
+        <KpiCard label="Taxa de Conversão" icon="chart" {...conversaoHonesta(overview.kpis)} />
       </KpiGrid>
 
       <div className="mb-6 grid gap-4 xl:grid-cols-2">
         <Section
           title="Pipeline de Vendas"
+          info={overview.funilNome ? `Abertos por etapa · ${overview.funilNome}` : 'Abertos por etapa'}
           action={
             <Link href="/pipeline" className="flex items-center gap-1 text-[13px] font-medium text-brand hover:underline">
               Ver pipeline <Icon name="arrowRight" size={14} />
             </Link>
           }
         >
-          <p className="t-display">{moeda(overview.kpis.valorFunil)}</p>
-          <p className="mt-1 text-[13px] text-muted">em oportunidades</p>
+          {/* O valor total já está no KPI acima: aqui entra o funil por etapa (valor e contagem). */}
           {overview.funil.length > 0 ? (
-            <div className="mt-5">
-              <FaixasFunil etapas={overview.funil.map((f) => ({ rotulo: f.nome, valor: f.total }))} />
-            </div>
+            <FunilPorEtapa etapas={overview.funil} />
           ) : (
-            <p className="mt-5 text-[13px] text-muted">Configure um pipeline em Configurações para ver o funil aqui.</p>
+            <p className="text-sm text-muted">Este funil ainda não tem etapas. Crie as etapas no Pipeline para ver a distribuição aqui.</p>
           )}
         </Section>
 
@@ -172,7 +166,8 @@ function DashboardReal() {
         </Section>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      {/* items-start: painel vazio fica do tamanho do conteúdo, não estica até a altura da Atividade. */}
+      <div className="grid items-start gap-4 xl:grid-cols-3">
         <Section
           title="Atividade Recente"
           action={
@@ -205,14 +200,19 @@ function DashboardReal() {
         <Section
           title="Tarefas de Hoje"
           action={
-            <Link href="/agenda" className="flex items-center gap-1 text-[13px] font-medium text-brand hover:underline">
-              Ver agenda <Icon name="arrowRight" size={14} />
+            <Link href="/tarefas" className="flex items-center gap-1 text-[13px] font-medium text-brand hover:underline">
+              Ver tarefas <Icon name="arrowRight" size={14} />
             </Link>
           }
           bodyClassName="p-0"
         >
           {!tarefas || tarefas.length === 0 ? (
-            <EmptyState icon="check2" title="Nada para hoje" description="Tarefas com vencimento hoje aparecem aqui." />
+            <VazioCompacto
+              icon="check2"
+              title="Nada vencendo hoje"
+              description="Tarefas com prazo para hoje aparecem aqui."
+              cta={{ href: '/tarefas', label: 'Criar tarefa' }}
+            />
           ) : (
             <ul className="divide-y divide-line">
               {tarefas.map((t) => (
@@ -248,18 +248,12 @@ function DashboardReal() {
             <h2 className="t-section">Insights da NICO</h2>
             <span className="pill pill-brand">Beta</span>
           </div>
-          <div className="flex-1 p-5">
-            <EmptyState
-              icon="ai"
-              title="Ainda sem insights"
-              description="O Copiloto analisa pipeline, leads e conversas para sugerir ações. Volte aqui quando houver mais atividade registrada."
-              action={
-                <Link href="/ia" className="btn btn-sm">
-                  Abrir Copiloto <Icon name="arrowRight" size={14} />
-                </Link>
-              }
-            />
-          </div>
+          <VazioCompacto
+            icon="ai"
+            title="Ainda sem insights"
+            description="A NICO analisa pipeline, leads e conversas para sugerir ações quando houver mais atividade."
+            cta={{ href: '/nyro', label: 'Perguntar à NICO' }}
+          />
         </section>
       </div>
     </>
@@ -456,25 +450,69 @@ function DashboardVazio() {
         premium
         icon="chart"
         title="Seu painel de receita ainda não tem dados"
-        description="Assim que entrarem leads, conversas e negócios, os indicadores aparecem aqui automaticamente. Para conhecer a interface antes disso, ligue o modo de demonstração."
+        description="Assim que entrarem leads, conversas e negócios, os indicadores aparecem aqui automaticamente."
         action={
           <div className="flex flex-wrap items-center justify-center gap-2">
             <Link href="/leads" className="btn btn-primary btn-sm">
               <Icon name="plus" size={15} />
               Cadastrar primeiro lead
             </Link>
-            <a
-              href="https://"
-              onClick={(e) => e.preventDefault()}
-              className="btn btn-sm"
-              title="Defina NEXT_PUBLIC_ORVYN_DEMO=1 no .env.local"
-            >
-              <Icon name="info" size={15} />
-              Como ativar o modo demo
-            </a>
+            <Link href="/pipeline" className="btn btn-sm">
+              <Icon name="chart" size={15} />
+              Abrir o pipeline
+            </Link>
           </div>
         }
       />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+/** Funil do dashboard: uma linha por etapa, barra proporcional ao VALOR. */
+function FunilPorEtapa({ etapas }: { etapas: Overview['funil'] }) {
+  const maior = Math.max(...etapas.map((e) => e.valor), 0);
+  return (
+    <ul className="space-y-3.5">
+      {etapas.map((e) => {
+        const pct = maior > 0 ? Math.max(e.valor > 0 ? 3 : 0, Math.round((e.valor / maior) * 100)) : 0;
+        return (
+          <li key={e.id}>
+            <div className="flex min-w-0 items-baseline justify-between gap-3">
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: e.cor }} aria-hidden />
+                <span className="truncate text-sm font-medium text-fg">{e.nome}</span>
+                <span className="shrink-0 text-xs tabular text-muted">
+                  {numero(e.total)} {e.total === 1 ? 'negócio' : 'negócios'}
+                </span>
+              </span>
+              <span className="shrink-0 text-sm font-semibold tabular text-fg">{moeda(e.valor)}</span>
+            </div>
+            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[var(--fill-4)]" aria-hidden>
+              <div className="h-full rounded-full bg-brand" style={{ width: `${pct}%`, opacity: e.valor > 0 ? 1 : 0 }} />
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** Estado vazio de painel secundário: uma linha, com a ação útil ao lado. */
+function VazioCompacto({ icon, title, description, cta }: { icon: Parameters<typeof Icon>[0]['name']; title: string; description: string; cta: { href: string; label: string } }) {
+  return (
+    <div className="flex items-start gap-3 px-5 pb-5 pt-3">
+      <span className="icon-tile icon-tile-neutral h-9 w-9 rounded-md">
+        <Icon name={icon} size={17} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-fg">{title}</p>
+        <p className="mt-0.5 text-xs text-muted">{description}</p>
+        <Link href={cta.href} className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline">
+          {cta.label} <Icon name="arrowRight" size={14} />
+        </Link>
+      </div>
     </div>
   );
 }

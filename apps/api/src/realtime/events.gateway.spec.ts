@@ -1,5 +1,5 @@
 import { JwtService } from '@nestjs/jwt';
-import { EventsGateway, salaDoTenant } from './events.gateway';
+import { EventsGateway, salaDeConversas, salaDoTenant } from './events.gateway';
 import { RealtimeService } from './realtime.service';
 import { TokenService } from '../auth/token.service';
 import { ConfigService } from '../config/config.service';
@@ -59,7 +59,7 @@ describe('EventsGateway (D2 — auth e isolamento do socket)', () => {
     const s = fakeSocket({ ticket });
     g.handleConnection(s as never);
 
-    expect(s.salas).toEqual([salaDoTenant(TENANT_A)]);
+    expect(s.salas).toEqual([salaDoTenant(TENANT_A), salaDeConversas(TENANT_A)]);
     expect(s.data).toMatchObject({ tenantId: TENANT_A });
     expect(s.desconectado).toBe(false);
     expect(s.emitidos[0].evento).toBe('pronto');
@@ -108,7 +108,7 @@ describe('EventsGateway (D2 — auth e isolamento do socket)', () => {
     // tenta se passar pelo tenant B por todos os caminhos que o cliente controla
     const s = fakeSocket({ ticket, tenantId: TENANT_B, tenant_id: TENANT_B }, { tenantId: TENANT_B });
     g.handleConnection(s as never);
-    expect(s.salas).toEqual([salaDoTenant(TENANT_A)]); // ticket manda, payload do cliente não
+    expect(s.salas).toEqual([salaDoTenant(TENANT_A), salaDeConversas(TENANT_A)]); // ticket manda, payload do cliente não
     expect(s.data.tenantId).toBe(TENANT_A);
   });
 
@@ -128,7 +128,48 @@ describe('EventsGateway (D2 — auth e isolamento do socket)', () => {
     const ticket = tokens().signWsTicket(claims(TENANT_A));
     const s = fakeSocket({}, { ticket });
     g.handleConnection(s as never);
+    expect(s.salas).toEqual([salaDoTenant(TENANT_A), salaDeConversas(TENANT_A)]);
+  });
+});
+
+describe('EventsGateway — acesso por módulo (ADR-0045)', () => {
+  /** Prisma falso: membership e permissões do colaborador. */
+  function prismaCom(role: string, permissoes: unknown) {
+    const user = { findFirst: async () => ({ permissoes }) };
+    return {
+      membership: { findUnique: async () => ({ role }) },
+      withTenant: async <T>(_t: string, fn: (tx: unknown) => Promise<T>) => fn({ user }),
+    } as unknown as PrismaService;
+  }
+  const conectar = async (prisma: PrismaService, role: string) => {
+    const g = new EventsGateway(tokens(), new ConfigService(), prisma);
+    const s = fakeSocket({ ticket: tokens().signWsTicket({ ...claims(TENANT_A), role }) });
+    g.handleConnection(s as never);
+    await new Promise((r) => setImmediate(r));
+    return s;
+  };
+
+  it('colaborador sem Conversas NÃO entra na sala de conversas', async () => {
+    const s = await conectar(prismaCom('member', { modulos: ['agenda'] }), 'member');
     expect(s.salas).toEqual([salaDoTenant(TENANT_A)]);
+  });
+
+  it('colaborador com Conversas entra', async () => {
+    const s = await conectar(prismaCom('member', { modulos: ['conversas'] }), 'member');
+    expect(s.salas).toEqual([salaDoTenant(TENANT_A), salaDeConversas(TENANT_A)]);
+  });
+
+  it('papel vem do banco, não do ticket: admin no banco nunca é restrito', async () => {
+    const s = await conectar(prismaCom('admin', { modulos: [] }), 'member');
+    expect(s.salas).toContain(salaDeConversas(TENANT_A));
+  });
+
+  it('mensagem e conversa vão para a sala de conversas; o resto, para a do tenant', () => {
+    const { g, server } = gateway();
+    g.emitirParaTenant(TENANT_A, 'message.created', { conversationId: 'c1', id: 'm1', de: 'contato', texto: 'oi', hora: null });
+    g.emitirParaTenant(TENANT_A, 'conversation.updated', { id: 'c1' });
+    g.emitirParaTenant(TENANT_A, 'deal.updated', { id: 'd1' });
+    expect(server.enviados.map((e) => e.sala)).toEqual([salaDeConversas(TENANT_A), salaDeConversas(TENANT_A), salaDoTenant(TENANT_A)]);
   });
 });
 

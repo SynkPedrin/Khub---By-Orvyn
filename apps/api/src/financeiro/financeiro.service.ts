@@ -141,7 +141,7 @@ export class FinanceiroService {
       form.set('line_items[0][price_data][product_data][name]', cob.descricao);
       form.set('client_reference_id', id);
       // `tenant_id` no metadata: o webhook (`POST /v1/webhooks/stripe`) conecta
-      // como `orvyn_app` (NOBYPASSRLS) e não pode descobrir o tenant de uma
+      // como `khub_app` (NOBYPASSRLS) e não pode descobrir o tenant de uma
       // cobrança por lookup cross-tenant — precisa vir de uma fonte confiável
       // já na criação do checkout, mesmo padrão do roteamento Meta/STEVO.
       form.set('metadata[kind]', 'financeiro_cobranca');

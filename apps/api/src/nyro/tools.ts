@@ -68,6 +68,67 @@ export const TOOLS: Tool[] = [
     () => 'listar as automações',
   ),
 
+  t(
+    'resumo_financeiro',
+    'Visão financeira da conta: recebido, a receber, vencido (valores em centavos), número de cobranças pagas/vencidas e, junto, o valor no funil. Use para qualquer pergunta de caixa, inadimplência, receita ou previsão.',
+    z.object({}),
+    'leitura',
+    () => 'ler o resumo financeiro',
+  ),
+  t(
+    'listar_cobrancas',
+    'Lista as cobranças da conta (descrição, valor em centavos, vencimento, status). Filtre por status para achar inadimplentes ou o que falta receber.',
+    z.object({ status: z.enum(['rascunho', 'enviada', 'paga', 'vencida', 'cancelada']).optional() }),
+    'leitura',
+    (a) => (a.status ? `listar cobranças ${a.status}s` : 'listar as cobranças'),
+  ),
+  t(
+    'guia_do_sistema',
+    'Mapa do KHUB: onde fica cada tela, o que ela faz e como fazer tarefas comuns (criar automação, conectar WhatsApp, ver campanhas, cobrar cliente...). Use quando perguntarem "onde fica", "como faço" ou "como configuro".',
+    z.object({ assunto: z.string().max(120).optional() }),
+    'leitura',
+    (a) => (a.assunto ? `consultar o mapa do sistema: "${a.assunto}"` : 'consultar o mapa do sistema'),
+  ),
+
+  t(
+    'pesquisar_web',
+    'Pesquisa na web (Google-like) e devolve títulos, links e resumo. Com lerPaginas=true traz também o conteúdo dos resultados: use para benchmark de concorrentes, tendências, preços de mercado, referências de copy, notícias e dúvidas que a base interna não responde. Cite a URL de onde tirou cada informação.',
+    z.object({ consulta: z.string().min(3).max(300), limite: z.number().int().min(1).max(8).default(5), lerPaginas: z.boolean().default(false) }),
+    'leitura',
+    (a) => `pesquisar na web: "${a.consulta}"`,
+  ),
+  t(
+    'ler_pagina',
+    'Lê uma página pública da web (site de concorrente, landing page, artigo, perfil) e devolve o texto em Markdown. Use para analisar a oferta, a copy e a estrutura de uma página específica.',
+    z.object({ url: z.string().url().max(500) }),
+    'leitura',
+    (a) => `ler a página ${a.url.replace(/^https?:\/\//, '').slice(0, 60)}`,
+  ),
+  t(
+    'atualizar_plano',
+    'Registra e atualiza o PLANO de trabalho visível para o usuário. Chame no início de tarefas com 3 ou mais etapas (objetivo + passos) e de novo a cada etapa concluída, marcando o status. Não use em conversa simples.',
+    z.object({
+      objetivo: z.string().min(3).max(200),
+      passos: z.array(z.object({ texto: z.string().min(2).max(160), status: z.enum(['pendente', 'fazendo', 'feito']) })).min(1).max(10),
+    }),
+    'leitura',
+    (a) => `plano: ${a.objetivo}`,
+  ),
+  t(
+    'insights_conversas',
+    'Lê as mensagens recentes que os LEADS enviaram nas conversas (sem telefone nem e-mail) para você extrair dores, objeções, dúvidas e linguagem real do cliente. Use antes de escrever copy, roteiro, FAQ ou melhorar o prompt do agente. Resuma padrões; não cite dados pessoais.',
+    z.object({ dias: z.number().int().min(1).max(90).default(30), termo: z.string().max(60).optional() }),
+    'leitura',
+    (a) => `ler o que os leads falaram nos últimos ${a.dias} dias`,
+  ),
+  t(
+    'esquecer',
+    'Apaga um fato da memória da conta (use quando o usuário corrigir ou disser que algo mudou).',
+    z.object({ chave: z.string().min(2).max(60) }),
+    'escrita',
+    (a) => `esquecer "${a.chave}"`,
+  ),
+
   // ---------------- Escrita (efeito interno, reversível) ----------------
   t(
     'criar_contato',
@@ -146,6 +207,64 @@ export const TOOLS: Tool[] = [
     z.object({ pipelineId: z.string().uuid(), nome: z.string().min(1).max(60), cor: z.string().max(9).optional() }),
     'escrita',
     (a) => `adicionar a etapa "${a.nome}" ao funil`,
+  ),
+
+  // ---------------- Marketing e operação (ADR-0044) ----------------
+  t(
+    'analisar_campanhas',
+    'Desempenho das campanhas de anúncios (Meta) no período: investimento, leads, CPL, CTR, CPC, CPM, ROAS, frequência, comparação com o período anterior e ALERTAS de diagnóstico. Use antes de opinar sobre tráfego pago.',
+    z.object({ dias: z.number().int().min(3).max(90).default(7) }),
+    'leitura',
+    (a) => `analisar as campanhas dos últimos ${a.dias} dias`,
+  ),
+  t(
+    'benchmark_biblioteca_anuncios',
+    'Monta o benchmark de concorrentes na Biblioteca de Anúncios da Meta: links de busca prontos (anúncios ativos no Brasil) para cada concorrente/termo e o método de análise (tempo no ar, variações, gancho, oferta, CTA).',
+    z.object({ termos: z.array(z.string().min(2).max(80)).min(1).max(8), pais: z.string().length(2).default('BR') }),
+    'leitura',
+    (a) => `montar benchmark na Biblioteca de Anúncios: ${a.termos.join(', ')}`,
+  ),
+  t(
+    'analisar_prompt_agentes',
+    'Avalia o prompt dos Agentes de IA de atendimento (WhatsApp) com uma rubrica 0 a 100 (papel, objetivo, tom, transferência para humano, limites, base de conhecimento, objeções, compliance) e devolve o texto para você sugerir reescrita.',
+    z.object({ agentId: z.string().uuid().optional() }),
+    'leitura',
+    () => 'avaliar o prompt dos agentes de IA',
+  ),
+  t(
+    'diagnosticar_automacoes',
+    'Diagnostica as automações: taxa de falha por fluxo, erros mais comuns, execuções travadas, fluxos ativos que nunca disparam e esperas acumuladas. Use quando perguntarem se as automações estão funcionando ou para achar erro.',
+    z.object({ workflowId: z.string().uuid().optional() }),
+    'leitura',
+    () => 'diagnosticar as automações',
+  ),
+  t(
+    'gerar_relatorio',
+    'Salva um relatório em Markdown (com títulos, tabelas e emojis) no painel da NICO, com download em .md e PDF. Escreva o relatório COMPLETO no campo conteudoMd, usando só números que vieram de tools.',
+    z.object({ titulo: z.string().min(3).max(160), tipo: z.enum(['campanhas', 'benchmark', 'funil', 'automacoes', 'agentes', 'conteudo', 'financeiro', 'livre']).default('livre'), conteudoMd: z.string().min(20).max(60000) }),
+    'escrita',
+    (a) => `salvar o relatório "${a.titulo}"`,
+  ),
+  t(
+    'agendar_rotina',
+    'Cria uma rotina recorrente da NICO (ex.: toda segunda às 8h analisar as campanhas e gerar o relatório). A instrução é o que você fará em cada execução. diaSemana: 0=domingo … 6=sábado.',
+    z.object({ titulo: z.string().min(3).max(120), instrucao: z.string().min(5).max(2000), frequencia: z.enum(['diaria', 'semanal', 'mensal']), hora: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).default('08:00'), diaSemana: z.number().int().min(0).max(6).optional(), diaMes: z.number().int().min(1).max(28).optional() }),
+    'escrita',
+    (a) => `criar a rotina "${a.titulo}" (${a.frequencia} às ${a.hora})`,
+  ),
+  t(
+    'listar_rotinas',
+    'Lista as rotinas agendadas da NICO, com próxima execução e status da última.',
+    z.object({}),
+    'leitura',
+    () => 'listar as rotinas',
+  ),
+  t(
+    'pausar_rotina',
+    'Pausa (cancela) uma rotina agendada da NICO.',
+    z.object({ id: z.string().uuid() }),
+    'escrita',
+    () => 'pausar uma rotina',
   ),
 
   // ---------------- Sensível (pede aprovação humana) ----------------
@@ -239,5 +358,6 @@ function tipoJson(campo: z.ZodTypeAny): Record<string, unknown> {
   if (tn === z.ZodFirstPartyTypeKind.ZodBoolean) return { type: 'boolean' };
   if (tn === z.ZodFirstPartyTypeKind.ZodEnum) return { type: 'string', enum: (campo._def as { values: string[] }).values };
   if (tn === z.ZodFirstPartyTypeKind.ZodArray) return { type: 'array', items: tipoJson((campo._def as { type: z.ZodTypeAny }).type) };
+  if (tn === z.ZodFirstPartyTypeKind.ZodObject) return zodParaJsonSchema(campo);
   throw new Error(`tipo de campo não suportado nas tools: ${tn}`);
 }

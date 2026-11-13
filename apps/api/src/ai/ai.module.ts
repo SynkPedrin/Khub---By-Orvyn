@@ -1,8 +1,10 @@
 import { Global, Module } from '@nestjs/common';
 import { AnthropicProvider } from './anthropic.provider';
+import { OllamaProvider } from './ollama.provider';
 import { OpenAiProvider } from './openai.provider';
 import { AiProviderRegistry } from './provider.registry';
-import { AI_PROVIDER, type AIProvider } from './provider.contract';
+import { AGENT_LLM, AI_PROVIDER, type AIProvider } from './provider.contract';
+import { AgentLlmService } from './agent-llm.service';
 import { AiService } from './ai.service';
 
 /**
@@ -21,14 +23,17 @@ import { AiService } from './ai.service';
   providers: [
     AnthropicProvider,
     OpenAiProvider,
+    OllamaProvider,
     AiProviderRegistry,
     {
       provide: AI_PROVIDER,
       inject: [AiProviderRegistry],
       useFactory: (registry: AiProviderRegistry): AIProvider => registry.ativo(),
     },
+    AgentLlmService,
+    { provide: AGENT_LLM, useExisting: AgentLlmService },
     AiService,
   ],
-  exports: [AI_PROVIDER, AiProviderRegistry, AiService, AnthropicProvider],
+  exports: [AI_PROVIDER, AGENT_LLM, AiProviderRegistry, AiService, AnthropicProvider],
 })
 export class AiModule {}

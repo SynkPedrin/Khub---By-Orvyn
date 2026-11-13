@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import type { RagEscopo, RagHit } from '@orvyn/types';
+import type { RagEscopo, RagHit } from '@khub/types';
 import { RetrievalService, type RagContext } from './retrieval.service';
 
 const ESCOPOS = ['tenant', 'sub', 'nicho', 'global'] as const;

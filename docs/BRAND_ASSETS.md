@@ -8,17 +8,17 @@ no repositório, não o que o brief pedia idealmente.
 
 | Asset | Caminho real | Uso |
 |---|---|---|
-| Símbolo ORVYN (ícone) | `apps/web/public/logo.png` | Único arquivo de marca gráfica real. Usado no Sidebar, AuthShell (desktop e mobile). |
+| Símbolo KHUB (ícone) | `apps/web/public/logo.png` | Único arquivo de marca gráfica real. Usado no Sidebar, AuthShell (desktop e mobile). |
 | Vídeo de cristal | `apps/web/public/crystal-video.mp4` | É o `videoROXO.mp4` fornecido pelo usuário — MD5 idêntico ao original, confirmado bit a bit antes de renomear. Renomeado para refletir o conteúdo (cristal roxo), não o nome do arquivo de origem. |
 | Poster do login | `apps/web/public/Background-login.png` | Frame estático pré-existente, usado como poster/fallback do vídeo no `AuthShell`. |
 
 ## O que NÃO existe (documentado, não fabricado)
 
-- **Não existe um arquivo de logotipo "ORVYN Revenue OS"** (wordmark oficial do
-  produto, distinto do wordmark corporativo "ORVYN"). Não foi criado nenhum
+- **Não existe um arquivo de logotipo "KHUB Revenue OS"** (wordmark oficial do
+  produto, distinto do wordmark corporativo "KHUB"). Não foi criado nenhum
   substituto em CSS/texto fazendo-se passar por logo oficial — onde a marca do
   produto precisa aparecer, usa-se o símbolo real (`logo.png`) + tipografia
-  (`OrvynMark`), nunca um arquivo inventado.
+  (`KhubMark`), nunca um arquivo inventado.
 - **NYRO não tem asset de logo próprio.** Mantém identidade só tipográfica
   (nome "NYRO" em componentes como `CommandBar`), sem ganhar nenhum elemento
   visual do Revenue OS — não foi criado um logo para preencher essa lacuna.
@@ -27,7 +27,7 @@ no repositório, não o que o brief pedia idealmente.
   `ffmpeg`/`ffprobe` disponíveis neste ambiente). Efeito prático: o navegador
   não consegue tocar progressivamente enquanto baixa; o arquivo precisa
   chegar quase inteiro antes do primeiro frame. Mitigado no componente
-  (`OrvynBrandMotion`) com poster instantâneo + crossfade só no `onCanPlay` +
+  (`KhubBrandMotion`) com poster instantâneo + crossfade só no `onCanPlay` +
   carregamento adiado (`requestIdleCallback`) fora do login. Resolver na raiz
   exigiria reexportar com `ffmpeg -movflags +faststart`, fora do escopo desta
   sessão por falta de ferramenta no ambiente.

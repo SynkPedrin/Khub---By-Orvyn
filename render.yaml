@@ -1,0 +1,38 @@
+# Free deployment for validation. Sleeping web instances pause workers.
+services:
+  - type: web
+    name: khub-api
+    runtime: docker
+    plan: free
+    region: virginia
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    dockerCommand: node /repo/deploy/start-free.mjs
+    healthCheckPath: /v1/ready
+    autoDeployTrigger: off
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: LOG_FORMAT
+        value: json
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: WEB_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: khub-queue
+          property: connectionString
+      - key: AI_PROVIDER
+        value: anthropic
+  - type: keyvalue
+    name: khub-queue
+    plan: free
+    region: virginia
+    maxmemoryPolicy: noeviction
+    ipAllowList: []

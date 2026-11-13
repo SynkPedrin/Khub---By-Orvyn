@@ -10,7 +10,7 @@ import { ProductShot } from '@/components/marketing/ui/ProductShot';
 import { SCREENS } from '@/lib/marketing/screens';
 
 /** Os blocos abaixo são os mesmos do fluxo publicado na captura ao lado
- *  (`automations-flat.png`): gatilho, IA de qualificação, espera,
+ *  (`automations-dark.png`): gatilho, IA de qualificação, espera,
  *  condição e as duas saídas. Nada aqui é inventado para a LP. */
 const PASSOS = [
   { tipo: 'Gatilho', titulo: 'Entrada de lead', texto: 'Novo lead via WhatsApp, o fluxo começa sozinho, sem ninguém abrir o sistema.' },
@@ -80,7 +80,7 @@ export function Automations() {
                   className="absolute -left-[34px] top-[6px] block h-[9px] w-[9px] rounded-full border border-[var(--lp-accent)] bg-[var(--lp-bg)]"
                 />
                 <Reveal delay={i * 0.05}>
-                  <p className="lp-label mb-2 text-[var(--lp-accent)]">{p.tipo}</p>
+                  <p className="lp-label lp-eyebrow mb-2 text-[var(--lp-accent)]">{p.tipo}</p>
                   <h3 className="lp-h4 text-[var(--lp-ink)]">{p.titulo}</h3>
                   <p className="mt-2 max-w-[44ch] text-[14.5px] leading-[1.6] text-[var(--lp-ink-2)]">{p.texto}</p>
                   {'ramifica' in p && p.ramifica ? (

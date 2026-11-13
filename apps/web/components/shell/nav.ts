@@ -3,10 +3,10 @@ import type { IconName } from '../icons';
 /**
  * Navegação do KHUB.
  *
- * PRIMARY é o menu do produto. SECONDARY são módulos herdados do ORVYN OS que
+ * PRIMARY é o menu do produto. SECONDARY são módulos herdados do KHUB OS que
  * continuam funcionando e testados, mas saem da navegação primária para não
  * diluir o foco em receita — acessíveis só por rota direta hoje (nenhuma tela
- * ainda lista SECONDARY_NAV; ver decisão 3 em `docs/ORVYN_REVENUE_AUDIT.md`).
+ * ainda lista SECONDARY_NAV; ver decisão 3 em `docs/KHUB_REVENUE_AUDIT.md`).
  * "Agentes de IA" é exceção deliberada: feature nova e central (ADR-0030),
  * foi para o PRIMARY para não nascer invisível.
  */
@@ -40,9 +40,14 @@ export const PRIMARY_NAV: NavItem[] = [
   { href: '/pipeline', label: 'Pipeline', icon: 'chart', grupo: 'Operação' },
   { href: '/conversas', label: 'Conversas', icon: 'chat', badge: 'conversas', grupo: 'Operação' },
   { href: '/agenda', label: 'Agenda', icon: 'calendar', grupo: 'Operação' },
+  { href: '/tarefas', label: 'Tarefas', icon: 'check2', grupo: 'Operação' },
   { href: '/automacoes', label: 'Automações', icon: 'zap', grupo: 'Crescimento' },
   { href: '/campanhas', label: 'Campanhas', icon: 'send', grupo: 'Crescimento' },
+  // Captura de leads por link/embed (Q4.1).
+  { href: '/formularios', label: 'Formulários', icon: 'file', grupo: 'Crescimento' },
   { href: '/analytics', label: 'Analytics', icon: 'trend', grupo: 'Crescimento' },
+  // Cobranças e links de pagamento: receita, junto das ferramentas de crescimento (Q2.6).
+  { href: '/financeiro', label: 'Financeiro', icon: 'finance', grupo: 'Crescimento' },
   // NICO = agente INTERNA (trabalha com a equipe); Agentes de IA = atendem CLIENTES no WhatsApp (ADR-0040).
   { href: '/nyro', label: 'NICO', icon: 'sparkles', grupo: 'Inteligência' },
   { href: '/agentes', label: 'Agentes de IA', icon: 'chat', grupo: 'Inteligência' },
@@ -58,12 +63,10 @@ export const AGENCY_NAV: NavItem[] = [
   { href: '/agency/configuracoes', label: 'Configurações', icon: 'settings', grupo: 'Conta' },
 ];
 
+/** Empresas, Tarefas e Financeiro subiram para o PRIMARY na Q2.6. */
 export const SECONDARY_NAV: NavItem[] = [
-  { href: '/empresas', label: 'Empresas', icon: 'building' },
-  { href: '/tarefas', label: 'Tarefas', icon: 'check2' },
   { href: '/conhecimento', label: 'Conhecimento', icon: 'knowledge' },
   { href: '/marketing/ads', label: 'Anúncios', icon: 'marketing' },
-  { href: '/financeiro', label: 'Financeiro', icon: 'finance' },
 ];
 
 /**

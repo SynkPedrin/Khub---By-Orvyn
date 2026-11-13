@@ -5,5 +5,7 @@ import { AgendaController } from './agenda.controller';
 @Module({
   controllers: [AgendaController],
   providers: [AgendaService],
+  // Exportado para o Action Engine dos agentes (consultar/solicitar agendamento).
+  exports: [AgendaService],
 })
 export class AgendaModule {}

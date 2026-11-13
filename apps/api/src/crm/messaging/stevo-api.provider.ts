@@ -1,13 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '../../config/config.service';
 import { DeliveryError, type MessagingProvider } from './stevo.provider';
+import type { MidiaSaida } from './provider.contract';
 
 /**
  * STEVO — API de GESTÃO (`https://openapi.stevo.chat/v1`).
  *
  * Contrato tirado da especificação oficial (`openapi.stevo.chat/openapi.yaml`)
  * e dos tipos do SDK oficial `stevo-sdk` — nenhum endpoint inventado (ADR-0031:
- * a Stevo é só transporte; a inteligência é do Revenue OS).
+ * a Stevo é só transporte; a inteligência é do KHUB).
  *
  * Diferente do `StevoProvider` antigo (API de instância, uma instância global
  * no .env): aqui cada TENANT tem sua instância, vinculada em `integrations`
@@ -42,7 +43,7 @@ export interface StevoMe {
   key: { name: string; scopes: string[]; allowed_instance_ids: string[] | null; rate_limit_per_minute?: number };
 }
 
-/** Escopos que o Revenue OS usa (menor privilégio — doc 18 §5). */
+/** Escopos que o KHUB usa (menor privilégio — doc 18 §5). */
 export const ESCOPOS_NECESSARIOS: Record<string, string> = {
   'instances:read': 'listar instâncias e ver conexão',
   'instances:write': 'vincular instância (external_ref)',
@@ -76,7 +77,7 @@ export class StevoApiProvider implements MessagingProvider {
     const headers: Record<string, string> = {
       authorization: `Bearer ${this.config.get('STEVO_REVENUE_API_KEY')}`,
       accept: 'application/json',
-      'user-agent': 'orvyn-revenue-os/1.0',
+      'user-agent': 'khub-revenue-os/1.0',
     };
     if (opts.corpo !== undefined) headers['content-type'] = 'application/json';
     if (opts.idempotencyKey) headers['idempotency-key'] = opts.idempotencyKey;
@@ -101,7 +102,7 @@ export class StevoApiProvider implements MessagingProvider {
     return (await this.req<StevoMe>('GET', '/v1/me')).dados;
   }
 
-  /** Escopos que faltam para o Revenue OS (para a UI dizer "falta permissão X"). */
+  /** Escopos que faltam para o KHUB (para a UI dizer "falta permissão X"). */
   async escoposFaltando(): Promise<{ escopo: string; para: string }[]> {
     const { key } = await this.me();
     const tem = new Set(key.scopes.map((s) => SINONIMOS[s] ?? s));
@@ -116,14 +117,60 @@ export class StevoApiProvider implements MessagingProvider {
     return (await this.req<StevoInstancia>('GET', `/v1/instances/${encodeURIComponent(id)}`)).dados;
   }
 
-  /** `GET /v1/instances/{id}/connection` → conectado / logado. */
-  async conexao(id: string): Promise<{ connected: boolean; logged_in: boolean }> {
-    return (await this.req<{ connected: boolean; logged_in: boolean }>('GET', `/v1/instances/${encodeURIComponent(id)}/connection`)).dados;
+  /** `GET /v1/instances/{id}/connection` → conectado / logado / número pareado. */
+  async conexao(id: string): Promise<{ connected: boolean; logged_in: boolean; phone_number: string | null }> {
+    return (await this.req<{ connected: boolean; logged_in: boolean; phone_number: string | null }>('GET', `/v1/instances/${encodeURIComponent(id)}/connection`)).dados;
+  }
+
+  /**
+   * `GET /v1/instances/{id}/qr` — `qr` já vem como data URI (`data:image/png;base64,…`),
+   * pronto pra `<img src>`; `null` até o servidor gerar (chamador relê em instantes).
+   * O campo `pairing_code` da API NÃO é um código curto digitável — é o payload
+   * bruto do QR (string gigante do protocolo Baileys) — por isso não é exposto
+   * aqui: mostrar isso como "código" na UI enganaria o usuário.
+   */
+  async obterQrCode(id: string): Promise<{ qr: string | null }> {
+    const { dados } = await this.req<{ qr: string | null }>('GET', `/v1/instances/${encodeURIComponent(id)}/qr`);
+    return { qr: dados.qr };
+  }
+
+  /** `POST /v1/instances/{id}/qr/refresh` — força QR novo (o anterior pode ter expirado). */
+  async atualizarQrCode(id: string): Promise<{ qr: string | null }> {
+    const { dados } = await this.req<{ qr: string | null }>('POST', `/v1/instances/${encodeURIComponent(id)}/qr/refresh`);
+    return { qr: dados.qr };
   }
 
   /** `PATCH /v1/instances/{id}` — `external_ref` = tenant dono (verificação cruzada no webhook). */
   async definirExternalRef(id: string, externalRef: string | null): Promise<StevoInstancia> {
     return (await this.req<StevoInstancia>('PATCH', `/v1/instances/${encodeURIComponent(id)}`, { corpo: { external_ref: externalRef } })).dados;
+  }
+
+  /**
+   * `GET /v1/instances/{id}` — resolve `server_url` + `token` (a apikey da
+   * instância SM v2). CREDENCIAL FORTE: nunca logar, nunca persistir em
+   * claro; usar só na hora e descartar.
+   */
+  async acessoInstancia(id: string): Promise<{ serverUrl: string; token: string } | null> {
+    const { dados } = await this.req<{ server_url?: string | null; token?: string | null }>('GET', `/v1/instances/${encodeURIComponent(id)}`);
+    return dados.server_url && dados.token ? { serverUrl: dados.server_url, token: dados.token } : null;
+  }
+
+  /**
+   * SM v2 da instância: `POST /user/avatar` → URL assinada da foto de perfil
+   * do WhatsApp (pps.whatsapp.net — expira; quem grava deve guardar o
+   * timestamp junto, ver db/037). `null` quando o número não tem foto ou a
+   * instância recusa.
+   */
+  async avatarDoNumero(serverUrl: string, token: string, numero: string): Promise<string | null> {
+    const res = await fetch(`${serverUrl.replace(/\/+$/, '')}/user/avatar`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', apikey: token, authorization: `Bearer ${token}` },
+      body: JSON.stringify({ number: numero, preview: false }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) return null;
+    const j = (await res.json().catch(() => ({}))) as { data?: { url?: string } };
+    return j.data?.url ?? null;
   }
 
   /** `POST /v1/webhooks` — o `secret` (whsec_…) só volta NESTA resposta. */
@@ -147,11 +194,30 @@ export class StevoApiProvider implements MessagingProvider {
    *    4xx restantes → falha definitiva.
    */
   async sendText(number: string, text: string, instanceId?: string, idempotencyKey?: string): Promise<{ providerId?: string }> {
+    return this.enviar(number, { text }, instanceId, idempotencyKey);
+  }
+
+  /** A API de gestão só aceita `media_url` (sem base64): mídia exige storage. */
+  readonly aceitaBase64 = false;
+
+  /**
+   * Mídia pelo MESMO endpoint do texto. Especificação oficial
+   * (`openapi.stevo.chat/openapi.yaml`, `POST /v1/instances/{id}/messages`):
+   * `to` + `media_url` + `media_type` (image|video|audio|document) +
+   * `caption?` + `filename?`. Não há campo de base64 — sem URL, recusa.
+   */
+  async sendMedia(number: string, midia: MidiaSaida, instanceId?: string, idempotencyKey?: string): Promise<{ providerId?: string }> {
+    if (!midia.url) throw new DeliveryError(400, { retryable: false, uncertain: false, codigo: 'midia_sem_url' });
+    const media_type = midia.tipo === 'imagem' ? 'image' : midia.tipo === 'audio' ? 'audio' : 'document';
+    return this.enviar(number, { media_url: midia.url, media_type, filename: midia.nome, ...(midia.legenda ? { caption: midia.legenda } : {}) }, instanceId, idempotencyKey);
+  }
+
+  private async enviar(number: string, conteudo: Record<string, string>, instanceId?: string, idempotencyKey?: string): Promise<{ providerId?: string }> {
     if (!instanceId) throw new DeliveryError(400, { retryable: false, uncertain: false, codigo: 'sem_instancia' });
     const to = (number || '').replace(/\D/g, '');
     try {
       const { dados } = await this.req<{ message_id: string | null; sent: boolean }>('POST', `/v1/instances/${encodeURIComponent(instanceId)}/messages`, {
-        corpo: { to, text },
+        corpo: { to, ...conteudo },
         idempotencyKey,
       });
       return { providerId: dados?.message_id ?? undefined };

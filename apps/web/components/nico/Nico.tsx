@@ -23,19 +23,31 @@ export const NICO = {
 
 export type EstadoNico = 'online' | 'pensando' | 'configurar';
 
-/** Rosto da NICO com o ponto de presença. */
+/** Rosto da NICO: a orbe é viva — muda de forma como uma gosma, a estrela
+    balança dentro e o halo pulsa atrás. O ponto de presença fica por cima. */
 export function NicoAvatar({ tamanho = 40, estado, className }: { tamanho?: number; estado?: EstadoNico; className?: string }) {
   const ponto = Math.max(8, Math.round(tamanho * 0.24));
   return (
     <span className={cx('relative inline-flex shrink-0', className)} style={{ width: tamanho, height: tamanho }}>
+      {/* Halo goo atrás da orbe */}
       <span
-        className="flex h-full w-full items-center justify-center rounded-full"
+        className="nico-orbe-halo absolute -inset-[22%] rounded-full"
         style={{
-          background: 'radial-gradient(circle at 30% 25%, var(--base-0), var(--khub-lime-soft) 70%)',
+          background:
+            'radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--khub-lime) 55%, transparent), color-mix(in srgb, var(--brand) 38%, transparent) 62%, transparent 78%)',
+          filter: 'blur(6px)',
+        }}
+        aria-hidden
+      />
+      <span
+        className="nico-orbe relative flex h-full w-full items-center justify-center overflow-hidden"
+        style={{
+          background:
+            'radial-gradient(circle at 30% 25%, var(--base-0), var(--khub-lime-soft) 62%, color-mix(in srgb, var(--brand-soft) 70%, var(--khub-lime-soft)))',
           boxShadow: 'inset 0 0 0 1px var(--khub-lime-border), 0 4px 14px -6px color-mix(in srgb, var(--brand) 35%, transparent)',
         }}
       >
-        <Image src="/nico-avatar.png" alt="" width={256} height={256} unoptimized className="h-[78%] w-[78%] object-contain" />
+        <Image src="/nico-avatar.png" alt="" width={256} height={256} unoptimized className="nico-orbe-estrela h-[78%] w-[78%] object-contain" />
       </span>
       {estado && (
         <span

@@ -3,7 +3,7 @@ import { cx } from '../ui';
 
 /**
  * Marca KHUB — wordmark oficial (`/khub-logo.png`, lockup "K" + "HUB" + "by
- * ORVYN ai"). Cores de marca fixas no próprio arquivo: funciona nos dois
+ * KHUB ai"). Cores de marca fixas no próprio arquivo: funciona nos dois
  * temas sem inversão.
  */
 export function BrandMark({
@@ -42,7 +42,7 @@ export function BrandSignature({ className }: { className?: string }) {
       <BrandMark size="sm" />
       <div className="hidden items-center gap-4 md:flex">
         <span className="h-px w-14 bg-line" aria-hidden />
-        <span className="text-[10px] font-medium uppercase tracking-[0.28em] text-faint">
+        <span className="text-2xs font-medium uppercase tracking-[0.28em] text-faint">
           Sistemas para um crescimento real
         </span>
       </div>

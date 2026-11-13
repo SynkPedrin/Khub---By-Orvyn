@@ -2,21 +2,21 @@ import type { ReactNode } from 'react';
 import { cx } from '../ui';
 
 /**
- * Moldura padrão de página do Revenue OS.
+ * Moldura padrão de página do KHUB.
  *
  * Toda tela do produto usa este container: mesma gutter lateral, mesmo
  * ritmo vertical. Sem ele, cada página inventa o próprio espaçamento e o
  * produto perde a densidade uniforme que os mockups pedem.
  */
 export function PageShell({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cx('mx-auto w-full max-w-[1680px] px-4 py-6 lg:px-8 lg:py-8', className)}>{children}</div>;
+  return <div className={cx('page-shell mx-auto min-w-0 w-full max-w-[1680px] px-4 py-6 lg:px-8 lg:py-8', className)}>{children}</div>;
 }
 
 /**
  * Cabeçalho de página: título + subtítulo à esquerda; mote da marca e/ou
  * ação primária à direita.
  *
- * O mote (`quote`) é assinatura visual da ORVYN, não conteúdo — some em
+ * O mote (`quote`) é assinatura visual da KHUB, não conteúdo — some em
  * telas estreitas para não competir com a ação.
  */
 export function PageHeader({
@@ -45,7 +45,7 @@ export function PageHeader({
 
       {/* Frase de efeito (`quote`) não é mais exibida (ADR-0039): decoração de
           site de marketing dentro do sistema; o prop fica por compatibilidade. */}
-      {actions && <div className="relative flex shrink-0 items-center gap-2">{actions}</div>}
+      {actions && <div className="relative flex max-w-full flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }
@@ -70,7 +70,7 @@ export function Section({
   info?: string;
 }) {
   return (
-    <section className={cx('card flex flex-col', className)}>
+    <section className={cx('card min-w-0 flex flex-col', className)}>
       <div className="flex items-start justify-between gap-3 px-5 pt-5">
         <div className="min-w-0">
           <h2 className="t-section">{title}</h2>

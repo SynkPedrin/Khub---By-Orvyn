@@ -15,7 +15,7 @@ Estado em 2026-10-14 (após a Sprint 0). Legenda: PASS, FAIL, BLOCKED (depende d
 | Build web | PASS | usar `NEXT_DIST_DIR` e `env -u NODE_ENV` fora do dev |
 | Migrations 000–027 em banco limpo | PASS 28/28, idempotentes | Banco de QA isolado |
 | Isolamento RLS: `002` (RAG) | PASS | |
-| Isolamento RLS: matriz como `orvyn_app` | PASS 122/122 | 13 das 51 tabelas com `tenant_id` |
+| Isolamento RLS: matriz como `khub_app` | PASS 122/122 | 13 das 51 tabelas com `tenant_id` |
 | Isolamento entre agências A×B (API) | PASS 14/15 | falha = SEC-01 (revogação) |
 | Isolamento por RLS das tabelas de agência | NOT_EXIST | tabelas sem RLS (SEC-02) |
 | Worker startup e reinício no meio de espera | PASS | |
@@ -56,7 +56,7 @@ Ainda **não** se pode declarar "100% green": há gates `NOT_EXECUTED` e um `FAI
 - Meta: App Review, Business Verification, `META_APP_SECRET`.
 - IA: `ANTHROPIC_API_KEY`, chave Voyage.
 - E-mail: SMTP/Resend para convites.
-- Infra: Postgres e Redis do Orvyn rodando.
+- Infra: Postgres e Redis do KHUB rodando.
 - Google Ads: developer token.
 
 ## Ações que exigem aprovação explícita (não executadas)

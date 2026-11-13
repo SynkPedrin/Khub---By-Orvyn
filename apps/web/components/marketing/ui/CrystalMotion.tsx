@@ -6,8 +6,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
  * Macro de ametista real (`/lp-revenue/motion/crystal.mp4`) — usada como
  * MATERIAL, não como fundo roxo.
  *
- * Segue a mesma lógica de carregamento do `OrvynBrandMotion` do app
- * (`components/brand/OrvynBrandMotion.tsx`): poster instantâneo, vídeo só
+ * Segue a mesma lógica de carregamento do `KhubBrandMotion` do app
+ * (`components/brand/KhubBrandMotion.tsx`): poster instantâneo, vídeo só
  * depois de `onCanPlay`, e nada de vídeo com `prefers-reduced-motion`.
  *
  * O arquivo não tem o átomo `moov` no início (não está otimizado para

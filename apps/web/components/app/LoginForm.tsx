@@ -17,7 +17,6 @@ export function LoginForm() {
   const params = useSearchParams();
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
-  const [ajudaSenha, setAjudaSenha] = useState(false);
   const [erro, setErro] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -79,13 +78,8 @@ export function LoginForm() {
         )}
         <div className="flex items-center justify-between text-sm">
           <label className="flex items-center gap-2 text-muted"><input type="checkbox" className="accent-brand" /> Lembrar de mim</label>
-          <button type="button" className="font-medium text-brand hover:underline" onClick={() => setAjudaSenha((v) => !v)} aria-expanded={ajudaSenha}>Esqueci a senha</button>
+          <Link href={`/esqueci-senha${email ? `?email=${encodeURIComponent(email)}` : ''}`} className="font-medium text-brand hover:underline">Esqueci a senha</Link>
         </div>
-        {ajudaSenha && (
-          <p className="rounded-lg bg-[var(--fill-4)] px-3 py-2 text-[13px] text-muted" role="status">
-            A redefinição por e-mail ainda não está disponível. Peça ao administrador da sua conta (dono da agência) para gerar uma nova senha.
-          </p>
-        )}
         <Button type="submit" className="btn-auth-primary w-full" disabled={loading}>
           {loading && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden />}
           {loading ? 'Entrando…' : 'Entrar no KHUB'}

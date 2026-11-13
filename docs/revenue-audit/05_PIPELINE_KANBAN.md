@@ -22,7 +22,7 @@ Arquivos centrais: `apps/api/src/crm/crm.service.ts`, `crm.controller.ts`, `apps
 | Reordenar dentro da coluna | AUSENTE | `Deal` não tem campo de posição; backend ordena por `createdAt asc` (`crm.service.ts:380`), a UI insere no topo (`page.tsx:87`) e após refresh o card volta de lugar |
 | Mover por teclado | PARCIAL | Menu "Mover para" existe só no `Cartao` do demo (`page.tsx:493-507`); `PipelineReal` é só HTML5 DnD (inacessível por teclado/touch) |
 | Audit log | PARCIAL | `AuditInterceptor` (`common/audit.interceptor.ts`) grava linha genérica `deals.stage` com `actor_id`, SEM antes/depois. `Activity` grava texto "moveu X para Y" com `actor:'Você'` fixo (`crm.service.ts:447`), não o usuário real |
-| Disparo de automação ao mudar de estágio | REAL | Trigger SQL `orvyn_domain_outbox` (`db/022:57-59`) insere `deal.moved` ao mudar `stage_id` (vale também para `PATCH /deals/:id` com stageId); `TriggersService` mapeia para `gatilho.etapa_mudou` (`triggers.service.ts:12`) e filtra por `stageId`. Teste: `crm.service.spec.ts:148` (apenas evento realtime, não o worker) |
+| Disparo de automação ao mudar de estágio | REAL | Trigger SQL `khub_domain_outbox` (`db/022:57-59`) insere `deal.moved` ao mudar `stage_id` (vale também para `PATCH /deals/:id` com stageId); `TriggersService` mapeia para `gatilho.etapa_mudou` (`triggers.service.ts:12`) e filtra por `stageId`. Teste: `crm.service.spec.ts:148` (apenas evento realtime, não o worker) |
 | Ganho/perda | API-ONLY | `status` aberto/ganho/perdido via `PATCH /deals/:id` (`crm.controller.ts:40`); trigger cancela runs ao ganhar/perder (`db/022:64-66`) e publica `deal.status_changed`. Sem UI, sem motivo de perda, sem data de fechamento. `overview` considera "ganho" = deals na ÚLTIMA etapa (`crm.service.ts:106-107`), ignorando `status` (inconsistente com o campo de status) |
 | Filtros / busca / responsável | UI-ONLY/DEMO | Controles existem só em `Quadro` e não têm handlers (`page.tsx:272-296`). `Deal` não tem owner. Busca global ⌘K cobre deals por título/origem/contato (`crm.service.ts:472`) |
 | Tags no deal | AUSENTE | Só `Contact.tags`; `Deal` sem tags |
@@ -117,7 +117,7 @@ ACCEPTANCE CRITERIA: importar 1.000 linhas com 50 duplicadas cria 950, reporta 5
 
 **ISSUE L-3: Origem do contato perdida e evento `contact.created` com origem errada**
 SEVERITY: Média
-ROOT CAUSE: trigger SQL `orvyn_domain_outbox` lê `campos_custom->>'origem'`, mas nenhum caminho grava essa chave (lead externo grava `lead_origem`; manual/WhatsApp não gravam); `Contact.origem` nunca é escrita.
+ROOT CAUSE: trigger SQL `khub_domain_outbox` lê `campos_custom->>'origem'`, mas nenhum caminho grava essa chave (lead externo grava `lead_origem`; manual/WhatsApp não gravam); `Contact.origem` nunca é escrita.
 FILES: `db/022_production_foundation.sql:46`; `apps/api/src/crm/crm.service.ts:352-372`; `apps/api/src/crm/leads.service.ts:60-64,85-94`; `apps/api/src/crm/messaging/messages.service.ts:116`
 IMPACT: Gatilho "Contato criado" filtrado por origem ("Meta Lead Ads", "WhatsApp") não dispara (o outbox durável traz "Manual"); relatórios de origem não confiáveis.
 RECOMMENDED FIX: gravar `contacts.origem` em todos os caminhos e fazer o trigger ler a coluna.
@@ -167,7 +167,7 @@ Arquivos: `apps/web/app/(app)/inbox/page.tsx` (tela real), `/conversas/page.tsx`
 
 **ISSUE I-1: Evento realtime de mensagem recebida é emitido no processo worker, que não tem servidor de sockets**
 SEVERITY: Alta (verificar em runtime)
-ROOT CAUSE: `receiveInbound` roda em `OperationsProcessor` (somente `ORVYN_PROCESS_ROLE=worker`, `operations.module.ts:11`). O worker é `createApplicationContext` sem adapter WS (`worker.ts:9`); `EventsGateway.server` fica indefinido e `emitirParaTenant` retorna silenciosamente (`events.gateway.ts:70`). Não há `@socket.io/redis-emitter` (grep sem resultado). O adapter Redis só é ligado na API (`main.ts:33-35`).
+ROOT CAUSE: `receiveInbound` roda em `OperationsProcessor` (somente `KHUB_PROCESS_ROLE=worker`, `operations.module.ts:11`). O worker é `createApplicationContext` sem adapter WS (`worker.ts:9`); `EventsGateway.server` fica indefinido e `emitirParaTenant` retorna silenciosamente (`events.gateway.ts:70`). Não há `@socket.io/redis-emitter` (grep sem resultado). O adapter Redis só é ligado na API (`main.ts:33-35`).
 FILES: `apps/api/src/realtime/events.gateway.ts:69-73`; `apps/api/src/events/domain-events.service.ts:44-48`; `apps/api/src/worker.ts`; `apps/api/src/crm/messaging/messages.service.ts:90-102`; `apps/web/app/(app)/inbox/page.tsx:97-109`
 IMPACT: Com socket conectado a tela não faz polling (só faz se `conectado=false`), então mensagens recebidas só aparecem em reload. O indicador verde "Ao vivo" dá falsa segurança. Também vale para `contact.created`.
 RECOMMENDED FIX: no worker usar `@socket.io/redis-emitter` (mesmo Redis do adapter) para publicar na sala do tenant; ou manter um polling leve de segurança no Inbox mesmo conectado.

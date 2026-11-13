@@ -1,10 +1,14 @@
 import { BadRequestException, Body, Controller, ForbiddenException, Headers, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
-import { IsArray, IsIn, IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min } from 'class-validator';
+import { IsArray, IsIn, IsNumber, IsObject, IsOptional, IsString, IsUUID, MaxLength, Min, ArrayMaxSize, IsBoolean } from 'class-validator';
 import { CrmService } from './crm.service';
 import { MessagesService } from './messaging/messages.service';
 import { CurrentUser, TenantId, type AuthUser } from '../auth/decorators';
 import { AtendimentoService } from './messaging/atendimento.service';
+import { ConversasService } from './messaging/conversas.service';
+import { filtroConversasDaQuery } from './messaging/conversas-filtro';
 import { SkipAudit } from '../common/audit.interceptor';
+import { filtroDaQuery, parseOrdem } from './contatos-filtro';
+import { filtroNegociosDaQuery } from './pipeline-filtro';
 
 class CreateContactDto {
   @IsString() @MaxLength(160) nome!: string;
@@ -13,6 +17,8 @@ class CreateContactDto {
   @IsOptional() @IsString() @MaxLength(160) empresa?: string;
   @IsOptional() @IsString() @MaxLength(40) tag?: string;
   @IsOptional() @IsNumber() @Min(0) valorEstimado?: number;
+  /** Campos personalizados `{ chave: valor }` validados pelas definições (Q2.3). */
+  @IsOptional() @IsObject() camposCustom?: Record<string, unknown>;
 }
 class CreateDealDto {
   @IsString() @MaxLength(200) titulo!: string;
@@ -20,6 +26,8 @@ class CreateDealDto {
   @IsUUID() stageId!: string;
   @IsOptional() @IsNumber() @Min(0) valor?: number;
   @IsOptional() @IsString() @MaxLength(80) origem?: string;
+  /** Campos personalizados `{ chave: valor }` validados pelas definições (Q2.3). */
+  @IsOptional() @IsObject() camposCustom?: Record<string, unknown>;
 }
 class MoveDealDto {
   @IsUUID() stageId!: string;
@@ -30,9 +38,13 @@ class UpdateContactDto {
   @IsOptional() @IsString() @MaxLength(40) telefone?: string;
   @IsOptional() @IsString() @MaxLength(160) empresa?: string;
   @IsOptional() @IsString() @MaxLength(40) tag?: string;
-  @IsOptional() @IsArray() @IsString({ each: true }) tags?: string[];
+  @IsOptional() @IsArray() @ArrayMaxSize(50) @IsString({ each: true }) @MaxLength(40, { each: true }) tags?: string[];
   @IsOptional() @IsNumber() @Min(0) valorEstimado?: number;
   @IsOptional() @IsUUID() companyId?: string;
+  /** "Não perturbe" (Q2.2): true grava `opted_out_at = now()`, false limpa. */
+  @IsOptional() @IsBoolean() naoPerturbe?: boolean;
+  /** Campos personalizados `{ chave: valor }` validados pelas definições (Q2.3). */
+  @IsOptional() @IsObject() camposCustom?: Record<string, unknown>;
 }
 class ConsentimentoDto {
   @IsIn(['consentimento', 'execucao_contrato', 'obrigacao_legal', 'legitimo_interesse', 'protecao_credito']) baseLegal!: string;
@@ -45,6 +57,13 @@ class UpdateDealDto {
   @IsOptional() @IsIn(['aberto', 'ganho', 'perdido']) status?: string;
   @IsOptional() @IsUUID() stageId?: string;
   @IsOptional() @IsUUID() contactId?: string;
+  /** Campos personalizados `{ chave: valor }` validados pelas definições (Q2.3). */
+  @IsOptional() @IsObject() camposCustom?: Record<string, unknown>;
+  /** Motivo de perda (Q2.1): obrigatório ao marcar `perdido` se o tenant tem motivos ativos; `null` limpa. */
+  @IsOptional() @IsUUID() motivoPerdaId?: string | null;
+  @IsOptional() @IsString() @MaxLength(500) motivoPerdaObs?: string | null;
+  /** identityId do responsável (Q2.1); `null` deixa sem dono. */
+  @IsOptional() @IsUUID() ownerId?: string | null;
 }
 class SendMessageDto {
   @IsString() @MaxLength(4000) texto!: string;
@@ -58,17 +77,21 @@ class AtendimentoDto {
 /** CRM Core. O tenant vem SEMPRE do JWT (@TenantId) — nunca de header do browser. */
 @Controller('crm')
 export class CrmController {
-  constructor(private readonly crm: CrmService, private readonly messages: MessagesService, private readonly atendimento: AtendimentoService) {}
+  constructor(private readonly crm: CrmService, private readonly messages: MessagesService, private readonly atendimento: AtendimentoService, private readonly conversas: ConversasService) {}
 
   @Get('overview')
   overview(@TenantId() tenantId: string) {
     return this.crm.overview(tenantId);
   }
 
-  /** Lista paginada por cursor: `{ items, nextCursor }` (D1). */
+  /**
+   * Lista paginada por cursor: `{ items, nextCursor }` (D1). Filtros (Q2.2):
+   * `q, stageId, origem, tag, ownerId (uuid|nenhum), naoPerturbe (sim|nao),
+   * criadoDe, criadoAte (AAAA-MM-DD), cf_<chave>=<valor>` e `ordem`.
+   */
   @Get('contacts')
-  contacts(@TenantId() tenantId: string, @Query('q') q?: string, @Query('cursor') cursor?: string, @Query('limit') limit?: string) {
-    return this.crm.listContacts(tenantId, { q, cursor, limit: limit ? Number(limit) : undefined });
+  contacts(@TenantId() tenantId: string, @Query() query: Record<string, unknown>, @Query('cursor') cursor?: string, @Query('limit') limit?: string, @Query('ordem') ordem?: string) {
+    return this.crm.listContacts(tenantId, { cursor, limit: limit ? Number(limit) : undefined, filtro: filtroDaQuery(query), ordem: parseOrdem(ordem) });
   }
 
   /** Perfil 360 do contato. */
@@ -79,7 +102,9 @@ export class CrmController {
 
   @Patch('contacts/:id')
   updateContact(@TenantId() tenantId: string, @Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateContactDto) {
-    return this.crm.updateContact(tenantId, id, dto);
+    // pela API o bloco é PATCH validado/mesclado, nunca substituição crua do jsonb
+    const { camposCustom, ...resto } = dto;
+    return this.crm.updateContact(tenantId, id, { ...resto, ...(camposCustom ? { camposCustomPatch: camposCustom } : {}) });
   }
 
   @Delete('contacts/:id')
@@ -103,8 +128,9 @@ export class CrmController {
 
   /** Busca global (Cmd+K): contatos + negócios + conversas do tenant da sessão. */
   @Get('search')
-  search(@TenantId() tenantId: string, @Query('q') q?: string) {
-    return this.crm.search(tenantId, q ?? '');
+  search(@TenantId() tenantId: string, @CurrentUser() u: AuthUser, @Query('q') q?: string) {
+    // Acesso por módulo (ADR-0045): a busca não vaza o que a pessoa não vê.
+    return this.crm.search(tenantId, q ?? '', 5, u.modulos);
   }
 
   @Post('contacts')
@@ -112,10 +138,15 @@ export class CrmController {
     return this.crm.createContact(tenantId, dto);
   }
 
+  /**
+   * Quadro de um funil. Filtros (Q2.1): `q, ownerId (uuid|nenhum), origem, tag,
+   * valorMin, valorMax, status (abertos|ganhos|perdidos|todos; padrão abertos),
+   * criadoDe, criadoAte (AAAA-MM-DD)`.
+   */
   @Get('pipeline')
-  pipeline(@TenantId() tenantId: string, @Query('pipelineId') pipelineId?: string) {
+  pipeline(@TenantId() tenantId: string, @Query() query: Record<string, unknown>, @Query('pipelineId') pipelineId?: string) {
     if (pipelineId && !/^[0-9a-f-]{36}$/i.test(pipelineId)) throw new BadRequestException('pipelineId inválido');
-    return this.crm.pipeline(tenantId, pipelineId);
+    return this.crm.pipeline(tenantId, pipelineId, filtroNegociosDaQuery(query));
   }
 
   @Post('deals')
@@ -135,7 +166,7 @@ export class CrmController {
 
   @Patch('deals/:id')
   updateDeal(@TenantId() tenantId: string, @Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateDealDto) {
-    return this.crm.updateDeal(tenantId, id, dto);
+    return this.crm.updateDeal(tenantId, id, dto, { exigirMotivoPerda: true });
   }
 
   @Delete('deals/:id')
@@ -143,9 +174,10 @@ export class CrmController {
     return this.crm.deleteDeal(tenantId, id);
   }
 
+  /** Lista leve, filtrável por canal/status/etiqueta/tipo/busca (Conversas omnichannel, db/063). */
   @Get('conversations')
-  conversations(@TenantId() tenantId: string) {
-    return this.crm.listConversations(tenantId);
+  conversations(@TenantId() tenantId: string, @Query() query: Record<string, unknown>) {
+    return this.conversas.listar(tenantId, filtroConversasDaQuery(query));
   }
 
   @Get('conversations/:id/messages')

@@ -1,4 +1,4 @@
-# APIs e Contratos — Orvyn
+# APIs e Contratos — KHUB
 
 > REST versionada (`/v1`) + WebSocket para tempo real. Transcrição fiel do PRD §13. Ver [[PRD]] · [[Arquitetura]] · [[Banco]].
 
@@ -75,6 +75,8 @@ Front (Next, cookies httpOnly): `POST /api/auth/{signup,login,refresh,logout}`, 
 | POST | `/v1/integrations/:provider/callback` | **público**; state HMAC carrega o tenant; cifra credencial + enfileira sync |
 | POST | `/v1/integrations/:id/sync` | enfileira sync (BullMQ) |
 | GET | `/v1/ads/overview` · `/campaigns` · `/creatives` | agregados por tenant; melhor criativo |
+| POST | `/v1/ads/simulador/simular` | simulador de campanhas: `{objetivo, orcamentoDia(6–100000), dias(1–90), publico, posicionamento, ticketMedio, taxaFechamento, criativos[1–3]{nome, formato, hook, copy, titulo, cta, videoSegundos?, legendas?, rosto?, textoNaImagem?, notaVisualIa?}, premissas?{cpm,ctr,conversao}}` → totais com faixa p10–p50–p90, série diária, notas por criativo com motivos, A/B, curva de verba, alertas, base usada e calibração (ad_insights 90d do tenant). 400 corpo inválido. |
+| POST | `/v1/ads/simulador/analisar` | análise do criativo com IA: `{objetivo, criativo, negocio?, imagens[0–4]{tipo, base64, rotulo}}` (corpo até 22 MB) → `{notaVisual, resumo, pontosFortes, melhorias, hooksAlternativos, copySugerida, riscosPolitica, modelo, provedor, analisouImagem}`. 501 `config_required` sem provedor de IA; 502 `ia_invalida` se a IA não devolver JSON válido em 2 tentativas. |
 | GET/POST | `/v1/webhooks/meta` | **público**; verify + ack idempotente |
 
 Front (Next): proxy autenticado `/api/v1/*` (Bearer) + landing OAuth `/api/integrations/meta/callback`. Ver [[Arquitetura]] ADR-0007.
@@ -88,6 +90,7 @@ Front (Next): proxy autenticado `/api/v1/*` (Bearer) + landing OAuth `/api/integ
 | POST | `/v1/settings/invites` | cria convite + **link de aceite** (`/signup?invite=<token>`); e-mail requer OAuth2/SMTP |
 | DELETE | `/v1/settings/invites/:id` | revoga convite |
 | PATCH | `/v1/settings/members/:identityId/role` | muda papel (owner/admin/member/viewer) |
+| PATCH | `/v1/settings/members/:identityId/modulos` | acesso por módulo (ADR-0045): `{modulos: string[] \| null}`; `null` tira a restrição; 400 para owner/admin. `POST /invites` aceita `modulos` opcional; `GET /members` devolve `modulos` (null = sem restrição) em membros e convites; `GET /auth/me` devolve `modulos` efetivo. Rota de módulo bloqueada → 403 `você não tem acesso a este módulo` |
 | GET | `/v1/settings/audit` | **audit_logs** imutável — histórico de todas as ações |
 
 Toda mutação de settings grava em `audit_logs` (`actor_id` = identidade). Front: `/configuracoes` (abas Perfil, Personalização, Empresa, Equipe, Integrações, Auditoria) + canto superior direito (usuário/config/tema).
@@ -191,7 +194,7 @@ Canais ([[PRD]] §10.3): inbox, Kanban, execução de automação ao vivo.
 - **Autenticação (ticket):** o access token vive em cookie **httpOnly**, inalcançável pelo JS. O front chama `POST /api/auth/ws-ticket` (Next) → `POST /v1/auth/ws-ticket` (JWT) → recebe um **ticket de 60s** (`typ:'ws'`) e o usa no handshake (`auth.ticket`, com `?ticket=` como fallback). O `JwtAuthGuard` **recusa** `typ:'ws'` na API REST: ticket vazado não vira acesso.
 - **Reconexão:** `auth` é uma **função** — o Socket.IO a chama a cada tentativa e busca ticket **novo**. Com ticket estático, a reconexão voltaria com credencial expirada e seria recusada para sempre.
 - **Isolamento:** na conexão o socket entra **só** em `tenant:<tenantId>`, e o tenant vem **do ticket assinado** — não existe evento para o cliente pedir sala. Todo `emit` é `server.to(sala)`; **nunca** broadcast.
-- **Formato:** envelope `{ evento, dados, emitidoEm }`. Contrato tipado em `@orvyn/types` (`RealtimeEvents`) — front e back importam do mesmo lugar; evento sem tipo lá não compila.
+- **Formato:** envelope `{ evento, dados, emitidoEm }`. Contrato tipado em `@khub/types` (`RealtimeEvents`) — front e back importam do mesmo lugar; evento sem tipo lá não compila.
 - **Eventos:** `message.created` · `conversation.updated` · `deal.created|moved|updated|deleted` · `contact.created` · `automation.run` (canal pronto; emissores no Sprint E).
 - **Ordem:** publicação sempre **após o commit** — quem recebe o evento e consulta a API tem que encontrar o dado.
 - **Escala:** `RedisIoAdapter` (`@socket.io/redis-adapter`) — com 2+ instâncias, o socket está numa e o `emit` na outra; sem barramento o evento se perde. Sem Redis, degrada para memória com aviso.

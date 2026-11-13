@@ -1,5 +1,5 @@
 // Teste de isolamento cross-tenant para api_keys + crm_tags (invariante RLS).
-// Semeia como superuser (bypassa RLS), depois atua como orvyn_app (NOBYPASSRLS)
+// Semeia como superuser (bypassa RLS), depois atua como khub_app (NOBYPASSRLS)
 // com app.current_tenant_id = A e prova que A NÃO enxerga dados de B, que não
 // grava no escopo de B (WITH CHECK), e que a função de auth acha o tenant certo
 // pelo hash. Qualquer vazamento => exit != 0. Ao final: limpa o que semeou.
@@ -21,7 +21,7 @@ const check = (cond, msg) => { if (!cond) { falhas++; console.error(`  ✗ ${msg
 
 async function comTenant(tenant, fn) {
   return prisma.$transaction(async (tx) => {
-    await tx.$executeRawUnsafe(`SET LOCAL ROLE orvyn_app`);
+    await tx.$executeRawUnsafe(`SET LOCAL ROLE khub_app`);
     await tx.$executeRawUnsafe(`SELECT set_config('app.current_tenant_id', $1, true)`, tenant);
     return fn(tx);
   });

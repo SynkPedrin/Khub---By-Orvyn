@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StevoApiProvider } from './stevo-api.provider';
+import { type ConexaoWhatsApp, type EstadoWhatsApp } from './whatsapp-connection.service';
 
 /**
  * Vínculo instância Stevo ⇄ subconta (tenant) — RV-06 / doc 18 §12.3.
@@ -25,7 +26,7 @@ export class StevoApiVinculoService {
       throw new ConflictException('instância já vinculada a outra subconta na Stevo (external_ref) — desvincule lá primeiro');
     }
     const ja = await this.prisma.$queryRaw<{ tenant_id: string | null }[]>`SELECT resolve_tenant_by_stevo_api_instance(${instanciaId}) AS tenant_id`;
-    if (ja[0]?.tenant_id && ja[0].tenant_id !== tenantId) throw new ConflictException('instância já vinculada a outra subconta no Revenue OS');
+    if (ja[0]?.tenant_id && ja[0].tenant_id !== tenantId) throw new ConflictException('instância já vinculada a outra subconta no KHUB');
 
     const conexao = await this.stevo.conexao(instanciaId);
     if (inst.external_ref !== tenantId) await this.stevo.definirExternalRef(instanciaId, tenantId);
@@ -46,6 +47,56 @@ export class StevoApiVinculoService {
       return r;
     });
     return { integracaoId: integ.id, status: integ.status, instancia: { id: inst.id, nome: inst.name, perfil: inst.profile_name } };
+  }
+
+  /** Instância Stevo vinculada a este tenant (não revogada), ou `null` se nenhuma. */
+  private async instancia(tenantId: string) {
+    return this.prisma.withTenant(tenantId, (tx) =>
+      tx.integration.findFirst({ where: { tenantId, provider: 'stevo_api', status: { not: 'revoked' } } }),
+    );
+  }
+
+  /**
+   * Estado real do WhatsApp via Stevo — mesmo contrato de `WhatsAppConnectionService`
+   * (Evolution), para o front usar os dois providers de forma transparente.
+   * Sempre pergunta à Stevo (nunca confia só no `status` persistido).
+   */
+  async status(tenantId: string, incluirQr = false): Promise<ConexaoWhatsApp> {
+    const integ = await this.instancia(tenantId);
+    if (!integ?.externalBusinessId) return { estado: 'desconectado', atualizadoEm: new Date().toISOString() };
+
+    const conexao = await this.stevo.conexao(integ.externalBusinessId);
+    const pareada = conexao.connected && conexao.logged_in;
+    const estado: EstadoWhatsApp = pareada ? 'conectado' : 'desconectado';
+
+    await this.prisma.withTenant(tenantId, (tx) =>
+      tx.integration.updateMany({
+        where: { tenantId, provider: 'stevo_api', externalBusinessId: integ.externalBusinessId },
+        data: { status: pareada ? 'connected' : 'disconnected', health: pareada ? 'ok' : 'error', erro: pareada ? null : 'WhatsApp não pareado (logged_in=false)', lastSyncAt: new Date() },
+      }),
+    );
+
+    const qr = incluirQr && !pareada ? await this.qrNormalizado(integ.externalBusinessId) : undefined;
+    return { estado: qr ? 'aguardando_qr' : estado, numero: conexao.phone_number ?? undefined, qr, atualizadoEm: new Date().toISOString() };
+  }
+
+  /** "Conectar": busca o QR atual da instância já vinculada; força um novo se não houver. */
+  async conectar(tenantId: string): Promise<ConexaoWhatsApp> {
+    const integ = await this.instancia(tenantId);
+    if (!integ?.externalBusinessId) throw new BadRequestException('nenhuma instância Stevo vinculada a esta subconta — vincule uma instância primeiro');
+
+    let qr = await this.qrNormalizado(integ.externalBusinessId);
+    if (!qr) {
+      const r = await this.stevo.atualizarQrCode(integ.externalBusinessId);
+      if (r.qr) qr = { qrImageDataUrl: r.qr, expiresAt: new Date(Date.now() + 60_000).toISOString() };
+    }
+    if (!qr) return this.status(tenantId); // sem QR novo: já pode ter pareado nesse meio tempo
+    return { estado: 'aguardando_qr', qr, atualizadoEm: new Date().toISOString() };
+  }
+
+  private async qrNormalizado(instanciaId: string) {
+    const r = await this.stevo.obterQrCode(instanciaId);
+    return r.qr ? { qrImageDataUrl: r.qr, expiresAt: new Date(Date.now() + 60_000).toISOString() } : undefined;
   }
 
   async desvincular(tenantId: string, instanciaId: string, actorIdentityId: string) {

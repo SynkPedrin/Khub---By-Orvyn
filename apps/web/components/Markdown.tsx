@@ -14,7 +14,7 @@ function transformWikilinks(md: string): string {
 export function Markdown({ children }: { children: string }) {
   const src = transformWikilinks(children);
   return (
-    <div className="prose-orvyn">
+    <div className="prose-khub">
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{src}</ReactMarkdown>
     </div>
   );

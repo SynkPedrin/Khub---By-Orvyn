@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import type { AtendimentoConversa } from '@orvyn/types';
+import type { AtendimentoConversa } from '@khub/types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DomainEventsService } from '../../events/domain-events.service';
 

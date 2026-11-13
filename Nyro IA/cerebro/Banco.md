@@ -1,4 +1,4 @@
-# Banco de Dados e Modelo Multi-tenant — Orvyn
+# Banco de Dados e Modelo Multi-tenant — KHUB
 
 > Schema, RLS, índices e migrações planejadas. Transcrição fiel do PRD §12 + decisões de implementação. Ver [[Arquitetura]] · [[PRD]].
 
@@ -56,21 +56,21 @@ audit_logs(id, tenant_id, actor, acao, payload, ts)
 
 ## 2.1 Auth + Tenants (FASE 1 — `db/004_auth_tenants.sql`)
 - `identities` (global, credenciais, **sem RLS**): email único (`lower`), `password_hash` (argon2id), `oauth_provider/subject`, `email_verified_at`, `twofa_secret?`.
-- `memberships` (identidade↔tenant N:N, sem RLS), `refresh_tokens` (rotativos/revogáveis, sem RLS), `invites` (por token, sem RLS).
+- `memberships` (identidade↔tenant N:N, sem RLS), `refresh_tokens` (rotativos/revogáveis, sem RLS), `invites` (por token, sem RLS; `permissoes jsonb` desde db/065: módulos escolhidos no convite, ADR-0045). `users.permissoes` guarda `{modulos: [...]}` do colaborador (ausente = sem restrição).
 - `audit_logs` — **imutável** (RLS + `REVOKE UPDATE/DELETE` + trigger `audit_logs_immutable`) + `webhook_events` (RLS, dedupe `(provider,event_id)`).
-- `tenants` +`nicho`,`subespecialidade`; `users` +`identity_id`,`permissoes`. Grants: `orvyn_app` INSERT em `tenants` (signup). Justificativa infra-sem-RLS: ADR-0006. Teste `002` estendido (audit_logs/webhook_events isolados). ✅
+- `tenants` +`nicho`,`subespecialidade`; `users` +`identity_id`,`permissoes`. Grants: `khub_app` INSERT em `tenants` (signup). Justificativa infra-sem-RLS: ADR-0006. Teste `002` estendido (audit_logs/webhook_events isolados). ✅
 
 ## 2.2 Integrações de anúncios (Sprint A — `db/005_integrations_schema.sql`)
-7 tabelas, todas `tenant_id` + RLS + isolamento (`002`): `integrations` (credencial OAuth **cifrada** AES-256-GCM em `credentials_encrypted`), `ad_accounts`, `ad_campaigns`, `ad_sets`, `ad_creatives`, `ad_insights` (**particionada por `date`** RANGE + partição default; unique `(tenant_id,provider,level,external_ref_id,date)`), `ad_sync_runs`. Grants `orvyn_app`/`orvyn_service`. Ver ADR-0007. ✅
+7 tabelas, todas `tenant_id` + RLS + isolamento (`002`): `integrations` (credencial OAuth **cifrada** AES-256-GCM em `credentials_encrypted`), `ad_accounts`, `ad_campaigns`, `ad_sets`, `ad_creatives`, `ad_insights` (**particionada por `date`** RANGE + partição default; unique `(tenant_id,provider,level,external_ref_id,date)`), `ad_sync_runs`. Grants `khub_app`/`khub_service`. Ver ADR-0007. ✅
 
 ## 2.3 Roteamento de webhook sem tenant (`db/008`, `db/009`)
-Webhook público chega **sem tenant** e a app roda como `orvyn_app` (NOBYPASSRLS): um SELECT direto devolveria 0 linhas. Duas funções **SECURITY DEFINER** (owner `orvyn_service`) expõem **somente o `tenant_id` de roteamento** — nenhum dado de negócio atravessa, e logo depois a app entra em `withTenant()` e tudo volta para a RLS:
+Webhook público chega **sem tenant** e a app roda como `khub_app` (NOBYPASSRLS): um SELECT direto devolveria 0 linhas. Duas funções **SECURITY DEFINER** (owner `khub_service`) expõem **somente o `tenant_id` de roteamento** — nenhum dado de negócio atravessa, e logo depois a app entra em `withTenant()` e tudo volta para a RLS:
 - `resolve_tenant_by_stevo_instance(text)` — via `integrations(provider='stevo', external_business_id=instância, status='connected')`, com unique index parcial garantindo instância→1 tenant.
 - `resolve_tenant_by_meta_page(text)` — via `meta_pages(page_id UNIQUE)`, populada no OAuth (`listPages`).
 Ambas cobertas pelo teste `002` (roteia certo **e** a linha do outro tenant continua invisível). Ver ADR-0008 e ADR-0010.
 
 ## 2.4 CRM F2 (Sprint D1 — `db/009_crm_f2.sql`)
-Todas com `tenant_id NOT NULL` + RLS + FORCE + policy `tenant_rw` + grants `orvyn_app`/`orvyn_service`; isolamento no `002`. ✅
+Todas com `tenant_id NOT NULL` + RLS + FORCE + policy `tenant_rw` + grants `khub_app`/`khub_service`; isolamento no `002`. ✅
 - `companies(id, tenant_id, nome, dominio, telefone, endereco, segmento, tamanho, site, campos_custom)` — unique `(tenant_id, lower(nome))`: não duplica conta dentro do tenant.
 - `tasks(..., status aberta|concluida, prioridade baixa|media|alta, due_at, contact_id, deal_id, company_id, assignee_id, completed_at)` — CHECK em status/prioridade; índice parcial `(tenant_id, due_at) WHERE status='aberta'` (a fila do dia).
 - `notes(..., corpo, contact_id, deal_id, company_id, author_id, author_nome)` — `author_nome` é **snapshot**: a nota continua legível se o autor sair do tenant.
@@ -79,10 +79,10 @@ Todas com `tenant_id NOT NULL` + RLS + FORCE + policy `tenant_rw` + grants `orvy
 - **Paginação:** índice `(tenant_id, created_at DESC, id DESC)`. O cursor é resolvido pelo **Prisma no banco** — comparar timestamp serializado em JS perde os microssegundos do `timestamptz(6)` e derruba lotes inteiros ([[Bugs|BUG-009]]).
 
 ## 2.5 Configurações avançadas — Tags + Private Integrations ([[Arquitetura|ADR-0023]] · `db/018`, `db/019`)
-Ambas com `tenant_id NOT NULL` + RLS + FORCE + policy `tenant_rw` + grants `orvyn_app`/`orvyn_service`; isolamento em `scripts/test-isolation-api-keys.mjs`. ✅
+Ambas com `tenant_id NOT NULL` + RLS + FORCE + policy `tenant_rw` + grants `khub_app`/`khub_service`; isolamento em `scripts/test-isolation-api-keys.mjs`. ✅
 - `crm_tags(id, tenant_id, name, color, descricao, usos, created_at)` — catálogo canônico de tags (nome+cor); unique `(tenant_id, lower(name))`. Contatos referenciam por **nome** (`contacts.tags TEXT[]`), acoplamento frouxo.
 - `api_keys(id, tenant_id, name, key_prefix, key_hash UNIQUE, scopes, created_by, last_used_at, revoked_at, created_at)` — chaves de API do tenant. Guardamos só `key_hash = sha256(chave)`; a chave em claro só existe na resposta da criação.
-- **Auth cross-tenant controlada:** função `auth_lookup_api_key(hash)` `SECURITY DEFINER` (dona `orvyn_service`, BYPASSRLS) devolve **só** `(tenant_id, id)` da chave ativa e carimba `last_used_at`. É o único caminho que lê `api_keys` sem contexto de tenant — o CRUD passa pela `tenant_rw`. Revoke = `revoked_at` (soft).
+- **Auth cross-tenant controlada:** função `auth_lookup_api_key(hash)` `SECURITY DEFINER` (dona `khub_service`, BYPASSRLS) devolve **só** `(tenant_id, id)` da chave ativa e carimba `last_used_at`. É o único caminho que lê `api_keys` sem contexto de tenant — o CRUD passa pela `tenant_rw`. Revoke = `revoked_at` (soft).
 
 ## 2.6 Financeiro — cobranças ([[Arquitetura|ADR-0025]] · `db/020`)
 `tenant_id NOT NULL` + RLS + FORCE + policy `tenant_rw` + grants; isolamento no `scripts/test-isolation-api-keys.mjs`. ✅
@@ -91,6 +91,9 @@ Ambas com `tenant_id NOT NULL` + RLS + FORCE + policy `tenant_rw` + grants `orvy
 ## 2.7 Agenda — compromissos ([[Arquitetura|ADR-0026]] · `db/021`)
 `tenant_id NOT NULL` + RLS + FORCE + policy `tenant_rw` + grants; isolamento no `scripts/test-isolation-api-keys.mjs`. ✅
 - `agenda_compromissos(id, tenant_id, contact_id→SET NULL, titulo, inicio, fim, status CHECK(agendado|confirmado|concluido|cancelado|nao_compareceu), local, notas, google_event_id, created_by, created_at, updated_at, CHECK(fim>inicio))`. Índices `(tenant_id, inicio)` e `(tenant_id, contact_id)`. Choque de horário barrado em app (409); horários livres calculados sem API externa.
+
+## 2.9 Agent Intelligence ([[Arquitetura|ADR-0038]] · `db/034_agent_intelligence.sql`)
+Tabelas (todas `tenant_id NOT NULL`, RLS FORCE `tenant_rw`, gatilho `tenant_reference`): `agent_versions`, `agent_intent_categories`, `agent_knowledge_sources`, `agent_customer_profiles`, `agent_profile_facts`, `agent_extractions`, `agent_memories`, `agent_delivery_queue`, `agent_followup_rules`, `agent_followups`, `agent_tool_executions`, `agent_learning_events`, `agent_improvement_proposals`, `agent_eval_scenarios`, `agent_evaluations`, `agent_simulations`. Colunas novas: `agents.config` (JSONB), `agents.versao_publicada_id`, `agent_runs.{version_id,intencao,sentimento,urgencia,confianca,trace,blocos}`, `rag_documents.texto_fonte`. Funções: `agent_rag_search_hybrid/lexical` (filtro por documentos dentro do WHERE), `agent_tsquery_or`. Anti-duplicidade no banco: um follow-up agendado por contato e agente; uma linha por bloco de entrega (`idempotency_key`). Rollback no cabeçalho da migração. Teste: `db/034_agent_intelligence_isolation_test.sql`.
 
 ## 3. Escopo de F0 — schema inicial
 

@@ -17,43 +17,43 @@ export type ProductScreen = {
 
 export const SCREENS = {
   dashboard: {
-    src: '/lp-revenue/product/dashboard-flat.png',
+    src: '/lp-revenue/product/dashboard-dark.png',
     alt: 'Dashboard do KHUB: leads do dia, taxa de resposta, follow-ups pendentes, pipeline de vendas e recomendações da IA',
   },
   leads: {
-    src: '/lp-revenue/product/leads-flat.png',
+    src: '/lp-revenue/product/leads-dark.png',
     alt: 'Tela de Leads do KHUB com origem por canal, score de qualificação e próxima ação de cada lead',
   },
   leadDetail: {
-    src: '/lp-revenue/product/lead-detail-flat.png',
+    src: '/lp-revenue/product/lead-detail-dark.png',
     alt: 'Detalhe de um lead no KHUB: resumo do contato, timeline de interações por canal, negócios, tarefas e atribuição de campanha',
   },
   conversations: {
-    src: '/lp-revenue/product/conversations-flat.png',
+    src: '/lp-revenue/product/conversations-dark.png',
     alt: 'Caixa de conversas do KHUB com WhatsApp, Instagram, e-mail e site na mesma fila, com os dados do lead ao lado da conversa',
   },
   pipeline: {
-    src: '/lp-revenue/product/pipeline-flat.png',
+    src: '/lp-revenue/product/pipeline-dark.png',
     alt: 'Pipeline de vendas do KHUB em Kanban, com valor por etapa, ticket médio e ciclo médio de vendas',
   },
   automations: {
-    src: '/lp-revenue/product/automations-flat.png',
+    src: '/lp-revenue/product/automations-dark.png',
     alt: 'Construtor de automações do KHUB: gatilho de entrada de lead, bloco de IA de qualificação, espera, condição e follow-up',
   },
   campaigns: {
-    src: '/lp-revenue/product/campaigns-flat.png',
+    src: '/lp-revenue/product/campaigns-dark.png',
     alt: 'Tela de Campanhas do KHUB com sequências multicanal, público, canais e atribuição de respostas e reuniões',
   },
   analytics: {
-    src: '/lp-revenue/product/analytics-flat.png',
+    src: '/lp-revenue/product/analytics-dark.png',
     alt: 'Analytics do KHUB: receita por canal, funil de conversão, tempo de resposta por equipe e meta versus realizado',
   },
   agenda: {
-    src: '/lp-revenue/product/agenda-flat.png',
+    src: '/lp-revenue/product/agenda-dark.png',
     alt: 'Agenda do KHUB com reuniões e follow-ups conectados ao pipeline',
   },
   copilot: {
-    src: '/lp-revenue/product/copilot-flat.png',
+    src: '/lp-revenue/product/copilot-dark.png',
     alt: 'Copiloto NICO dentro do KHUB respondendo sobre a operação comercial',
   },
 } as const satisfies Record<string, ProductScreen>;

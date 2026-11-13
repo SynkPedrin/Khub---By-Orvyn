@@ -1,4 +1,4 @@
-# Infra local do Orvyn (F0-08). Requer Docker (não instalado nesta máquina).
+# Infra local do KHUB (F0-08). Requer Docker (não instalado nesta máquina).
 #   docker compose up -d
 #   export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/orvyn"
 #   psql "$DATABASE_URL" -f db/000_foundation.sql ...  (ver db/README.md)

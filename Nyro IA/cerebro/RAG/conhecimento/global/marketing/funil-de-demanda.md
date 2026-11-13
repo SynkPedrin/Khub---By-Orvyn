@@ -31,8 +31,8 @@ Ao desenhar ou consertar a máquina de aquisição: como transformar desconhecid
 
 **Advocacia.** Objetivo: transformar clientes em promotores. Táticas: sucesso do cliente, NPS, incentivos de indicação, comunidade, produção de casos. Métrica: NPS, taxa de indicação, receita de expansão.
 
-## Aplicação no Orvyn
-Cada etapa mapeia direto para o CRM do Orvyn: consciência/interesse alimentam o topo do pipeline (Captação), consideração/decisão são as etapas de agendamento e proposta, e advocacia é o pipeline de Pós-consulta/Recorrência. A Nyro deve identificar em qual etapa o gargalo está antes de sugerir mais verba de anúncio.
+## Aplicação no KHUB
+Cada etapa mapeia direto para o CRM do KHUB: consciência/interesse alimentam o topo do pipeline (Captação), consideração/decisão são as etapas de agendamento e proposta, e advocacia é o pipeline de Pós-consulta/Recorrência. A Nyro deve identificar em qual etapa o gargalo está antes de sugerir mais verba de anúncio.
 
 ## Princípio-chave
 Construa o funil de baixo para cima: conserte a conversão antes de despejar mais verba na consciência. Não adianta gerar tráfego para um funil furado.

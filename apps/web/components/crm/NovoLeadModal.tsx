@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui';
+import { useDialogFocus } from '@/lib/use-dialog-focus';
 import { Icon } from '@/components/icons';
 import { crm } from '@/lib/crm';
 import { lerValor, mensagemErroCrm } from './erro-api';
@@ -21,13 +22,7 @@ export function NovoLeadModal({ onClose, onCreated }: Props) {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !salvando) onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, salvando]);
+  const foco = useDialogFocus(true, () => { if (!salvando) onClose(); });
 
   const set = (campo: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [campo]: e.target.value }));
@@ -68,13 +63,15 @@ export function NovoLeadModal({ onClose, onCreated }: Props) {
       onClick={() => !salvando && onClose()}
     >
       <Card
+        ref={(el) => { foco.current = el; }}
+        tabIndex={-1}
         className="lg-sheet max-h-[90vh] w-full max-w-md animate-scale-in overflow-y-auto p-6"
         role="dialog"
         aria-modal="true"
         aria-labelledby="novo-lead-titulo"
         onClick={(e) => e.stopPropagation()}
       >
-        <form onSubmit={salvar} className="space-y-4" noValidate>
+        <form onSubmit={salvar} className="space-y-4">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 id="novo-lead-titulo" className="t-section text-fg">Novo lead</h2>

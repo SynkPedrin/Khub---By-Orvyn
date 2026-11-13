@@ -1,4 +1,4 @@
-# ESTADO ATUAL — ORVYN OS
+# ESTADO ATUAL — KHUB OS
 
 > Inventário da **Fase 0** (auditoria de baseline não destrutiva), verificado contra o sistema rodando em 2026-07-18.
 > Baseline: **194 testes / 23 suítes verdes** · cobertura global **71,9% statements · 54,1% branches**.
@@ -125,7 +125,7 @@ Priorizado por **risco × esforço**. Detalhe e severidade em `Nyro IA/cerebro/B
 ## 5. Incidente encontrado e estancado nesta fase
 
 **BUG-014 — RLS não protegia a partição de `ad_insights`.**
-A tabela-pai tem RLS, mas no Postgres a policy **não vale** para quem consulta a partição direto: `SELECT * FROM ad_insights_default` como `orvyn_app`, **sem contexto de tenant**, devolvia 14 linhas.
+A tabela-pai tem RLS, mas no Postgres a policy **não vale** para quem consulta a partição direto: `SELECT * FROM ad_insights_default` como `khub_app`, **sem contexto de tenant**, devolvia 14 linhas.
 
 Nada vazou pela API (a aplicação sempre consulta a tabela-pai) — mas isso fazia a *aplicação* virar a 1ª camada de isolamento, exatamente o que o invariante 1 proíbe.
 
@@ -147,3 +147,47 @@ Páginas do front ........ 19 (3 stubs: agenda, financeiro, nyro)
 ```
 
 **Regra:** nenhuma fase pode entregar com menos de 154 testes verdes.
+
+---
+
+## 2026-11-09 — Acabamento visual (bordas + luz) e fix de Ads
+
+A pedido do Pedro (referência: desigualOS dark), com a decisão "claro, mas com bordas e luz":
+- **Tokens claros** (`globals.css`): bordas mais nítidas (`--border/--edge` 0.12→0.17, fortes 0.20→0.28, `--lg-edge*` idem), sombras com toque roxo da marca (`--sh-surface*`, `--lg-shadow`).
+- **Cards**: filete de luz no topo (gradiente branco) + nova sombra.
+- **Ambiente**: véu branco mais leve, vazamentos roxo/lima mais presentes + 3º feixe violeta no topo direito.
+- **Shell**: sidebar/topbar com sombra roxa de flutuação; sidebar com divisórias (marca/grupos/rodapé) e classe `sidebar-shell`; item ativo com tint e glow de marca.
+- **Gráficos**: glow `feDropShadow` na linha principal de receita (`revenue/charts.tsx`); sparklines já tinham.
+- **NICO**: orbe viva (blob morph + estrela balançando + halo), wordmark maior no header de `/nyro`.
+- **Fix BUG-027** (API): sync de Ads fazia rede dentro de transação Prisma (timeout 5s) → sempre falhava. Rede movida para fora da transação; verificado com sync real (8 contas, 10 campanhas, 398 insights).
+- **Logos oficiais dos canais** (`public/logos/*.webp`: meta, instagram, whatsapp, google-ads, tiktok, youtube): `BrandLogo` passa a usar os arquivos oficiais para essas marcas (SVGs artesanais removidos; demais marcas seguem em SVG). `CanalBadge` (leads, pipeline, conversas, campanhas) mostra a logo real de WhatsApp/Instagram/Google Ads. Badges de conexão da página de Ads exibem a logo do provider.
+- **`/campanhas` com dados reais**: a tela era 100% demo (`CampanhasVazio` em modo real) e quem conectava a Meta não via nada. Agora o modo real mostra a seção "Campanhas de anúncios" (logo Meta, KPIs de 30d, tabela de campanhas, link p/ Marketing → Ads) quando há campanhas sincronizadas; o aviso de prospecção fica abaixo, contextualizado. Validado: dados do Studio da Beleza existem no banco (R$586, 7 campanhas, meta ok).
+- **Inbox real recebendo WhatsApp** (BUG-028): body parsing manual no `main.ts` (webhooks 100mb com rawBody; upload 22mb; resto padrão) — o parser global do Nest (100kb) rodava antes dos app.use e matava webhooks com mídia; parte chegava urlencoded. Dra. Bárbara: 6 → 55 mensagens, 14 conversas.
+- **Estado vazio do Inbox honesto**: se o WhatsApp já está conectado (stevo_api/evolution/whatsapp status=connected), não mostra mais "Conectar WhatsApp" — explica que a conversa aparece quando o primeiro cliente escrever.
+
+---
+
+## 2026-11-09 — Migração GHL → KHUB (preparação da virada)
+
+Estado encontrado: tags do Studio já importadas (9/9); workflows do GHL recriados como rascunho (5 fiéis + MetaAds Tagging ativo); IA do GHL da Bárbara ("Julia"/Carol) existia só no tenant Orvyn IA.
+
+Preparado hoje:
+- **Carol** copiada para o tenant Dra. Bárbara Lopes — ativa, NÃO-padrão (teste seguro, não responde conversa nenhuma sozinha).
+- **Ritinha** criada no Studio da Beleza a partir das evidências reais do GHL (custom values: preços, políticas, follow-ups, assinatura) + ferramentas de agenda (no GHL ela só encaminhava; aqui agenda de verdade). Ativa, NÃO-padrão.
+- **5 workflows fiéis ao GHL pré-validados** com a validação de publicação (21/6/2/3/2 nós, todos válidos).
+- `scripts/operar/virada-ghl.mjs`: dry-run mostra o plano; `--aplicar` publica os 5 fluxos, pausa as 2 duplicatas simplificadas e torna Ritinha/Carol padrão. **Só rodar com o GHL desligado** (senão cliente recebe em dobro).
+- `scripts/operar/validar-virada.mjs`: revalida os rascunhos antes da virada.
+
+Virada: usuário testa as agentes ao vivo (Agentes → testar no WhatsApp, contato de teste) → desliga GHL → rodar virada-ghl.mjs --aplicar.
+
+---
+
+## 2026-11-13 — Consolidação das 5 sessões paralelas
+
+- **Saúde da árvore:** tsc API+Web limpos · **jest 1.172 verdes** (95 suítes) · vitest 179/179 · lint limpo.
+- **Fotos de perfil + atribuição de lead (066) fechadas:** `OrigemFotoController` registrado no `CrmModule` (estava importado, fora do array — rotas 404); regra `origemAtualizada` promove placeholder de canal para "Meta Ads" etc. quando o toque é confirmado/provável, sem nunca sobrescrever origem específica; E2E 20/20 (`scripts/qa/e2e-origem-foto.mjs`).
+- **SIM-5:** simulações do Gerenciador persistem na subconta (`db/067`, RLS, teto de 50); endpoints `/v1/ads/simulador/simulacoes`; tela usa API com espelho offline. E2E 9/9.
+- **Neon (produção):** 066, 067 e 068 aplicadas + registradas no ledger; isolamento 066/067/068 verde em produção.
+- **Render:** `FIRECRAWL_API_KEY` e `NICO_PROVEDOR=anthropic` configuradas.
+- **Repo público:** histórico reescrito (force push) — telefone de teste removido de todos os commits.
+- **Importação GHL → Neon retomada** (tinha morrido no contato 750 por falta da 066).

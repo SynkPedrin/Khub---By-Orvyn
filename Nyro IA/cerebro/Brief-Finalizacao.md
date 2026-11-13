@@ -1,4 +1,4 @@
-# BRIEF MESTRE — Finalização do Orvyn (Claude Code)
+# BRIEF MESTRE — Finalização do KHUB (Claude Code)
 
 > Contrato de operação + plano faseado. **Uma sprint por sessão.** A Seção 7 é a primeira mensagem de cada sessão. Referenciado pelo `CLAUDE.md` da raiz.
 
@@ -6,7 +6,7 @@
 
 ## 0. MISSÃO
 
-Finalizar **100% do código** do Orvyn. Objetivo terminal:
+Finalizar **100% do código** do KHUB. Objetivo terminal:
 
 > **Levar o produto ao estado em que a única coisa que falta para qualquer funcionalidade rodar em produção é plugar credenciais/APIs externas — nunca escrever código.**
 
@@ -88,7 +88,7 @@ Não refatorar auth/RLS/CRM Core que funcionam (só com ADR) · não afrouxar/de
 ## 7. PRIMEIRA MENSAGEM DE CADA SESSÃO
 
 ```
-Você é o engenheiro full-stack do Orvyn. Leia o Brief-Finalizacao.md e, na ordem,
+Você é o engenheiro full-stack do KHUB. Leia o Brief-Finalizacao.md e, na ordem,
 o PRD.md, Arquitetura.md, Banco.md, APIs.md, RegrasNegocio.md, Tasks.md, Bugs.md e Sprint.md.
 Depois inspecione apps/web, apps/api e packages/*.
 

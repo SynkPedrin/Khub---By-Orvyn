@@ -1,8 +1,8 @@
-# PRD — Orvyn
+# PRD — KHUB
 
-> Fonte da verdade do produto. Transcrição fiel do documento **"Orvyn — Documento de Produto e Arquitetura", Versão 1.0, Julho de 2026, Confidencial**. Nada aqui foi resumido. Onde o documento original não define algo necessário à construção, há uma marca `> ⚠️ LACUNA:`.
+> Fonte da verdade do produto. Transcrição fiel do documento **"KHUB — Documento de Produto e Arquitetura", Versão 1.0, Julho de 2026, Confidencial**. Nada aqui foi resumido. Onde o documento original não define algo necessário à construção, há uma marca `> ⚠️ LACUNA:`.
 
-- **Produto:** Orvyn — o primeiro CRM vertical totalmente configurado por Inteligência Artificial.
+- **Produto:** KHUB — o primeiro CRM vertical totalmente configurado por Inteligência Artificial.
 - **Powered by:** Nyro IA.
 - **Versão do documento base:** 1.0 · Julho de 2026 · Confidencial.
 - **Fase atual:** F0 — Fundação.
@@ -13,7 +13,7 @@ Documentos irmãos: [[Arquitetura]] · [[Banco]] · [[APIs]] · [[RegrasNegocio]
 
 ## 1. Sumário Executivo
 
-O Orvyn é um CRM de vendas vertical, multi-tenant, cuja principal diferenciação é ser **totalmente configurado por Inteligência Artificial**. No momento da criação da conta, o usuário escolhe o modelo de negócio dele (clínica médica, escritório de advocacia, escritório de contabilidade, agência, entre outros) e entra em um CRM **já pronto**: pipelines montados, automações ativas, campos personalizados, dashboards e integrações configuradas para aquele nicho.
+O KHUB é um CRM de vendas vertical, multi-tenant, cuja principal diferenciação é ser **totalmente configurado por Inteligência Artificial**. No momento da criação da conta, o usuário escolhe o modelo de negócio dele (clínica médica, escritório de advocacia, escritório de contabilidade, agência, entre outros) e entra em um CRM **já pronto**: pipelines montados, automações ativas, campos personalizados, dashboards e integrações configuradas para aquele nicho.
 
 No centro de tudo está a **Nyro IA**, o assistente de crescimento mais completo do mercado: uma IA que domina vendas, marketing, copy, tecnologia, crescimento, contabilidade e jurídico, alimentada por um **RAG especializado por nicho e subespecialidade** (ex.: advogado bancário, advogado previdenciário, médico neurologista, áreas contábeis). A Nyro não é um chatbot acoplado: ela é a camada de inteligência que configura, opera e otimiza o CRM inteiro.
 
@@ -22,7 +22,7 @@ Completam o produto um **motor de automações visual** no estilo n8n / GoHighLe
 Este documento descreve o produto de ponta a ponta: visão, funcionalidades, front-end, back-end, banco de dados, APIs, segurança e o método de construção baseado em um cérebro de documentação no Obsidian lido pelo Claude Code.
 
 ### Posicionamento em uma frase
-> "O Orvyn é o CRM que já nasce pronto para o seu negócio — configurado, automatizado e operado por uma IA que entende do seu mercado."
+> "O KHUB é o CRM que já nasce pronto para o seu negócio — configurado, automatizado e operado por uma IA que entende do seu mercado."
 
 ---
 
@@ -36,12 +36,12 @@ Este documento descreve o produto de ponta a ponta: visão, funcionalidades, fro
 
 ### 2.2 A oportunidade
 - Mercado de CRM vertical em expansão, com disposição a pagar premium por solução pronta.
-- Agências (como a própria MedScale) podem revender templates e operar carteiras de clientes dentro do Orvyn — canal de distribuição natural via white-label/parceiros.
+- Agências (como a própria MedScale) podem revender templates e operar carteiras de clientes dentro do KHUB — canal de distribuição natural via white-label/parceiros.
 - O custo de inferência de LLMs caiu a ponto de viabilizar uma IA operadora (não apenas assistente) com margem saudável em SaaS.
 
 ### 2.3 Para quem
 
-| Perfil | Dor principal | O que o Orvyn entrega |
+| Perfil | Dor principal | O que o KHUB entrega |
 |---|---|---|
 | Clínicas médicas e estéticas | Agenda cheia de furos, follow-up manual, sem visão de funil | CRM médico pronto: pipeline de pacientes, confirmação automática, Nyro treinada em saúde |
 | Escritórios de advocacia | Captação desorganizada, prazos e processos fora do funil | CRM jurídico com pipelines por área (bancário, previdenciário, trabalhista...) |
@@ -52,7 +52,7 @@ Este documento descreve o produto de ponta a ponta: visão, funcionalidades, fro
 
 ## 3. Visão Geral da Solução
 
-O Orvyn é composto por **cinco camadas de produto** que funcionam como um organismo único:
+O KHUB é composto por **cinco camadas de produto** que funcionam como um organismo único:
 
 | Camada | Descrição |
 |---|---|
@@ -110,7 +110,7 @@ template/
 
 ## 5. Nyro IA — O Cérebro do Sistema
 
-A Nyro IA é o diferencial competitivo do Orvyn. Ela atua em **quatro papéis simultâneos**:
+A Nyro IA é o diferencial competitivo do KHUB. Ela atua em **quatro papéis simultâneos**:
 
 | Papel | O que faz |
 |---|---|
@@ -149,7 +149,7 @@ Cada template carrega uma **base de conhecimento vetorizada** própria, com hera
 
 ### 6.2 Isolamento e segurança do conhecimento
 - Documentos do tenant ficam em **namespace exclusivo** (`tenant_id` em toda query).
-- Bases de nicho são **read-only** para as contas; apenas o time Orvyn versiona e publica.
+- Bases de nicho são **read-only** para as contas; apenas o time KHUB versiona e publica.
 - Toda resposta da Nyro **cita internamente as fontes usadas** (rastreabilidade para auditoria).
 
 > ⚠️ LACUNA: O PRD não define o modelo de embeddings, dimensão do vetor, tamanho de chunk, nem o re-ranker específico. Deriva-se para F3. Registrar como ADR quando decidido.
@@ -193,7 +193,7 @@ Workspace visual de automação no estilo **n8n + GoHighLevel**: canvas drag-and
 | **Meta (Facebook/Instagram)** | Lead Ads (webhook de leads), Conversions API, Instagram DM e Messenger, métricas de campanhas via Marketing API | Cria/pausa campanhas, analisa CPL/ROAS, responde DMs, envia eventos de conversão do funil |
 | **Google** | Google Ads (métricas e conversões offline), Google Calendar (agenda), Gmail (envio/threads), Sheets (export) | Analisa campanhas, agenda reuniões/consultas, sincroniza disponibilidade |
 | **LinkedIn** | Lead Gen Forms, perfil da empresa, publicação de conteúdo | Captura leads B2B, sugere conteúdo para autoridade |
-| **Stripe** | Checkout, assinaturas, faturas, webhooks de pagamento; também é o billing do próprio Orvyn | Cria cobranças a partir do funil, dispara automações por pagamento aprovado/falho |
+| **Stripe** | Checkout, assinaturas, faturas, webhooks de pagamento; também é o billing do próprio KHUB | Cria cobranças a partir do funil, dispara automações por pagamento aprovado/falho |
 | **WhatsApp** | WhatsApp Cloud API (oficial) e Evolution API (número próprio) — inbox unificado | Atendimento e follow-up conversacional, confirmações, campanhas de reativação |
 | **Webhooks / API pública** | Entrada e saída genéricas, chaves de API por tenant, docs OpenAPI | Conecta qualquer sistema externo (ERP, prontuário, sistema jurídico) |
 
@@ -228,7 +228,7 @@ Arquitetura de **monólito modular** no início (velocidade de entrega) com fron
 Ver detalhamento em [[Arquitetura]] §Front-end.
 
 ### 10.1 Princípios de UI/UX
-- **Identidade Orvyn:** base clara, **roxo `#7B2FBE`** como cor de ação, visual premium e limpo coerente com a marca (trevo de diamantes). Assets oficiais no repositório: `logo.png` (1058×1058) e `Identidade visual.png` (1340×1320).
+- **Identidade KHUB:** base clara, **roxo `#7B2FBE`** como cor de ação, visual premium e limpo coerente com a marca (trevo de diamantes). Assets oficiais no repositório: `logo.png` (1058×1058) e `Identidade visual.png` (1340×1320).
 - **Mobile-first:** dono de clínica e advogado operam pelo celular; inbox e Kanban 100% responsivos.
 - **A Nyro sempre a um atalho de distância:** painel lateral + command bar (`Cmd/Ctrl+K`).
 - **Zero tela em branco:** todo módulo abre com dados do template e estados vazios com CTA da Nyro.
@@ -273,7 +273,7 @@ Ver detalhamento em [[Arquitetura]] §Back-end e [[Banco]].
 | `nyro` | Orquestrador de agentes, tools, memória de conta, guardrails, filas de aprovação |
 | `rag` | Ingestão, chunking, embeddings, busca híbrida, namespaces por tenant/nicho |
 | `integrations` | Conectores Meta/Google/LinkedIn/Stripe/WhatsApp, OAuth vault, webhooks in/out |
-| `billing` | Assinaturas do Orvyn no Stripe, medição de uso de IA (créditos), limites por plano |
+| `billing` | Assinaturas do KHUB no Stripe, medição de uso de IA (créditos), limites por plano |
 | `analytics` | Eventos de produto, KPIs por nicho, materialized views para dashboards |
 | `audit` | Log imutável de toda ação (humana ou da Nyro): quem, o que, quando, com que dado |
 
@@ -316,7 +316,7 @@ Ver detalhamento em [[RegrasNegocio]] §Segurança e LGPD.
 
 ## 15. Método de Desenvolvimento — Cérebro Obsidian + Claude Code
 
-O Orvyn será construído com um método de **documentação viva como fonte única de verdade**. Todo o contexto do projeto mora em um vault do Obsidian (o 'cérebro'), na mesma pasta já conectada à Nyro IA. O Claude Code lê essa documentação antes de gerar qualquer código — o código nunca diverge da especificação.
+O KHUB será construído com um método de **documentação viva como fonte única de verdade**. Todo o contexto do projeto mora em um vault do Obsidian (o 'cérebro'), na mesma pasta já conectada à Nyro IA. O Claude Code lê essa documentação antes de gerar qualquer código — o código nunca diverge da especificação.
 
 ### 15.1 Estrutura do vault (original do PRD)
 
@@ -353,7 +353,7 @@ Nyro IA/
 | **F2 — Templates + Provisionamento** | 3-4 sem | Schema de blueprint, 3 templates (Médico, Advocacia, Contábil), onboarding com entrevista | Conta nova sai 100% configurada em < 5 min |
 | **F3 — Nyro IA v1** | 4-6 sem | Chat + tools de configuração, RAG global + 3 nichos, SDR no WhatsApp com aprovação humana | >60% das conversas qualificadas sem humano |
 | **F4 — Automações** | 4-5 sem | Workflow builder visual, engine BullMQ, logs, 15 nós essenciais, automações dos templates ligadas ao motor | Automações dos 3 templates rodando no motor |
-| **F5 — Integrações + Billing** | 4-5 sem | Meta Lead Ads + Ads API, Google Calendar/Ads, Stripe (cliente e billing Orvyn), WhatsApp Cloud API | Lead do anúncio ao fechamento sem sair do Orvyn |
+| **F5 — Integrações + Billing** | 4-5 sem | Meta Lead Ads + Ads API, Google Calendar/Ads, Stripe (cliente e billing KHUB), WhatsApp Cloud API | Lead do anúncio ao fechamento sem sair do KHUB |
 | **F6 — Beta fechado** | 4 sem | 10-20 contas (base da agência), telemetria, hardening, LGPD, pricing final | NPS > 50; churn de beta < 10% |
 | **F7 — Lançamento + Scale** | contínuo | Nyro Growth (campanhas), LinkedIn, white-label para agências, marketplace de templates | MRR e CAC/LTV dentro das metas |
 

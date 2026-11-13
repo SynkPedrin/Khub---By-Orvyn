@@ -1,13 +1,13 @@
 -- =====================================================================
--- ORVYN · Nyro IA — Teste de isolamento cross-tenant do RAG (R0.2)
+-- KHUB · Nyro IA — Teste de isolamento cross-tenant do RAG (R0.2)
 -- BLOQUEANTE no CI. Em qualquer vazamento faz RAISE EXCEPTION -> exit != 0.
 --
 -- Rodar:  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/002_isolation_test.sql
--- O runner deve ser superuser OU membro de orvyn_service e orvyn_app
+-- O runner deve ser superuser OU membro de khub_service e khub_app
 -- (no Postgres do docker-compose o usuário 'postgres' já é superuser).
 --
--- O teste semeia dados como orvyn_service (BYPASSRLS), depois atua como
--- orvyn_app (NOBYPASSRLS) com app.current_tenant_id = A e prova que:
+-- O teste semeia dados como khub_service (BYPASSRLS), depois atua como
+-- khub_app (NOBYPASSRLS) com app.current_tenant_id = A e prova que:
 --   1. A NÃO enxerga documentos/chunks do tenant B (vazamento = incidente LGPD)
 --   2. A enxerga o próprio tenant + as bases compartilhadas (global)
 --   3. A busca híbrida (rag_search_hybrid) nunca retorna chunk de B
@@ -24,7 +24,7 @@ BEGIN;
 \set tenant_b '22222222-2222-2222-2222-222222222222'
 
 -- ---------- SEED (como serviço, ignora RLS) ----------
-SET LOCAL ROLE orvyn_service;
+SET LOCAL ROLE khub_service;
 
 INSERT INTO tenants (id, nome) VALUES
   (:'tenant_a', 'Clinica A'),
@@ -111,13 +111,13 @@ VALUES ('ad000000-0000-4000-8000-00000000000b', :'tenant_b', 'AGENTE_SECRETO_DO_
 INSERT INTO conversations (id, tenant_id, nome, atendimento, agent_id)
 VALUES ('ad000000-0000-4000-8000-0000000000cb', :'tenant_b', 'Conversa do B', 'ia', 'ad000000-0000-4000-8000-00000000000b');
 INSERT INTO messages (id, tenant_id, conversation_id, autor_tipo, corpo)
--- autor 'humano': mensagem de contato dispararia o outbox (orvyn_service não grava outbox_events).
+-- autor 'humano': mensagem de contato dispararia o outbox (khub_service não grava outbox_events).
 VALUES ('ad000000-0000-4000-8000-0000000000eb', :'tenant_b', 'ad000000-0000-4000-8000-0000000000cb', 'humano', 'MENSAGEM_DO_LEAD_DE_B');
 INSERT INTO agent_runs (tenant_id, agent_id, conversation_id, message_id, status, motivo)
 VALUES (:'tenant_b', 'ad000000-0000-4000-8000-00000000000b', 'ad000000-0000-4000-8000-0000000000cb', 'ad000000-0000-4000-8000-0000000000eb', 'respondido', 'RUN_SECRETO_DO_B');
 
 -- ---------- ACT + ASSERT (como aplicação, tenant = A) ----------
-SET LOCAL ROLE orvyn_app;
+SET LOCAL ROLE khub_app;
 SET LOCAL app.current_tenant_id = :'tenant_a';
 
 DO $$
@@ -390,7 +390,7 @@ BEGIN
   SELECT document_id INTO v_doc_g FROM rag_chunks WHERE conteudo LIKE '%global publico%';
   RESET ROLE;  -- só para descobrir o id do documento de B (invisível a A)
   SELECT id INTO v_doc_b FROM rag_documents WHERE titulo = 'DOC_B';
-  SET LOCAL ROLE orvyn_app;
+  SET LOCAL ROLE khub_app;
 
   INSERT INTO rag_chunks (document_id, tenant_id, escopo, nicho, ordem, conteudo, status)
   VALUES (v_doc_a, '11111111-1111-1111-1111-111111111111', 'tenant', 'medico', 1, 'chunk novo de A', 'published');

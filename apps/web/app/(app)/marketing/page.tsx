@@ -148,10 +148,10 @@ export default function BibliotecaPage() {
             <Card key={t.id} className="flex h-full flex-col p-4">
               <div className="flex items-start justify-between gap-2">
                 <p className="font-bold text-fg">{t.name}</p>
-                {t.featured && <span className="rounded-full bg-brand/12 px-2 py-0.5 text-[10px] font-bold text-brand">★ destaque</span>}
+                {t.featured && <span className="rounded-full bg-brand/12 px-2 py-0.5 text-2xs font-bold text-brand">★ destaque</span>}
               </div>
               <p className="mt-1.5 line-clamp-3 flex-1 text-sm text-muted">{t.description}</p>
-              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10.5px]">
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-2xs">
                 <span className="rounded-full bg-surface3 px-2 py-0.5 font-semibold text-muted">{t.category}</span>
                 {t.requirements.map((r) => (
                   <span key={r} className="rounded-full bg-amber-500/10 px-2 py-0.5 font-semibold text-amber-700 dark:text-amber-400">requer {REQ_ROTULO[r] ?? r}</span>

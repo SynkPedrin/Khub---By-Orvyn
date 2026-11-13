@@ -41,7 +41,7 @@ Estratégia: comece estreito (cabeça de praia), domine, depois expanda.
 
 Um bom posicionamento é: diferenciado (claramente distinto das alternativas), crível (você entrega de fato a promessa), relevante (o alvo realmente se importa) e sustentável (concorrente não copia fácil).
 
-## Aplicação no Orvyn
+## Aplicação no KHUB
 Para uma clínica, o "segmento" raramente é "todo mundo com dor": é, por exemplo, "mulheres 35–55 buscando procedimento estético com médico especialista, que priorizam segurança sobre preço". Para um escritório, é a área + o perfil de causa (ex.: aposentadoria por invalidez, público 50+). A Nyro deve preencher o template de posicionamento com os dados coletados na entrevista de onboarding.
 
 ## Princípio-chave

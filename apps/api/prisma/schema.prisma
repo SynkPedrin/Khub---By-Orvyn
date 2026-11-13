@@ -73,6 +73,8 @@ model RagDocument {
   status           RagDocStatus @default(pending)
   erro             String?
   metadados        Json         @default("{}")
+  /// Texto extraído da fonte (reprocessar/visualizar) — db/034.
+  textoFonte       String?      @map("texto_fonte")
   criadoPor        String?      @map("criado_por") @db.Uuid
   publishedAt      DateTime?    @map("published_at") @db.Timestamptz(6)
   createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -233,6 +235,7 @@ model AgencyMember {
   createdAt    DateTime                        @default(now()) @map("created_at") @db.Timestamptz(6)
   agency       Agency                          @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   clientAccess AgencyMemberClientAccess[]
+  clientPrefs  AgencyMemberClientPref[]
 
   @@unique([agencyId, identityId])
   @@map("agency_members")
@@ -249,9 +252,25 @@ model AgencyClientAccount {
   updatedAt   DateTime                   @default(now()) @map("updated_at") @db.Timestamptz(6)
   agency      Agency                     @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   memberAccess AgencyMemberClientAccess[]
+  memberPrefs  AgencyMemberClientPref[]
 
   @@unique([agencyId, tenantId])
   @@map("agency_client_accounts")
+}
+
+/// Preferências do membro por subconta no seletor (db/064): fixar e último acesso ("Recentes").
+model AgencyMemberClientPref {
+  agencyMemberId  String              @map("agency_member_id") @db.Uuid
+  clientAccountId String              @map("client_account_id") @db.Uuid
+  fixado          Boolean             @default(false)
+  ultimoAcessoEm  DateTime?           @map("ultimo_acesso_em") @db.Timestamptz(6)
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime            @default(now()) @map("updated_at") @db.Timestamptz(6)
+  member          AgencyMember        @relation(fields: [agencyMemberId], references: [id], onDelete: Cascade)
+  clientAccount   AgencyClientAccount @relation(fields: [clientAccountId], references: [id], onDelete: Cascade)
+
+  @@id([agencyMemberId, clientAccountId])
+  @@map("agency_member_client_prefs")
 }
 
 model AgencyMemberClientAccess {
@@ -279,11 +298,26 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+/// "Esqueci minha senha" (db/038 · ADR-0042). Infra de auth, sem RLS
+/// (mesmo padrão de refresh_tokens). Guarda só o hash; uso único.
+model PasswordResetToken {
+  id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  identityId String    @map("identity_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt     DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("password_reset_tokens")
+}
+
 model Invite {
   id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   tenantId   String    @map("tenant_id") @db.Uuid
   email      String
   role       String    @default("member")
+  /// Acesso por módulo já escolhido no convite (db/065, ADR-0045): vira users.permissoes no aceite.
+  permissoes Json      @default("{}")
   tokenHash  String    @unique @map("token_hash")
   expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
   acceptedAt DateTime? @map("accepted_at") @db.Timestamptz(6)
@@ -354,6 +388,10 @@ model Contact {
   nome            String
   email           String?
   telefone        String?
+  /// Foto de perfil do WhatsApp (db/037). URL assinada do pps.whatsapp.net —
+  /// expira; `fotoEm` controla a revalidação por TTL.
+  fotoUrl         String?         @map("foto_url")
+  fotoEm          DateTime?       @map("foto_em") @db.Timestamptz(6)
   empresa         String?
   tag             String         @default("Lead")
   tags            String[]
@@ -375,6 +413,8 @@ model Contact {
   /// Base legal/consentimento LGPD (RegrasNegocio §5). '{}' = não registrado
   /// ainda — nunca retroage um consentimento que não foi de fato dado.
   consentimento   Json           @default("{}")
+  /// Origem do lead (db/066): { fonte, canal, adId, campanha, criativo, cliqueId, confianca, primeiroToqueEm, ultimoToque }.
+  atribuicao      Json           @default("{}")
   ownerId         String?        @map("owner_id") @db.Uuid
   proximaAcaoAt   DateTime?      @map("proxima_acao_at") @db.Timestamptz(6)
   proximaAcaoTipo String?        @map("proxima_acao_tipo")
@@ -395,6 +435,24 @@ model Contact {
   @@map("contacts")
 }
 
+/// Lista salva (smart list) de Leads/Contatos (db/052 · Q2.2). Filtros e
+/// colunas validados na API (crm/contatos-filtro.ts). Do dono; compartilhada
+/// = visível à equipe do mesmo tenant (RLS).
+model ContactView {
+  id              String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  nome            String
+  filtros         Json     @default("{}")
+  colunas         Json     @default("[]")
+  ordem           String   @default("recentes")
+  ownerIdentityId String   @map("owner_identity_id") @db.Uuid
+  compartilhada   Boolean  @default(false)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("contact_views")
+}
+
 model Deal {
   id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   tenantId   String   @map("tenant_id") @db.Uuid
@@ -405,16 +463,39 @@ model Deal {
   valor      Decimal  @default(0) @db.Decimal(12, 2)
   origem     String?
   status     String   @default("aberto")
+  /// Valores dos campos personalizados do negócio (db/053). Definições em CustomFieldDef.
+  camposCustom Json   @default("{}") @map("campos_custom")
+  /// Motivo de perda (db/051 · Q2.1): obrigatório pela API ao marcar perdido se o tenant tem motivos ativos.
+  motivoPerdaId  String? @map("motivo_perda_id") @db.Uuid
+  motivoPerdaObs String? @map("motivo_perda_obs")
+  /// identities.id do responsável (db/051). Sem FK: a API valida que é membro do tenant.
+  ownerId    String?  @map("owner_id") @db.Uuid
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
   contact    Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
   pipeline   Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
   stage      Stage    @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  motivoPerda LostReason? @relation(fields: [motivoPerdaId], references: [id], onDelete: SetNull)
   tasks      Task[]
   notes      Note[]
   activities Activity[]
 
   @@map("deals")
+}
+
+/// Catálogo de motivos de perda por tenant (db/051 · Q2.1). RLS tenant_rw.
+model LostReason {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  nome      String
+  ativo     Boolean  @default(true)
+  ordem     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  deals     Deal[]
+
+  @@index([tenantId, ordem], map: "idx_lost_reasons_lista")
+  @@map("lost_reasons")
 }
 
 model Conversation {
@@ -434,12 +515,42 @@ model Conversation {
   assigneeId    String?   @map("assignee_id") @db.Uuid
   handoffMotivo String?   @map("handoff_motivo")
   handoffAt     DateTime? @map("handoff_at") @db.Timestamptz(6)
+  /// 'dm' | 'comentario' (db/063): comentário de post/anúncio/vídeo também é conversa.
+  tipo            String    @default("dm")
+  /// Id da conversa NA REDE (IGSID/PSID da DM, id do comentário raiz). Único por (tenant, canal).
+  externoId       String?   @map("externo_id")
+  canalConexaoId  String?   @map("canal_conexao_id") @db.Uuid
+  /// De onde veio o comentário (post/mídia/vídeo). Nunca token.
+  contextoExterno Json?     @map("contexto_externo")
   updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   contact      Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
   messages     Message[]
 
   @@map("conversations")
+}
+
+/// Conta de rede conectada pelo tenant dentro de Conversas (db/063):
+/// Instagram/Messenger (página do Facebook), YouTube (canal). O WhatsApp
+/// continua em `integrations` (Stevo/Evolution). Token só cifrado.
+model ChannelConnection {
+  id                   String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId             String    @map("tenant_id") @db.Uuid
+  rede                 String
+  externalId           String    @map("external_id")
+  pageId               String?   @map("page_id")
+  nome                 String    @default("")
+  status               String    @default("conectado")
+  credentialsEncrypted String?   @map("credentials_encrypted")
+  scopes               String[]
+  connectedBy          String?   @map("connected_by") @db.Uuid
+  erro                 String?
+  ultimaSyncAt         DateTime? @map("ultima_sync_at") @db.Timestamptz(6)
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([rede, externalId], map: "channel_connections_ext_uq")
+  @@map("channel_connections")
 }
 
 model Message {
@@ -455,6 +566,13 @@ model Message {
   autorTipo      String       @default("contato") @map("autor_tipo")
   /// Agente que escreveu a mensagem (autor_tipo = 'ia').
   agentId        String?      @map("agent_id") @db.Uuid
+  /// Automação que disparou o envio (autor_tipo = 'automacao'; migration 036).
+  workflowId     String?      @map("workflow_id") @db.Uuid
+  /// Identidade que digitou (autor_tipo = 'humano'; migration 036).
+  enviadoPorId   String?      @map("enviado_por_id") @db.Uuid
+  /// Anexo de saída (db/055): { tipo, mime, nome, tamanho, legenda?, storageKey? }.
+  /// Só a CHAVE do objeto no storage — a URL é assinada na leitura e expira.
+  anexo          Json?
   corpo          String
   hora           String?
   createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -498,6 +616,29 @@ model Company {
   notes        Note[]
 
   @@map("companies")
+}
+
+/// Definição de campo personalizado (db/053 · Q2.3). Os VALORES ficam no
+/// `campos_custom` (jsonb) da entidade, indexados pela `chave` (slug estável).
+/// Arquivar não apaga valores.
+model CustomFieldDef {
+  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  entidade    String
+  chave       String
+  rotulo      String
+  tipo        String
+  opcoes      Json      @default("[]")
+  obrigatorio Boolean   @default(false)
+  ordem       Int       @default(0)
+  grupo       String?
+  arquivadoEm DateTime? @map("arquivado_em") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([tenantId, entidade, chave], map: "uq_custom_field_defs_chave")
+  @@index([tenantId, entidade, ordem], map: "idx_custom_field_defs_lista")
+  @@map("custom_field_defs")
 }
 
 model Task {
@@ -561,6 +702,12 @@ model Workflow {
   janelaFim     Int               @default(18) @map("janela_fim") @db.SmallInt
   timezone      String            @default("America/Sao_Paulo")
   webhookKey    String?           @unique @map("webhook_key")
+  /// Segredo HMAC do webhook de entrada (X-KHUB-Signature) — db/050. Nunca sai no GET.
+  webhookSegredo String?          @map("webhook_segredo")
+  /// Janela de envio também segura "Notificar equipe" (db/050).
+  janelaIncluiEquipe Boolean      @default(false) @map("janela_inclui_equipe")
+  /// Pasta da lista de automações (db/058). NULL = sem pasta. Uma por fluxo.
+  pasta         String?
   createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime          @default(now()) @map("updated_at") @db.Timestamptz(6)
   versaoAtiva   WorkflowVersion?  @relation("versaoAtiva", fields: [versaoAtivaId], references: [id], onDelete: SetNull)
@@ -611,6 +758,8 @@ model WorkflowRun {
   erro       String?
   passos     Int               @default(0)
   teste      Boolean           @default(false)
+  /// Grafo do rascunho congelado para o "Testar" (db/050). NULL = usa a versão.
+  grafoTeste Json?             @map("grafo_teste")
   startedAt  DateTime          @default(now()) @map("started_at") @db.Timestamptz(6)
   finishedAt DateTime?         @map("finished_at") @db.Timestamptz(6)
   workflow   Workflow          @relation(fields: [workflowId], references: [id], onDelete: Cascade)
@@ -667,8 +816,40 @@ model WorkflowDripCounter {
   @@map("workflow_drip_counters")
 }
 
+/// Rodízio do nó "Atribuir usuário" (db/056 · Q3.1). O executor faz UPSERT
+/// atômico via $queryRaw na mesma transação que grava o dono.
+model WorkflowRoundRobin {
+  tenantId   String   @map("tenant_id") @db.Uuid
+  workflowId String   @map("workflow_id") @db.Uuid
+  nodeId     String   @map("node_id")
+  contador   BigInt   @default(0)
+  updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@id([tenantId, workflowId, nodeId])
+  @@map("workflow_round_robin")
+}
+
+/// Agenda dos gatilhos por tempo (db/057 · Q3.2): `gatilho.agendado` e
+/// `gatilho.data_contato`. Escrita na publicação; varrida pelo worker com lease.
+model WorkflowSchedule {
+  tenantId     String    @map("tenant_id") @db.Uuid
+  workflowId   String    @map("workflow_id") @db.Uuid
+  versionId    String    @map("version_id") @db.Uuid
+  nodeId       String    @map("node_id")
+  tipo         String
+  proximoEm    DateTime  @map("proximo_em") @db.Timestamptz(6)
+  ultimaJanela DateTime? @map("ultima_janela") @db.Timestamptz(6)
+  leaseUntil   DateTime? @map("lease_until") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@id([tenantId, workflowId, nodeId])
+  @@index([tenantId, proximoEm], map: "idx_workflow_schedules_due")
+  @@map("workflow_schedules")
+}
+
 /// Marketplace de templates de automação (migration 016). Global (tenantId null,
-/// só orvyn_service publica) + do tenant. `workflow` é o grafo do editor.
+/// só khub_service publica) + do tenant. `workflow` é o grafo do editor.
 model AutomationTemplate {
   id           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   tenantId     String?  @map("tenant_id") @db.Uuid
@@ -682,7 +863,7 @@ model AutomationTemplate {
   difficulty   String   @default("facil")
   estimatedMin Int?     @map("estimated_min")
   tags         String[] @default([])
-  author       String   @default("Orvyn")
+  author       String   @default("KHUB")
   version      Int      @default(1)
   isOfficial   Boolean  @default(false) @map("is_official")
   isPremium    Boolean  @default(false) @map("is_premium")
@@ -751,7 +932,7 @@ model FinanceiroCobranca {
   @@map("financeiro_cobrancas")
 }
 
-/// Assinatura do PRÓPRIO Orvyn (billing da plataforma) — não confundir com
+/// Assinatura do PRÓPRIO KHUB (billing da plataforma) — não confundir com
 /// FinanceiroCobranca (o tenant cobrando OS CLIENTES dele). migration 028.
 model Subscription {
   id                   String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
@@ -776,10 +957,19 @@ model AgendaCompromisso {
   titulo        String
   inicio        DateTime  @db.Timestamptz(6)
   fim           DateTime  @db.Timestamptz(6)
-  status        String    @default("agendado") // agendado|confirmado|concluido|cancelado|nao_compareceu
+  status        String    @default("agendado") // agendado|confirmado|concluido|cancelado|faltou (migration 054)
+  /// reuniao|call|demo|visita|followup|outro (migration 054)
+  tipo          String    @default("reuniao")
+  responsavelId String?   @map("responsavel_id") @db.Uuid
   local         String?
   notas         String?
   googleEventId String?   @map("google_event_id")
+  confirmadoEm  DateTime? @map("confirmado_em") @db.Timestamptz(6)
+  faltouEm      DateTime? @map("faltou_em") @db.Timestamptz(6)
+  concluidoEm   DateTime? @map("concluido_em") @db.Timestamptz(6)
+  canceladoEm   DateTime? @map("cancelado_em") @db.Timestamptz(6)
+  /// Quando a varredura D-1 disparou o lembrete (gera appointment.reminder_due).
+  lembreteEnviadoEm DateTime? @map("lembrete_enviado_em") @db.Timestamptz(6)
   createdBy     String?   @map("created_by") @db.Uuid
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
@@ -1049,6 +1239,11 @@ model Agent {
   maxCaracteres        Int      @default(600) @map("max_caracteres")
   canais               String[] @default(["WhatsApp"])
   padrao               Boolean  @default(false)
+  /// Configuração estendida (identidade, personalidade, comportamento, regras,
+  /// comunicação, inteligência, memória, CRM) — validada por Zod (db/034).
+  config               Json     @default("{}")
+  /// Versão publicada que o runtime usa; NULL = configuração viva (legado).
+  versaoPublicadaId    String?  @map("versao_publicada_id") @db.Uuid
   createdBy            String?  @map("created_by") @db.Uuid
   createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt            DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
@@ -1073,9 +1268,712 @@ model AgentRun {
   tokensSaida       Int       @default(0) @map("tokens_saida")
   custoUsd          Decimal   @default(0) @map("custo_usd") @db.Decimal(12, 6)
   latenciaMs        Int?      @map("latencia_ms")
+  versionId         String?   @map("version_id") @db.Uuid
+  intencao          String?
+  sentimento        String?
+  urgencia          String?
+  confianca         Decimal?  @db.Decimal(4, 3)
+  /// Decisão estruturada do Intelligence Core (sem raciocínio privado).
+  trace             Json      @default("{}")
+  blocos            Int       @default(0) @db.SmallInt
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   finishedAt        DateTime? @map("finished_at") @db.Timestamptz(6)
 
   @@unique([tenantId, messageId], map: "agent_runs_por_mensagem")
   @@map("agent_runs")
+}
+
+// ===================================================================
+// KHUB Agent Intelligence Platform (db/034 · docs/AI_AGENT_ARCHITECTURE.md)
+// ===================================================================
+
+model AgentVersion {
+  id           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  agentId      String   @map("agent_id") @db.Uuid
+  numero       Int
+  snapshot     Json
+  notas        String?
+  origem       String   @default("publicacao")
+  propostaId   String?  @map("proposta_id") @db.Uuid
+  avaliacaoId  String?  @map("avaliacao_id") @db.Uuid
+  publicadoPor String?  @map("publicado_por") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([agentId, numero], map: "agent_versions_numero")
+  @@map("agent_versions")
+}
+
+model AgentIntentCategory {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  chave     String
+  nome      String
+  descricao String   @default("")
+  exemplos  String[] @default([])
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([tenantId, chave], map: "agent_intent_categories_chave")
+  @@map("agent_intent_categories")
+}
+
+model AgentKnowledgeSource {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  agentId    String   @map("agent_id") @db.Uuid
+  documentId String   @map("document_id") @db.Uuid
+  categoria  String   @default("geral")
+  ativo      Boolean  @default(true)
+  createdBy  String?  @map("created_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([agentId, documentId], map: "agent_knowledge_sources_doc")
+  @@map("agent_knowledge_sources")
+}
+
+model AgentCustomerProfile {
+  id                 String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId           String    @map("tenant_id") @db.Uuid
+  contactId          String    @map("contact_id") @db.Uuid
+  resumo             String    @default("")
+  temperatura        String?
+  intencao           String?
+  sentimento         String?
+  urgencia           String?
+  etapa              String?
+  proximaAcao        String?   @map("proxima_acao")
+  proximaAcaoEm      DateTime? @map("proxima_acao_em") @db.Timestamptz(6)
+  motivoNaoConversao String?   @map("motivo_nao_conversao")
+  convertidoEm       DateTime? @map("convertido_em") @db.Timestamptz(6)
+  ultimaInteracaoAt  DateTime? @map("ultima_interacao_at") @db.Timestamptz(6)
+  ultimoAgentId      String?   @map("ultimo_agent_id") @db.Uuid
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([tenantId, contactId], map: "agent_customer_profiles_contato")
+  @@map("agent_customer_profiles")
+}
+
+model AgentProfileFact {
+  id             String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  contactId      String   @map("contact_id") @db.Uuid
+  campo          String
+  valor          Json
+  origem         String
+  confianca      Decimal  @default(0) @db.Decimal(4, 3)
+  status         String   @default("pendente")
+  agentId        String?  @map("agent_id") @db.Uuid
+  conversationId String?  @map("conversation_id") @db.Uuid
+  messageId      String?  @map("message_id") @db.Uuid
+  identificadoEm DateTime @default(now()) @map("identificado_em") @db.Timestamptz(6)
+  atualizadoEm   DateTime @default(now()) @map("atualizado_em") @db.Timestamptz(6)
+
+  @@unique([tenantId, contactId, campo], map: "agent_profile_facts_campo")
+  @@map("agent_profile_facts")
+}
+
+model AgentExtraction {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  contactId String   @map("contact_id") @db.Uuid
+  agentId   String?  @map("agent_id") @db.Uuid
+  runId     String?  @map("run_id") @db.Uuid
+  messageId String?  @map("message_id") @db.Uuid
+  campo     String
+  valor     Json
+  origem    String
+  confianca Decimal  @default(0) @db.Decimal(4, 3)
+  decisao   String
+  motivo    String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("agent_extractions")
+}
+
+model AgentMemory {
+  id                String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId          String    @map("tenant_id") @db.Uuid
+  contactId         String?   @map("contact_id") @db.Uuid
+  conversationId    String?   @map("conversation_id") @db.Uuid
+  agentId           String?   @map("agent_id") @db.Uuid
+  camada            String
+  tipo              String
+  conteudo          String
+  importancia       Int       @default(3) @db.SmallInt
+  origem            String    @default("agente")
+  ateMessageId      String?   @map("ate_message_id") @db.Uuid
+  mensagensCobertas Int       @default(0) @map("mensagens_cobertas")
+  expiraEm          DateTime? @map("expira_em") @db.Timestamptz(6)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("agent_memories")
+}
+
+model AgentDelivery {
+  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  agentId        String?   @map("agent_id") @db.Uuid
+  conversationId String    @map("conversation_id") @db.Uuid
+  runId          String?   @map("run_id") @db.Uuid
+  followupId     String?   @map("followup_id") @db.Uuid
+  sequenciaId    String    @map("sequencia_id") @db.Uuid
+  ordem          Int       @db.SmallInt
+  total          Int       @db.SmallInt
+  texto          String
+  atrasoMs       Int       @default(0) @map("atraso_ms")
+  status         String    @default("pendente")
+  tentativas     Int       @default(0) @db.SmallInt
+  agendadoPara   DateTime  @default(now()) @map("agendado_para") @db.Timestamptz(6)
+  enviadoEm      DateTime? @map("enviado_em") @db.Timestamptz(6)
+  messageId      String?   @map("message_id") @db.Uuid
+  idempotencyKey String    @map("idempotency_key")
+  motivo         String?
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([tenantId, idempotencyKey], map: "agent_delivery_idempotencia")
+  @@unique([sequenciaId, ordem], map: "agent_delivery_seq_ordem")
+  @@map("agent_delivery_queue")
+}
+
+model AgentFollowupRule {
+  id              String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  agentId         String   @map("agent_id") @db.Uuid
+  nome            String
+  estrategia      String
+  ativo           Boolean  @default(false)
+  maxTentativas   Int      @default(3) @map("max_tentativas") @db.SmallInt
+  intervalosHoras Int[]    @default([24, 72, 168]) @map("intervalos_horas")
+  horarioInicio   Int      @default(9) @map("horario_inicio") @db.SmallInt
+  horarioFim      Int      @default(19) @map("horario_fim") @db.SmallInt
+  diasSemana      Int[]    @default([1, 2, 3, 4, 5]) @map("dias_semana") @db.SmallInt
+  fuso            String   @default("America/Sao_Paulo")
+  objetivo        String   @default("")
+  tom             String   @default("")
+  instrucoes      String   @default("")
+  pararSe         String[] @default(["respondeu", "converteu", "optout", "humano_assumiu"]) @map("parar_se")
+  maxMensagensDia Int      @default(1) @map("max_mensagens_dia") @db.SmallInt
+  prioridade      Int      @default(5) @db.SmallInt
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([agentId, estrategia], map: "agent_followup_rules_estrategia")
+  @@map("agent_followup_rules")
+}
+
+model AgentFollowup {
+  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  agentId        String    @map("agent_id") @db.Uuid
+  ruleId         String    @map("rule_id") @db.Uuid
+  contactId      String    @map("contact_id") @db.Uuid
+  conversationId String    @map("conversation_id") @db.Uuid
+  cicloId        String    @map("ciclo_id") @db.Uuid
+  estrategia     String
+  tentativa      Int       @db.SmallInt
+  status         String    @default("agendado")
+  agendadoPara   DateTime  @map("agendado_para") @db.Timestamptz(6)
+  executadoEm    DateTime? @map("executado_em") @db.Timestamptz(6)
+  motivo         String?
+  contexto       Json      @default("{}")
+  mensagem       String?
+  sequenciaId    String?   @map("sequencia_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([tenantId, cicloId, tentativa], map: "agent_followups_ciclo_tentativa")
+  @@map("agent_followups")
+}
+
+model AgentToolExecution {
+  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  agentId        String?   @map("agent_id") @db.Uuid
+  runId          String?   @map("run_id") @db.Uuid
+  conversationId String?   @map("conversation_id") @db.Uuid
+  contactId      String?   @map("contact_id") @db.Uuid
+  ferramenta     String
+  args           Json      @default("{}")
+  resultado      Json?
+  status         String
+  erro           String?
+  origem         String    @default("modelo")
+  latenciaMs     Int?      @map("latencia_ms")
+  aprovadoPor    String?   @map("aprovado_por") @db.Uuid
+  decididoEm     DateTime? @map("decidido_em") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("agent_tool_executions")
+}
+
+model AgentLearningEvent {
+  id             String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  agentId        String   @map("agent_id") @db.Uuid
+  tipo           String
+  chave          String
+  conversationId String?  @map("conversation_id") @db.Uuid
+  runId          String?  @map("run_id") @db.Uuid
+  detalhe        Json     @default("{}")
+  peso           Int      @default(1) @db.SmallInt
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("agent_learning_events")
+}
+
+model AgentImprovementProposal {
+  id               String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  agentId          String    @map("agent_id") @db.Uuid
+  tipo             String
+  chave            String
+  titulo           String
+  descricao        String
+  evidencias       Json      @default("[]")
+  patch            Json?
+  conteudoSugerido String?   @map("conteudo_sugerido")
+  ocorrencias      Int       @default(1)
+  status           String    @default("aberta")
+  avaliacaoId      String?   @map("avaliacao_id") @db.Uuid
+  decididoPor      String?   @map("decidido_por") @db.Uuid
+  decididoEm       DateTime? @map("decidido_em") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("agent_improvement_proposals")
+}
+
+model AgentEvalScenario {
+  id           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  agentId      String   @map("agent_id") @db.Uuid
+  nome         String
+  mensagens    Json
+  expectativas Json     @default("{}")
+  ativo        Boolean  @default(true)
+  origem       String   @default("manual")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("agent_eval_scenarios")
+}
+
+model AgentEvaluation {
+  id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  agentId    String    @map("agent_id") @db.Uuid
+  versionId  String?   @map("version_id") @db.Uuid
+  propostaId String?   @map("proposta_id") @db.Uuid
+  alvo       String
+  status     String    @default("executando")
+  nota       Decimal?  @db.Decimal(5, 2)
+  metricas   Json      @default("{}")
+  resultados Json      @default("[]")
+  comparacao Json?
+  regressao  Boolean   @default(false)
+  custoUsd   Decimal   @default(0) @map("custo_usd") @db.Decimal(12, 6)
+  erro       String?
+  createdBy  String?   @map("created_by") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  finishedAt DateTime? @map("finished_at") @db.Timestamptz(6)
+
+  @@map("agent_evaluations")
+}
+
+model AgentSimulation {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  agentId   String   @map("agent_id") @db.Uuid
+  perfil    String   @default("livre")
+  mensagens Json     @default("[]")
+  traces    Json     @default("[]")
+  custoUsd  Decimal  @default(0) @map("custo_usd") @db.Decimal(12, 6)
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("agent_simulations")
+}
+
+/// Proposta comercial (db/038 · ADR-0042). RLS FORCE + tenant_reference.
+model Proposal {
+  id                String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId          String    @map("tenant_id") @db.Uuid
+  contactId         String?   @map("contact_id") @db.Uuid
+  dealId            String?   @map("deal_id") @db.Uuid
+  titulo            String
+  itens             Json      @default("[]")
+  desconto          Decimal   @default(0) @db.Decimal(12, 2)
+  valor             Decimal   @default(0) @db.Decimal(12, 2)
+  status            String    @default("rascunho")
+  validade          DateTime? @db.Date
+  enviadaEm         DateTime? @map("enviada_em") @db.Timestamptz(6)
+  respondidaEm      DateTime? @map("respondida_em") @db.Timestamptz(6)
+  motivoRecusa      String?   @map("motivo_recusa")
+  observacoes       String?
+  ownerId           String?   @map("owner_id") @db.Uuid
+  proximoFollowupAt DateTime? @map("proximo_followup_at") @db.Timestamptz(6)
+  createdBy         String?   @map("created_by") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@index([tenantId, status, updatedAt(sort: Desc)], map: "idx_proposals_status")
+  @@map("proposals")
+}
+
+/// Respostas rápidas do Inbox (db/055 · Q2.5): "/atalho" no composer.
+model QuickReply {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  atalho    String
+  titulo    String
+  corpo     String
+  criadoPor String?  @map("criado_por") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([tenantId, atalho], map: "quick_replies_atalho_uq")
+  @@map("quick_replies")
+}
+
+/// Nota interna da conversa (db/055 · Q2.5). Tabela própria de propósito:
+/// nunca passa pelo provedor, pelo outbox nem pelo histórico do agente de IA.
+model ConversationNote {
+  id             String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  autorId        String?  @map("autor_id") @db.Uuid
+  corpo          String
+  mencoes        String[] @default([]) @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([tenantId, conversationId, createdAt], map: "idx_conversation_notes_conv")
+  @@map("conversation_notes")
+}
+
+/// Notificação persistida (db/055 · Q2.6), por destinatário. As derivadas
+/// (não lidas, integração quebrada) continuam sem tabela.
+model Notification {
+  id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  identityId String    @map("identity_id") @db.Uuid
+  tipo       String
+  titulo     String
+  detalhe    String    @default("")
+  url        String
+  entidade   String?
+  entidadeId String?   @map("entidade_id") @db.Uuid
+  lidaEm     DateTime? @map("lida_em") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([tenantId, identityId, createdAt(sort: Desc)], map: "idx_notifications_destino")
+  @@map("notifications")
+}
+
+// ==================== Disparos em massa (migration 061 · Q4.3) ====================
+/// Disparo em massa por segmento. Audiência congelada em `BroadcastRecipient`
+/// ao aprovar; ritmo (lote/intervalo/janela) e lease do worker aqui.
+model Broadcast {
+  id                 String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId           String    @map("tenant_id") @db.Uuid
+  nome               String
+  canal              String
+  segmento           Json      @default("{}")
+  mensagem           String    @default("")
+  assunto            String?
+  status             String    @default("rascunho")
+  agendadoPara       DateTime? @map("agendado_para") @db.Timestamptz(6)
+  loteTamanho        Int       @default(20) @map("lote_tamanho")
+  loteIntervaloSeg   Int       @default(60) @map("lote_intervalo_seg")
+  janela             Json      @default("{\"dias\":[1,2,3,4,5],\"inicio\":9,\"fim\":18,\"fuso\":\"America/Sao_Paulo\"}")
+  exigeAprovacao     Boolean   @default(false) @map("exige_aprovacao")
+  aprovadoPor        String?   @map("aprovado_por") @db.Uuid
+  aprovadoEm         DateTime? @map("aprovado_em") @db.Timestamptz(6)
+  rejeitadoMotivo    String?   @map("rejeitado_motivo")
+  criadoPor          String?   @map("criado_por") @db.Uuid
+  criadoPorTipo      String    @default("humano") @map("criado_por_tipo")
+  pausaMotivo        String?   @map("pausa_motivo")
+  pausaDetalhe       Json?     @map("pausa_detalhe")
+  proximoLoteEm      DateTime? @map("proximo_lote_em") @db.Timestamptz(6)
+  leaseUntil         DateTime? @map("lease_until") @db.Timestamptz(6)
+  iniciadoEm         DateTime? @map("iniciado_em") @db.Timestamptz(6)
+  concluidoEm        DateTime? @map("concluido_em") @db.Timestamptz(6)
+  canceladoEm        DateTime? @map("cancelado_em") @db.Timestamptz(6)
+  totalDestinatarios Int       @default(0) @map("total_destinatarios")
+  totalEnviados      Int       @default(0) @map("total_enviados")
+  totalFalhas        Int       @default(0) @map("total_falhas")
+  totalIgnorados     Int       @default(0) @map("total_ignorados")
+  totalRespostas     Int       @default(0) @map("total_respostas")
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@index([tenantId, createdAt(sort: Desc)], map: "idx_broadcasts_lista")
+  @@map("broadcasts")
+}
+
+/// Destinatário congelado de um disparo (idempotente por UNIQUE broadcast+contato).
+model BroadcastRecipient {
+  id           String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  broadcastId  String    @map("broadcast_id") @db.Uuid
+  contactId    String    @map("contact_id") @db.Uuid
+  nome         String    @default("")
+  destino      String?
+  status       String    @default("pendente")
+  messageId    String?   @map("message_id") @db.Uuid
+  erro         String?
+  tentativaEm  DateTime? @map("tentativa_em") @db.Timestamptz(6)
+  enviadoEm    DateTime? @map("enviado_em") @db.Timestamptz(6)
+  respondidoEm DateTime? @map("respondido_em") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([broadcastId, contactId], map: "uq_broadcast_recipient")
+  @@index([tenantId, broadcastId, status], map: "idx_broadcast_recipients_status")
+  @@map("broadcast_recipients")
+}
+
+// ==================== Pedido de avaliação (migration 062 · Q4.4) ====================
+/// Configuração de avaliação por tenant (link público + mensagem padrão).
+model ReviewSettings {
+  tenantId         String   @id @map("tenant_id") @db.Uuid
+  plataforma       String   @default("google")
+  link             String
+  mensagemPadrao   String   @map("mensagem_padrao")
+  assuntoEmail     String   @default("Como foi sua experiência?") @map("assunto_email")
+  filtroSatisfacao Boolean  @default(false) @map("filtro_satisfacao")
+  notaMinima       Int      @default(4) @map("nota_minima") @db.SmallInt
+  updatedBy        String?  @map("updated_by") @db.Uuid
+  updatedAt        DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("review_settings")
+}
+
+/// Pedido de avaliação enviado a um contato, com link curto rastreável `/r/:token`.
+model ReviewRequest {
+  id               String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  contactId        String    @map("contact_id") @db.Uuid
+  canal            String
+  link             String
+  token            String    @unique(map: "uq_review_requests_token")
+  status           String    @default("pendente")
+  origem           String    @default("manual")
+  idempotencyKey   String?   @map("idempotency_key")
+  messageId        String?   @map("message_id") @db.Uuid
+  erro             String?
+  filtroSatisfacao Boolean   @default(false) @map("filtro_satisfacao")
+  notaMinima       Int       @default(4) @map("nota_minima") @db.SmallInt
+  enviadoEm        DateTime? @map("enviado_em") @db.Timestamptz(6)
+  clicadoEm        DateTime? @map("clicado_em") @db.Timestamptz(6)
+  cliques          Int       @default(0)
+  avaliacaoInterna Int?      @map("avaliacao_interna") @db.SmallInt
+  avaliadoEm       DateTime? @map("avaliado_em") @db.Timestamptz(6)
+  comentario       String?
+  redirecionado    Boolean   @default(false)
+  criadoPor        String?   @map("criado_por") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([tenantId, createdAt(sort: Desc)], map: "idx_review_requests_lista")
+  @@map("review_requests")
+}
+
+// ======================= Formulários públicos (Q4.1 · migration 059) =======================
+
+/// Formulário público (/f/<slug>). `campos`/`estilo` validados por Zod em forms/forms.schema.ts.
+model Form {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  nome      String
+  slug      String   @unique
+  campos    Json     @default("[]")
+  estilo    Json     @default("{}")
+  ativo     Boolean  @default(true)
+  tag       String?
+  stageId   String?  @map("stage_id") @db.Uuid
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  envios    FormSubmission[]
+
+  @@index([tenantId, createdAt(sort: Desc)], map: "idx_forms_tenant")
+  @@map("forms")
+}
+
+/// Envio de formulário. `respostas` = { [campoId]: valor }. IP só como sha256.
+model FormSubmission {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  formId    String   @map("form_id") @db.Uuid
+  contactId String?  @map("contact_id") @db.Uuid
+  dealId    String?  @map("deal_id") @db.Uuid
+  respostas Json     @default("{}")
+  utm       Json     @default("{}")
+  ipHash    String?  @map("ip_hash")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  form      Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, formId, createdAt(sort: Desc)], map: "idx_form_submissions_form")
+  @@index([tenantId, contactId], map: "idx_form_submissions_contact")
+  @@map("form_submissions")
+}
+
+// ======================= Agendamento público (Q4.2 · migration 060) =======================
+
+/// Página pública de agendamento (/b/<slug>). `horarios`/`perguntas` validados em booking/booking.schema.ts.
+model BookingPage {
+  id                    String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId              String   @map("tenant_id") @db.Uuid
+  slug                  String   @unique
+  titulo                String
+  descricao             String?
+  duracaoMin            Int      @default(30) @map("duracao_min")
+  intervaloMin          Int      @default(0) @map("intervalo_min")
+  antecedenciaMinHoras  Int      @default(2) @map("antecedencia_min_horas")
+  janelaDias            Int      @default(30) @map("janela_dias")
+  horarios              Json     @default("{}")
+  fuso                  String   @default("America/Sao_Paulo")
+  responsaveis          String[] @default([]) @db.Uuid
+  /// round_robin | fixo
+  distribuicao          String   @default("round_robin")
+  rrCursor              Int      @default(0) @map("rr_cursor")
+  local                 String?
+  tipo                  String   @default("reuniao")
+  perguntas             Json     @default("[]")
+  confirmacaoAutomatica Boolean  @default(false) @map("confirmacao_automatica")
+  estilo                Json     @default("{}")
+  ativo                 Boolean  @default(true)
+  createdBy             String?  @map("created_by") @db.Uuid
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  reservas              BookingReserva[]
+
+  @@index([tenantId, createdAt(sort: Desc)], map: "idx_booking_pages_tenant")
+  @@map("booking_pages")
+}
+
+/// Reserva feita pela página pública: liga o compromisso ao link de gerenciamento (sha256 do token).
+model BookingReserva {
+  id             String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId       String      @map("tenant_id") @db.Uuid
+  bookingPageId  String      @map("booking_page_id") @db.Uuid
+  compromissoId  String      @unique(map: "uq_booking_reservas_compromisso") @map("compromisso_id") @db.Uuid
+  contactId      String?     @map("contact_id") @db.Uuid
+  tokenHash      String      @unique @map("token_hash")
+  respostas      Json        @default("{}")
+  utm            Json        @default("{}")
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  pagina         BookingPage @relation(fields: [bookingPageId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, bookingPageId, createdAt(sort: Desc)], map: "idx_booking_reservas_page")
+  @@map("booking_reservas")
+}
+
+/// Rotinas da NICO (db/039 · ADR-0044): "toda segunda 8h, analise as campanhas".
+model NicoAgendamento {
+  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  titulo         String
+  instrucao      String
+  frequencia     String
+  hora           String    @default("08:00")
+  diaSemana      Int?      @map("dia_semana") @db.SmallInt
+  diaMes         Int?      @map("dia_mes") @db.SmallInt
+  fuso           String    @default("America/Sao_Paulo")
+  ativo          Boolean   @default(true)
+  proximoEm      DateTime  @map("proximo_em") @db.Timestamptz(6)
+  ultimoEm       DateTime? @map("ultimo_em") @db.Timestamptz(6)
+  ultimoStatus   String?   @map("ultimo_status")
+  ultimoErro     String?   @map("ultimo_erro")
+  destinatarioId String?   @map("destinatario_id") @db.Uuid
+  criadoPor      String?   @map("criado_por") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("nico_agendamentos")
+}
+
+/// Relatórios gerados pela NICO (db/039 · ADR-0044). Markdown; a tela exporta .md e PDF.
+model NicoRelatorio {
+  id             String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  titulo         String
+  tipo           String   @default("livre")
+  conteudoMd     String   @map("conteudo_md")
+  origem         String   @default("chat")
+  agendamentoId  String?  @map("agendamento_id") @db.Uuid
+  conversationId String?  @map("conversation_id") @db.Uuid
+  criadoPor      String?  @map("criado_por") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("nico_relatorios")
+}
+
+/// Foto de perfil durável do contato (db/066). Bytes da imagem: a URL do
+/// WhatsApp/Instagram expira em horas/dias; a API serve estes bytes.
+model ContactFoto {
+  contactId    String   @id @map("contact_id") @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  mime         String
+  bytes        Bytes
+  fonte        String
+  atualizadaEm DateTime @default(now()) @map("atualizada_em") @db.Timestamptz(6)
+
+  @@map("contact_fotos")
+}
+
+/// Fila de publicações das redes sociais (db/068). Só o worker publica; toda
+/// linha nasce confirmada por uma pessoa (`confirmadoEm`).
+model RedesPublicacao {
+  id                   String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId             String    @map("tenant_id") @db.Uuid
+  conexaoId            String    @map("conexao_id") @db.Uuid
+  rede                 String
+  formato              String
+  titulo               String?
+  legenda              String    @default("")
+  midiaUrl             String    @map("midia_url")
+  privacidade          String?
+  opcoes               Json      @default("{}")
+  agendadoPara         DateTime  @map("agendado_para") @db.Timestamptz(6)
+  status               String    @default("agendado")
+  tentativas           Int       @default(0)
+  externoId            String?   @map("externo_id")
+  postId               String?   @map("post_id")
+  permalink            String?
+  erro                 String?
+  proximaVerificacaoEm DateTime? @map("proxima_verificacao_em") @db.Timestamptz(6)
+  publicadoEm          DateTime? @map("publicado_em") @db.Timestamptz(6)
+  confirmadoPor        String?   @map("confirmado_por") @db.Uuid
+  confirmadoEm         DateTime  @map("confirmado_em") @db.Timestamptz(6)
+  criadoPor            String?   @map("criado_por") @db.Uuid
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@index([tenantId, createdAt(sort: Desc)], map: "idx_redes_pub_tenant")
+  @@map("redes_publicacoes")
+}
+
+/// Foto diária da conta de rede social (db/068): base do gráfico de crescimento.
+model RedesSnapshot {
+  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  conexaoId     String   @map("conexao_id") @db.Uuid
+  rede          String
+  dia           DateTime @db.Date
+  seguidores    BigInt?
+  publicacoes   BigInt?
+  visualizacoes BigInt?
+  curtidas      BigInt?
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([conexaoId, dia], map: "redes_snap_dia_uq")
+  @@map("redes_snapshots")
 }

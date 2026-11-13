@@ -4,7 +4,7 @@ import { agency } from '@/lib/agency';
 import { useAgency } from './AgencyProvider';
 import { Button,Field,Input } from '@/components/ui';
 export function AgencyInvites(){
- const {contexto,clientes}=useAgency();const [email,setEmail]=useState('');const [role,setRole]=useState('member');const [ids,setIds]=useState<string[]>([]);const [rows,setRows]=useState<Awaited<ReturnType<typeof agency.invites>>>([]);const [msg,setMsg]=useState('');const [link,setLink]=useState('');const [busy,setBusy]=useState(false);
+ const {contexto,subcontas:clientes}=useAgency();const [email,setEmail]=useState('');const [role,setRole]=useState('member');const [ids,setIds]=useState<string[]>([]);const [rows,setRows]=useState<Awaited<ReturnType<typeof agency.invites>>>([]);const [msg,setMsg]=useState('');const [link,setLink]=useState('');const [busy,setBusy]=useState(false);
  const allowed=!!contexto&&['owner','admin'].includes(contexto.role);
  const load=()=>agency.invites().then(setRows).catch(e=>setMsg(e.message));
  useEffect(()=>{if(allowed)void load();},[allowed]);

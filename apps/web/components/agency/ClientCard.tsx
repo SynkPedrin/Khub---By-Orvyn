@@ -22,8 +22,8 @@ export function ClientCard({ cliente }: { cliente: ClienteAgencia }) {
         <div className="flex items-start justify-between gap-2">
           <h3 className="truncate text-[15px] font-semibold text-fg">{cliente.nome}</h3>
           <div className="flex shrink-0 items-center gap-1.5">
-            {cliente.isDemo && <span className="pill text-[10px]">DEMO</span>}
-            {ativo && <span className="pill pill-brand text-[10px]">ATUAL</span>}
+            {cliente.isDemo && <span className="pill text-2xs">DEMO</span>}
+            {ativo && <span className="pill pill-brand text-2xs">ATUAL</span>}
           </div>
         </div>
 

@@ -9,7 +9,7 @@ class CheckoutDto {
 }
 
 /**
- * Billing da PLATAFORMA (o tenant pagando o Orvyn) — distinto de
+ * Billing da PLATAFORMA (o tenant pagando o KHUB) — distinto de
  * `/v1/financeiro` (o tenant cobrando os clientes dele).
  */
 @SkipAudit()

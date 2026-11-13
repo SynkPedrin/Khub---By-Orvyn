@@ -1,8 +1,10 @@
 import type { NextResponse } from 'next/server';
 
-export const API = process.env.ORVYN_API_URL ?? 'http://localhost:3333';
-export const ACCESS = 'orvyn_access';
-export const REFRESH = 'orvyn_refresh';
+// ORVYN_API_URL: nome legado (rebrand KHUB, ADR-0041). Mantido como fallback até
+// os ambientes (Vercel, .env.local, scripts de QA) passarem a definir KHUB_API_URL.
+export const API = process.env.KHUB_API_URL ?? process.env.ORVYN_API_URL ?? 'http://localhost:3333';
+export const ACCESS = 'khub_access';
+export const REFRESH = 'khub_refresh';
 
 const secure = process.env.NODE_ENV === 'production';
 
@@ -33,5 +35,5 @@ export async function sessaoValida(cookies: { get(nome: string): { value: string
 }
 
 /** Resposta 401 no formato RFC 7807. */
-export const NAO_AUTENTICADO = { type: 'https://orvyn.dev/errors/unauthorized', title: 'Sessão necessária', status: 401 } as const;
+export const NAO_AUTENTICADO = { type: 'urn:khub:error:unauthorized', title: 'Sessão necessária', status: 401 } as const;
 

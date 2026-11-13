@@ -1,5 +1,5 @@
 {
-  "name": "@orvyn/types",
+  "name": "@khub/types",
   "version": "0.0.1",
   "private": true,
   "description": "Contratos compartilhados front<->back.",

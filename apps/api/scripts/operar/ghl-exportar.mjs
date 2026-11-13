@@ -44,10 +44,11 @@ async function ghl(caminho, { metodo = 'GET', corpo } = {}) {
       method: metodo,
       headers: {
         authorization: `Bearer ${TOKEN}`,
-        version: '2021-07-28',
+        // export de mensagens só responde com a versão da API de conversas (com 2021-07-28 volta lista vazia)
+        version: caminho.startsWith('/conversations') ? '2021-04-15' : '2021-07-28',
         accept: 'application/json',
         // Cloudflare do GHL bloqueia UA genérico (erro 1010).
-        'user-agent': 'orvyn-migracao/1.0',
+        'user-agent': 'khub-migracao/1.0',
         ...(corpo ? { 'content-type': 'application/json' } : {}),
       },
       body: corpo ? JSON.stringify(corpo) : undefined,

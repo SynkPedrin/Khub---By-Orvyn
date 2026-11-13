@@ -1,4 +1,4 @@
-# ENV — fonte única das credenciais do ORVYN OS
+# ENV — fonte única das credenciais do KHUB OS
 
 > Contrato (Brief §2 · **Gating por Credencial**): **todo módulo está implementado**. O que falta para uma
 > feature externa funcionar é **a chave**, nunca código. Sem a chave, a API responde
@@ -18,7 +18,7 @@ mapa devem sempre concordar — se divergirem, **o código está errado**.
 | Variável | Onde obter / gerar | Observação |
 |---|---|---|
 | `JWT_SECRET` | `openssl rand -base64 48` | ≥16 chars. Assina access token **e** o `state` do OAuth. |
-| `DATABASE_URL` | Postgres local/gerenciado | Role da app = `orvyn_app` (**NOBYPASSRLS**). Nunca aponte a app para `orvyn_service`. |
+| `DATABASE_URL` | Postgres local/gerenciado | Role da app = `khub_app` (**NOBYPASSRLS**). Nunca aponte a app para `khub_service`. |
 
 Sem `DATABASE_URL` válida a API **sobe assim mesmo** e `/v1/health` reporta `db:false` (dev sem banco).
 
@@ -31,6 +31,7 @@ Sem `DATABASE_URL` válida a API **sobe assim mesmo** e `/v1/health` reporta `db
 | `WEB_URL` | `http://localhost:3210` | Base dos redirects OAuth e do link de convite. |
 | `JWT_ACCESS_TTL` | `15m` | TTL do access token. |
 | `REFRESH_TTL_DAYS` | `30` | TTL do refresh (rotativo, hasheado). |
+| `KHUB_PROXY_SECRET` | — (vale o IP do socket) | **API e web, mesmo valor (≥ 16 caracteres, ex.: `openssl rand -hex 32`).** O proxy público do web (`/api/public/*`, páginas `/f` e `/b`) repassa o IP real do visitante em `x-khub-client-ip` com este segredo; só assim o rate limit dos formulários e do agendamento conta por visitante. Sem ele, todo o tráfego público conta como o IP do servidor web (limite compartilhado). Obrigatória na prática em produção. |
 | `SENTRY_DSN` | — (sem Sentry) | sentry.io → criar projeto Node → DSN. Sem ela, `ErrorReporter` só loga estruturado (correlation-id); com ela, todo erro não tratado também vai pro Sentry — achado da auditoria de produção: o código já existia (`error-reporter.service.ts`), só faltava chamar `Sentry.init()`. |
 
 ## 3. Provedores externos — o que cada um destrava
@@ -44,7 +45,7 @@ Cada bloco lista o **conjunto mínimo**: com ele completo, o provedor sai de `co
 | `EVOLUTION_API_KEY` | ✅ | Chave GLOBAL do servidor Evolution (dona da instância — não confundir com o token por-instância, que a própria Evolution devolve em `/instance/create` e fica cifrado em `integrations.credentials_encrypted`). |
 
 **Sem elas:** `config_required` ao tentar conectar um número; nenhuma instância é criada.
-**Risco operacional (não é só config):** Evolution usa o protocolo do WhatsApp Web (Baileys), não a Cloud API oficial da Meta — número pode ser banido a qualquer momento, fora do controle do Orvyn. Ver auditoria de produção.
+**Risco operacional (não é só config):** Evolution usa o protocolo do WhatsApp Web (Baileys), não a Cloud API oficial da Meta — número pode ser banido a qualquer momento, fora do controle do KHUB. Ver auditoria de produção.
 
 ### 3.1 `stevo` — WhatsApp (API não oficial)
 | Variável | Obrigatória | Onde obter |
@@ -91,11 +92,11 @@ Developer token: Google Ads API Center (conta MCC).
 | `STRIPE_SECRET_KEY` | ✅ | dashboard.stripe.com → Developers → API keys. |
 | `STRIPE_WEBHOOK_SECRET` | ✅ | Developers → Webhooks → endpoint `{API_URL}/v1/webhooks/stripe` → "Signing secret". **Sem ela, NENHUM evento é processado** (nem cobrança de cliente nem assinatura da plataforma confirmam sozinhas — fica preso em "enviada"/"incompleta" até alguém marcar na mão). |
 | `STRIPE_PUBLISHABLE_KEY` | — | Só se o front precisar do Stripe.js diretamente; hoje o checkout é 100% hospedado (redirect), não usa. |
-| `STRIPE_PRICE_STARTER` / `STRIPE_PRICE_GROWTH` / `STRIPE_PRICE_SCALE` | — (mas sem ela aquele plano específico não vende) | Price ID de cada plano da **assinatura do Orvyn** (Products → criar o preço → copiar `price_...`). Preço em si é decisão de negócio, nunca hardcoded — ver PRD §17 (LACUNA de pricing). |
+| `STRIPE_PRICE_STARTER` / `STRIPE_PRICE_GROWTH` / `STRIPE_PRICE_SCALE` | — (mas sem ela aquele plano específico não vende) | Price ID de cada plano da **assinatura do KHUB** (Products → criar o preço → copiar `price_...`). Preço em si é decisão de negócio, nunca hardcoded — ver PRD §17 (LACUNA de pricing). |
 
 Dois fluxos pela mesma chave/webhook, diferenciados por `metadata.kind` no evento (nunca inferido):
 - **`financeiro_cobranca`** — o tenant cobrando OS CLIENTES dele (`/v1/financeiro`, checkout `mode=payment`).
-- **`orvyn_subscription`** — o tenant pagando o Orvyn (`/v1/billing`, checkout `mode=subscription`).
+- **`khub_subscription`** — o tenant pagando o KHUB (`/v1/billing`, checkout `mode=subscription`).
 
 ### 3.6 `voyage` — embeddings do RAG
 | Variável | Obrigatória | Onde obter |
@@ -110,11 +111,21 @@ migration 007) — mesmo filtro de escopo e RLS, sem vetor. Continua respondendo
 ### 3.7 `anthropic` — Nyro (chat/agente)
 `ANTHROPIC_API_KEY` ✅ — console.anthropic.com. Sem ela, as rotas da Nyro respondem 501 `config_required`.
 
+**NICO (ADR-0046)** — comportamento por variável (todas opcionais):
+| Variável | Padrão | Efeito |
+|---|---|---|
+| `NICO_PROVEDOR` | segue `AI_PROVIDER` | `anthropic` faz a NICO usar o Claude mesmo com o resto da operação em Ollama. **É o que dá a qualidade de conversa esperada.** |
+| `NICO_AGENTE_UNICO` | `1` com Claude, `0` com Ollama | Agente único com todas as tools (sem roteador). Modelo local pequeno segue roteado. |
+| `NICO_AUTOAPRENDIZADO` | `1` | `0` desliga a extração automática de fatos para a memória (1 chamada barata por turno). |
+
+### 3.7b `firecrawl` — pesquisa na web da NICO
+`FIRECRAWL_API_KEY` — firecrawl.dev. Habilita `pesquisar_web` e `ler_pagina` (benchmark de concorrentes, tendências, referências). Sem ela a NICO avisa que a pesquisa não está conectada e não finge ter pesquisado. A chave é segredo: só em variável de ambiente, nunca em arquivo versionado.
+
 ### 3.8 `email` — convites e transacionais
 | Variável | Obrigatória | Onde obter |
 |---|---|---|
 | `SMTP_URL` | ✅ | `smtps://usuario:senha@smtp.host:465`. Gmail: use **App Password** (a API key `AIzaSy…` do painel **não envia e-mail**). |
-| `SMTP_FROM` | — | Default `Orvyn OS <no-reply@orvyn.app>`. |
+| `SMTP_FROM` | — | Default `KHUB <no-reply@orvyn.app>`. |
 
 **Sem ela:** o convite **é criado e auditado**; o link de aceite volta na resposta para envio manual.
 
@@ -124,7 +135,7 @@ Sem elas, os botões existem mas a rota responde 501 explicando o que falta — 
 
 ### 3.9a `google_calendar` — sincronização de agenda
 `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` (mesmo app OAuth do login social, escopo adicional de Calendar).
-Sem elas: agenda funciona só dentro do Orvyn, sem sincronizar com o Google Calendar do usuário.
+Sem elas: agenda funciona só dentro do KHUB, sem sincronizar com o Google Calendar do usuário.
 
 ### 3.10 `integrations_crypto` — cifra das credenciais dos clientes
 | Variável | Obrigatória | Como gerar |
@@ -133,6 +144,18 @@ Sem elas: agenda funciona só dentro do Orvyn, sem sincronizar com o Google Cale
 
 Cifra AES-256-GCM os tokens OAuth de cada tenant em repouso. Sem ela, **nenhuma** integração conecta (501).
 **Trocar a chave invalida tudo que já foi cifrado** — rotação exige re-conexão dos clientes.
+
+### 3.11 `storage` — arquivos S3-compatible (anexos do Inbox)
+| Variável | Obrigatória | Onde pegar |
+|---|---|---|
+| `S3_ENDPOINT` | ✅ | Endpoint path-style. R2: `https://<conta>.r2.cloudflarestorage.com`; AWS: `https://s3.<região>.amazonaws.com`; MinIO: `http://localhost:9000`. |
+| `S3_BUCKET` | ✅ | Nome do bucket (privado basta). |
+| `S3_ACCESS_KEY_ID` | ✅ | Chave de API com `PutObject` + `GetObject` no bucket. |
+| `S3_SECRET_ACCESS_KEY` | ✅ | Segredo da chave acima. |
+| `S3_REGION` | — | Default `auto` (R2). AWS: a região do bucket. |
+| `S3_PUBLIC_BASE_URL` | — | Base pública/CDN do bucket. Vazio = URLs assinadas (SigV4, 7 dias para o provedor baixar; 1 h para a tela). |
+
+Sem elas: o Inbox envia imagem/documento/áudio **até 5 MB** em base64 direto pela Evolution (que aceita base64); acima disso, ou pela Stevo (que só aceita `media_url`), responde `config_required` com `provider: "storage"`. O banco guarda só a chave do objeto, nunca a URL.
 
 ## 4. Ajustes do RAG (opcionais, com default)
 
@@ -144,6 +167,6 @@ Cifra AES-256-GCM os tokens OAuth de cada tenant em repouso. Sem ela, **nenhuma*
 ## 5. Regras que não se negociam
 
 1. **Segredo nunca vai pro código, pro log ou pro git.** `.env` está no `.gitignore`; commite só `.env.example`.
-2. A app conecta como `orvyn_app`. `orvyn_service` (BYPASSRLS) é só para migração/publicação de base.
+2. A app conecta como `khub_app`. `khub_service` (BYPASSRLS) é só para migração/publicação de base.
 3. Variável **vazia conta como ausente** — `ConfigService.get()` trata `""` e `"   "` como não definida.
 4. Adicionou provedor novo? Atualize **`REQUIRED` no ConfigService _e_ este arquivo** no mesmo PR.

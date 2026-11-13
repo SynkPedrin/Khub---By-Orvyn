@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 /**
- * Backend do Orvyn (MVP): o cérebro Obsidian (vault de markdown) é a fonte de
+ * Backend do KHUB (MVP): o cérebro Obsidian (vault de markdown) é a fonte de
  * dados. Este módulo lê o vault do filesystem. É consumido tanto pelas Route
  * Handlers (/api/cerebro/*) — a "API do backend" — quanto pelos Server
  * Components da UI. Ver ADR-0005 em Nyro IA/cerebro/Arquitetura.md.
@@ -43,6 +43,27 @@ export function resolveCerebroDir(): string {
 }
 
 const CEREBRO_DIR = resolveCerebroDir();
+
+/**
+ * Escopo de visibilidade (BUG-030). O vault tem duas naturezas:
+ *  - `RAG/conhecimento/**` é a base de conhecimento de produto (Biblioteca,
+ *    frameworks de marketing e operação) e pode ser lida por qualquer usuário
+ *    logado de qualquer cliente;
+ *  - todo o resto (PRD, Bugs, Arquitetura, revisões de segurança, Sprint) é
+ *    documentação INTERNA de engenharia e nunca pode chegar a um cliente.
+ * O interno só aparece em desenvolvimento local ou com `KHUB_VAULT_INTERNO=1`.
+ */
+export const PREFIXO_PUBLICO = 'RAG/conhecimento/';
+
+export function vaultInternoLiberado(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.KHUB_VAULT_INTERNO === '1') return true;
+  if (env.KHUB_VAULT_INTERNO === '0') return false;
+  return env.NODE_ENV === 'development';
+}
+
+export function slugVisivel(slug: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  return slug.startsWith(PREFIXO_PUBLICO) || vaultInternoLiberado(env);
+}
 
 function stripFrontmatter(raw: string): string {
   if (raw.startsWith('---')) {
@@ -135,6 +156,7 @@ export function listDocs(): DocMeta[] {
   const rels: string[] = [];
   walk(CEREBRO_DIR, CEREBRO_DIR, rels);
   return rels
+    .filter((rel) => slugVisivel(rel.replace(/\.md$/i, '').split(path.sep).join('/')))
     .map(toMeta)
     .sort((a, b) => a.category.localeCompare(b.category) || a.title.localeCompare(b.title));
 }
@@ -143,6 +165,7 @@ export function listDocs(): DocMeta[] {
 export function getDoc(segments: string[]): Doc | null {
   const target = safeJoin(segments);
   if (!target || !fs.existsSync(target)) return null;
+  if (!slugVisivel(segments.join('/'))) return null;
   const relPath = path.relative(CEREBRO_DIR, target);
   const raw = fs.readFileSync(target, 'utf8');
   return { ...toMeta(relPath), markdown: stripFrontmatter(raw) };

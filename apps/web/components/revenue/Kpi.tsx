@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { Icon, type IconName } from '../icons';
 import { cx } from '../ui';
-import { cardHover } from '@/lib/motion';
 import { ContaNumero } from './ContaNumero';
 
 export type Tom = 'brand' | 'success' | 'warning' | 'danger' | 'info' | 'neutral';
@@ -45,7 +44,7 @@ export function KpiCard({
 }) {
   if (loading) {
     return (
-      <div className={cx('card p-5', className)}>
+      <div className={cx('card min-w-0 overflow-hidden p-5', className)}>
         <div className="flex items-start gap-3.5">
           <div className="skeleton h-[38px] w-[38px] rounded-md" />
           <div className="flex-1 space-y-2">
@@ -63,7 +62,7 @@ export function KpiCard({
   const positivo = subiu === null ? null : subiu === deltaBom;
 
   return (
-    <motion.div whileHover={cardHover} className={cx('card-crystal p-5', className)}>
+    <motion.div  className={cx('card-crystal min-w-0 p-5', className)}>
       <div className={cx('flex items-start max-sm:flex-col max-sm:gap-2.5', compacto ? 'gap-2.5' : 'gap-3.5')}>
         <span className={cx('icon-tile', compacto && 'h-8 w-8', tom !== 'brand' && `icon-tile-${tom}`)}>
           <Icon name={icon} size={compacto ? 16 : 19} />

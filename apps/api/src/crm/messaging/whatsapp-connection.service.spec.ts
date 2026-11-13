@@ -4,7 +4,7 @@ import { EvolutionProvider } from './evolution.provider';
 import { CryptoService } from '../../integrations/crypto.service';
 
 const tenant = 'a7f09625-8049-4ed3-9a0f-39420da4de8f';
-const instance = `orvyn-${tenant}`;
+const instance = `khub-${tenant}`;
 const qr = { qrImageDataUrl: 'data:image/png;base64,ABC=', expiresAt: new Date(Date.now() + 45000).toISOString() };
 
 describe('WhatsAppConnectionService — pareamento', () => {

@@ -7,7 +7,7 @@ import { Avatar, cx } from '@/components/ui';
 import { PageShell, PageHeader } from '@/components/revenue/Page';
 import { SeloDemo } from '@/components/revenue/SeloDemo';
 import { EmptyState } from '@/components/revenue/States';
-import { AgendaReal } from '@/components/agenda/AgendaReal';
+import { AgendaCalendario } from '@/components/agenda/AgendaCalendario';
 import { hora } from '@/lib/format';
 import { modoDemo } from '@/lib/demo/flag';
 import { COMPROMISSOS, EQUIPE, TAREFAS_AGENDA } from '@/lib/demo/dataset';
@@ -33,10 +33,19 @@ export default function AgendaPage() {
         title="Agenda"
         subtitle="Organize suas reuniões, demos e follow-ups. Tempo bem investido gera mais receita."
         quote={'"Disciplina hoje,\nmais oportunidades amanhã."'}
-        actions={<SeloDemo />}
+        actions={
+          <>
+            <SeloDemo />
+            {/* Q4.2: páginas públicas de agendamento (link para o cliente marcar sozinho). */}
+            <Link href="/agenda/paginas" className="btn btn-sm">
+              <Icon name="link" size={14} />
+              Páginas de agendamento
+            </Link>
+          </>
+        }
       />
 
-      {demo ? <Calendario /> : <AgendaReal />}
+      {demo ? <Calendario /> : <AgendaCalendario />}
     </PageShell>
   );
 }

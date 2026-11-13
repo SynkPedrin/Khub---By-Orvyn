@@ -5,11 +5,12 @@ import { useEffect } from 'react';
 /**
  * Grupos de elementos cuja luz segue o ponteiro (ver globals.css):
  *  - controles: brilho especular de `.btn`/`.lg-interactive` (ADR-0029);
- *  - superfícies: holofote roxo de `.card`/`.card-crystal` (ADR-0034).
- * Um botão dentro de um card atualiza OS DOIS — a luz do card não "congela"
- * quando o ponteiro passa por cima de um controle.
+ *  - superfícies: reflexo roxo dos StatCards `.card-crystal` (ADR-0034/0036).
+ * `.card` saiu da lista no Q1.7: o card comum não usa mais `--lg-x/--lg-y`
+ * (superfície neutra, sem holofote), então escrever nele era trabalho morto.
+ * Um botão dentro de um StatCard atualiza OS DOIS.
  */
-const GRUPOS = ['.btn, .lg-interactive', '.card, .card-crystal'];
+const GRUPOS = ['.btn, .lg-interactive', '.card-crystal'];
 
 /**
  * Luz que reage ao ponteiro.

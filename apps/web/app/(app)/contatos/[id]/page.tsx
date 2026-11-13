@@ -1,16 +1,23 @@
 'use client';
 
+import { AvatarContato } from '@/components/inbox/AvatarContato';
+import { OrigemLead } from '@/components/crm/OrigemLead';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Avatar, Badge, Button, Card, Field, Input } from '@/components/ui';
 import { Icon } from '@/components/icons';
 import { crm, brl, type Contato360, type Empresa } from '@/lib/crm';
+import { Confirm, SkeletonDetail, useToast } from '@/components/kit';
+import { CamposPersonalizados } from '@/components/crm/CamposPersonalizados';
+import { PerfilTagsNaoPerturbe } from '@/components/crm/leads/PerfilTagsNaoPerturbe';
+import { AutomacoesDoContato } from '@/components/automations/AutomacoesDoContato';
+import { PedirAvaliacao } from '@/components/avaliacoes/PedirAvaliacao';
 
 const TONE: Record<string, 'brand' | 'green' | 'amber' | 'neutral'> = {
   'Lead quente': 'amber', Lead: 'neutral', Paciente: 'brand', Cliente: 'green',
 };
-const TOM_TIMELINE: Record<string, string> = { success: 'bg-emerald-500', warn: 'bg-amber-500', neutral: 'bg-brand' };
+const TOM_TIMELINE: Record<string, string> = { success: 'bg-success', warn: 'bg-warning', neutral: 'bg-brand' };
 
 function quando(iso: string | null): string {
   if (!iso) return '-';
@@ -33,6 +40,8 @@ export default function Contato360Page() {
   const [tarefa, setTarefa] = useState({ titulo: '', dueAt: '', prioridade: 'media' });
   const [confirmando, setConfirmando] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
+  const toast = useToast();
 
   const load = useCallback(async () => {
     try {
@@ -64,41 +73,73 @@ export default function Contato360Page() {
       });
       setEditando(false);
       await load();
+      toast.success('Contato atualizado.');
+    } catch {
+      toast.error('Não foi possível salvar o contato.', { description: 'Confira os campos e tente de novo.' });
     } finally {
       setSalvando(false);
     }
   };
 
   const excluir = async () => {
-    await crm.deleteContact(id);
-    router.replace('/contatos');
+    setExcluindo(true);
+    try {
+      await crm.deleteContact(id);
+      toast.success('Contato excluído.');
+      router.replace('/contatos');
+    } catch {
+      toast.error('Não foi possível excluir o contato.');
+      setExcluindo(false);
+      setConfirmando(false);
+    }
   };
 
   const addNota = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nota.trim()) return;
-    await crm.createNote({ corpo: nota, contactId: id });
-    setNota('');
-    await load();
+    try {
+      await crm.createNote({ corpo: nota, contactId: id });
+      setNota('');
+      await load();
+    } catch {
+      toast.error('Não foi possível salvar a nota.');
+    }
   };
 
   const addTarefa = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tarefa.titulo.trim()) return;
-    await crm.createTask({
-      titulo: tarefa.titulo,
-      prioridade: tarefa.prioridade,
-      dueAt: tarefa.dueAt ? new Date(tarefa.dueAt).toISOString() : undefined,
-      contactId: id,
-    });
-    setTarefa({ titulo: '', dueAt: '', prioridade: 'media' });
-    await load();
+    try {
+      await crm.createTask({
+        titulo: tarefa.titulo,
+        prioridade: tarefa.prioridade,
+        dueAt: tarefa.dueAt ? new Date(tarefa.dueAt).toISOString() : undefined,
+        contactId: id,
+      });
+      setTarefa({ titulo: '', dueAt: '', prioridade: 'media' });
+      await load();
+      toast.success('Tarefa criada.');
+    } catch {
+      toast.error('Não foi possível criar a tarefa.');
+    }
   };
 
-  const toggleTarefa = async (tid: string) => { await crm.toggleTask(tid); await load(); };
+  const toggleTarefa = async (tid: string) => {
+    try {
+      await crm.toggleTask(tid);
+      await load();
+    } catch {
+      toast.error('Não foi possível atualizar a tarefa.');
+    }
+  };
 
   if (erro) return <div className="mx-auto max-w-2xl px-4 py-16 text-center"><p className="text-muted">{erro}</p><Link href="/contatos" className="mt-3 inline-block text-sm font-semibold text-brand hover:underline">← Voltar para contatos</Link></div>;
-  if (!c) return <div className="px-6 py-10 text-sm text-muted">Carregando…</div>;
+  if (!c)
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+        <SkeletonDetail label="Carregando contato" />
+      </div>
+    );
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 px-4 py-6 sm:px-6">
@@ -110,21 +151,21 @@ export default function Contato360Page() {
       <Card className="p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-4">
-            <Avatar name={c.nome} size={56} />
+            <AvatarContato nome={c.nome} fotoUrl={(c as { fotoUrl?: string | null }).fotoUrl} size={56} />
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-semibold tracking-tight text-fg">{c.nome}</h1>
                 <Badge tone={TONE[c.tag] ?? 'neutral'}>{c.tag}</Badge>
               </div>
               <p className="mt-0.5 text-sm text-muted">
-                {c.company ? <Link href={`/empresas/${c.company.id}`} className="font-semibold text-brand hover:underline">{c.company.nome}</Link> : c.empresa ?? 'sem empresa'}
-                {' · '}cliente desde {new Date(c.createdAt).toLocaleDateString('pt-BR')}
+                Cliente desde {new Date(c.createdAt).toLocaleDateString('pt-BR')}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <PedirAvaliacao contato={c} />
             <Button variant="ghost" onClick={() => setEditando((v) => !v)}><Icon name="settings" size={15} /> {editando ? 'Cancelar' : 'Editar'}</Button>
-            <Button variant="ghost" onClick={() => setConfirmando(true)} className="text-red-600 hover:bg-red-500/10 dark:text-red-400">Excluir</Button>
+            <Button variant="ghost" onClick={() => setConfirmando(true)} className="btn-danger"><Icon name="trash" size={15} /> Excluir</Button>
           </div>
         </div>
 
@@ -133,12 +174,6 @@ export default function Contato360Page() {
             <Field label="Nome"><Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></Field>
             <Field label="E-mail"><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
             <Field label="Telefone"><Input value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} /></Field>
-            <Field label="Empresa">
-              <select className="input" value={form.companyId} onChange={(e) => setForm({ ...form, companyId: e.target.value })}>
-                <option value="">- sem empresa -</option>
-                {empresas.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
-              </select>
-            </Field>
             <Field label="Tag">
               <select className="input" value={form.tag} onChange={(e) => setForm({ ...form, tag: e.target.value })}>
                 {['Lead', 'Lead quente', 'Paciente', 'Cliente'].map((t) => <option key={t}>{t}</option>)}
@@ -157,6 +192,19 @@ export default function Contato360Page() {
         )}
       </Card>
 
+      <Card className="p-5">
+        <PerfilTagsNaoPerturbe id={id} tags={c.tags ?? []} optedOutAt={c.optedOutAt ?? null} onMudou={load} />
+      </Card>
+
+      <Card className="p-5">
+        <h2 className="mb-3 font-bold text-fg">Origem do lead</h2>
+        <OrigemLead contactId={id} />
+      </Card>
+
+      <Card className="p-5">
+        <CamposPersonalizados entidade="contact" valores={c.camposCustom} onSalvar={async (camposCustom) => { await crm.updateContact(id, { camposCustom }); await load(); }} />
+      </Card>
+
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
           {/* Negócios */}
@@ -171,7 +219,7 @@ export default function Contato360Page() {
                     <span className="block truncate text-sm font-semibold text-fg">{d.titulo}</span>
                     <span className="text-xs text-muted">{d.stage}{d.origem ? ` · ${d.origem}` : ''}</span>
                   </span>
-                  <span className="shrink-0 text-sm font-bold text-fg">{brl(d.valor)}</span>
+                  <span className="shrink-0 text-sm font-semibold tabular text-fg">{brl(d.valor)}</span>
                 </Link>
               ))}
             </div>
@@ -238,11 +286,14 @@ export default function Contato360Page() {
                     <span className={`block text-sm ${t.status === 'concluida' ? 'text-muted line-through' : 'text-fg'}`}>{t.titulo}</span>
                     {t.dueAt && <span className="text-[11px] text-muted">{new Date(t.dueAt).toLocaleDateString('pt-BR')}</span>}
                   </span>
-                  {t.prioridade === 'alta' && t.status === 'aberta' && <span className="shrink-0 text-[10px] font-bold text-red-500">ALTA</span>}
+                  {t.prioridade === 'alta' && t.status === 'aberta' && <span className="pill pill-danger h-5 shrink-0 px-2 text-2xs">Alta</span>}
                 </button>
               ))}
             </div>
           </Card>
+
+          {/* Automações (Q3.3): fluxos em que o contato está, com "remover deste fluxo" */}
+          <AutomacoesDoContato contactId={id} />
 
           {/* Conversas */}
           <Card className="p-5">
@@ -256,7 +307,7 @@ export default function Contato360Page() {
                     <span className="block truncate text-xs font-semibold text-fg">{cv.canal}</span>
                     <span className="block truncate text-[11px] text-muted">{cv.ultimaPrevia ?? '-'}</span>
                   </span>
-                  {cv.naoLidas > 0 && <span className="shrink-0 rounded-full bg-brand px-1.5 text-[10px] font-bold text-white">{cv.naoLidas}</span>}
+                  {cv.naoLidas > 0 && <span className="shrink-0 rounded-full bg-brand px-1.5 text-2xs font-bold text-white">{cv.naoLidas}</span>}
                 </Link>
               ))}
             </div>
@@ -264,22 +315,15 @@ export default function Contato360Page() {
         </div>
       </div>
 
-      {confirmando && (
-        <div className="lg-backdrop fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setConfirmando(false)}>
-          <Card className="lg-sheet w-full max-w-sm animate-scale-in p-6">
-            <div onClick={(e) => e.stopPropagation()}>
-              <h2 className="text-lg font-bold text-fg">Excluir {c.nome}?</h2>
-              <p className="mt-2 text-sm text-muted">
-                As tarefas e notas deste contato somem junto. Os negócios e conversas <strong>ficam</strong>, sem o vínculo. Não dá para desfazer.
-              </p>
-              <div className="mt-5 flex justify-end gap-2">
-                <Button variant="ghost" onClick={() => setConfirmando(false)}>Cancelar</Button>
-                <Button onClick={excluir} className="bg-red-600 hover:bg-red-700">Excluir contato</Button>
-              </div>
-            </div>
-          </Card>
-        </div>
-      )}
+      <Confirm
+        open={confirmando}
+        onClose={() => setConfirmando(false)}
+        onConfirm={excluir}
+        loading={excluindo}
+        title={`Excluir ${c.nome}?`}
+        description="As tarefas e notas deste contato somem junto. Os negócios e conversas ficam, sem o vínculo. Não dá para desfazer."
+        confirmLabel="Excluir contato"
+      />
     </div>
   );
 }

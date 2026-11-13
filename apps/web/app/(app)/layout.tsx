@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { MotionConfig } from 'framer-motion';
 import { Sidebar } from '@/components/shell/Sidebar';
 import { Topbar } from '@/components/shell/Topbar';
 import { BrandSignature } from '@/components/shell/BrandMark';
@@ -10,10 +11,14 @@ import { PageTransition } from '@/components/shell/PageTransition';
 import { PersonalizationProvider } from '@/components/app/PersonalizationProvider';
 import { CommandBar } from '@/components/app/CommandBar';
 import { NyroDock } from '@/components/app/NyroDock';
+import { PortaoDeModulo } from '@/components/app/PortaoDeModulo';
+import { useAuth } from '@/lib/auth';
+import { podeVer } from '@/lib/modulos';
 import { Icon } from '@/components/icons';
+import { ToastProvider, useFocusTrap, useScrollLock } from '@/components/kit';
 
 /**
- * Shell do ORVYN Revenue OS.
+ * Shell do KHUB.
  *
  * Duas superfícies de Liquid Glass flutuando sobre o ambient (ADR-0029):
  * sidebar à esquerda e topbar no topo. O conteúdo rola por baixo delas.
@@ -24,6 +29,9 @@ import { Icon } from '@/components/icons';
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [drawer, setDrawer] = useState(false);
   const pathname = usePathname();
+  // Acesso por módulo (ADR-0045): sem o módulo IA, o balão da NICO nem aparece.
+  const { user } = useAuth();
+  const veIa = podeVer(user?.modulos, '/nyro');
 
   // Navegar fecha o drawer — inclusive quando a navegação parte de um link
   // dentro do conteúdo, não só da sidebar.
@@ -31,17 +39,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     setDrawer(false);
   }, [pathname]);
 
-  // Drawer aberto trava o scroll do corpo (senão a página rola por baixo).
-  useEffect(() => {
-    if (!drawer) return;
-    const anterior = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = anterior;
-    };
-  }, [drawer]);
+  // Drawer mobile é um diálogo: trava a rolagem do corpo, prende o foco,
+  // fecha com Esc e devolve o foco ao botão do menu (Q1.8).
+  const gaveta = useRef<HTMLDivElement>(null);
+  useScrollLock(drawer);
+  useFocusTrap(gaveta, drawer, { onEsc: () => setDrawer(false) });
 
   return (
+    // "Reduzir movimento" do sistema desliga transform/layout do framer-motion
+    // na área logada inteira (o CSS global já zera as animações de CSS).
+    <MotionConfig reducedMotion="user">
+    <ToastProvider>
     <PersonalizationProvider>
       <a href="#conteudo" className="skip-link">
         Pular para o conteúdo
@@ -49,7 +57,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       <AmbientBackground />
 
-      <div className="relative flex h-screen overflow-hidden">
+      <div className="relative flex h-[100dvh] overflow-hidden">
         {/* Sidebar flutuante — desktop */}
         <aside className="hidden shrink-0 p-3 lg:block">
           <Sidebar />
@@ -61,11 +69,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <Topbar onMobileMenu={() => setDrawer(true)} />
           </div>
 
-          <main id="conteudo" className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+          <main id="conteudo" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
             {/* Assinatura sempre no pé: em página curta não flutua no meio (ADR-0036). */}
             <div className="flex min-h-full flex-col">
               <div className="flex-1">
-                <PageTransition>{children}</PageTransition>
+                <PageTransition><PortaoDeModulo>{children}</PortaoDeModulo></PageTransition>
               </div>
               <BrandSignature className="border-t border-line" />
             </div>
@@ -74,12 +82,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Drawer de navegação — mobile e tablet */}
         {drawer && (
-          <div className="fixed inset-0 z-drawer lg:hidden">
+          <div
+            ref={gaveta}
+            className="fixed inset-0 z-drawer lg:hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menu de navegação"
+          >
             <button
               type="button"
               className="lg-backdrop absolute inset-0"
               onClick={() => setDrawer(false)}
               aria-label="Fechar menu de navegação"
+              // Só para o toque/clique fora; no teclado o X e o Esc fecham.
+              tabIndex={-1}
             />
             <div className="absolute inset-y-0 left-0 animate-fade-in p-2">
               <Sidebar onNavigate={() => setDrawer(false)} />
@@ -97,8 +113,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         <CommandBar />
         {/* NICO, a agente interna de marketing, à mão em qualquer tela (ADR-0040). */}
-        <NyroDock />
+        {veIa && <NyroDock />}
       </div>
     </PersonalizationProvider>
+    </ToastProvider>
+    </MotionConfig>
   );
 }

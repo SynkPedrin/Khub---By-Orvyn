@@ -30,7 +30,7 @@ function mapStatus(stripeStatus: string): 'incompleta' | 'ativa' | 'inadimplente
 /**
  * Webhook único da Stripe pros DOIS fluxos que passam por ela (mesma conta,
  * uma URL só pra configurar no painel): assinatura da plataforma
- * (`orvyn_subscription`, ver BillingService) e cobrança de cliente do tenant
+ * (`khub_subscription`, ver BillingService) e cobrança de cliente do tenant
  * (`financeiro_cobranca`, ver FinanceiroService). Roteado por
  * `metadata.kind`, setado por nós na criação do checkout — nunca inferido.
  *
@@ -90,7 +90,8 @@ export class StripeWebhookController {
       return;
     }
 
-    if (metadata.kind === 'orvyn_subscription' || tipo.startsWith('customer.subscription.')) {
+    // 'orvyn_subscription': assinaturas criadas antes do rebrand (ADR-0041) seguem no Stripe com o valor antigo.
+    if (metadata.kind === 'khub_subscription' || metadata.kind === 'orvyn_subscription' || tipo.startsWith('customer.subscription.')) {
       if (tipo === 'checkout.session.completed') {
         await this.billing.sincronizarAssinatura({
           tenantId, plano: metadata.plano ?? 'starter', status: 'ativa',

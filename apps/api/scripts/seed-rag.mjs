@@ -7,7 +7,7 @@
  *   node apps/api/scripts/seed-rag.mjs             # ingere de verdade (precisa API + DB + VOYAGE_API_KEY)
  *
  * Bases global/nicho são conhecimento COMPARTILHADO: em produção a ingestão
- * roda como orvyn_service (BYPASSRLS). Ver db/README.md.
+ * roda como khub_service (BYPASSRLS). Ver db/README.md.
  */
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, dirname, basename, sep } from 'node:path';
@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CORPUS = join(__dirname, '..', '..', '..', 'Nyro IA', 'cerebro', 'RAG', 'conhecimento');
-const API = process.env.ORVYN_API ?? 'http://localhost:3333';
+const API = process.env.KHUB_API ?? process.env.ORVYN_API ?? 'http://localhost:3333';
 const DRY = process.argv.includes('--dry-run');
 
 const NICHOS = new Set(['medico', 'juridico', 'contabil']);

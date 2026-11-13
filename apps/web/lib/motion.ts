@@ -22,22 +22,22 @@ export const motionTokens = {
 };
 
 /**
- * Transição de página: fade + leve deslocamento vertical + blur sutil.
+ * Transição de página: fade + leve deslocamento vertical (6px, ADR-0036).
  *
- * `transitionEnd` remove filtro e transform ao terminar. Deixar
- * `filter: blur(0px)` inline (como antes) fazia do wrapper da página um
- * containing block para `position: fixed` — o overlay dos modais cobria só
- * o `<main>`, não a sidebar/topbar — e um backdrop root, que impedia o
- * vidro dos sheets de desfocar o que está atrás (ADR-0029).
+ * Sem blur (Q1.7): `filter` na página inteira custava repintura em telas
+ * densas e, enquanto durava, fazia do wrapper um containing block para
+ * `position: fixed` e um backdrop root (o vidro dos sheets não desfocava).
+ * `transitionEnd` remove o transform ao terminar pelo mesmo motivo.
+ * Com "Reduzir movimento" o `MotionConfig reducedMotion="user"` do layout
+ * logado desliga o deslocamento.
  */
 export const pageVariants: Variants = {
-  initial: { opacity: 0, y: 10, filter: 'blur(4px)' },
+  initial: { opacity: 0, y: 6 },
   animate: {
     opacity: 1,
     y: 0,
-    filter: 'blur(0px)',
     transition: { duration: motionTokens.duration.normal, ease: motionTokens.easing.standard },
-    transitionEnd: { filter: 'none', transform: 'none' },
+    transitionEnd: { transform: 'none' },
   },
 };
 

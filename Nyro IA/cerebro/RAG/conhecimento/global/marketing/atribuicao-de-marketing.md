@@ -33,8 +33,8 @@ Ao decidir onde alocar verba e precisar entender qual canal/campanha efetivament
 - Revise a atribuição mensalmente, não diariamente.
 - Trate atribuição como direcional, não como verdade absoluta — use para decisões de alocação.
 
-## Aplicação no Orvyn
-Como o Orvyn conecta Meta/Google ao CRM e registra a origem em cada deal, a Nyro consegue montar atribuição de primeiro + último toque nativamente. Ao analisar CPL/ROAS, ela deve cruzar a origem do lead com a etapa de fechamento — e não olhar só o custo por lead isolado.
+## Aplicação no KHUB
+Como o KHUB conecta Meta/Google ao CRM e registra a origem em cada deal, a Nyro consegue montar atribuição de primeiro + último toque nativamente. Ao analisar CPL/ROAS, ela deve cruzar a origem do lead com a etapa de fechamento — e não olhar só o custo por lead isolado.
 
 ## Aviso
 Atribuição perfeita é mito. O objetivo é estar direcionalmente correto, não precisamente errado.

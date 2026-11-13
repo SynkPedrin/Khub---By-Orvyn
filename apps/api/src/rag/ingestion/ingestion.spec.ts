@@ -76,13 +76,18 @@ describe('IngestionService (R1.3 idempotência)', () => {
 describe('IngestionProcessor (R1.3 processamento idempotente)', () => {
   const doc = { id: 'doc-1', tenantId: '111', escopo: 'tenant', nicho: 'medico', subespecialidade: null };
 
-  function setup(embedImpl?: () => Promise<number[][]>) {
+  function setup(embedImpl?: () => Promise<number[][]>, disponivel = true) {
     const execCalls: string[] = [];
+    const metaCalls: unknown[][] = [];
     const update = jest.fn().mockResolvedValue(undefined);
     const tx = {
       ragDocument: { findUnique: jest.fn().mockResolvedValue(doc), update },
       $executeRawUnsafe: jest.fn(async (sql: string) => {
         execCalls.push(sql.trim().split(/\s+/).slice(0, 2).join(' ')); // "DELETE FROM" | "INSERT INTO"
+        return 1;
+      }),
+      $executeRaw: jest.fn(async (...args: unknown[]) => {
+        metaCalls.push(args);
         return 1;
       }),
     };
@@ -91,10 +96,11 @@ describe('IngestionProcessor (R1.3 processamento idempotente)', () => {
     const prisma = { $transaction: transaction, withTenant } as unknown as PrismaService;
     const embeddings = {
       dims: 1024,
+      available: disponivel,
       embed: jest.fn(embedImpl ?? (async (texts: string[]) => texts.map(() => [0.1, 0.2, 0.3]))),
     } as unknown as EmbeddingsService;
     const proc = new IngestionProcessor(prisma, new ChunkingService(), embeddings);
-    return { proc, update, execCalls, embeddings, transaction, withTenant };
+    return { proc, update, execCalls, embeddings, transaction, withTenant, tx, metaCalls };
   }
 
   it('faz delete + N inserts (idempotente) e publica', async () => {
@@ -129,5 +135,17 @@ describe('IngestionProcessor (R1.3 processamento idempotente)', () => {
     });
     await expect(proc.process('doc-1', '# T\n\ntexto')).rejects.toThrow('voyage down');
     expect(update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'failed' }) }));
+  });
+
+  it('sem chave de embedding: indexa só para busca lexical (vetor NULL) e marca para reindexar', async () => {
+    const { proc, embeddings, tx, metaCalls, update } = setup(undefined, false);
+    const r = await proc.process('doc-1', '# T\n\nParágrafo.');
+    expect(r.chunks).toBeGreaterThan(0);
+    expect(embeddings.embed).not.toHaveBeenCalled();
+    const insert = (tx.$executeRawUnsafe.mock.calls as unknown[][]).find((c) => String(c[0]).includes('INSERT'))!;
+    expect(insert[10]).toBeNull();
+    expect(insert[11]).toBe('none');
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'published' }) }));
+    expect(JSON.stringify(metaCalls)).toContain('lexical');
   });
 });

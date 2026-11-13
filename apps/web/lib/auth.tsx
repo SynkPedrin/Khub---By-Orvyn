@@ -2,16 +2,20 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
-export interface OrvynUser {
+export interface KhubUser {
   name: string;
   email: string;
   role?: string;
   empresa?: string;
   tenantId?: string;
+  /** identities.id (Inbox: filtro "Minhas", menções). */
+  identityId?: string;
+  /** Módulos que a pessoa vê (ADR-0045). null = sem restrição. */
+  modulos?: string[] | null;
 }
 
 interface AuthCtx {
-  user: OrvynUser | null;
+  user: KhubUser | null;
   ready: boolean;
   refreshMe: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -20,7 +24,7 @@ interface AuthCtx {
 const Ctx = createContext<AuthCtx | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<OrvynUser | null>(null);
+  const [user, setUser] = useState<KhubUser | null>(null);
   const [ready, setReady] = useState(false);
 
   const refreshMe = useCallback(async () => {
@@ -28,7 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const r = await fetch('/api/auth/me', { cache: 'no-store' });
       if (r.ok) {
         const d = await r.json();
-        setUser({ name: d.nome || d.email || 'Você', email: d.email, role: d.role, empresa: d.tenant?.nome, tenantId: d.tenant?.id });
+        setUser({ name: d.nome || d.email || 'Você', email: d.email, role: d.role, empresa: d.tenant?.nome, tenantId: d.tenant?.id, identityId: d.identityId, modulos: Array.isArray(d.modulos) ? d.modulos : null });
       } else {
         setUser(null);
       }

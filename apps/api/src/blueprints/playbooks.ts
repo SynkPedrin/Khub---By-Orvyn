@@ -1,5 +1,5 @@
 /**
- * Camada de Conhecimento — Playbooks por nicho (os "Blueprints" do ORVYN).
+ * Camada de Conhecimento — Playbooks por nicho (os "Blueprints" do KHUB).
  *
  * Fato e regra DE NICHO, versionado — nunca dado de cliente (isso entra como
  * delta na aplicação). Separação de camadas: o playbook guarda a estrutura; o

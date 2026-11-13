@@ -1,4 +1,4 @@
-import type { RagEscopo } from '@orvyn/types';
+import type { RagEscopo } from '@khub/types';
 
 export interface IngestionInput {
   tenantId?: string | null;

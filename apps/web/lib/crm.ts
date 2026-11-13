@@ -17,7 +17,11 @@ const req = clienteApi('/api/crm/');
 
 export interface Overview {
   /** `negocios`/`valorFunil` = só ABERTOS do funil principal; `conversaoBase` diz de onde veio a taxa. */
-  kpis: { contatos: number; negocios: number; valorFunil: number; ganho: number; conversao: number; conversaoBase?: 'fechados' | 'etapa_final' | null };
+  kpis: {
+    contatos: number; negocios: number; valorFunil: number; ganho: number; conversao: number; conversaoBase?: 'fechados' | 'etapa_final' | null;
+    /** Contagem de negócios ganhos/perdidos do funil principal (base honesta da conversão, Q1.9). Opcional até a API enviar. */
+    ganhos?: number; perdidos?: number;
+  };
   funilNome?: string | null;
   funil: { id: string; nome: string; cor: string; total: number; valor: number }[];
   /** Receita fechada por mês (AAAA-MM), últimos 6 meses com zeros. */
@@ -42,6 +46,8 @@ export interface Contato360 {
   id: string; nome: string; email: string | null; telefone: string | null; empresa: string | null;
   tag: string; tags: string[]; valor: number; camposCustom: Record<string, unknown>;
   ultimoContatoAt: string | null; createdAt: string;
+  /** "Não perturbe" (Q2.2): data em que foi marcado; null = recebe mensagens. */
+  optedOutAt?: string | null; ownerId?: string | null;
   company: { id: string; nome: string; dominio: string | null; segmento: string | null } | null;
   negocios: { id: string; titulo: string; valor: number; status: string; stage: string; cor: string; origem: string | null }[];
   conversas: { id: string; canal: string; ultimaPrevia: string | null; ultimaHora: string | null; naoLidas: number }[];
@@ -54,6 +60,12 @@ export interface Negocio360 {
   stage: { id: string; nome: string; cor: string } | null;
   contato: { id: string; nome: string; email: string | null; telefone: string | null } | null;
   createdAt: string; updatedAt: string; tarefas: Tarefa[]; notas: Nota[];
+  /** Valores dos campos personalizados do negócio (Q2.3). */
+  camposCustom?: Record<string, unknown>;
+  /** Dono e motivo de perda (Q2.1). */
+  ownerId?: string | null;
+  motivoPerda?: { id: string; nome: string } | null;
+  motivoPerdaObs?: string | null;
 }
 export interface Tarefa {
   id: string; titulo: string; descricao?: string | null; status: string; prioridade: string;
@@ -71,6 +83,8 @@ export interface Empresa360 {
   contatos: { id: string; nome: string; email: string | null; telefone: string | null; tag: string }[];
   negocios: { id: string; titulo: string; valor: number; status: string; stage: string; cor: string; contato: string | null }[];
   valorAberto: number; tarefas: Tarefa[]; notas: Nota[];
+  /** Valores dos campos personalizados da empresa (Q2.3). */
+  camposCustom?: Record<string, unknown>;
 }
 export type Atendimento = 'ia' | 'humano';
 export interface Conversa {
@@ -82,10 +96,20 @@ export interface Conversa {
   handoffMotivo: string | null;
   /** ISO da última atividade (a lista é leve: as mensagens vêm de `crm.mensagens`). */
   atualizadaEm?: string;
-  contato?: { id: string; telefone: string | null; email: string | null } | null;
+  contato?: { id: string; telefone: string | null; email: string | null; fotoUrl?: string | null; empresa?: string | null } | null;
   mensagens: { id: string; de: string; texto: string; hora: string | null; agentId?: string | null }[];
+  /** Conversas omnichannel (db/063): DM ou comentário, aberta/resolvida e etiquetas do contato. */
+  tipo?: 'dm' | 'comentario';
+  status?: string;
+  etiquetas?: string[];
+  contextoExterno?: Record<string, string | undefined> | null;
 }
-export interface MensagemConversa { id: string; de: string; texto: string; hora: string | null; status?: string; agentId?: string | null; criadaEm?: string }
+export interface MensagemConversa {
+  id: string; de: string; texto: string; hora: string | null; status?: string; agentId?: string | null; criadaEm?: string;
+  /** Origem (migration 036): automação que enviou (de='automacao') ou atendente que digitou (de='humano'). */
+  workflowId?: string | null; workflowNome?: string | null;
+  enviadoPorId?: string | null; enviadoPorNome?: string | null;
+}
 export interface EstadoAtendimento { id: string; atendimento: Atendimento; agentId: string | null; assigneeId: string | null; handoffMotivo: string | null }
 export interface Atendente { identityId: string; nome: string; email: string; role: string; abertas: number }
 
@@ -93,7 +117,7 @@ export interface Atendente { identityId: string; nome: string; email: string; ro
 export interface SendResult {
   id: string;
   hora: string;
-  status: 'sent' | 'failed' | 'sem_telefone' | 'config_required' | 'unknown' | 'pending' | 'cancelled';
+  status: 'sent' | 'failed' | 'sem_telefone' | 'config_required' | 'unknown' | 'pending' | 'cancelled' | 'canal_desconectado' | 'bloqueado_dev' | 'midia_nao_suportada';
   erro: string | null;
   missing?: string[];
 }
@@ -152,7 +176,8 @@ export const crm = {
   deleteNote: (id: string) => req<{ ok: boolean }>(`notes/${id}`, { method: 'DELETE' }),
 
   // ---- Inbox ----
-  conversations: () => req<Conversa[]>('conversations'),
+  /** Lista filtrada no servidor (canal, status, etiqueta, tipo, busca) — ver lib/conversas-filtro. */
+  conversations: (qs = '') => req<Conversa[]>(`conversations${qs ? `?${qs}` : ''}`),
   atendentes: () => req<Atendente[]>('atendentes'),
   mudarAtendimento: (id: string, body: { acao: 'assumir' | 'devolver_ia' | 'atribuir'; agentId?: string; assigneeId?: string }) =>
     req<EstadoAtendimento>(`conversations/${id}/atendimento`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),

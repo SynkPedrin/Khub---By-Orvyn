@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
-import type { RealtimeEnvelope, RealtimeEvent, RealtimeEvents } from '@orvyn/types';
+import type { RealtimeEnvelope, RealtimeEvent, RealtimeEvents } from '@khub/types';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3333';
 

@@ -1,4 +1,4 @@
-# Bugs — Orvyn
+# Bugs — KHUB
 
 > Reprodução, severidade, status. Alimenta a triagem da sprint ([[Sprint]]). Toda correção: causa raiz + verificar se existe em outros pontos + teste de regressão.
 
@@ -8,6 +8,42 @@ Status: `aberto` · `em correção` · `corrigido` · `não reproduz`.
 ---
 
 ## Abertos
+
+### BUG-030 — Vault interno visível para clientes (S1) — corrigido 2026-11-10
+- **Reprodução:** qualquer usuário logado de qualquer subconta abria `/conhecimento` ou `GET /api/cerebro` e lia PRD, Bugs, Arquitetura e revisões de segurança; a imagem de produção copiava o vault inteiro.
+- **Causa:** `lib/cerebro.ts` listava todo o diretório; o Dockerfile do web copiava `Nyro IA/cerebro` inteiro.
+- **Correção:** fora de dev só `RAG/conhecimento/**` é listado/lido (`slugVisivel`, flag `KHUB_VAULT_INTERNO`); o Dockerfile copia só essa subpasta. Regressão: `apps/web/lib/cerebro.test.ts`.
+
+### BUG-029 — Gatilho "Contato criado" com filtro de origem nunca disparava (S1) — corrigido 2026-11-10
+- **Reprodução:** fluxo com gatilho `contato_criado` filtrado por origem (ex.: "MetaAds" do Studio da Beleza) nunca abria run.
+- **Causa:** a função de outbox lia `campos_custom->>'origem'`; o cadastro manual grava a coluna `contacts.origem` e o lead de anúncio grava `campos_custom.lead_origem`. O filtro sempre via "Manual".
+- **Correção:** `db/050` (função de outbox com `COALESCE(origem, lead_origem, origem, 'Manual')`), `leads.service` e `createContact` gravam a coluna, filtro normalizado ("Meta Ads" = "metaads"). Regressão: `triggers.service.spec`, `contato-origem.spec`, `db/050_automation_isolation_test.sql`.
+
+### BUG-031 — Condição sem ramo casado seguia o primeiro ramo (S2) — corrigido 2026-11-10
+- **Causa e correção:** o executor caía na aresta do primeiro ramo quando nenhum casava; agora o run encerra. Teste em `executor`/`workflows.service.spec`.
+
+### BUG-032 — Links `?aba=` de Configurações caíam na aba padrão (S3) — corrigido 2026-11-10
+- **Causa e correção:** seis links usavam `?aba=`; a página lia só `?tab=`. Agora aceita os dois, com apelido `ia → integracoes`.
+
+### BUG-028 — Webhooks de WhatsApp morriam no body parser (Inbox nunca carregava)
+- Severidade: **S1** (mensageria real quebrada em produção-local: mensagem recebida não virava conversa)
+- Status: **corrigido** (2026-11-09)
+- Reprodução: conectar WhatsApp (Stevo/Evolution) numa subconta → mensagens chegam → `POST /v1/webhooks/stevo-api` → 500 `PayloadTooLargeError` → Inbox vazio.
+- Causa raiz (duas camadas):
+  1. Payloads com mídia em base64 (~170 kb) estouram o default de 100 kb do Express.
+  2. O parser global do Nest (json 100 kb) é registrado ANTES dos `app.use` do `main.ts` — a exceção por rota nunca rodava para webhooks. Além disso, parte dos webhooks chega como `form-urlencoded` e caía no parser urlencoded (também 100 kb).
+- Correção (`apps/api/src/main.ts`): `bodyParser: false` e parsing 100% manual, na ordem — webhooks `/v1/(webhooks|hooks)/*` com `json({limit:'100mb'})` → upload de conhecimento (22 mb) → resto da API com defaults; TODOS com `verify` capturando `rawBody` (Meta HMAC e Stripe dependem do corpo cru; `rawBody:true` do Nest foi removido junto).
+- Regressão/verificação: 74/74 testes de messaging; mensagens reais da Dra. Bárbara entrando (6 → 10) e outbox processando (4534 processed, 0 stevo pendente) logo após a correção.
+- Lição: teste de webhook com payload pequeno não pega isso — falta teste de integração com body >100 kb no webhook da Stevo.
+
+### BUG-027 — Sync de Ads morria por timeout de transação (Meta conectada, zero dados)
+- Severidade: S1 (integração conectava, sync sempre falhava, `/marketing/ads` vazio)
+- Status: **corrigido** (2026-11-09)
+- Reprodução: conectar Meta Ads → `handleCallback` enfileira `ads-sync` → run falha com `Transaction API error: Transaction already closed: ... timeout ... 5000 ms`; integração fica `health=down`, `ad_accounts/ad_campaigns/ad_insights` vazios.
+- Causa raiz: `AdsSyncService.run` fazia as chamadas à Graph API (listAdAccounts/syncCampaigns/syncCreatives/syncInsights) DENTRO de uma transação interativa do Prisma (timeout padrão 5s). A rede estourava o teto → transação expirava → primeira escrita (`adAccount.upsert`) quebrava.
+- Correção: rede fora da transação (busca tudo do provider primeiro, `Promise.all` por conta); a transação fica só com as escritas, com `{ timeout: 30_000 }` via novo param opcional `options` em `PrismaService.withTenant`.
+- Regressão/verificação: `npx jest src/integrations` (31/31) + sync real enfileirado no worker: `success`, 239 registros (8 contas, 10 campanhas, 398 insights), `health=ok`, `last_sync_at` preenchido.
+- Existe em outros pontos?: padrão "rede dentro de withTenant" merece varredura nos demais services que chamam provider externo.
 
 ### BUG-001 — `retrieval.service.ts`: `tenant_id` interpolado em string no `SET LOCAL` (risco de SQL injection)
 - Severidade: S1 (S0 se `tenantId` puder vir de fonte não confiável)
@@ -60,7 +96,7 @@ Status: `aberto` · `em correção` · `corrigido` · `não reproduz`.
 
 ### BUG-020 — `/api/cerebro` servia o vault interno sem sessão; token de webhook ia para logs/Sentry
 - Severidade: S2 · Status: **corrigido**
-- Correção: rotas exigem sessão validada na API (5 testes); `urlSegura()` redige `/hooks/:chave`, `/hooks/evolution/:token` e `?token=` em log, Sentry e corpo de erro (5 testes). Pendente (produto): `/conhecimento` e ⌘K ainda mostram o vault da Orvyn a qualquer usuário logado — trocar pela base RAG do tenant.
+- Correção: rotas exigem sessão validada na API (5 testes); `urlSegura()` redige `/hooks/:chave`, `/hooks/evolution/:token` e `?token=` em log, Sentry e corpo de erro (5 testes). Pendente (produto): `/conhecimento` e ⌘K ainda mostram o vault da KHUB a qualquer usuário logado — trocar pela base RAG do tenant.
 
 ### BUG-023 — Conversas e Agenda vazias no modo real (dados existiam)
 - Severidade: S1 · Status: **corrigido** (ADR-0039)
@@ -74,6 +110,11 @@ Status: `aberto` · `em correção` · `corrigido` · `não reproduz`.
 - Severidade: S2 · Status: **corrigido** (ADR-0039)
 - Reprodução: 405 conversas / 6.572 mensagens → payload de megabytes a cada mensagem nova ou a cada 5 s sem socket; abrir a conversa não baixava o contador.
 
+### BUG-026 — "Esperar resposta": resposta não chegava à condição; trava cancelava boas-vindas; resposta rápida se perdia; 2ª mensagem sobrescrevia a 1ª
+- Severidade: S1 (qualquer fluxo com "Esperar resposta" quebrava; o "Novo Lead" do GHL inviável) · Status: **corrigido** (importação GHL, 4 testes novos)
+- Reprodução: (1) a resposta acordava o run mas o TEXTO não entrava no contexto — a condição "resposta contém Google" caía sempre no ramo errado; (2) a trava "contato respondeu, cancela o envio" comparava com o início do run, então as boas-vindas pós-resposta eram canceladas; (3) resposta que chegava nos ms entre a mensagem anterior e a marca da espera se perdia e o follow-up ia para quem JÁ tinha respondido; (4) duas mensagens rápidas ("Vi no Instagram" + "Quero progressiva"): a 2ª sobrescrevia `mensagem` antes da condição ler a 1ª. Achado no teste ponta a ponta da automação importada.
+- Correção: `avisarResposta` leva o texto da resposta ao contexto e marca `baseResposta` (a trava passa a contar dali); 1ª passada do "Esperar resposta" reconhece resposta antecipada por `lastInboundAt >= baseResposta` e carrega o texto; run já acordado (`respondeu` ainda não consumido) não é sobrescrito por mensagem nova.
+
 ### BUG-022 — Base de conhecimento de cliente nunca indexava (RLS)
 - Severidade: S1 (IA sem base própria) · Status: **corrigido** (db/033)
 - Reprodução: `POST /v1/rag/documents` de qualquer tenant → documento não gravava (`rag_documents_write` exige `app.current_tenant_id`, o serviço gravava fora do `withTenant`); e mesmo com documento, todo chunk falhava com 42501 — `rag_chunks` só tinha policy de LEITURA. Achado na importação do GHL (0 documentos de tenant existiam no banco).
@@ -82,11 +123,6 @@ Status: `aberto` · `em correção` · `corrigido` · `não reproduz`.
 ### BUG-021 — Teste intermitente "espera de 1 dia vira delay na fila"
 - Severidade: S3 · Status: aberto
 - Reprodução: falhou 1 vez em 3 na suíte completa; passa isolado. Provável cálculo de `delay` a partir do relógio (diferença de ms sob carga).
-
-### BUG-026 — "Esperar resposta": resposta não chegava à condição; trava cancelava boas-vindas; resposta rápida se perdia; 2ª mensagem sobrescrevia a 1ª
-- Severidade: S1 (qualquer fluxo com "Esperar resposta" quebrava; o "Novo Lead" do GHL inviável) · Status: **corrigido** (importação GHL, 4 testes novos)
-- Reprodução: (1) a resposta acordava o run mas o TEXTO não entrava no contexto — a condição "resposta contém Google" caía sempre no ramo errado; (2) a trava "contato respondeu, cancela o envio" comparava com o início do run, então as boas-vindas pós-resposta eram canceladas; (3) resposta que chegava nos ms entre a mensagem anterior e a marca da espera se perdia e o follow-up ia para quem JÁ tinha respondido; (4) duas mensagens rápidas ("Vi no Instagram" + "Quero progressiva"): a 2ª sobrescrevia `mensagem` antes da condição ler a 1ª. Achado no teste ponta a ponta da automação importada.
-- Correção: `avisarResposta` leva o texto da resposta ao contexto e marca `baseResposta` (a trava passa a contar dali); 1ª passada do "Esperar resposta" reconhece resposta antecipada por `lastInboundAt >= baseResposta` e carrega o texto; run já acordado (`respondeu` ainda não consumido) não é sobrescrito por mensagem nova.
 
 ### BUG-015 — Overlay dos modais cobria só o `<main>` e os sheets de vidro não desfocavam
 - Severidade: S3
@@ -115,7 +151,7 @@ Status: `aberto` · `em correção` · `corrigido` · `não reproduz`.
 ### BUG-014 — RLS não protegia as partições de `ad_insights` (vazamento cross-tenant)
 - Severidade: **S1 — incidente de isolamento** (não explorado via API, mas a 1ª camada estava furada)
 - Status: **corrigido** (Fase 0, 2026-07-18)
-- Reprodução: como `orvyn_app`, **sem** `app.current_tenant_id`: `SELECT count(*) FROM ad_insights_default` → **14 linhas** (de todos os tenants). Via tabela-pai `ad_insights`, a mesma query devolve 0 — a policy só vale por lá.
+- Reprodução: como `khub_app`, **sem** `app.current_tenant_id`: `SELECT count(*) FROM ad_insights_default` → **14 linhas** (de todos os tenants). Via tabela-pai `ad_insights`, a mesma query devolve 0 — a policy só vale por lá.
 - Causa: `ad_insights` é particionada por RANGE(date). No Postgres, `ENABLE ROW LEVEL SECURITY` na tabela-pai é aplicada quando a leitura passa **por ela**; a partição acessada diretamente tem a **própria** (in)existência de policy. A migration 005 criou a partição `default` sem RLS, e o teste `db/002` só exercitava a tabela-pai.
 - Impacto real: nenhuma rota da aplicação consulta a partição direto, então **não vazou pela API**. Mas isso transformava a *aplicação* na 1ª camada de isolamento — o oposto do invariante 1 ("isolamento é do banco"). Um `$queryRaw` futuro, um dump ou um SELECT de suporte já bastariam.
 - Correção: `db/014_rls_particoes.sql` — RLS + FORCE + policy `tenant_rw` em toda partição de `ad_insights`, num bloco **reexecutável** (partição nova nasce protegida ao rodar de novo). Verificado: sem tenant → 0 linhas; com tenant A → 14 (todas dele); tenant B → 0.
@@ -219,6 +255,23 @@ Invariante 6 exige "rate limiting por tenant e por integração; circuit breaker
 - Status: mitigado nesta sessão
 - Reprodução: `001_rag_schema.sql` habilita RLS em documents/chunks/queries/feedback, mas **não** em `nyro_guardrail_hits` (que tem `tenant_id`).
 - Correção: RLS + policy adicionadas em `db/001a_rls_harden.sql`. Manter alinhado se o schema base mudar.
+
+### BUG-033 — Agente de WhatsApp no Ollama respondia genérico/errado e em ~130 s (Ritinha, 2026-11-11)
+- Severidade: S1
+- Status: corrigido (código em `src`, aguardando build oficial; validado ao vivo no WhatsApp com `dist-ritinha`)
+- Ambiente: local (AI_PROVIDER=ollama, qwen3.5:9b)
+- Reprodução: "quanto tá o alongamento de gel e vocês atendem sábado?" → 131 s; tratou unha como "cabelo com química", cobrou sinal inexistente; "aceita cartão?" → "aceitamos crédito e débito" (inventado); "quero agendar sexta de manhã" → "vou verificar" sem consultar agenda; "sim" → "vaga garantida" sem agendar.
+- Causas raiz: (1) `conversarOllama` sem `num_ctx` → janela 4096 corta o INÍCIO do prompt (some o system); sem `keep_alive` (recarga a cada 5 min); (2) prompt sem a data de hoje; (3) modelo pequeno não chama ferramentas de escrita e afirma ações que não fez; (4) chunker/validador remontavam listas em frase corrida; (5) descritor de formalidade alta ("o senhor/a senhora") brigava com "trate pelo primeiro nome"; (6) memória da máquina em swap (Docker 7,75 GB + 9b 6 GB em 16 GB).
+- Correção: `num_ctx`/`keep_alive` (OLLAMA_NUM_CTX, OLLAMA_KEEP_ALIVE); calendário no contexto; guia ESTILO_WHATSAPP com par ruim/bom; pré-consulta de agenda + agendamento determinístico no aceite explícito de horário livre (`engines/agenda-intent.ts`); dados do sistema colados na última mensagem; transferência prometida vira transferência; afirmação de agendamento inexistente removida; cumprimento repetido e frases de enchimento removidos; rajada atravessa automação; atraso de rajada 4→7 s (AGENTE_ESPERA_RAJADA_MS); resposta velha descartada se o contato escreveu durante a geração. Specs: 103/103 nos agentes.
+- Existe em outros pontos?: a mesma `conversarOllama` atende a NICO — o `num_ctx` também a corrige.
+- Pendências: fluxo "Novo Lead 🚀" (importado do GHL) fala junto com a IA em todo contato novo — decisão do dono; "digitando…"/marcar como lida não existem na API de gestão Stevo (openapi.yaml); análise por IA desligada na Ritinha (custa 16–27 s no Mac) → sem extração de campos do CRM.
+
+### BUG-034 — Restringir subcontas ou rebaixar papel de membro da agência não valia dentro das subcontas já abertas (2026-11-12)
+- Severidade: S1 (segurança: acesso que deveria ter sido retirado continuava)
+- Status: corrigido (`AgencyService.sincronizarAcessos`), validado em runtime no QA (`apps/api/scripts/qa/seletor-subcontas.mjs`, 14/14)
+- Reprodução: membro admin entra nas subcontas A e B → dono edita o membro para viewer com acesso só à A → o membro continuava entrando na B com o mesmo token e continuava admin na A.
+- Causa raiz: `atualizarMembro` só gravava `agency_member_client_access`/`role`; as `memberships` criadas por `ativarCliente` (upsert com `update: {}`) nunca eram revistas.
+- Correção: ao editar o membro, vínculos não padrão de subcontas que saíram da visibilidade são apagados (+ sessões revogadas + perfil removido) e o papel das que ficaram é ajustado; `ativarCliente` também alinha o papel a cada entrada. O tenant próprio da pessoa (`isDefault`) nunca é tocado. Specs: 20/20 em `agency.service.spec.ts`.
 
 ---
 

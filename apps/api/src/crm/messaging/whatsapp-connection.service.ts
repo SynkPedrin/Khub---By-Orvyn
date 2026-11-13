@@ -47,7 +47,7 @@ export class WhatsAppConnectionService {
    *    nunca cria uma segunda para o mesmo tenant.
    * 2. Cria na Evolution só na primeira vez.
    * 3. Preserva conexão ativa; reaproveita QR da criação ou busca um novo.
-   * 4. Registra o webhook do ORVYN nessa instância.
+   * 4. Registra o webhook do KHUB nessa instância.
    */
   async connect(tenantId: string, webhookUrl: string): Promise<ConexaoWhatsApp> {
     if (!this.evolution.configured()) {

@@ -1,9 +1,27 @@
 import { Module } from '@nestjs/common';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { CrmService } from './crm.service';
+import { OrigemFotoController } from './origem-foto.controller';
+import { AtribuicaoService } from './atribuicao.service';
 import { CrmController } from './crm.controller';
+import { ContatosController } from './contatos.controller';
+import { ContatosMassaService } from './contatos-massa.service';
+import { ContatosMesclaService } from './contatos-mescla.service';
+import { ContatosViewsService } from './contatos-views.service';
 import { CrmF2Controller } from './crm-f2.controller';
+import { PipelinesController } from './pipelines.controller';
+import { ComercialController } from './comercial.controller';
+import { PipelinesService } from './pipelines.service';
+import { ProposalsService } from './proposals.service';
+import { CarteiraService } from './carteira.service';
+import { ImportacaoService } from './importacao.service';
 import { CompaniesService } from './companies.service';
+import { CustomFieldsService } from './custom-fields.service';
+import { CustomFieldsController } from './custom-fields.controller';
+import { LostReasonsService } from './lost-reasons.service';
+import { LostReasonsController } from './lost-reasons.controller';
+import { NegociosMassaService } from './negocios-massa.service';
+import { NegociosController } from './negocios.controller';
 import { TasksService } from './tasks.service';
 import { NotesService } from './notes.service';
 import { LeadsService } from './leads.service';
@@ -19,14 +37,34 @@ import { EvolutionProvider } from './messaging/evolution.provider';
 import { EvolutionWebhookController } from './messaging/evolution-webhook.controller';
 import { WhatsAppConnectionService } from './messaging/whatsapp-connection.service';
 import { WhatsAppController } from './messaging/whatsapp.controller';
+import { AvatarContatoService } from './messaging/avatar-contato.service';
 import { CryptoService } from '../integrations/crypto.service';
+import { InboxService } from './messaging/inbox.service';
+import { InboxController } from './messaging/inbox.controller';
+import { ConversasService } from './messaging/conversas.service';
+import { SugestoesService } from './messaging/sugestoes.service';
+import { CanaisController } from './messaging/canais/canais.controller';
+import { CanaisService } from './messaging/canais/canais.service';
+import { CanaisIngestaoService } from './messaging/canais/canais-ingestao.service';
+import { MetaCanaisHttp, YoutubeHttp } from './messaging/canais/canais.http';
 
 @Module({
   imports: [RealtimeModule],
-  controllers: [CrmController, CrmF2Controller, StevoWebhookController, StevoApiWebhookController, EvolutionWebhookController, WhatsAppController],
+  controllers: [ContatosController, NegociosController, LostReasonsController, CrmController, CrmF2Controller, CustomFieldsController, PipelinesController, ComercialController, OrigemFotoController, StevoWebhookController, StevoApiWebhookController, EvolutionWebhookController, WhatsAppController, InboxController, CanaisController],
   providers: [
     CrmService,
+    AtribuicaoService,
+    ContatosMassaService,
+    ContatosMesclaService,
+    ContatosViewsService,
+    PipelinesService,
+    ProposalsService,
+    CarteiraService,
+    ImportacaoService,
     CompaniesService,
+    CustomFieldsService,
+    LostReasonsService,
+    NegociosMassaService,
     TasksService,
     NotesService,
     LeadsService,
@@ -38,12 +76,21 @@ import { CryptoService } from '../integrations/crypto.service';
     StevoProvider,
     EvolutionProvider,
     WhatsAppConnectionService,
+    AvatarContatoService,
+    InboxService,
+    // Conversas omnichannel (db/063): filtros/contagens e canais conectados.
+    ConversasService,
+    SugestoesService,
+    CanaisService,
+    CanaisIngestaoService,
+    MetaCanaisHttp,
+    YoutubeHttp,
     // Instância própria (stateless, só depende de ConfigService) — evita
     // ciclo de import com IntegrationsModule, que é quem importa CrmModule.
     CryptoService,
   ],
   // superfície pública do CRM: quem age em nome do usuário (automations,
   // integrations, e a Nyro em F) entra por aqui — nunca no banco direto.
-  exports: [CrmService, MessagesService, AtendimentoService, StevoApiProvider, StevoApiEventosService, StevoApiVinculoService, LeadsService, TasksService, CompaniesService, NotesService],
+  exports: [CrmService, AtribuicaoService, AvatarContatoService, MessagesService, CanaisIngestaoService, AtendimentoService, StevoApiProvider, StevoApiEventosService, StevoApiVinculoService, LeadsService, TasksService, CompaniesService, NotesService, CustomFieldsService],
 })
 export class CrmModule {}

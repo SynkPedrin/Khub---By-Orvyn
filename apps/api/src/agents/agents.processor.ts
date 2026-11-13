@@ -1,6 +1,6 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
-import type { Job } from 'bullmq';
+import { DelayedError, type Job } from 'bullmq';
 import { AgentRuntimeService, FILA_AGENTES, type AgenteJob } from './agent-runtime.service';
 
 /**
@@ -16,8 +16,14 @@ export class AgentesProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<AgenteJob>): Promise<void> {
-    const desfecho = await this.runtime.responder(job.data);
-    if (desfecho !== 'nada') this.log.log(`mensagem ${job.data.messageId}: ${desfecho}`);
+  async process(job: Job<AgenteJob>, token?: string): Promise<void> {
+    const r = await this.runtime.responderOuAdiar(job.data);
+    if (r.desfecho === 'adiado' && r.adiarAte && token) {
+      // Fora do horário: o MESMO job volta para a fila na abertura (BullMQ).
+      this.log.log(`mensagem ${job.data.messageId}: fora do horário, responde em ${r.adiarAte.toISOString()}`);
+      await job.moveToDelayed(r.adiarAte.getTime(), token);
+      throw new DelayedError();
+    }
+    if (r.desfecho !== 'nada') this.log.log(`mensagem ${job.data.messageId}: ${r.desfecho}`);
   }
 }

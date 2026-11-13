@@ -25,12 +25,12 @@ const SUGESTOES = [
 export function NyroDock() {
   const pathname = usePathname() ?? '';
   const [open, setOpen] = useState(false);
-  const { status, bolhas, passos, texto, setTexto, pensando, erro, enviar, decidir } = useNyroChat(open);
+  const { status, bolhas, passos, texto, setTexto, pensando, erro, enviar, decidir, aoVivo, plano } = useNyroChat(open);
   const fimRef = useRef<HTMLDivElement>(null);
   const rolar = useCallback(() => setTimeout(() => fimRef.current?.scrollIntoView({ behavior: 'smooth' }), 40), []);
   useEffect(() => {
     rolar();
-  }, [bolhas, passos, rolar]);
+  }, [bolhas, passos, aoVivo, plano, rolar]);
   useEffect(() => {
     if (!open) return;
     const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
@@ -80,7 +80,7 @@ export function NyroDock() {
             {bolhas.length === 0 && status?.configurada !== false && (
               <p className="text-[13.5px] text-muted">Oi! Sou a NICO, da sua equipe de marketing. Me peça algo e eu faço por aqui mesmo.</p>
             )}
-            <NyroMensagens status={status} bolhas={bolhas} passos={passos} pensando={pensando} erro={erro} sugestoes={SUGESTOES} onSugestao={enviar} onDecidir={decidir} />
+            <NyroMensagens status={status} bolhas={bolhas} passos={passos} pensando={pensando} erro={erro} sugestoes={SUGESTOES} onSugestao={enviar} onDecidir={decidir} aoVivo={aoVivo} plano={plano} />
             <div ref={fimRef} />
           </div>
 

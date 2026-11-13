@@ -11,7 +11,11 @@ import { modoDemo } from '@/lib/demo/flag';
 import { useEffect, useState } from 'react';
 import { useLocale } from '@/lib/locale';
 import { useAgency } from '@/components/agency/AgencyProvider';
+import { useAuth } from '@/lib/auth';
+import { filtrarPorModulos } from '@/lib/modulos';
+import { SubaccountSwitcher } from '@/components/agency/SubaccountSwitcher';
 import { motionTokens } from '@/lib/motion';
+import { billingApi, NOME_PLANO, ROTULO_STATUS, type BillingStatus } from '@/lib/billing';
 
 const PREF_RECOLHIDA = 'khub:sidebar-recolhida';
 
@@ -39,15 +43,14 @@ export function Sidebar({
 }) {
   const pathname = usePathname() ?? '/';
   const {t}=useLocale();
-  const { contexto, clientes, clienteAtivo, entrarNoCliente, trocandoCliente, erro } = useAgency();
-  const [busca, setBusca] = useState('');
-  const normalizar = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const encontrados = clientes.filter(c => normalizar(c.nome).includes(normalizar(busca.trim())));
+  const { contexto, clienteAtivo } = useAgency();
   // Modo agência tem a PRÓPRIA navegação (seção 24 do brief) — nunca
   // misturada com a operacional de um cliente. `/agency` nunca é rota de
   // um cliente (nome reservado), então esta checagem é segura.
   const modoAgencia = pathname.startsWith('/agency');
-  const nav = modoAgencia ? AGENCY_NAV : PRIMARY_NAV;
+  // Acesso por módulo (ADR-0045): o colaborador só vê no menu o que foi liberado.
+  const { user } = useAuth();
+  const nav = modoAgencia ? AGENCY_NAV : filtrarPorModulos(PRIMARY_NAV, user?.modulos);
   const active = activeHref(pathname, nav);
   const grupos = agruparNav(nav);
 
@@ -63,6 +66,10 @@ export function Sidebar({
       /* armazenamento indisponível: fica expandida */
     }
   }, [podeRecolher]);
+  // Editor de automação: o canvas precisa de espaço, então a sidebar fica
+  // recolhida no quadrado do KHUB (o editor começa logo depois dela, ver
+  // automacoes/[id]/page.tsx). Não mexe na preferência das outras telas.
+  const noEditor = /^\/automacoes\/[^/]+$/.test(pathname);
   const alternar = () =>
     setRecolhida((r) => {
       try {
@@ -72,64 +79,67 @@ export function Sidebar({
       }
       return !r;
     });
-  const curta = podeRecolher && recolhida;
+  const curta = podeRecolher && (noEditor || recolhida);
+
+  // Plano real do tenant ativo (assinatura da plataforma). Sem assinatura ou
+  // sem resposta, o cartão não aparece: nada de "Plano Pro" fixo (Q1.9).
+  const [assinatura, setAssinatura] = useState<BillingStatus | null>(null);
+  const demo = modoDemo();
+  useEffect(() => {
+    if (demo) return;
+    let vivo = true;
+    billingApi
+      .status()
+      .then((b) => vivo && setAssinatura(b))
+      .catch(() => vivo && setAssinatura(null));
+    return () => {
+      vivo = false;
+    };
+  }, [demo, clienteAtivo?.id]);
 
   return (
     <div
       className={cx(
-        'glass-floating nav-floating flex h-full flex-col transition-[width] duration-200 ease-out',
+        'glass-floating nav-floating sidebar-shell flex h-full flex-col transition-[width] duration-200 ease-out',
         curta ? 'w-[76px]' : 'w-sidebar',
         className,
       )}
     >
-      {/* Marca — logo completa expandida; o símbolo KHUB quando recolhida. */}
-      <div className={cx('flex h-topbar shrink-0 items-center', curta ? 'justify-center px-2' : 'px-5')}>
+      {/* Marca — logo branca ocupando a sidebar de ponta a ponta; símbolo KHUB quando recolhida. */}
+      <div className={cx('sidebar-brand sidebar-hairline flex shrink-0 items-center border-b', curta ? 'h-topbar justify-center px-2' : 'px-4 py-5')}>
         <Link
           href="/dashboard"
           onClick={onNavigate}
           aria-label="KHUB, ir para o Dashboard"
-          className="flex items-center"
+          className="flex w-full items-center"
         >
           {curta ? (
-            <Image src="/khub-mark.png" alt="KHUB" width={330} height={330} unoptimized priority className="h-8 w-8 object-contain" />
+            <Image src="/khub-mark.png" alt="KHUB" width={330} height={330} unoptimized priority className="h-9 w-9 object-contain" />
           ) : (
             <Image
               src="/khub-logo.png"
               alt="KHUB"
-              width={751}
-              height={301}
+              width={711}
+              height={261}
               unoptimized
               priority
-              className="h-8 w-auto object-contain"
+              className="h-auto w-full object-contain"
             />
           )}
         </Link>
       </div>
 
+      {/* Seletor de subcontas (estilo GHL): só para quem é de uma agência. */}
+      {contexto && (
+        <div className={cx('shrink-0 pt-3', curta ? 'px-2' : 'px-3')}>
+          <SubaccountSwitcher curta={curta} onNavigate={onNavigate} />
+        </div>
+      )}
+
       {/* Navegação primária */}
       <nav aria-label="Navegação principal" className="flex-1 overflow-y-auto scrollbar-thin px-3 py-2">
-        {contexto && !curta && <section className="mb-3 border-b border-line pb-3" aria-label="Agência e subcontas">
-          <Link href="/agency" onClick={onNavigate} className="nav-item" aria-current={modoAgencia ? 'page' : undefined}>
-            <Icon name="building" size={19} /><span>Agência</span>
-          </Link>
-          <label htmlFor={`subcontas-${onNavigate ? 'mobile' : 'desktop'}`} className="mt-2 block text-xs text-muted">Pesquisar subcontas</label>
-          <input id={`subcontas-${onNavigate ? 'mobile' : 'desktop'}`} type="search" className="input mt-1 w-full" placeholder="Nome do cliente" value={busca} onChange={e => setBusca(e.target.value)} />
-          <div className="mt-2 max-h-48 overflow-y-auto">
-            {encontrados.map(c => <button key={c.id} type="button" className="nav-item w-full text-left" disabled={trocandoCliente || c.status !== 'active'} aria-pressed={clienteAtivo?.id === c.id} onClick={() => void entrarNoCliente(c.id)}>
-              <span className="truncate">{c.nome}</span>{clienteAtivo?.id === c.id && <Icon name="check2" size={14} />}
-            </button>)}
-            {!encontrados.length && <p className="px-2 py-3 text-xs text-muted">Nenhuma subconta encontrada.</p>}
-          </div>
-          {erro && <p role="alert" className="mt-2 text-xs text-red-600">{erro}</p>}
-        </section>}
-        {contexto && curta && (
-          <Link href="/agency" onClick={onNavigate} title="Agência" className="nav-item mb-2 justify-center px-0" aria-current={modoAgencia ? 'page' : undefined}>
-            <Icon name="building" size={19} />
-            <span className="sr-only">Agência</span>
-          </Link>
-        )}
         {grupos.map(({ grupo, itens }, gi) => (
-          <div key={grupo ?? gi} className={cx(gi > 0 && (curta ? 'mt-2 border-t border-line pt-2' : 'mt-4'))}>
+          <div key={grupo ?? gi} className={cx(gi > 0 && (curta ? 'mt-2 border-t border-line pt-2' : 'sidebar-hairline mt-3 border-t pt-3'))}>
             {grupo && !curta && <p className="nav-grupo">{grupo}</p>}
             <ul className="space-y-0.5">
               {itens.map((item) => {
@@ -152,13 +162,13 @@ export function Sidebar({
                           aria-hidden
                         />
                       )}
-                      <Icon name={item.icon} size={19} className="relative shrink-0" />
+                      <Icon name={item.icon} size={21} className="relative shrink-0" />
                       <span className={cx('relative flex-1 truncate', curta && 'sr-only')}>{t(item.label)}</span>
                       {count ? (
                         <span
                           className={cx(
-                            'inline-flex items-center justify-center rounded-full bg-brand font-semibold text-white',
-                            curta ? 'absolute right-2 top-1.5 h-4 min-w-4 px-1 text-[10px]' : 'h-5 min-w-5 px-1.5 text-[11px]',
+                            'inline-flex items-center justify-center rounded-full bg-brand font-semibold text-[#0e1a04]',
+                            curta ? 'absolute right-2 top-1.5 h-4 min-w-4 px-1 text-2xs' : 'h-5 min-w-5 px-1.5 text-[11px]',
                           )}
                           aria-label={`${count} não lidas`}
                         >
@@ -174,12 +184,21 @@ export function Sidebar({
         ))}
       </nav>
 
-      {/* Rodapé: plano. Desacoplado de billing — só apresenta o que recebe.
-          Sem módulo de cobrança, os números de uso só existem no modo demo;
-          em produção o cartão aparece sem barra, e não com zeros falsos. */}
-      <div className="shrink-0 space-y-2 p-3">
-        {!curta && (modoDemo() ? <PlanCard usado={284} total={500_000} /> : <PlanCard />)}
-        {podeRecolher && (
+      {/* Rodapé: plano. No modo real vem de `GET /billing/status`; sem
+          assinatura o cartão some. Sem tela de cobrança no app ainda, não há
+          botão de upgrade (seria um botão morto, ADR-0039). */}
+      <div className="sidebar-hairline shrink-0 space-y-2 border-t p-3">
+        {!curta &&
+          (demo ? (
+            <PlanCard plano="Plano Pro" descricao="Seu crescimento sem limites." usado={284} total={500_000} />
+          ) : assinatura?.plano && assinatura.status !== 'sem_assinatura' ? (
+            <PlanCard
+              plano={`Plano ${NOME_PLANO[assinatura.plano] ?? assinatura.plano}`}
+              descricao={ROTULO_STATUS[assinatura.status]}
+              alerta={assinatura.status === 'inadimplente' || assinatura.status === 'cancelada'}
+            />
+          ) : null)}
+        {podeRecolher && !noEditor && (
           <button
             type="button"
             onClick={alternar}
@@ -198,26 +217,27 @@ export function Sidebar({
 }
 
 /**
- * Cartão de plano da sidebar.
- *
- * Nesta fase é **apresentacional e desacoplado de billing**: não consulta
- * nenhuma API de cobrança. Quando o módulo de billing existir, basta passar
- * os números por props — o layout não muda.
+ * Cartão de plano da sidebar: apresentacional, recebe o plano por props.
+ * O botão de upgrade só aparece quando houver `href` para uma tela de
+ * cobrança que exista.
  */
 export function PlanCard({
-  plano = 'Plano Pro',
-  descricao = 'Seu crescimento sem limites.',
+  plano,
+  descricao,
   usado,
   total,
   unidade = 'leads',
-  href = '/configuracoes?aba=plano',
+  href,
+  alerta = false,
 }: {
-  plano?: string;
+  plano: string;
   descricao?: string;
   usado?: number;
   total?: number;
   unidade?: string;
   href?: string;
+  /** Pagamento pendente/cancelado: descrição em tom de atenção. */
+  alerta?: boolean;
 }) {
   const temUso = typeof usado === 'number' && typeof total === 'number' && total > 0;
   const pct = temUso ? Math.min(100, Math.round((usado / total) * 100)) : 0;
@@ -232,7 +252,7 @@ export function PlanCard({
           <p className="truncate text-[13px] font-semibold text-fg">{plano}</p>
         </div>
       </div>
-      <p className="mt-1.5 text-xs leading-snug text-muted">{descricao}</p>
+      {descricao && <p className={cx('mt-1.5 text-xs leading-snug', alerta ? 'font-medium text-warning' : 'text-muted')}>{descricao}</p>}
 
       {temUso && (
         <div className="mt-3">
@@ -253,10 +273,12 @@ export function PlanCard({
         </div>
       )}
 
-      <Link href={href} className="btn btn-soft btn-sm mt-3 w-full">
-        Fazer upgrade
-        <Icon name="arrowRight" size={14} />
-      </Link>
+      {href && (
+        <Link href={href} className="btn btn-soft btn-sm mt-3 w-full">
+          Fazer upgrade
+          <Icon name="arrowRight" size={14} />
+        </Link>
+      )}
     </div>
   );
 }

@@ -38,8 +38,8 @@ Ao definir o que medir e montar painéis que orientem decisões, e não apenas m
 - **Qualidade:** NPS, churn, taxa de erro, cumprimento de SLA.
 - **Saúde:** runway, burn rate, satisfação e retenção da equipe.
 
-## Aplicação no Orvyn
-Os dashboards por nicho do Orvyn devem seguir estas três camadas: o dono vê o painel estratégico, o time vê o tático em tempo real (inbox, agenda). A Nyro gera insights semanais e alertas de anomalia mirando indicadores antecedentes (ex.: queda de agendamentos antes de virar queda de faturamento).
+## Aplicação no KHUB
+Os dashboards por nicho do KHUB devem seguir estas três camadas: o dono vê o painel estratégico, o time vê o tático em tempo real (inbox, agenda). A Nyro gera insights semanais e alertas de anomalia mirando indicadores antecedentes (ex.: queda de agendamentos antes de virar queda de faturamento).
 
 ## Princípio-chave
 Você não melhora o que não mede. Construa dashboards (ferramentas de decisão), não relatórios (retrospectiva).

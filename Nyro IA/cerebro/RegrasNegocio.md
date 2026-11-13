@@ -1,4 +1,4 @@
-# Regras de Negócio — Orvyn
+# Regras de Negócio — KHUB
 
 > Regras por nicho, limites de plano, guardrails da Nyro, segurança/LGPD. Consolida PRD §5, §6, §14, §17 + regras de engenharia do master prompt. Ver [[PRD]] · [[Arquitetura]] · [[Banco]].
 
