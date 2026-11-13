@@ -266,7 +266,8 @@ try {
             return {
               tenantId: TENANT,
               conversationId: conv.id,
-              autorTipo: saida ? 'humano' : 'contato',
+              // GHL marca o remetente: workflow = automação; app/api com userId = humano.
+              autorTipo: !saida ? 'contato' : m.source === 'workflow' ? 'automacao' : 'humano',
               corpo: corpoDe(m),
               hora: hora(m.dateAdded),
               createdAt: new Date(m.dateAdded),

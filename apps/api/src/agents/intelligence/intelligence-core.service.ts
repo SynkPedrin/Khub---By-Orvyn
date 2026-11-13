@@ -225,6 +225,8 @@ export class IntelligenceCoreService {
       exigirConfirmacao: cfg.permissoes.exigirConfirmacao,
       workflowsPermitidos: cfg.permissoes.workflowsPermitidos,
       etapasPermitidas: cfg.permissoes.etapasPermitidas,
+      // As ferramentas de agenda respeitam as faixas/fuso/feriados do agente.
+      horario: cfg.horario,
     };
     const disparadas = avaliarRegras(cfg.regras, { analise, mensagem: ultima, etapa: e.perfil.etapa, perfil: fatosComoTexto(e.perfil), jaDisparadas: e.regrasJaDisparadas });
     const sep = separarAcoes(disparadas);
