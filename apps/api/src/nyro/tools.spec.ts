@@ -1,5 +1,5 @@
 import { TOOLS, TOOLS_POR_NOME, paraAnthropic, zodParaJsonSchema } from './tools';
-import { AGENTES, toolsDoAgente } from './agentes';
+import { AGENTES, PROMPT_ROTEADOR, toolsDoAgente } from './agentes';
 import { z } from 'zod';
 
 describe('Tools da Nyro (ADR-0014 — conjunto fechado)', () => {
@@ -108,5 +108,33 @@ describe('Agentes (PRD §5.1 — orquestrador multi-agente)', () => {
       expect(def.prompt).toContain('buscar_conhecimento');
       expect(def.prompt).toMatch(/lacuna|tools/i);
     }
+  });
+});
+
+describe('Tools de pesquisa, plano e memória', () => {
+  it('atualizar_plano aceita lista de objetos (JSON Schema aninhado correto)', () => {
+    const j = paraAnthropic([TOOLS_POR_NOME.get('atualizar_plano')!])[0].input_schema as { properties: { passos: { type: string; items: { type: string; properties: { status: { enum: string[] } }; required: string[] } } }; required: string[] };
+    expect(j.required).toEqual(['objetivo', 'passos']);
+    expect(j.properties.passos.type).toBe('array');
+    expect(j.properties.passos.items.type).toBe('object');
+    expect(j.properties.passos.items.properties.status.enum).toEqual(['pendente', 'fazendo', 'feito']);
+    expect(j.properties.passos.items.required).toEqual(['texto', 'status']);
+  });
+
+  it('pesquisa, leitura de página, plano e conversas dos leads são só leitura', () => {
+    for (const n of ['pesquisar_web', 'ler_pagina', 'atualizar_plano', 'insights_conversas']) expect(TOOLS_POR_NOME.get(n)?.sensibilidade).toBe('leitura');
+    expect(TOOLS_POR_NOME.get('esquecer')?.sensibilidade).toBe('escrita');
+  });
+
+  it('URL inválida é recusada pelo schema antes de qualquer chamada', () => {
+    expect(TOOLS_POR_NOME.get('ler_pagina')!.schema.safeParse({ url: 'isso não é url' }).success).toBe(false);
+    expect(TOOLS_POR_NOME.get('pesquisar_web')!.schema.safeParse({ consulta: 'ab' }).success).toBe(false);
+  });
+
+  it('o agente único enxerga TODAS as tools; o roteador nunca o oferece como opção', () => {
+    expect(toolsDoAgente('nico')).toHaveLength(TOOLS.length);
+    expect(PROMPT_ROTEADOR).not.toContain('- nico:');
+    expect(AGENTES.nico.prompt).toContain('atualizar_plano');
+    expect(AGENTES.nico.prompt).toContain('pesquisar_web');
   });
 });

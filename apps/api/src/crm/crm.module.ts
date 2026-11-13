@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { CrmService } from './crm.service';
+import { OrigemFotoController } from './origem-foto.controller';
+import { AtribuicaoService } from './atribuicao.service';
 import { CrmController } from './crm.controller';
 import { ContatosController } from './contatos.controller';
 import { ContatosMassaService } from './contatos-massa.service';
@@ -48,9 +50,10 @@ import { MetaCanaisHttp, YoutubeHttp } from './messaging/canais/canais.http';
 
 @Module({
   imports: [RealtimeModule],
-  controllers: [ContatosController, NegociosController, LostReasonsController, CrmController, CrmF2Controller, CustomFieldsController, PipelinesController, ComercialController, StevoWebhookController, StevoApiWebhookController, EvolutionWebhookController, WhatsAppController, InboxController, CanaisController],
+  controllers: [ContatosController, NegociosController, LostReasonsController, CrmController, CrmF2Controller, CustomFieldsController, PipelinesController, ComercialController, OrigemFotoController, StevoWebhookController, StevoApiWebhookController, EvolutionWebhookController, WhatsAppController, InboxController, CanaisController],
   providers: [
     CrmService,
+    AtribuicaoService,
     ContatosMassaService,
     ContatosMesclaService,
     ContatosViewsService,
@@ -88,6 +91,6 @@ import { MetaCanaisHttp, YoutubeHttp } from './messaging/canais/canais.http';
   ],
   // superfície pública do CRM: quem age em nome do usuário (automations,
   // integrations, e a Nyro em F) entra por aqui — nunca no banco direto.
-  exports: [CrmService, MessagesService, CanaisIngestaoService, AtendimentoService, StevoApiProvider, StevoApiEventosService, StevoApiVinculoService, LeadsService, TasksService, CompaniesService, NotesService, CustomFieldsService],
+  exports: [CrmService, AtribuicaoService, AvatarContatoService, MessagesService, CanaisIngestaoService, AtendimentoService, StevoApiProvider, StevoApiEventosService, StevoApiVinculoService, LeadsService, TasksService, CompaniesService, NotesService, CustomFieldsService],
 })
 export class CrmModule {}

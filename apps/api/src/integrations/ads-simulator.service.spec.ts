@@ -99,3 +99,43 @@ describe('AdsSimulatorService', () => {
     expect(r.resumo).toBe('Bom, mas fraco.');
   });
 });
+
+describe('Simulações salvas (db/067)', () => {
+  function montarSalvas(linhas: unknown[] = []) {
+    const tx = {
+      $queryRaw: jest.fn(async () => linhas),
+      $executeRaw: jest.fn(async () => 1),
+      aiUsageEvent: { create: jest.fn(async () => ({})) },
+    };
+    const prisma = { withTenant: (_t: string, fn: (t: typeof tx) => unknown) => fn(tx) };
+    const llm = { configured: () => false, missing: () => ['OLLAMA_BASE_URL'] } as unknown as AIProvider;
+    return { svc: new AdsSimulatorService(prisma as never, llm), tx };
+  }
+
+  it('salvar: valida nome e entrada (400)', async () => {
+    const { svc } = montarSalvas();
+    await expect(svc.salvarSimulacao('t1', { nome: '', entrada: simulacao })).rejects.toThrow('Simulação inválida');
+    await expect(svc.salvarSimulacao('t1', { nome: 'x'.repeat(121), entrada: simulacao })).rejects.toThrow('Simulação inválida');
+    await expect(svc.salvarSimulacao('t1', { nome: 'Ok', entrada: { ...simulacao, criativos: [] } })).rejects.toThrow('Simulação inválida');
+  });
+
+  it('salvar: grava (upsert) e apara as mais antigas além do teto', async () => {
+    const linha = { id: 's1', nome: 'Sim', entrada: simulacao, resumo: {}, salvoEm: new Date() };
+    const { svc, tx } = montarSalvas([linha]);
+    const r = await svc.salvarSimulacao('t1', { nome: 'Sim', entrada: simulacao, resumo: { resultados: 10 } });
+    expect(r).toEqual(linha);
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it('remover: 404 quando a simulação não existe (ou é de outra subconta)', async () => {
+    const { svc } = montarSalvas([]);
+    await expect(svc.removerSimulacao('t1', 'b7f3f3f3-0000-4000-8000-000000000067')).rejects.toThrow('Simulação não encontrada');
+  });
+
+  it('listar: devolve as linhas da subconta (RLS filtra no banco)', async () => {
+    const linhas = [{ id: 's1', nome: 'A', entrada: {}, resumo: {}, salvoEm: new Date() }];
+    const { svc } = montarSalvas(linhas);
+    await expect(svc.listarSalvas('t1')).resolves.toEqual(linhas);
+  });
+});

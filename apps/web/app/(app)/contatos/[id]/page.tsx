@@ -1,5 +1,7 @@
 'use client';
 
+import { AvatarContato } from '@/components/inbox/AvatarContato';
+import { OrigemLead } from '@/components/crm/OrigemLead';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -149,7 +151,7 @@ export default function Contato360Page() {
       <Card className="p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-4">
-            <Avatar name={c.nome} size={56} />
+            <AvatarContato nome={c.nome} fotoUrl={(c as { fotoUrl?: string | null }).fotoUrl} size={56} />
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-semibold tracking-tight text-fg">{c.nome}</h1>
@@ -192,6 +194,11 @@ export default function Contato360Page() {
 
       <Card className="p-5">
         <PerfilTagsNaoPerturbe id={id} tags={c.tags ?? []} optedOutAt={c.optedOutAt ?? null} onMudou={load} />
+      </Card>
+
+      <Card className="p-5">
+        <h2 className="mb-3 font-bold text-fg">Origem do lead</h2>
+        <OrigemLead contactId={id} />
       </Card>
 
       <Card className="p-5">

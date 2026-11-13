@@ -173,7 +173,8 @@ export function campoParaPublico(c: CampoPublico) {
   };
 }
 
-const UTM_CHAVES = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid', 'fbclid'] as const;
+// gbraid/wbraid: clique do Google Ads em iOS; ttclid: TikTok (origem do lead, db/066).
+const UTM_CHAVES = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid', 'gbraid', 'wbraid', 'fbclid', 'ttclid'] as const;
 
 function urlHttp(s: unknown): URL | null {
   if (typeof s !== 'string' || s.length > 2000) return null;

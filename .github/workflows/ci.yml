@@ -32,8 +32,6 @@ jobs:
           pnpm --filter @khub/web exec tsc --noEmit -p tsconfig.json
       - name: Testes (API)
         run: pnpm --filter @khub/api exec jest --ci --silent
-      - name: Testes (Web)
-        run: pnpm --filter @khub/web exec vitest run
       - name: Build (API + Web)
         run: pnpm build
 

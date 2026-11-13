@@ -2921,3 +2921,24 @@ a {
     }
   }
 }
+
+/* Relatório da NICO: "Salvar em PDF" = imprimir só o relatório aberto. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .relatorio-print,
+  .relatorio-print * {
+    visibility: visible;
+  }
+  .relatorio-print {
+    position: absolute;
+    inset: 0;
+    max-height: none !important;
+    overflow: visible !important;
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    border: 0 !important;
+  }
+}

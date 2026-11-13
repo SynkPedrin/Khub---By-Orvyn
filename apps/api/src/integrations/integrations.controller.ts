@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { IsString } from 'class-validator';
 import { IntegrationsService } from './integrations.service';
 import { AdsService } from './ads.service';
@@ -81,5 +81,20 @@ export class AdsSimuladorController {
   @HttpCode(200)
   analisar(@TenantId() tenantId: string, @Body() corpo: unknown) {
     return this.sim.analisar(tenantId, corpo);
+  }
+
+  @Get('simulacoes')
+  listarSalvas(@TenantId() tenantId: string) {
+    return this.sim.listarSalvas(tenantId);
+  }
+
+  @Post('simulacoes')
+  salvarSimulacao(@TenantId() tenantId: string, @Body() corpo: unknown) {
+    return this.sim.salvarSimulacao(tenantId, corpo);
+  }
+
+  @Delete('simulacoes/:id')
+  removerSimulacao(@TenantId() tenantId: string, @Param('id', ParseUUIDPipe) id: string) {
+    return this.sim.removerSimulacao(tenantId, id);
   }
 }

@@ -14,7 +14,8 @@
     "db:migrate": "node scripts/db-migrate.mjs",
     "db:migrate:status": "node scripts/db-migrate.mjs --status",
     "db:isolation-test": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f ../../db/002_isolation_test.sql",
-    "start:worker": "node dist/worker.js"
+    "start:worker": "node dist/worker.js",
+    "nico:eval": "node dist/nyro/eval/rodar-eval.js"
   },
   "dependencies": {
     "@khub/types": "workspace:*",

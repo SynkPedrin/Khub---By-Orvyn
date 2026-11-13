@@ -66,19 +66,46 @@ const hojeOuOntem = (iso?: string) => {
   return diaDe(iso);
 };
 
-/** Linhas "📎 url" (anexos importados) viram link; o resto é texto. */
+/** Prévia da lista: link de mídia vira "📷 Mídia" (o link cru não diz nada). */
+function previaLegivel(p: string | null | undefined): string {
+  if (!p) return 'Sem mensagens';
+  const t = p.replace(/📎\s*https?:\/\/\S+/g, '📷 Mídia').replace(/https?:\/\/lookaside\.fbsbx\.com\S*/g, '📷 Mídia').trim();
+  return t || '📷 Mídia';
+}
+
+/**
+ * Mídia que chegou como link (DM do Instagram/Messenger, histórico importado):
+ * tenta exibir como vídeo (pela extensão) ou imagem; se não carregar (link
+ * expirado do CDN da Meta, ou não é mídia), vira um link "Abrir anexo".
+ */
+function MidiaPorLink({ url }: { url: string }) {
+  const [falhou, setFalhou] = useState(false);
+  const video = /\.(mp4|mov|webm)(\?|$)/i.test(url);
+  if (!falhou && video) {
+    return <video src={url} controls preload="metadata" className="mt-1 max-h-72 w-full rounded-xl" onError={() => setFalhou(true)} />;
+  }
+  if (!falhou) {
+    return (
+      <a href={url} target="_blank" rel="noreferrer" className="mt-1 block overflow-hidden rounded-xl">
+        {/* eslint-disable-next-line @next/next/no-img-element -- CDN externo da Meta, fora do otimizador do Next */}
+        <img src={url} alt="Mídia recebida" loading="lazy" referrerPolicy="no-referrer" className="max-h-72 w-full object-cover" onError={() => setFalhou(true)} />
+      </a>
+    );
+  }
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="mt-1 flex items-center gap-1.5 underline decoration-current/40 underline-offset-2">
+      <Icon name="paperclip" size={13} /> Abrir anexo
+    </a>
+  );
+}
+
+/** Linhas "📎 url" (anexos importados) viram mídia; o resto é texto. */
 function CorpoMensagem({ texto }: { texto: string }) {
   return (
     <>
       {texto.split('\n').map((linha, i) => {
         const anexo = /^📎\s*(https?:\/\/\S+)/.exec(linha);
-        if (anexo) {
-          return (
-            <a key={i} href={anexo[1]} target="_blank" rel="noreferrer" className="mt-1 flex items-center gap-1.5 underline decoration-current/40 underline-offset-2">
-              <Icon name="paperclip" size={13} /> Anexo
-            </a>
-          );
-        }
+        if (anexo) return <MidiaPorLink key={i} url={anexo[1]} />;
         return (
           <span key={i} className="block whitespace-pre-wrap break-words">
             {linha || ' '}
@@ -620,7 +647,7 @@ export function InboxAtendimento() {
                     {c.contato?.empresa && <span className="block truncate text-[12px] text-brand">{c.contato.empresa}</span>}
                     <span className="mt-0.5 flex items-center gap-2">
                       {c.atendimento === 'ia' && <span className="shrink-0 rounded-full bg-[var(--violet-soft)] px-1.5 text-[11px] font-semibold text-[var(--violet)]">IA</span>}
-                      <span className={cx('truncate text-[13px]', c.naoLidas ? 'text-fg' : 'text-muted')}>{c.ultimaPrevia ?? 'Sem mensagens'}</span>
+                      <span className={cx('truncate text-[13px]', c.naoLidas ? 'text-fg' : 'text-muted')}>{previaLegivel(c.ultimaPrevia)}</span>
                     </span>
                     <span className="mt-1.5 flex items-center gap-1.5">
                       {c.tipo === 'comentario' && <span className="pill h-5 shrink-0 px-2 text-[11px]">Comentário</span>}
@@ -796,7 +823,8 @@ export function InboxAtendimento() {
                           className={cx(
                             'max-w-[78%] rounded-2xl px-3.5 py-2 text-[14px] leading-relaxed shadow-sm sm:max-w-[68%]',
                             !minha && 'rounded-bl-md border border-line bg-[var(--base-0)] text-fg',
-                            minha && !ia && !automacao && 'rounded-br-md bg-brand text-white',
+                            // Padrão WhatsApp: verde com texto escuro no claro, verde-escuro com texto claro no escuro (o lima da marca não tinha contraste com texto branco).
+                            minha && !ia && !automacao && 'rounded-br-md bg-[#d9fdd3] text-[#111b21] dark:bg-[#005c4b] dark:text-[#e9edef]',
                             ia && 'rounded-br-md border border-[color-mix(in_srgb,var(--brand)_18%,transparent)] bg-brand-soft text-fg',
                             automacao && 'rounded-br-md border border-lime-border bg-lime-soft text-fg',
                           )}
@@ -808,7 +836,7 @@ export function InboxAtendimento() {
                             </p>
                           )}
                                                     {!ia && !automacao && minha && (
-                            <p className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold text-white/85">
+                            <p className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold text-[#1f7a57] dark:text-[#7fe0b8]">
                               {/* Mensagens antigas (importadas antes da migration 036) não
                                   têm autor gravado — o histórico do WhatsApp não traz isso.
                                   Caem no rótulo genérico "Equipe" em vez de ficar sem origem. */}
@@ -823,7 +851,7 @@ export function InboxAtendimento() {
                           ) : (
                             <CorpoMensagem texto={m.texto} />
                           )}
-                          <p className={cx('mt-1 text-right text-[10.5px] tabular', minha && !ia && !automacao ? 'text-white/75' : 'text-muted')}>
+                          <p className={cx('mt-1 text-right text-[10.5px] tabular', minha && !ia && !automacao ? 'text-[#667781] dark:text-[#e9edef]/70' : 'text-muted')}>
                             {m.hora ?? ''}
                           </p>
                         </div>

@@ -4,6 +4,12 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { DomainEventsService } from '../../../events/domain-events.service';
 import type { Rede } from './canais.tipos';
 import type { EventoCanal } from './meta-canais.parse';
+import type { CredencialCanal } from './canais.tipos';
+import { Logger } from '@nestjs/common';
+import { CryptoService } from '../../../integrations/crypto.service';
+import { AtribuicaoService } from '../../atribuicao.service';
+import { toqueDeReferralMeta } from '../../atribuicao';
+import { AvatarContatoService } from '../avatar-contato.service';
 
 /** Entrada já normalizada (DM ou comentário), de qualquer rede. */
 export interface EntradaCanal {
@@ -52,9 +58,14 @@ function nomePadrao(e: Pick<EntradaCanal, 'canal' | 'autorId' | 'autorNome'>): s
  */
 @Injectable()
 export class CanaisIngestaoService {
+  private readonly log = new Logger('CanaisIngestao');
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventos: DomainEventsService,
+    private readonly atribuicao?: AtribuicaoService,
+    private readonly avatares?: AvatarContatoService,
+    private readonly crypto?: CryptoService,
   ) {}
 
   /**
@@ -67,11 +78,42 @@ export class CanaisIngestaoService {
     const tenantId = rows[0]?.tenant_id;
     if (!tenantId) return { semTenant: true };
     const conexao = await this.prisma.withTenant(tenantId, (tx) => tx.channelConnection.findFirst({ where: { rede: ev.rede, externalId: ev.contaId }, select: { id: true } }));
-    return this.receber({
+    const r = await this.receber({
       tenantId, rede: ev.rede, canal: ev.canal, tipo: ev.tipo, conexaoId: conexao?.id ?? null,
       autorId: ev.autorId, autorNome: ev.autorNome, texto: ev.texto, idExterno: ev.idExterno, fioId: ev.fioId,
       origem: ev.origem, recebidoEm: ev.recebidoEm,
     });
+    if (!r.duplicada) {
+      // Depois do lead já estar na tela: origem (anúncio ou direto) e foto/nome do perfil.
+      void this.depoisDaEntrada(tenantId, r.conversationId, ev, conexao?.id ?? null).catch((e: Error) => this.log.warn(`pós-entrada (${ev.canal}) falhou: ${e.message.slice(0, 160)}`));
+    }
+    return r;
+  }
+
+  private async depoisDaEntrada(tenantId: string, conversationId: string, ev: EventoCanal, conexaoId: string | null) {
+    const alvo = await this.prisma.withTenant(tenantId, (tx) => tx.conversation.findUnique({ where: { id: conversationId }, select: { contact: { select: { id: true, nome: true, fotoUrl: true, fotoEm: true } } } }));
+    const contato = alvo?.contact;
+    if (!contato) return;
+    if (ev.canal !== 'Facebook') await this.atribuicao?.registrar(tenantId, contato.id, toqueDeReferralMeta(ev.canal, ev.anuncio, ev.recebidoEm));
+    // Foto e nome do Instagram: rota oficial do perfil por IGSID (Messenger Platform,
+    // "Instagram User Profile": GET /{IGSID}?fields=name,username,profile_pic, token da página).
+    // A URL da foto expira em poucos dias: guardamos a IMAGEM (db/066).
+    if (ev.rede !== 'instagram' || ev.tipo !== 'dm' || !conexaoId || !this.crypto || !this.avatares) return;
+    if (contato.fotoUrl?.startsWith('/api/fotos/') && contato.fotoEm && Date.now() - contato.fotoEm.getTime() < 3 * 86400_000) return;
+    const cred = await this.prisma.withTenant(tenantId, (tx) => tx.channelConnection.findUnique({ where: { id: conexaoId }, select: { credentialsEncrypted: true } }));
+    if (!cred?.credentialsEncrypted) return;
+    const token = this.crypto.decryptJson<CredencialCanal>(cred.credentialsEncrypted).accessToken;
+    const url = new URL(`https://graph.facebook.com/${process.env.META_GRAPH_VERSION ?? 'v21.0'}/${encodeURIComponent(ev.autorId)}`);
+    url.searchParams.set('fields', 'name,username,profile_pic');
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000) });
+    const p = (await res.json().catch(() => ({}))) as { name?: string; username?: string; profile_pic?: string; error?: { message?: string } };
+    if (!res.ok || p.error) { this.log.warn(`perfil do Instagram indisponível: ${p.error?.message ?? res.status}`); return; }
+    if (p.profile_pic) await this.avatares.guardarDeUrl(tenantId, contato.id, p.profile_pic, 'instagram');
+    const nome = p.name?.trim() || (p.username ? `@${p.username}` : '');
+    // Só troca o nome provisório ("Contato do Instagram 1234"), nunca um nome que a equipe já editou.
+    if (nome && /^Contato do (Instagram|Messenger)/.test(contato.nome)) {
+      await this.prisma.withTenant(tenantId, (tx) => tx.contact.update({ where: { id: contato.id }, data: { nome: nome.slice(0, 160) } }));
+    }
   }
 
   async receber(e: EntradaCanal): Promise<ResultadoEntrada> {

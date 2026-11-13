@@ -50,7 +50,7 @@ async function bootstrap(): Promise<void> {
   // 2) Upload de fonte de conhecimento (PDF/DOCX em base64, até 15 MB), anexos do chat da NICO e
   //    lote de importação de contatos (até 500 linhas por chamada).
   const parserUpload = json({ limit: '22mb', verify: capturaRaw });
-  app.use(/^\/v1\/(agents\/[0-9a-f-]{36}\/conhecimento|crm\/import\/contacts|nyro\/chat)$/, function uploadConhecimentoJson(req: Parameters<typeof parserUpload>[0], res: Parameters<typeof parserUpload>[1], next: Parameters<typeof parserUpload>[2]) {
+  app.use(/^\/v1\/(agents\/[0-9a-f-]{36}\/conhecimento|crm\/import\/contacts|nyro\/chat|nyro\/chat\/stream)$/, function uploadConhecimentoJson(req: Parameters<typeof parserUpload>[0], res: Parameters<typeof parserUpload>[1], next: Parameters<typeof parserUpload>[2]) {
     parserUpload(req, res, next);
   });
   // 2b) Mídia de saída do Inbox (Q2.5): arquivo em base64, até 15 MB.

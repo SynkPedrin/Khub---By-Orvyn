@@ -249,6 +249,9 @@ export class CrmService {
             tags: c.tags ?? [], ownerId: c.ownerId ?? null, optedOutAt: c.optedOutAt ?? null,
             origem: c.origem ?? (typeof custom.lead_origem === 'string' ? custom.lead_origem : null),
             createdAt: c.createdAt ?? null,
+            // Foto durável (db/066) e fonte do lead (Meta Ads, Google Ads, WhatsApp direto…).
+            fotoUrl: c.fotoUrl ?? null,
+            fonte: c.atribuicao && typeof c.atribuicao === 'object' && !Array.isArray(c.atribuicao) ? ((c.atribuicao as Record<string, unknown>).fonte as string | undefined) ?? null : null,
             etapa: negocio?.stage ? { dealId: negocio.id, stageId: negocio.stage.id, nome: negocio.stage.nome, cor: negocio.stage.cor } : null,
           };
         }),
@@ -281,6 +284,7 @@ export class CrmService {
       return {
         id: c.id,
         nome: c.nome,
+        fotoUrl: c.fotoUrl ?? null,
         email: c.email,
         telefone: c.telefone,
         empresa: c.empresa,

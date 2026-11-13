@@ -1,5 +1,5 @@
 import { StevoApiEventosService } from './stevo-api-eventos.service';
-import { chavesDaMidia, extrairMidia, tipoDeEntrada, type MidiaEntrada } from './midia-entrada';
+import { chavesDaMidia, chavesDoReferral, extrairMidia, extrairReferralWhatsApp, tipoDeEntrada, type MidiaEntrada, type ReferralWhatsApp } from './midia-entrada';
 import { Prisma } from '@prisma/client';
 import { Controller, HttpCode, Logger, Post, Req, UnauthorizedException } from '@nestjs/common';
 import type { Request } from 'express';
@@ -52,6 +52,8 @@ export function payloadMinimo(tipo: string, instanciaId: string, data: Record<st
     isGroup: d.is_group === true,
     pushName: s(d.push_name),
     conteudoTipo: s(d.type),
+    // Anúncio de origem (clique para WhatsApp): base da atribuição do lead (db/066).
+    referral: extrairReferralWhatsApp(d),
     texto: s(d.text),
     timestamp: s(d.timestamp),
     motivo: s(d.reason),
@@ -63,7 +65,7 @@ export function payloadMinimo(tipo: string, instanciaId: string, data: Record<st
     })(),
   };
 }
-export type EventoStevoApi = Omit<ReturnType<typeof payloadMinimo>, 'midia'> & { midia?: MidiaEntrada | null; eventId: string };
+export type EventoStevoApi = Omit<ReturnType<typeof payloadMinimo>, 'midia' | 'referral'> & { midia?: MidiaEntrada | null; referral?: ReferralWhatsApp | null; eventId: string };
 
 /**
  * Webhook de CONTA da Stevo (API de gestão).
@@ -129,6 +131,11 @@ export class StevoApiWebhookController {
 
     const dedupeKey = `stevo_api-${ev.event_id}`;
     const payload: EventoStevoApi = { ...payloadMinimo(ev.type, ev.instance.id, ev.data ?? null), eventId: ev.event_id };
+    if (ev.type === 'message.received') {
+      const chaves = chavesDoReferral(ev.data ?? null);
+      // Diagnóstico do formato do anúncio de origem (não documentado pela Stevo): só NOMES de chaves.
+      if (chaves) this.log.log(`mensagem com contexto de origem ${chaves}`);
+    }
     if (ev.type === 'message.received' && tipoDeEntrada(payload.conteudoTipo)) {
       // Diagnóstico do formato de mídia (a doc da Stevo não lista os campos): só NOMES de chaves.
       this.log.log(`mídia recebida (${payload.conteudoTipo}) ${chavesDaMidia(ev.data ?? null)}`);

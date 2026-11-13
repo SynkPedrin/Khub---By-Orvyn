@@ -8,13 +8,14 @@ import { settingsApi, type NotificationItem } from '@/lib/settings';
 import { useAuth } from '@/lib/auth';
 import { useRealtime } from '@/lib/realtime';
 
-const ICONE: Record<NotificationItem['tipo'], IconName> = { mensagem: 'inbox', integracao: 'alert', mencao: 'note', disparo_aprovacao: 'send', avaliacao_negativa: 'star' };
+const ICONE: Record<NotificationItem['tipo'], IconName> = { mensagem: 'inbox', integracao: 'alert', mencao: 'note', disparo_aprovacao: 'send', avaliacao_negativa: 'star', nico: 'sparkles' };
 const TOM: Record<NotificationItem['tipo'], string> = {
   mensagem: 'bg-brand-soft text-brand',
   integracao: 'bg-warning-soft text-warning',
   mencao: 'bg-warning-soft text-warning',
   disparo_aprovacao: 'bg-brand-soft text-brand',
   avaliacao_negativa: 'bg-warning-soft text-warning',
+  nico: 'bg-brand-soft text-brand',
 };
 
 function quando(iso: string): string {

@@ -305,7 +305,7 @@ export class IntelligenceCoreService {
     let blocoAgenda = '';
     if (permitidas.has('ver_agendamentos') && e.contactId && this.llm.configured()) {
       const agora = new Date();
-      // "sim" para a proposta do agente ("…sexta (13/11) às 9h, confirma?"):
+      // "sim" para a proposta da Ritinha ("…sexta (13/11) às 9h, confirma?"):
       // dia e hora vêm da última fala da empresa.
       const falaEmpresa = ultimaFalaDaEmpresa(e.historico);
       const aceitouProposta = confirmou(ultima) && !afirmaAgendamento(falaEmpresa) && !!horaEscolhida(falaEmpresa) && !!detectarPedidoAgenda(falaEmpresa, agora, cfg.horario.fuso, 'agendamento');

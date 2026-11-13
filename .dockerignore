@@ -11,8 +11,3 @@ node_modules
 .env.*
 !.env.example
 apps/web/.next
-
-**/.next-*
-**/.env*
-docs/revenue-audit/evidence
-**/scripts/operar

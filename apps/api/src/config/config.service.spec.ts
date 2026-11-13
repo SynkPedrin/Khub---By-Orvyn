@@ -4,7 +4,7 @@ import { ConfigRequiredException, ConfigService, type Provider } from './config.
  * Canário do Brief §2: com TODA credencial de terceiro ausente, nada explode —
  * o sistema sabe dizer o que falta, e só a chamada externa fica bloqueada.
  */
-const TERCEIROS: Provider[] = ['stevo', 'stevo_api', 'stevo_webhook', 'evolution', 'meta', 'google_ads', 'tiktok', 'stripe', 'voyage', 'anthropic', 'email', 'oauth_google', 'oauth_github', 'google_calendar', 'integrations_crypto', 'storage', 'youtube'];
+const TERCEIROS: Provider[] = ['stevo', 'stevo_api', 'stevo_webhook', 'evolution', 'meta', 'google_ads', 'tiktok', 'stripe', 'voyage', 'anthropic', 'email', 'oauth_google', 'oauth_github', 'google_calendar', 'integrations_crypto', 'storage', 'youtube', 'firecrawl', 'google_presenca'];
 
 describe('ConfigService (gating por credencial)', () => {
   const backup = { ...process.env };

@@ -5,7 +5,9 @@ import { MessagesService } from './messages.service';
 import { AvatarContatoService } from './avatar-contato.service';
 import { StorageService } from '../../common/storage.service';
 import { RealtimeService } from '../../realtime/realtime.service';
-import { LIMITE_INLINE, ROTULO_MIDIA, type MidiaEntrada } from './midia-entrada';
+import { LIMITE_INLINE, ROTULO_MIDIA, type MidiaEntrada, type ReferralWhatsApp } from './midia-entrada';
+import { AtribuicaoService } from '../atribuicao.service';
+import { toqueDeReferralWhatsApp } from '../atribuicao';
 import type { EventoStevoApi } from './stevo-api-webhook.controller';
 
 /** JID do WhatsApp (`5511999999999@s.whatsapp.net`, `…:12@…`) → só dígitos. */
@@ -38,6 +40,7 @@ export class StevoApiEventosService {
     private readonly avatares?: AvatarContatoService,
     private readonly storage?: StorageService,
     private readonly realtime?: RealtimeService,
+    private readonly atribuicao?: AtribuicaoService,
   ) {}
 
   async processar(tenantId: string, ev: EventoStevoApi): Promise<DesfechoEvento> {
@@ -83,21 +86,23 @@ export class StevoApiEventosService {
     });
     if ('conversationId' in r && r.conversationId) {
       // Depois da mensagem já estar na tela: foto do contato e mídia, sem atrasar o texto.
-      void this.depoisDaEntrada(tenantId, r.conversationId, texto.slice(0, 4000), midia).catch((e: Error) => this.log.warn(`pós-entrada falhou: ${e.message.slice(0, 160)}`));
+      void this.depoisDaEntrada(tenantId, r.conversationId, texto.slice(0, 4000), midia, ev.referral ?? null).catch((e: Error) => this.log.warn(`pós-entrada falhou: ${e.message.slice(0, 160)}`));
     }
     return 'entrada';
   }
 
   /** Foto de perfil (se ausente/vencida) e mídia recebida guardada no anexo da mensagem. */
-  private async depoisDaEntrada(tenantId: string, conversationId: string, texto: string, midia: MidiaEntrada | null) {
+  private async depoisDaEntrada(tenantId: string, conversationId: string, texto: string, midia: MidiaEntrada | null, referral: ReferralWhatsApp | null = null) {
     const alvo = await this.prisma.withTenant(tenantId, async (tx) => {
-      const conv = await tx.conversation.findUnique({ where: { id: conversationId }, select: { contact: { select: { id: true, fotoEm: true } } } });
+      const conv = await tx.conversation.findUnique({ where: { id: conversationId }, select: { contact: { select: { id: true, fotoEm: true, fotoUrl: true } } } });
       const msg = midia
         ? await tx.message.findFirst({ where: { conversationId, autorTipo: 'contato', corpo: texto, anexo: { equals: Prisma.DbNull } }, orderBy: { createdAt: 'desc' }, select: { id: true } })
         : null;
       return { contato: conv?.contact ?? null, msgId: msg?.id ?? null };
     });
     this.avatares?.revalidarSeVencido(tenantId, alvo.contato);
+    // Origem do lead: anúncio (clique para WhatsApp) ou contato direto (só se ainda sem origem).
+    if (alvo.contato) await this.atribuicao?.registrar(tenantId, alvo.contato.id, toqueDeReferralWhatsApp(referral));
     if (!midia || !alvo.msgId) return;
 
     const bruto = await this.baixar(midia);

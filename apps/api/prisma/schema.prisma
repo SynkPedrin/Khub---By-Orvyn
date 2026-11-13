@@ -413,6 +413,8 @@ model Contact {
   /// Base legal/consentimento LGPD (RegrasNegocio §5). '{}' = não registrado
   /// ainda — nunca retroage um consentimento que não foi de fato dado.
   consentimento   Json           @default("{}")
+  /// Origem do lead (db/066): { fonte, canal, adId, campanha, criativo, cliqueId, confianca, primeiroToqueEm, ultimoToque }.
+  atribuicao      Json           @default("{}")
   ownerId         String?        @map("owner_id") @db.Uuid
   proximaAcaoAt   DateTime?      @map("proxima_acao_at") @db.Timestamptz(6)
   proximaAcaoTipo String?        @map("proxima_acao_tipo")
@@ -1911,4 +1913,67 @@ model NicoRelatorio {
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@map("nico_relatorios")
+}
+
+/// Foto de perfil durável do contato (db/066). Bytes da imagem: a URL do
+/// WhatsApp/Instagram expira em horas/dias; a API serve estes bytes.
+model ContactFoto {
+  contactId    String   @id @map("contact_id") @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  mime         String
+  bytes        Bytes
+  fonte        String
+  atualizadaEm DateTime @default(now()) @map("atualizada_em") @db.Timestamptz(6)
+
+  @@map("contact_fotos")
+}
+
+/// Fila de publicações das redes sociais (db/068). Só o worker publica; toda
+/// linha nasce confirmada por uma pessoa (`confirmadoEm`).
+model RedesPublicacao {
+  id                   String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId             String    @map("tenant_id") @db.Uuid
+  conexaoId            String    @map("conexao_id") @db.Uuid
+  rede                 String
+  formato              String
+  titulo               String?
+  legenda              String    @default("")
+  midiaUrl             String    @map("midia_url")
+  privacidade          String?
+  opcoes               Json      @default("{}")
+  agendadoPara         DateTime  @map("agendado_para") @db.Timestamptz(6)
+  status               String    @default("agendado")
+  tentativas           Int       @default(0)
+  externoId            String?   @map("externo_id")
+  postId               String?   @map("post_id")
+  permalink            String?
+  erro                 String?
+  proximaVerificacaoEm DateTime? @map("proxima_verificacao_em") @db.Timestamptz(6)
+  publicadoEm          DateTime? @map("publicado_em") @db.Timestamptz(6)
+  confirmadoPor        String?   @map("confirmado_por") @db.Uuid
+  confirmadoEm         DateTime  @map("confirmado_em") @db.Timestamptz(6)
+  criadoPor            String?   @map("criado_por") @db.Uuid
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@index([tenantId, createdAt(sort: Desc)], map: "idx_redes_pub_tenant")
+  @@map("redes_publicacoes")
+}
+
+/// Foto diária da conta de rede social (db/068): base do gráfico de crescimento.
+model RedesSnapshot {
+  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  conexaoId     String   @map("conexao_id") @db.Uuid
+  rede          String
+  dia           DateTime @db.Date
+  seguidores    BigInt?
+  publicacoes   BigInt?
+  visualizacoes BigInt?
+  curtidas      BigInt?
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([conexaoId, dia], map: "redes_snap_dia_uq")
+  @@map("redes_snapshots")
 }

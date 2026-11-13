@@ -78,3 +78,29 @@ describe('Guardrails (Sprint F) — camada 2, a que vale', () => {
     expect(validarResposta('Vamos garantir 3x mais leads este mês!', 'Agência de marketing').ok).toBe(true);
   });
 });
+
+describe('Guardrail mais inteligente (copy e conversa não somem por uma frase)', () => {
+  const clinica = (t: string) => validarResposta(t, 'Clínica médica');
+
+  it('citar a frase proibida como exemplo do que EVITAR não é promessa', () => {
+    expect(clinica('Evite escrever "cura garantida" ou "100% de sucesso" no anúncio: o CFM veda.').ok).toBe(true);
+    expect(clinica('❌ "Somos a melhor clínica da região" (vedado pelo CFM)').ok).toBe(true);
+  });
+
+  it('barra só o trecho problemático e preserva o resto da resposta', () => {
+    const texto = ['Segue a copy do anúncio, pronta para publicar:', 'Avaliação gratuita com a equipe, agende pelo WhatsApp.', 'Somos a melhor clínica da região!', 'Atendimento de segunda a sábado, com horário marcado, em ambiente confortável.'].join('\n');
+    const r = clinica(texto);
+    expect(r.ok).toBe(false);
+    expect(r.regra).toBe('cfm.superlativo');
+    expect(r.saneado).toContain('Avaliação gratuita com a equipe');
+    expect(r.saneado).toContain('trecho removido por compliance');
+    expect(r.saneado).not.toContain('melhor clínica');
+    expect(r.substituto).toBeDefined(); // o texto fixo continua disponível quando não sobra conteúdo útil
+  });
+
+  it('quando só sobra o trecho barrado, não há versão saneada (cai no texto fixo)', () => {
+    const r = clinica('É cura garantida, sem risco algum.');
+    expect(r.ok).toBe(false);
+    expect(r.saneado).toBeUndefined();
+  });
+});

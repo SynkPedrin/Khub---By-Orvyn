@@ -17,8 +17,8 @@ async function forward(req: NextRequest, path: string[]) {
     headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey ?? at}`, ...(req.headers.get('idempotency-key') ? {'idempotency-key': req.headers.get('idempotency-key')!} : {}) },
     cache: 'no-store',
     // Análise de criativo com visão (imagem/frames) leva ~1 min num modelo
-    // local; o resto da API segue com 25 s.
-    signal: AbortSignal.timeout(path.join('/') === 'ads/simulador/analisar' ? 180_000 : 25_000),
+    // local, e o chat da NICO roda várias tools por resposta; o resto da API segue com 25 s.
+    signal: AbortSignal.timeout(['ads/simulador/analisar', 'nyro/chat'].includes(path.join('/')) ? 180_000 : 25_000),
   };
   if (req.method !== 'GET' && req.method !== 'HEAD') init.body = await req.text();
   try {

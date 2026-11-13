@@ -31,6 +31,10 @@ export interface EventoCanal {
   fioId?: string;
   /** Comentário: post/mídia de onde veio. */
   origem?: { postId?: string; midiaId?: string; tipoMidia?: string };
+  /** DM vinda de anúncio (Click-to-Messenger/Instagram): `message.referral` da doc oficial. */
+  anuncio?: { adId?: string; ref?: string; titulo?: string; postId?: string };
+  /** Anexos da DM (`message.attachments[].payload.url`). */
+  anexos?: { tipo: string; url: string }[];
   recebidoEm: Date;
 }
 
@@ -45,7 +49,7 @@ function quando(v: unknown): Date {
   return new Date(n < 1e12 ? n * 1000 : n);
 }
 
-/** Extrai DMs e comentários. Ignora eco (`is_echo`: enviado pela própria conta), leitura, reação e mídia sem texto. */
+/** Extrai DMs (texto e/ou mídia, com anúncio de origem) e comentários. Ignora eco (`is_echo`: enviado pela própria conta), leitura e reação. */
 export function eventosDeConversa(body: unknown): EventoCanal[] {
   const b = obj(body);
   if (!b) return [];
@@ -63,10 +67,24 @@ export function eventosDeConversa(body: unknown): EventoCanal[] {
       const msg = obj(ev?.message);
       const autorId = str(obj(ev?.sender)?.id);
       const mid = str(msg?.mid);
-      const texto = str(msg?.text);
-      if (!ev || !msg || !autorId || !mid || !texto) continue;
+      if (!ev || !msg || !autorId || !mid) continue;
       if (msg.is_echo === true || autorId === contaId) continue;
-      out.push({ rede, canal: rede === 'instagram' ? 'Instagram' : 'Messenger', tipo: 'dm', contaId, autorId, texto, idExterno: mid, recebidoEm: quando(ev.timestamp) });
+      // Mídia: imagem, vídeo, áudio, figurinha, reel/post compartilhado. Vira linha
+      // "📎 url" (mesmo formato do histórico importado), que a tela exibe como mídia.
+      const anexos = (Array.isArray(msg.attachments) ? msg.attachments : [])
+        .map((a) => { const at = obj(a); const url = str(obj(at?.payload)?.url); return at && url && /^https:\/\//.test(url) ? { tipo: str(at.type) ?? 'file', url } : null; })
+        .filter((a): a is { tipo: string; url: string } => !!a);
+      const textoBase = str(msg.text);
+      const texto = [textoBase, ...anexos.map((a) => `📎 ${a.url}`)].filter(Boolean).join('\n');
+      if (!texto) continue;
+      const ref = obj(msg.referral) ?? obj(ev.referral);
+      const ads = obj(ref?.ads_context_data);
+      const anuncio = ref ? { adId: str(ref.ad_id), ref: str(ref.ref), titulo: str(ads?.ad_title), postId: str(ads?.post_id) } : undefined;
+      out.push({
+        rede, canal: rede === 'instagram' ? 'Instagram' : 'Messenger', tipo: 'dm', contaId, autorId, texto, idExterno: mid, recebidoEm: quando(ev.timestamp),
+        ...(anexos.length ? { anexos } : {}),
+        ...(anuncio && (anuncio.adId || anuncio.ref) ? { anuncio } : {}),
+      });
     }
 
     for (const c of Array.isArray(entry.changes) ? entry.changes : []) {

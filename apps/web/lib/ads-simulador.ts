@@ -79,6 +79,16 @@ export const simulador = {
     req<AnaliseIa>('analisar', { method: 'POST', body: JSON.stringify(corpo) }),
 };
 
+export interface SimulacaoSalvaApi { id: string; nome: string; entrada: EntradaSimulacao; resumo: Record<string, unknown>; salvoEm: string }
+
+/** Simulações salvas na subconta (db/067). A tela cai no localStorage se a API falhar. */
+export const simuladorSalvas = {
+  listar: () => req<SimulacaoSalvaApi[]>('simulacoes'),
+  salvar: (s: { id?: string; nome: string; entrada: EntradaSimulacao; resumo: Record<string, unknown> }) =>
+    req<SimulacaoSalvaApi>('simulacoes', { method: 'POST', body: JSON.stringify(s) }),
+  remover: (id: string) => req<{ ok: true }>(`simulacoes/${id}`, { method: 'DELETE' }),
+};
+
 export const OBJETIVO_ROTULO: Record<Objetivo, string> = {
   mensagens: 'Mensagens (WhatsApp/Direct)',
   leads: 'Cadastros (formulário)',

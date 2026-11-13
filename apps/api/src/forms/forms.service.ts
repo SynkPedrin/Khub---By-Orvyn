@@ -1,3 +1,5 @@
+import { AtribuicaoService } from '../crm/atribuicao.service';
+import { toqueDeUtm } from '../crm/atribuicao';
 import { BadRequestException, ConflictException, HttpException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -88,6 +90,7 @@ export class FormsService {
     private readonly camposCustom: CustomFieldsService,
     private readonly limite: PublicRateLimiter,
     private readonly redis: RedisService,
+    private readonly atribuicao?: AtribuicaoService,
   ) {}
 
   private view(f: FormRow, total = 0): FormView {
@@ -303,6 +306,8 @@ export class FormsService {
 
     const submissionId = randomUUID();
     const utm = extrairUtm(corpo);
+    // Origem do lead (db/066): gclid/fbclid/ttclid confirmam o anúncio; UTM sem id de clique fica 'provável'.
+    void this.atribuicao?.registrar(tenantId, contato.contactId, toqueDeUtm(utm));
     await this.prisma.withTenant(tenantId, async (tx) => {
       await tx.formSubmission.create({
         data: {

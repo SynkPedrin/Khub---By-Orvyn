@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/lib/api-error';
-import { ANEXO_EXTENSOES, ANEXO_MAX_BYTES, ANEXO_MAX_QTD, nyro, type AnexoEnvio, type Aprovacao, type PassoNyro, type StatusNyro } from '@/lib/nyro';
+import { ANEXO_EXTENSOES, ANEXO_MAX_BYTES, ANEXO_MAX_QTD, nyro, type AnexoEnvio, type Aprovacao, type EventoNyro, type PassoNyro, type PlanoNyro, type StatusNyro } from '@/lib/nyro';
 
 const PEDIDO_PADRAO_ANEXO = 'Leia o arquivo anexado, me diga o que achou e o que eu faço com isso.';
 
@@ -24,6 +24,9 @@ export interface Bolha {
   aprovacoes?: Aprovacao[];
   /** Nomes dos arquivos que o usuário mandou nesta mensagem. */
   anexos?: string[];
+  /** Plano de trabalho que a NICO executou nesta resposta. */
+  plano?: PlanoNyro;
+  relatorioId?: string;
 }
 
 /**
@@ -39,6 +42,10 @@ export function useNyroChat(ativo = true) {
   const [conversationId, setConversationId] = useState<string | undefined>();
   const [erro, setErro] = useState('');
   const [anexos, setAnexos] = useState<AnexoEnvio[]>([]);
+  /** Texto da resposta chegando AGORA (streaming). Vazio = ainda trabalhando/pensando. */
+  const [aoVivo, setAoVivo] = useState('');
+  const [plano, setPlano] = useState<PlanoNyro | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => { if (ativo && !status) nyro.status().then(setStatus).catch(() => undefined); }, [ativo, status]);
 
@@ -68,19 +75,34 @@ export function useNyroChat(ativo = true) {
     setBolhas((b) => [...b, { papel: 'user', texto: t, anexos: enviados.map((x) => x.nome) }]);
     setPensando(true);
     setPassos([]);
+    setAoVivo('');
+    setPlano(null);
+    abortRef.current = new AbortController();
+    const aoEvento = (e: EventoNyro) => {
+      if (e.tipo === 'conversa') setConversationId(e.conversationId);
+      else if (e.tipo === 'passo') { if (e.passo.tipo !== 'texto') setPassos((p) => [...p, e.passo]); }
+      else if (e.tipo === 'plano') setPlano(e.plano);
+      else if (e.tipo === 'texto') setAoVivo((v) => v + e.delta);
+      else if (e.tipo === 'limpar') setAoVivo('');
+    };
     try {
-      const r = await nyro.chat(t, conversationId, enviados);
+      const r = await nyro.chatStream(t, conversationId, enviados, aoEvento, abortRef.current.signal);
       setConversationId(r.conversationId);
-      setPassos(r.passos.filter((p) => p.tipo !== 'texto'));
-      setBolhas((b) => [...b, { papel: 'assistant', texto: r.texto, agente: r.agente, fontes: r.fontes, guardrail: r.guardrail, aprovacoes: r.aprovacoes }]);
+      setBolhas((b) => [...b, { papel: 'assistant', texto: r.texto, agente: r.agente, fontes: r.fontes, guardrail: r.guardrail, aprovacoes: r.aprovacoes, plano: r.plano, relatorioId: r.relatorioId }]);
     } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return; // o usuário parou
       const cr = e instanceof ApiError ? e.configRequired : null;
       if (cr) setStatus((s) => ({ configurada: false, missing: cr.missing, capacidades: s?.capacidades ?? [] }));
-      else setErro(e instanceof ApiError && e.status === 400 ? e.message : 'Não consegui falar com a NICO agora.');
+      else setErro(e instanceof ApiError && e.status >= 400 && e.status < 500 ? e.message : 'Não consegui falar com a NICO agora.');
     } finally {
       setPensando(false);
+      setAoVivo('');
+      setPlano(null);
+      abortRef.current = null;
     }
   }, [texto, pensando, conversationId, anexos]);
+
+  const parar = useCallback(() => abortRef.current?.abort(), []);
 
   const decidir = useCallback(async (a: Aprovacao, aprovar: boolean) => {
     try {
@@ -94,5 +116,5 @@ export function useNyroChat(ativo = true) {
     }
   }, []);
 
-  return { status, bolhas, passos, texto, setTexto, pensando, erro, enviar, decidir, anexos, anexar, removerAnexo };
+  return { status, bolhas, passos, texto, setTexto, pensando, erro, enviar, decidir, anexos, anexar, removerAnexo, aoVivo, plano, parar };
 }

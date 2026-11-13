@@ -12,7 +12,7 @@ import { tamanhoLegivel, type AnexoMensagem } from '@/lib/inbox';
  */
 export function AnexoBolha({ anexo, claro }: { anexo: AnexoMensagem; claro: boolean }) {
   const [imagemFalhou, setImagemFalhou] = useState(false);
-  const tom = claro ? 'text-white/80' : 'text-muted';
+  const tom = claro ? 'text-[#54656f] dark:text-[#e9edef]/80' : 'text-muted';
 
   if (anexo.figurinha && anexo.url && !imagemFalhou) {
     // Figurinha do WhatsApp: fundo transparente, tamanho fixo, sem moldura.
@@ -33,7 +33,7 @@ export function AnexoBolha({ anexo, claro }: { anexo: AnexoMensagem; claro: bool
 
   const conteudo = (
     <>
-      <span className={cx('grid h-9 w-9 shrink-0 place-items-center rounded-lg', claro ? 'bg-white/15' : 'bg-[var(--fill-4)]')}>
+      <span className={cx('grid h-9 w-9 shrink-0 place-items-center rounded-lg', claro ? 'bg-black/5 dark:bg-white/15' : 'bg-[var(--fill-4)]')}>
         <Icon name={anexo.tipo === 'audio' ? 'play' : 'file'} size={16} />
       </span>
       <span className="min-w-0 flex-1">
@@ -47,10 +47,10 @@ export function AnexoBolha({ anexo, claro }: { anexo: AnexoMensagem; claro: bool
     </>
   );
   return anexo.url ? (
-    <a href={anexo.url} target="_blank" rel="noreferrer" download={anexo.nome} className={cx('mb-1 flex items-center gap-2.5 rounded-xl px-2.5 py-2', claro ? 'bg-white/10 hover:bg-white/15' : 'border border-line hover:bg-[var(--fill-4)]')}>
+    <a href={anexo.url} target="_blank" rel="noreferrer" download={anexo.nome} className={cx('mb-1 flex items-center gap-2.5 rounded-xl px-2.5 py-2', claro ? 'bg-black/5 hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/15' : 'border border-line hover:bg-[var(--fill-4)]')}>
       {conteudo}
     </a>
   ) : (
-    <div className={cx('mb-1 flex items-center gap-2.5 rounded-xl px-2.5 py-2', claro ? 'bg-white/10' : 'border border-line')}>{conteudo}</div>
+    <div className={cx('mb-1 flex items-center gap-2.5 rounded-xl px-2.5 py-2', claro ? 'bg-black/5 dark:bg-white/10' : 'border border-line')}>{conteudo}</div>
   );
 }

@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Icon } from '../icons';
 import { ApiError } from '@/lib/api-error';
 import {
-  OBJETIVO_ROTULO, POSICIONAMENTO_ROTULO, PUBLICOS, simulador,
+  OBJETIVO_ROTULO, POSICIONAMENTO_ROTULO, PUBLICOS, simulador, simuladorSalvas,
   type CriativoSim, type EntradaSimulacao, type Objetivo, type Posicionamento, type ResultadoSimulacao,
 } from '@/lib/ads-simulador';
 import { MetaLogoAnimado } from '../ads/MetaLogoAnimado';
@@ -23,8 +23,9 @@ import type { Midia } from '../ads/simulador/midia';
  * provável, teste A/B e curva de verba. Calibra com o histórico real da conta
  * quando a Meta está conectada. A IA analisa texto e visual do criativo.
  *
- * As simulações salvas ficam neste navegador (rascunho do operador, não dado
- * do negócio). A mídia nunca sai do navegador, só os frames da análise.
+ * As simulações salvas ficam na subconta (db/067, via API); o localStorage
+ * vira espelho offline. A mídia nunca sai do navegador, só os frames da
+ * análise.
  */
 
 interface CriativoUi { id: string; c: CriativoSim; midia: Midia | null }
@@ -50,6 +51,21 @@ function lerSalvas(): Salva[] {
 }
 function gravarSalvas(l: Salva[]) {
   try { localStorage.setItem(CHAVE, JSON.stringify(l)); } catch { /* navegador sem storage: segue sem salvar */ }
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function daApi(s: import('@/lib/ads-simulador').SimulacaoSalvaApi): Salva {
+  const r = s.resumo as Partial<Salva['resumo'] & { negocio?: string; pagina?: string }>;
+  return {
+    id: s.id,
+    nome: s.nome,
+    entrada: s.entrada,
+    negocio: typeof r.negocio === 'string' ? r.negocio : '',
+    pagina: typeof r.pagina === 'string' ? r.pagina : '',
+    resumo: { resultados: Number(r.resultados) || 0, cpr: Number(r.cpr) || 0, nome: String(r.nome ?? ''), investimento: Number(r.investimento) || 0 },
+    salvoEm: s.salvoEm,
+  };
 }
 
 function Rotulo({ children }: { children: React.ReactNode }) {
@@ -103,7 +119,13 @@ export function AdsSimulador() {
   const resultadoRef = useRef<HTMLDivElement>(null);
   const seq = useRef(0);
 
-  useEffect(() => { setSalvas(lerSalvas()); }, []);
+  useEffect(() => {
+    let vivo = true;
+    simuladorSalvas.listar()
+      .then((l) => { if (!vivo) return; const m = l.map(daApi); setSalvas(m); gravarSalvas(m); })
+      .catch(() => { if (vivo) setSalvas(lerSalvas()); });
+    return () => { vivo = false; };
+  }, []);
 
   // Libera os object URLs da mídia ao sair.
   const midiasRef = useRef<CriativoUi[]>(criativos);
@@ -190,12 +212,23 @@ export function AdsSimulador() {
     setIdAtual(id);
     setSalvoOk(true);
     setTimeout(() => setSalvoOk(false), 1600);
+    void simuladorSalvas.salvar({ ...(UUID_RE.test(id) ? { id } : {}), nome: item.nome, entrada, resumo: { ...item.resumo, negocio, pagina } })
+      .then((s) => {
+        setIdAtual(s.id);
+        setSalvas((l) => {
+          const m = [daApi(s), ...l.filter((x) => x.id !== id && x.id !== s.id)].slice(0, 50);
+          gravarSalvas(m);
+          return m;
+        });
+      })
+      .catch(() => { /* API fora: a cópia do navegador segue valendo */ });
   };
 
   const remover = (id: string) => {
     const lista = salvas.filter((s) => s.id !== id);
     setSalvas(lista);
     gravarSalvas(lista);
+    if (UUID_RE.test(id)) void simuladorSalvas.remover(id).catch(() => { /* já some na próxima carga */ });
   };
 
   const setCamp = (p: Partial<typeof campanha>) => setCampanha((c) => ({ ...c, ...p }));
@@ -322,7 +355,7 @@ export function AdsSimulador() {
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-3">
-                  <div><Rotulo>Nome da página</Rotulo><input className="input" value={pagina} onChange={(e) => setPagina(e.target.value)} placeholder="Minha Loja" /></div>
+                  <div><Rotulo>Nome da página</Rotulo><input className="input" value={pagina} onChange={(e) => setPagina(e.target.value)} placeholder="Studio da Beleza" /></div>
                   <div><Rotulo>Negócio (para a IA)</Rotulo><input className="input" value={negocio} maxLength={200} onChange={(e) => setNegocio(e.target.value)} placeholder="Clínica de estética" /></div>
                 </div>
                 <button type="button" onClick={() => setAvancado((v) => !v)} className="flex items-center gap-1 text-xs font-semibold text-muted hover:text-fg">

@@ -69,3 +69,37 @@ export const ROTULO_MIDIA: Record<TipoEntrada, string> = {
   video: '🎬 Vídeo',
   documento: '📎 Documento',
 };
+
+/**
+ * Anúncio de origem (Click-to-WhatsApp). Nomes da WhatsApp Cloud API
+ * (`messages[].referral`: source_id, source_type, source_url, headline,
+ * ctwa_clid). A Stevo não documenta o próprio formato: aceitamos `referral`
+ * na raiz, em `context` ou em `ad`, e o webhook loga só os NOMES das chaves.
+ */
+export interface ReferralWhatsApp { adId?: string; cliqueId?: string; titulo?: string; url?: string }
+export function extrairReferralWhatsApp(data: Record<string, unknown> | null | undefined): ReferralWhatsApp | null {
+  const d = data ?? {};
+  const o = (v: unknown) => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
+  const r = o(d.referral) ?? o(o(d.context)?.referral) ?? o(d.ad) ?? o(o(d.context)?.external_ad_reply);
+  if (!r) return null;
+  const tipo = s(r.source_type) ?? s(r.sourceType);
+  const adId = s(r.source_id) ?? s(r.sourceId) ?? s(r.ad_id) ?? s(r.adId);
+  const out: ReferralWhatsApp = {
+    adId: adId && /^\d{5,30}$/.test(adId) && (!tipo || /ad/i.test(tipo)) ? adId : undefined,
+    cliqueId: s(r.ctwa_clid) ?? s(r.ctwaClid) ?? undefined,
+    titulo: s(r.headline) ?? s(r.title) ?? undefined,
+    url: s(r.source_url) ?? s(r.sourceUrl) ?? undefined,
+  };
+  return out.adId || out.cliqueId || out.titulo || out.url ? out : null;
+}
+
+export function chavesDoReferral(data: Record<string, unknown> | null | undefined): string | null {
+  const d = data ?? {};
+  for (const k of ['referral', 'ad']) {
+    const v = d[k];
+    if (v && typeof v === 'object') return `${k}:[${Object.keys(v as object).sort().join(',')}]`;
+  }
+  const ctx = d.context && typeof d.context === 'object' ? (d.context as Record<string, unknown>) : null;
+  if (ctx) return `context:[${Object.keys(ctx).sort().join(',')}]`;
+  return null;
+}

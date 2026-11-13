@@ -1,7 +1,10 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpException, Logger, Param, ParseUUIDPipe, Post, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsBoolean, IsOptional, IsString, IsUUID, MaxLength, MinLength, ValidateNested } from 'class-validator';
 import { NyroService } from './nyro.service';
+import { NicoInsightsService } from './insights.service';
+import { NicoAnalisesService } from './analises.service';
 import { CurrentUser, TenantId, type AuthUser } from '../auth/decorators';
 import { CATALOGO_PUBLICO } from './tools-publicas';
 import { MAX_ANEXOS } from './anexos';
@@ -26,7 +29,8 @@ class DecisaoDto {
  */
 @Controller('nyro')
 export class NyroController {
-  constructor(private readonly nyro: NyroService) {}
+  private readonly log = new Logger('Nyro');
+  constructor(private readonly nyro: NyroService, private readonly insights: NicoInsightsService, private readonly analises: NicoAnalisesService) {}
 
   /** Estado da Nyro para a UI decidir entre chat e "Conectar Claude". */
   @Get('status')
@@ -42,6 +46,61 @@ export class NyroController {
   @HttpCode(200)
   chat(@TenantId() t: string, @CurrentUser() u: AuthUser, @Body() dto: ChatDto) {
     return this.nyro.conversar({ tenantId: t, identityId: u.identityId }, dto.texto, dto.conversationId, dto.anexos);
+  }
+
+  /**
+   * Chat com streaming (SSE): passos, plano e texto chegam enquanto a NICO
+   * trabalha. Eventos: conversa | passo | plano | texto | limpar | final | erro.
+   */
+  @Post('chat/stream')
+  async chatStream(@TenantId() t: string, @CurrentUser() u: AuthUser, @Body() dto: ChatDto, @Res() res: Response) {
+    this.nyro.exigirPronta();
+    res.status(200).set({ 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+    res.flushHeaders();
+    let aberto = true;
+    res.on('close', () => { aberto = false; });
+    const enviar = (e: unknown) => { if (aberto) res.write(`data: ${JSON.stringify(e)}\n\n`); };
+    const batida = setInterval(() => { if (aberto) res.write(': ping\n\n'); }, 15_000);
+    try {
+      await this.nyro.conversar({ tenantId: t, identityId: u.identityId }, dto.texto, dto.conversationId, dto.anexos, { emitir: enviar });
+    } catch (e) {
+      // 4xx (ex.: anexo inválido) tem mensagem própria para o usuário; o resto não vaza detalhe interno
+      const status = e instanceof HttpException ? e.getStatus() : 500;
+      if (status >= 500) this.log.error(`chat/stream falhou: ${(e as Error).message}`);
+      enviar({ tipo: 'erro', status, mensagem: status < 500 && e instanceof HttpException ? e.message : 'Não consegui falar com a NICO agora.' });
+    } finally {
+      clearInterval(batida);
+      res.end();
+    }
+  }
+
+  /** Alertas que a NICO notou sozinha (regras, sem LLM): campanhas, cobranças, automações, conversas paradas. */
+  @Get('insights')
+  insightsDaConta(@TenantId() t: string) {
+    return this.insights.listar(t);
+  }
+
+  /** Relatórios que a NICO gerou (chat e rotinas): lista, leitura e, no front, download .md/PDF. */
+  @Get('relatorios')
+  relatorios(@TenantId() t: string) {
+    return this.analises.listarRelatorios(t);
+  }
+
+  @Get('relatorios/:id')
+  relatorio(@TenantId() t: string, @Param('id', ParseUUIDPipe) id: string) {
+    return this.analises.obterRelatorio(t, id);
+  }
+
+  /** Rotinas agendadas da NICO (o que ela faz sozinha). */
+  @Get('rotinas')
+  rotinas(@TenantId() t: string) {
+    return this.analises.listarAgendamentos(t);
+  }
+
+  @Post('rotinas/:id/pausar')
+  @HttpCode(200)
+  pausarRotina(@TenantId() t: string, @Param('id', ParseUUIDPipe) id: string) {
+    return this.analises.cancelarAgendamento(t, id);
   }
 
   @Get('conversas')

@@ -23,7 +23,7 @@ export interface ConviteEntregue {
 export interface Invite { id: string; email: string; role: string; modulos: string[] | null; expiresAt: string; createdAt: string }
 export interface AuditRow { id: string; actorType: string; actorId: string | null; acao: string; entidade: string | null; entidadeId: string | null; ts: string }
 
-export interface NotificationItem { id: string; tipo: 'mensagem' | 'integracao' | 'mencao' | 'disparo_aprovacao' | 'avaliacao_negativa'; titulo: string; detalhe: string; url: string; ts: string; novo: boolean }
+export interface NotificationItem { id: string; tipo: 'mensagem' | 'integracao' | 'mencao' | 'disparo_aprovacao' | 'avaliacao_negativa' | 'nico'; titulo: string; detalhe: string; url: string; ts: string; novo: boolean }
 export interface Tag { id: string; name: string; color: string; descricao: string; usos: number; createdAt: string }
 export interface ApiKey { id: string; name: string; keyPrefix: string; scopes: string[]; lastUsedAt: string | null; revokedAt: string | null; createdAt: string }
 /** A chave em claro (`key`) só existe na resposta da criação. */

@@ -1,5 +1,6 @@
 'use client';
 
+import { OrigemLead } from '@/components/crm/OrigemLead';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { Icon, type IconName } from '@/components/icons';
@@ -123,6 +124,12 @@ export function PainelContexto({ conversationId, versao, onContexto }: { convers
           <p className="text-sm text-muted">Conversa sem contato vinculado.</p>
         )}
       </Secao>
+
+      {c && (
+        <Secao titulo="Origem do lead" icone="send">
+          <OrigemLead contactId={c.id} compacto />
+        </Secao>
+      )}
 
       <Secao titulo="Pipeline e etapa" icone="briefcase">
         {ctx.negocios.length === 0 ? (

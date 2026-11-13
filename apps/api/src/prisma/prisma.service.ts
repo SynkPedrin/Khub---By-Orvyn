@@ -57,6 +57,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       // Parametrizado — sem interpolação de string (defesa contra SQL injection).
       await tx.$queryRaw`SELECT set_config('app.current_tenant_id', ${tenantId}, true)`;
       return work(tx);
-    }, options);
+    }, opcoes);
   }
 }
