@@ -408,9 +408,9 @@ export class AnthropicProvider implements AIProvider {
       throw new ErroProvedorIA(`Ollama ${res.status}: ${detalhe}`, causaPorStatus(res.status), 'ollama', res.status);
     }
 
-    const j: RespostaOllamaStream | { model?: string; done_reason?: string; message?: RespostaOllamaStream['message']; prompt_eval_count?: number; eval_count?: number } =
-      input.onTexto && res.body ? await consumirNdjsonOllama(res.body, input.onTexto) : ((await res.json()) as { model?: string; done_reason?: string; message?: RespostaOllamaStream['message']; prompt_eval_count?: number; eval_count?: number });
-    const msg = j.message ?? {};
+    type RespostaOllama = { model?: string; done_reason?: string; message?: RespostaOllamaStream['message']; prompt_eval_count?: number; eval_count?: number };
+    const j: RespostaOllama = input.onTexto && res.body ? await consumirNdjsonOllama(res.body, input.onTexto) : ((await res.json()) as RespostaOllama);
+    const msg: Partial<RespostaOllamaStream['message']> = j.message ?? {};
     const toolCalls = (msg.tool_calls ?? []).map((t, i) => {
       let args: Record<string, unknown> = {};
       const bruto = t.function.arguments;
