@@ -108,6 +108,7 @@ export function AgendamentoPublico({ slug, dados, previa = false }: { slug: stri
           <>
             {dados.descricao && <p className="mt-2 whitespace-pre-line text-md text-muted">{dados.descricao}</p>}
             <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
+              {dados.responsavel && <span className="inline-flex items-center gap-1.5"><Icon name="user" size={15} />com {dados.responsavel.nome}</span>}
               <span className="inline-flex items-center gap-1.5"><Icon name="clock" size={15} />{dados.duracaoMin} min</span>
               {dados.local && <span className="inline-flex items-center gap-1.5"><Icon name="mapPin" size={15} />{dados.local}</span>}
             </p>

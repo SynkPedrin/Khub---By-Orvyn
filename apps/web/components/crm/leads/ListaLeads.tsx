@@ -339,7 +339,7 @@ export function ListaLeads({ versao, vazio }: { versao: number; vazio: ReactNode
                     </td>
                     <td className="whitespace-nowrap">
                       <Link href={`/contatos/${c.id}`} className="flex items-center gap-2.5 hover:text-brand">
-                        <AvatarContato nome={c.nome} fotoUrl={(c as { fotoUrl?: string | null }).fotoUrl} size={30} />
+                        <AvatarContato nome={c.nome} fotoUrl={(c as { fotoUrl?: string | null }).fotoUrl} contatoId={c.id} size={30} />
                         <span className="min-w-0">
                           <span className="block truncate text-sm font-semibold text-fg">{c.nome}</span>
                           {!colunas.includes('email') && c.email && <span className="block truncate text-xs text-muted">{c.email}</span>}

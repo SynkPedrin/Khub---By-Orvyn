@@ -43,6 +43,10 @@
   --base-0: #131318;
   --base-1: #0b0b0f;
   --base-2: #060607;
+
+  /* Fundo do chat (Inbox/WhatsApp): padrão CLARO no tema escuro (escolha do dono) */
+  --chat-bg: url('/whatsapp/fundo-claro.jpg');
+  --chat-bg-cor: #efe9e1;
   --base-3: #1c1c22;
 
   /* ---------- COLOR: label ---------- */
@@ -366,6 +370,10 @@
   --violet-glow: #a66bff;
   --violet-soft: #f3ecff;
   --violet-border: #dccbff;
+
+  /* Fundo do chat: padrão ESCURO no tema claro (escolha do dono) */
+  --chat-bg: url('/whatsapp/fundo-escuro.jpg');
+  --chat-bg-cor: #0e0e12;
 
   --base-0: #ffffff;
   --base-1: #f7f7f9;
@@ -2941,4 +2949,14 @@ a {
     box-shadow: none !important;
     border: 0 !important;
   }
+}
+
+/* ---------- Fundo do chat do WhatsApp (Inbox) ----------
+   Padrão "doodle" por tema (escuro no escuro, claro no claro), igual ao
+   app de verdade. Os balões continuam com a superfície do tema por cima. */
+.chat-fundo {
+  background-color: var(--chat-bg-cor);
+  background-image: var(--chat-bg);
+  background-repeat: repeat;
+  background-size: 836px auto;
 }

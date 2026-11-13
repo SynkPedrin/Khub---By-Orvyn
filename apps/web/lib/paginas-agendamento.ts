@@ -32,12 +32,16 @@ export interface PaginaAgendamento {
   confirmacaoAutomatica: boolean;
   estilo: { cor?: string };
   ativo: boolean;
+  /** Página pessoal (CAL-PESSOAL): identity do dono. `null` = página da equipe. */
+  ownerId: string | null;
   totalReservas: number;
   createdAt: string;
   updatedAt: string;
 }
 
-export type PaginaPatch = Partial<Omit<PaginaAgendamento, 'id' | 'totalReservas' | 'createdAt' | 'updatedAt'>>;
+export type PaginaPatch = Partial<Omit<PaginaAgendamento, 'id' | 'ownerId' | 'totalReservas' | 'createdAt' | 'updatedAt'>>;
+/** Página pessoal: a fila (responsáveis/distribuição) é imposta pelo servidor. */
+export type MinhaPaginaPatch = Partial<Omit<PaginaPatch, 'responsaveis' | 'distribuicao'>>;
 
 export const paginasAgendamento = {
   listar: () => req<PaginaAgendamento[]>(''),
@@ -45,6 +49,9 @@ export const paginasAgendamento = {
   criar: (d: { titulo: string } & PaginaPatch) => req<PaginaAgendamento>('', { method: 'POST', body: JSON.stringify(d) }),
   atualizar: (id: string, d: PaginaPatch) => req<PaginaAgendamento>(id, { method: 'PATCH', body: JSON.stringify(d) }),
   remover: (id: string) => req<{ ok: true }>(id, { method: 'DELETE' }),
+  /** A página pessoal do colaborador logado (`null` = ainda não criou). */
+  minha: () => req<PaginaAgendamento | null>('minha'),
+  salvarMinha: (d: MinhaPaginaPatch) => req<PaginaAgendamento>('minha', { method: 'PUT', body: JSON.stringify(d) }),
 };
 
 export const DIAS: { key: DiaSemana; nome: string; curto: string }[] = [

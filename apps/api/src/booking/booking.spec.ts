@@ -1,4 +1,4 @@
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { AgendaService } from '../agenda/agenda.service';
 import { ConfigService } from '../config/config.service';
 import { emitirCarimbo } from '../common/public-request';
@@ -245,5 +245,63 @@ describe('BookingService.reservar', () => {
     expect(r).toEqual({ ok: true, reserva: null, token: null });
     expect(leads.capturar).not.toHaveBeenCalled();
     expect(criar).not.toHaveBeenCalled();
+  });
+});
+
+// ------------------------------------------------------------------ página pessoal (CAL-PESSOAL)
+
+const EU = '1da00000-0000-4000-8000-00000000069a';
+
+function montarPessoal(existente: Record<string, unknown> | null) {
+  const tx = {
+    bookingPage: {
+      findUnique: jest.fn(async () => existente),
+      create: jest.fn(async (a: { data: Record<string, unknown> }) => ({ id: 'p1', ...a.data, _count: undefined })),
+      update: jest.fn(async (a: { data: Record<string, unknown> }) => ({ id: 'p1', ...(existente ?? {}), ...a.data, _count: { reservas: 0 } })),
+    },
+    user: { findFirst: jest.fn(async () => ({ nome: 'Ana Souza' })) },
+  };
+  const prisma = { withTenant: jest.fn(async (_t: string, w: (t: unknown) => Promise<unknown>) => w(tx)) } as unknown as PrismaService;
+  const svc = new BookingService(prisma, {} as AgendaService, {} as LeadsService, {} as PublicRateLimiter);
+  return { svc, tx };
+}
+
+describe('BookingService.salvarMinha (página pessoal)', () => {
+  it('1ª vez: cria com a fila imposta pelo servidor e título/slug do nome', async () => {
+    const { svc, tx } = montarPessoal(null);
+    const p = await svc.salvarMinha(T, EU, { duracaoMin: 45 });
+    const data = (tx.bookingPage.create.mock.calls[0] as [{ data: Record<string, unknown> }])[0].data;
+    expect(data.responsaveis).toEqual([EU]);
+    expect(data.distribuicao).toBe('fixo');
+    expect(data.ownerId).toBe(EU);
+    expect(data.titulo).toBe('Agendar com Ana Souza');
+    expect(data.slug).toMatch(/^ana-souza-[0-9a-f]{6}$/);
+    expect(data.duracaoMin).toBe(45);
+    expect(p.ownerId).toBe(EU);
+  });
+
+  it('já existe: atualiza sem nunca tocar na fila', async () => {
+    const { svc, tx } = montarPessoal({ id: 'p1', ownerId: EU });
+    await svc.salvarMinha(T, EU, { titulo: 'Meu horário', ativo: false });
+    const data = (tx.bookingPage.update.mock.calls[0] as [{ data: Record<string, unknown> }])[0].data;
+    expect(data).toMatchObject({ titulo: 'Meu horário', ativo: false });
+    expect(data.responsaveis).toBeUndefined();
+    expect(data.distribuicao).toBeUndefined();
+    expect(tx.bookingPage.create).not.toHaveBeenCalled();
+  });
+
+  it('corpo com responsaveis/distribuicao é recusado (a fila não é negociável)', async () => {
+    const { svc, tx } = montarPessoal(null);
+    await expect(svc.salvarMinha(T, EU, { responsaveis: [] })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(svc.salvarMinha(T, EU, { distribuicao: 'round_robin' })).rejects.toBeInstanceOf(BadRequestException);
+    expect(tx.bookingPage.create).not.toHaveBeenCalled();
+  });
+
+  it('admin não tira o dono da fila nem pela rota geral', async () => {
+    const { svc } = montarPessoal({ id: 'p1', ownerId: EU });
+    const falha = await svc.atualizar(T, 'p1', { responsaveis: ['99999999-9999-4999-8999-999999999999'] }).catch((e: unknown) => e);
+    expect(falha).toBeInstanceOf(BadRequestException);
+    expect((falha as BadRequestException).getResponse()).toMatchObject({ code: 'dono_fora_da_fila' });
+    await expect(svc.atualizar(T, 'p1', { responsaveis: [EU] })).resolves.toMatchObject({ id: 'p1' });
   });
 });

@@ -73,6 +73,8 @@ export interface BookingPublico {
   perguntas: CampoView[];
   estilo: { cor?: string };
   marca: { nome: string };
+  /** Página pessoal (CAL-PESSOAL): com quem o visitante vai falar. */
+  responsavel: { nome: string } | null;
   carimbo: string;
 }
 

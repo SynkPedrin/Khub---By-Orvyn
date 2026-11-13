@@ -36,6 +36,11 @@ export default function AgendaPage() {
         actions={
           <>
             <SeloDemo />
+            {/* CAL-PESSOAL: calendário individual do colaborador (o próprio link). */}
+            <Link href="/agenda/meu-link" className="btn btn-sm">
+              <Icon name="user" size={14} />
+              Meu link
+            </Link>
             {/* Q4.2: páginas públicas de agendamento (link para o cliente marcar sozinho). */}
             <Link href="/agenda/paginas" className="btn btn-sm">
               <Icon name="link" size={14} />

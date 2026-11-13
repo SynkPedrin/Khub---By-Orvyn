@@ -636,7 +636,7 @@ export function InboxAtendimento() {
                   )}
                 >
                   <span className="relative shrink-0">
-                    <AvatarContato nome={c.nome} fotoUrl={c.contato?.fotoUrl} size={40} />
+                    <AvatarContato nome={c.nome} fotoUrl={c.contato?.fotoUrl} contatoId={c.contato?.id} size={40} />
                     <SeloCanal canal={c.canal} />
                   </span>
                   <span className="min-w-0 flex-1">
@@ -681,7 +681,7 @@ export function InboxAtendimento() {
                 <Icon name="arrowLeft" size={18} />
               </button>
               <span className="relative shrink-0">
-                <AvatarContato nome={conversa.nome} fotoUrl={conversa.contato?.fotoUrl} size={38} />
+                <AvatarContato nome={conversa.nome} fotoUrl={conversa.contato?.fotoUrl} contatoId={conversa.contato?.id} size={38} />
                 <SeloCanal canal={conversa.canal} />
               </span>
               <div className="min-w-0 flex-1">
@@ -777,7 +777,7 @@ export function InboxAtendimento() {
               )}
             </header>
 
-            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin bg-[color-mix(in_srgb,var(--base-2)_60%,transparent)] px-4 py-5 lg:px-6">
+            <div className="chat-fundo min-h-0 flex-1 overflow-y-auto scrollbar-thin px-4 py-5 lg:px-6">
               {erroThread && <ErrorState title="Não consegui abrir esta conversa" description="Tente de novo em instantes." onRetry={() => void abrir(conversa.id)} />}
               {!thread && !erroThread && (
                 <div className="space-y-3">
