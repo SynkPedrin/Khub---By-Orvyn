@@ -259,21 +259,45 @@ export class InboxService {
   /* ------------------------------------------------------------------ */
 
   /**
-   * Conversa nova pelo WhatsApp a partir de um contato com telefone. Se já
-   * existe conversa de WhatsApp com ele, devolve a mesma (nunca duplica: lock
-   * no contato, a mesma ordem de lock da entrada por webhook). Quem inicia
-   * fica como responsável, com atendimento humano.
+   * Conversa nova pelo WhatsApp a partir de um contato com telefone — ou de um
+   * número digitado direto (cria o contato na hora). Se já existe conversa de
+   * WhatsApp com ele, devolve a mesma (nunca duplica: lock no contato, a mesma
+   * ordem de lock da entrada por webhook). Quem inicia fica como responsável,
+   * com atendimento humano.
    */
-  async iniciarConversa(tenantId: string, contactId: string, identityId: string) {
+  async iniciarConversa(tenantId: string, entrada: { contactId?: string; telefone?: string; nome?: string }, identityId: string) {
     const r = await this.prisma.withTenant(tenantId, async (tx) => {
-      await tx.$queryRaw`SELECT id FROM contacts WHERE id = ${contactId}::uuid FOR UPDATE`;
-      const contato = await tx.contact.findUnique({ where: { id: contactId }, select: { id: true, nome: true, telefone: true } });
-      if (!contato) throw new NotFoundException('contato inexistente');
+      let contato: { id: string; nome: string; telefone: string | null } | null = null;
+
+      if (entrada.contactId) {
+        await tx.$queryRaw`SELECT id FROM contacts WHERE id = ${entrada.contactId}::uuid FOR UPDATE`;
+        contato = await tx.contact.findUnique({ where: { id: entrada.contactId }, select: { id: true, nome: true, telefone: true } });
+        if (!contato) throw new NotFoundException('contato inexistente');
+      } else if (entrada.telefone) {
+        // Normaliza: só dígitos, com DDI 55 (Brasil) quando omitido.
+        const digitos = entrada.telefone.replace(/\D/g, '');
+        if (digitos.length < 10) throw new UnprocessableEntityException('número incompleto — use DDD + número');
+        const comDdi = digitos.startsWith('55') && digitos.length >= 12 ? digitos : `55${digitos}`;
+        // O telefone salvo pode ter formatação variada ("+55 18 99777-6655"):
+        // casa comparando só os dígitos, pelo final do número (DDD + número).
+        const final = comDdi.slice(-11);
+        const [encontrado] = await tx.$queryRaw<{ id: string; nome: string; telefone: string }[]>`SELECT id, nome, telefone FROM contacts WHERE telefone IS NOT NULL AND regexp_replace(telefone, '\D', '', 'g') LIKE ${'%' + final} LIMIT 1`;
+        contato = encontrado ?? null;
+        if (!contato) {
+          contato = await tx.contact.create({
+            data: { tenantId, nome: entrada.nome?.trim() || `+${comDdi}`, telefone: `+${comDdi}` },
+            select: { id: true, nome: true, telefone: true },
+          });
+        }
+      } else {
+        throw new BadRequestException('informe o contato ou o número de telefone');
+      }
+
       if (!contato.telefone?.replace(/\D/g, '')) throw new UnprocessableEntityException('este contato não tem telefone; cadastre um para iniciar pelo WhatsApp');
-      const existente = await tx.conversation.findFirst({ where: { contactId, canal: 'WhatsApp' }, select: { id: true } });
+      const existente = await tx.conversation.findFirst({ where: { contactId: contato.id, canal: 'WhatsApp' }, select: { id: true } });
       if (existente) return { id: existente.id, criada: false };
       const conv = await tx.conversation.create({
-        data: { tenantId, contactId, nome: contato.nome, canal: 'WhatsApp', atendimento: 'humano', assigneeId: identityId, naoLidas: 0 },
+        data: { tenantId, contactId: contato.id, nome: contato.nome, canal: 'WhatsApp', atendimento: 'humano', assigneeId: identityId, naoLidas: 0 },
         select: { id: true },
       });
       await tx.$executeRaw`INSERT INTO audit_logs (tenant_id, actor_type, actor_id, acao, entidade, entidade_id)

@@ -51,20 +51,56 @@ export function NovaConversaModal({ open, onClose, onAberta }: { open: boolean; 
     }
   };
 
+  // Número digitado direto (sem contato): a API cria o contato na hora.
+  const digitosBusca = busca.replace(/\D/g, '');
+  const numeroDireto = digitosBusca.length >= 10 ? digitosBusca : null;
+
+  const iniciarPorNumero = async () => {
+    if (!numeroDireto) return;
+    setAbrindo('numero');
+    try {
+      const r = await inbox.iniciarConversa({ telefone: numeroDireto });
+      toast.success(r.criada ? 'Conversa criada — o contato foi cadastrado com esse número' : 'Abrindo a conversa existente');
+      onAberta(r.id);
+      onClose();
+    } catch (e) {
+      toast.error('Não consegui iniciar a conversa', { description: e instanceof ApiError ? e.message : undefined });
+    } finally {
+      setAbrindo(null);
+    }
+  };
+
   const comTelefone = (lista ?? []).filter((c) => c.telefone?.replace(/\D/g, ''));
 
   return (
-    <Modal open={open} onClose={onClose} title="Nova conversa" description="Escolha um contato com telefone para conversar pelo WhatsApp.">
+    <Modal open={open} onClose={onClose} title="Nova conversa" description="Escolha um contato ou digite o número com DDD para conversar pelo WhatsApp.">
       <div className="relative mb-3">
         <Icon name="search" size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
-        <input type="search" autoFocus className="input w-full pl-9" placeholder="Buscar por nome, telefone ou e-mail" value={busca} onChange={(e) => setBusca(e.target.value)} aria-label="Buscar contato" />
+        <input type="search" autoFocus className="input w-full pl-9" placeholder="Nome, telefone ou e-mail — ou o número com DDD" value={busca} onChange={(e) => setBusca(e.target.value)} aria-label="Buscar contato ou digitar número" />
       </div>
+      {numeroDireto && (
+        <button
+          type="button"
+          disabled={!!abrindo}
+          onClick={() => void iniciarPorNumero()}
+          className="mb-3 flex w-full items-center gap-3 rounded-xl border border-brand-border bg-brand-soft px-3 py-2.5 text-left transition-colors hover:bg-[var(--fill-4)] disabled:opacity-60"
+        >
+          <span className="icon-tile h-8 w-8 shrink-0"><Icon name="whatsapp" size={16} /></span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium text-fg">Iniciar conversa com +{numeroDireto.startsWith('55') ? numeroDireto : `55${numeroDireto}`}</span>
+            <span className="block text-xs text-muted">Número não cadastrado — o contato é criado automaticamente</span>
+          </span>
+          {abrindo === 'numero' ? <span className="text-xs text-muted">Abrindo…</span> : <Icon name="arrowRight" size={16} className="shrink-0 text-brand" />}
+        </button>
+      )}
       {erro ? (
         <ErrorState title="Não consegui buscar os contatos" description="Tente de novo em instantes." onRetry={() => setTentativa((n) => n + 1)} />
       ) : !lista ? (
         <SkeletonRows rows={5} />
       ) : comTelefone.length === 0 ? (
-        <EmptyState icon="contacts" title="Nenhum contato com telefone" description={busca ? 'Tente outro nome ou número.' : 'Cadastre o telefone no perfil do contato para iniciar pelo WhatsApp.'} />
+        numeroDireto ? null : (
+          <EmptyState icon="contacts" title="Nenhum contato com telefone" description={busca ? 'Tente outro nome ou número.' : 'Cadastre o telefone no perfil do contato para iniciar pelo WhatsApp.'} />
+        )
       ) : (
         <ul className="max-h-80 overflow-y-auto scrollbar-thin" aria-label="Contatos">
           {comTelefone.map((c) => (
