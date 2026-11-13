@@ -191,3 +191,13 @@ Virada: usuário testa as agentes ao vivo (Agentes → testar no WhatsApp, conta
 - **Render:** `FIRECRAWL_API_KEY` e `NICO_PROVEDOR=anthropic` configuradas.
 - **Repo público:** histórico reescrito (force push) — telefone de teste removido de todos os commits.
 - **Importação GHL → Neon retomada** (tinha morrido no contato 750 por falta da 066).
+
+---
+
+## 2026-11-13 — VIRADA GHL → KHUB concluída (IA e automações do GHL desligadas)
+
+- **Pré-virada:** `validar-virada.mjs` pegou nó órfão (`acao.atribuir_usuario` sem usuário e sem arestas, resto da importação) no rascunho "Notificação Interna 🔔 (importado do GHL)" — removido (6 → 5 nós), revalidado. Os 5 fluxos fiéis válidos.
+- **Virada aplicada** (`virada-ghl.mjs --aplicar`): publicados Novo Lead 🚀 v14, Notificação Interna 🔔, Agendamento Confirmado 📅, Disparo de Mensagem📨 e Resposta na Dm; pausadas as 2 duplicatas simplificadas; MetaAds Tagging segue ativo.
+- **Ritinha** (Studio) e **Carol** (Dra. Bárbara) agora são agentes **padrão** do WhatsApp (ativas).
+- Conversas antigas seguem em atendimento "humano" — só conversas novas caem na IA; para devolver uma conversa específica: `atendimento.devolverParaIa`.
+- Pendente de observação: primeira conversa real respondida pela Ritinha/Carol.

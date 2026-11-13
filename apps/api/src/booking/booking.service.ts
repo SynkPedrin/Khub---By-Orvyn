@@ -4,6 +4,8 @@ import { randomBytes } from 'node:crypto';
 import { ZodError } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
 import { AgendaService } from '../agenda/agenda.service';
+import { AtribuicaoService } from '../crm/atribuicao.service';
+import { toqueDeUtm } from '../crm/atribuicao';
 import { LeadsService } from '../crm/leads.service';
 import { avaliarAntiRobo, emitirCarimbo, hashToken, novoTokenOpaco, PublicRateLimiter, TOKEN_OPACO_RE } from '../common/public-request';
 import { campoParaPublico, extrairUtm, ListaCamposSchema, normalizarTelefoneBR, slugDe, validarRespostas, type CampoPublico } from '../common/public-fields';
@@ -122,6 +124,7 @@ export class BookingService {
     private readonly agenda: AgendaService,
     private readonly leads: LeadsService,
     private readonly limite: PublicRateLimiter,
+    private readonly atribuicao?: AtribuicaoService,
   ) {}
 
   // ------------------------------------------------------------------ autenticado
@@ -446,15 +449,19 @@ export class BookingService {
 
     const { token, hash } = novoTokenOpaco();
     const criado = compromisso;
+    const utm = extrairUtm(corpo);
     await this.prisma.withTenant(tenantId, async (tx) => {
       await tx.bookingReserva.create({
-        data: { tenantId, bookingPageId: pageId, compromissoId: criado.id, contactId: contato.contactId, tokenHash: hash, respostas: v.valores as Prisma.InputJsonValue, utm: extrairUtm(corpo) as Prisma.InputJsonValue },
+        data: { tenantId, bookingPageId: pageId, compromissoId: criado.id, contactId: contato.contactId, tokenHash: hash, respostas: v.valores as Prisma.InputJsonValue, utm: utm as Prisma.InputJsonValue },
       });
       if (pagina.distribuicao === 'round_robin' && criado.responsavelId) {
         const idx = pagina.responsaveis.indexOf(criado.responsavelId);
         if (idx >= 0) await tx.bookingPage.update({ where: { id: pageId }, data: { rrCursor: (idx + 1) % pagina.responsaveis.length } });
       }
     });
+    // Rastreio (db/066): o UTM/gclid/fbclid do link de agendamento vira a
+    // ficha de origem do contato — mesma lógica dos formulários públicos.
+    void this.atribuicao?.registrar(tenantId, contato.contactId, toqueDeUtm(utm));
     this.log.log(`reserva na página ${pageId} (tenant ${tenantId}, compromisso ${criado.id})`);
     return {
       ok: true as const,

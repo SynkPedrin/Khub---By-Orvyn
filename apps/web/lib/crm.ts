@@ -96,7 +96,7 @@ export interface Conversa {
   handoffMotivo: string | null;
   /** ISO da última atividade (a lista é leve: as mensagens vêm de `crm.mensagens`). */
   atualizadaEm?: string;
-  contato?: { id: string; telefone: string | null; email: string | null; fotoUrl?: string | null; empresa?: string | null } | null;
+  contato?: { id: string; telefone: string | null; email: string | null; fotoUrl?: string | null; empresa?: string | null; temFoto?: boolean } | null;
   mensagens: { id: string; de: string; texto: string; hora: string | null; agentId?: string | null }[];
   /** Conversas omnichannel (db/063): DM ou comentário, aberta/resolvida e etiquetas do contato. */
   tipo?: 'dm' | 'comentario';
@@ -106,6 +106,8 @@ export interface Conversa {
 }
 export interface MensagemConversa {
   id: string; de: string; texto: string; hora: string | null; status?: string; agentId?: string | null; criadaEm?: string;
+  /** Nome da agente de IA que enviou (de='ia') — ex.: "Ritinha". */
+  agentNome?: string | null;
   /** Origem (migration 036): automação que enviou (de='automacao') ou atendente que digitou (de='humano'). */
   workflowId?: string | null; workflowNome?: string | null;
   enviadoPorId?: string | null; enviadoPorNome?: string | null;

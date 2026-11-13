@@ -28,6 +28,13 @@ const ICONE: Record<string, { logo?: string; icone: 'send' | 'whatsapp' | 'insta
   messenger_direto: { icone: 'send' },
   formulario: { icone: 'file' },
 };
+/** Selo da fonte do lead (lista de contatos, inbox): logo oficial quando há. */
+export const LOGO_FONTE: Record<string, string> = Object.fromEntries(Object.entries(ICONE).filter(([, v]) => v.logo).map(([k, v]) => [k, v.logo as string]));
+export const ROTULO_FONTE: Record<string, string> = {
+  meta_ads: 'Meta Ads', google_ads: 'Google Ads', tiktok_ads: 'TikTok Ads', whatsapp_direto: 'WhatsApp direto',
+  instagram_direto: 'Instagram direto', messenger_direto: 'Messenger direto', formulario: 'Formulário', indicacao: 'Indicação',
+  importacao: 'Importação', manual: 'Cadastro manual', desconhecida: 'Desconhecida',
+};
 const CONFIANCA: Record<Toque['confianca'], { texto: string; cor: string; dica: string }> = {
   confirmada: { texto: 'Confirmada', cor: 'text-emerald-600 dark:text-emerald-400', dica: 'O próprio evento trouxe o anúncio ou o id do clique.' },
   provavel: { texto: 'Provável', cor: 'text-amber-600 dark:text-amber-400', dica: 'Inferida de sinal indireto (tag importada, UTM sem id de clique).' },

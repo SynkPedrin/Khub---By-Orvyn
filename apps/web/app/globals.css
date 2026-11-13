@@ -2960,3 +2960,18 @@ a {
   background-repeat: repeat;
   background-size: 836px auto;
 }
+
+/* ---------- Fundo do chat do Instagram (DM roxa) ----------
+   Conversas do canal Instagram não usam o doodle do WhatsApp: a DM real é um
+   degradê roxo/azul — aqui em véus radiais sobre a base do tema (funciona
+   nos dois temas). O balão da conta segue o gradiente oficial da DM. */
+.chat-fundo-insta {
+  background:
+    radial-gradient(130% 100% at 0% 0%, color-mix(in srgb, #c13584 26%, transparent), transparent 55%),
+    radial-gradient(130% 110% at 100% 100%, color-mix(in srgb, #5851db 30%, transparent), transparent 60%),
+    var(--base-2);
+}
+.bolha-insta {
+  background-image: linear-gradient(135deg, #833ab4 0%, #c13584 55%, #e1306c 100%);
+  color: #fff;
+}

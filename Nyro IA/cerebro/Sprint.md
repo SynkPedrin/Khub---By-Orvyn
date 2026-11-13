@@ -13,6 +13,7 @@
 - **Web:** tela `/agenda/meu-link` (criar em 1 clique com padrões, configurar horários/regras, copiar link); botão "Meu link" no cabeçalho da Agenda; editor extraído para `components/agenda/EditorPaginaAgendamento.tsx` e compartilhado com `/agenda/paginas/[id]`; selo "Pessoal" na lista admin; página pública mostra "com {nome}".
 - **Visão da empresa:** já existia (Q4.2) — reservas do link pessoal caem em `agenda_compromissos` com o dono de responsável e aparecem em "Toda a equipe" e no filtro por pessoa.
 - **Gates:** API 95 suítes / 1.176 testes (4 novos em `booking.spec.ts`); web 21 arquivos / 179 testes; tsc API e web ok; `next lint` sem avisos novos.
+- **Complemento (rastreabilidade, mesmo dia):** lacuna achada — reserva pelo link de agendamento gravava UTM em `booking_reservas` mas não gerava a ficha de origem (db/066). Ligado: `BookingService.reservar` chama `AtribuicaoService.registrar` com `toqueDeUtm` (gclid/fbclid/ttclid/utm_source → Google/Meta/TikTok), como já faziam formulários, Lead Ads e referrals de WhatsApp/Instagram. Lista de contatos passou a mostrar o selo com a logo da fonte na coluna Origem (`fonte` já vinha da API). Gates refeitos: API 1.178 testes, web 179, tsc/lint ok.
 - **Pendências reais:** aplicar `pnpm db:migrate` nos demais ambientes (QA/prod) no deploy; validação de browser logado (criar link como member, agendar como visitante) não feita nesta sessão; e2e da reserva depende da stack rodando.
 
 ---
