@@ -4,18 +4,16 @@
 
 ---
 
-## 🚧 SPRINT CAL-PESSOAL — Calendário individual por colaborador  *(EM ANDAMENTO — 2026-11-13)*
+## ✅ SPRINT CAL-PESSOAL — Calendário individual por colaborador  *(CONCLUÍDA — 2026-11-13)*
 > Pedido do product owner: gerenciar o calendário individual de cada pessoa da equipe; cada colaborador cria e configura o próprio calendário (horários) e compartilha o link individual com clientes; as reservas de todos formam a visão completa da empresa. Benefício do sistema, para todos os tenants.
-> Aprovação estrutural (2026-11-13): reusar `booking_pages` com `owner_id`; 1 link pessoal por colaborador; escopo full-stack nesta sessão. Tasks: [[Tasks|CAL-01…04]].
+> Aprovação estrutural (2026-11-13): reusar `booking_pages` com `owner_id`; 1 link pessoal por colaborador; escopo full-stack nesta sessão. Tasks: [[Tasks|CAL-01…04]] (todas `[x]`).
 
-**Objetivo único:** qualquer membro publica `/b/<seu-link>` com os próprios horários, e toda reserva cai na agenda geral com ele de responsável — sem precisar de admin.
-
-### Definition of Done
-- `db/069_booking_pessoal.sql` + teste de isolamento verde (`owner_id`, 1 página pessoal por membro, dono sempre na fila).
-- `GET/PUT /v1/booking-pages/minha` com permissão `agenda.write` (member incluído); invariantes de dono no serviço e no banco.
-- Tela `/agenda/meu-link` (criar, configurar, copiar link) + entrada no cabeçalho da Agenda; editor compartilhado com o de páginas de equipe.
-- Reserva pelo link pessoal aparece na visão "Toda a equipe" e no filtro da pessoa; página pública mostra o nome do dono.
-- Gates: tsc + lint + testes da API e do web verdes.
+- **Banco:** `db/069_booking_pessoal.sql` aplicada no dev — `booking_pages.owner_id`, índice único parcial (1 página pessoal por membro/tenant), trigger exige dono membro e dono na fila. Isolamento `db/069_*_isolation_test.sql` **PASS**.
+- **API:** `GET/PUT /v1/booking-pages/minha` (self-service, permissão `agenda.write` — member incluído); servidor impõe `responsaveis=[eu]`, `distribuicao=fixo`, `owner_id=eu`; nem o admin tira o dono da fila (`dono_fora_da_fila`); página pública `/b/<slug>` expõe `responsavel.nome` quando pessoal.
+- **Web:** tela `/agenda/meu-link` (criar em 1 clique com padrões, configurar horários/regras, copiar link); botão "Meu link" no cabeçalho da Agenda; editor extraído para `components/agenda/EditorPaginaAgendamento.tsx` e compartilhado com `/agenda/paginas/[id]`; selo "Pessoal" na lista admin; página pública mostra "com {nome}".
+- **Visão da empresa:** já existia (Q4.2) — reservas do link pessoal caem em `agenda_compromissos` com o dono de responsável e aparecem em "Toda a equipe" e no filtro por pessoa.
+- **Gates:** API 95 suítes / 1.176 testes (4 novos em `booking.spec.ts`); web 21 arquivos / 179 testes; tsc API e web ok; `next lint` sem avisos novos.
+- **Pendências reais:** aplicar `pnpm db:migrate` nos demais ambientes (QA/prod) no deploy; validação de browser logado (criar link como member, agendar como visitante) não feita nesta sessão; e2e da reserva depende da stack rodando.
 
 ---
 
