@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { MotionConfig } from 'framer-motion';
 import { Sidebar } from '@/components/shell/Sidebar';
+import { BottomNav } from '@/components/shell/BottomNav';
 import { Topbar } from '@/components/shell/Topbar';
 import { BrandSignature } from '@/components/shell/BrandMark';
 import { AmbientBackground } from '@/components/shell/AmbientBackground';
@@ -65,11 +66,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Coluna de conteúdo */}
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="p-3 pb-0">
-            <Topbar onMobileMenu={() => setDrawer(true)} />
+          <div className="p-3 pb-0 max-lg:px-3">
+            <Topbar />
           </div>
 
-          <main id="conteudo" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+          {/* pb extra no mobile: o conteúdo rola por baixo da barra inferior
+              flutuante (mesma ideia da topbar) sem ficar escondido atrás dela. */}
+          <main id="conteudo" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto scrollbar-thin max-lg:pb-[calc(7rem+env(safe-area-inset-bottom))]">
             {/* Assinatura sempre no pé: em página curta não flutua no meio (ADR-0036). */}
             <div className="flex min-h-full flex-col">
               <div className="flex-1">
@@ -112,6 +115,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         )}
 
         <CommandBar />
+        {/* Navegação inferior — mobile/tablet; "Menu" abre a gaveta completa. */}
+        <BottomNav onMenu={() => setDrawer(true)} />
         {/* NICO, a agente interna de marketing, à mão em qualquer tela (ADR-0040). */}
         {veIa && <NyroDock />}
       </div>

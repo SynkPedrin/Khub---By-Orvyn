@@ -9,4 +9,8 @@ async function start(): Promise<void> {
   const app = await NestFactory.createApplicationContext(AppModule);
   app.enableShutdownHooks();
 }
-void start().catch(() => { process.stderr.write('Worker failed to start; check configuration and dependency health.\n'); process.exitCode = 1; });
+void start().catch((e) => {
+  const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+  process.stderr.write(`Worker failed to start: ${msg}\n`);
+  process.exitCode = 1;
+});

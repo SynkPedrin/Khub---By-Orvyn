@@ -4,6 +4,21 @@
 
 ---
 
+## 🚧 SPRINT CAL-PESSOAL — Calendário individual por colaborador  *(EM ANDAMENTO — 2026-11-13)*
+> Pedido do product owner: gerenciar o calendário individual de cada pessoa da equipe; cada colaborador cria e configura o próprio calendário (horários) e compartilha o link individual com clientes; as reservas de todos formam a visão completa da empresa. Benefício do sistema, para todos os tenants.
+> Aprovação estrutural (2026-11-13): reusar `booking_pages` com `owner_id`; 1 link pessoal por colaborador; escopo full-stack nesta sessão. Tasks: [[Tasks|CAL-01…04]].
+
+**Objetivo único:** qualquer membro publica `/b/<seu-link>` com os próprios horários, e toda reserva cai na agenda geral com ele de responsável — sem precisar de admin.
+
+### Definition of Done
+- `db/069_booking_pessoal.sql` + teste de isolamento verde (`owner_id`, 1 página pessoal por membro, dono sempre na fila).
+- `GET/PUT /v1/booking-pages/minha` com permissão `agenda.write` (member incluído); invariantes de dono no serviço e no banco.
+- Tela `/agenda/meu-link` (criar, configurar, copiar link) + entrada no cabeçalho da Agenda; editor compartilhado com o de páginas de equipe.
+- Reserva pelo link pessoal aparece na visão "Toda a equipe" e no filtro da pessoa; página pública mostra o nome do dono.
+- Gates: tsc + lint + testes da API e do web verdes.
+
+---
+
 ## ✅ SPRINT KHUB-REAL — Auditoria de designer e o modo real funcionando  *(CONCLUÍDA — 2026-11-09)*
 > Pedido: "encontre todas as falhas de frontend que deixam o front quebrando e feio". Decisão: [[Arquitetura|ADR-0039]]. Bugs: [[Bugs|BUG-023, 024, 025]].
 - Auditoria logada no QA com volume real (152 contatos, 60 conversas/1.297 mensagens, 62 negócios, agenda, tarefas), desktop 1440 e celular 390, + varredura de botões sem ação (74).

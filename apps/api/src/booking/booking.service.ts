@@ -18,6 +18,7 @@ import {
   horariosPadrao,
   instanteLocal,
   janelaReservavel,
+  MinhaPaginaSchema,
   ordemDeTentativa,
   RemarcarSchema,
   ReservaPublicaSchema,
@@ -57,6 +58,8 @@ export interface PaginaView {
   confirmacaoAutomatica: boolean;
   estilo: { cor?: string };
   ativo: boolean;
+  /** Página pessoal (db/069): identity do dono. `null` = página da equipe. */
+  ownerId: string | null;
   totalReservas: number;
   createdAt: Date;
   updatedAt: Date;
@@ -81,7 +84,7 @@ export function viewPagina(p: PaginaRow, total = 0): PaginaView {
     antecedenciaMinHoras: p.antecedenciaMinHoras, janelaDias: p.janelaDias, horarios: horariosDoBanco(p.horarios), fuso: p.fuso,
     responsaveis: p.responsaveis, distribuicao: p.distribuicao === 'fixo' ? 'fixo' : 'round_robin', local: p.local, tipo: p.tipo,
     perguntas: perguntasDoBanco(p.perguntas), confirmacaoAutomatica: p.confirmacaoAutomatica, estilo: estiloDoBanco(p.estilo),
-    ativo: p.ativo, totalReservas: total, createdAt: p.createdAt, updatedAt: p.updatedAt,
+    ativo: p.ativo, ownerId: p.ownerId ?? null, totalReservas: total, createdAt: p.createdAt, updatedAt: p.updatedAt,
   };
 }
 
@@ -178,8 +181,13 @@ export class BookingService {
     const i = r.data;
     try {
       return await this.prisma.withTenant(tenantId, async (tx) => {
-        const existe = await tx.bookingPage.findUnique({ where: { id }, select: { id: true } });
+        const existe = await tx.bookingPage.findUnique({ where: { id }, select: { id: true, ownerId: true } });
         if (!existe) throw new NotFoundException('página de agendamento inexistente');
+        // Página pessoal (db/069): nem o admin tira o dono da própria fila —
+        // senão a reserva pública cairia na agenda de outra pessoa.
+        if (existe.ownerId && i.responsaveis && !i.responsaveis.includes(existe.ownerId)) {
+          throw new BadRequestException({ message: 'Esta é a página pessoal de um membro: o dono precisa continuar entre os responsáveis.', code: 'dono_fora_da_fila' });
+        }
         const p = await tx.bookingPage.update({
           where: { id },
           data: {
@@ -213,9 +221,14 @@ export class BookingService {
 
   private traduzirErroGravacao(e: unknown): unknown {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') return new ConflictException({ message: 'esse link já está em uso: escolha outro', code: 'slug_em_uso' });
-    // O trigger da db/060 levanta 23503 (o Prisma traduz para P2003 e esconde a mensagem).
+    // O trigger da db/060/069 levanta 23503/23514 (o Prisma traduz para P2003/P2004 e esconde a mensagem).
     const fk = e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003';
     if (fk || (e instanceof Error && /não é membro desta conta/.test(e.message))) return new BadRequestException('um dos responsáveis não é membro desta conta');
+    // 23514: os CHECKs de formato já foram validados pelo Zod — só o trigger do dono resta.
+    const chk = e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2004';
+    if (chk || (e instanceof Error && /dono precisa estar entre os responsáveis/.test(e.message))) {
+      return new BadRequestException({ message: 'Esta é a página pessoal de um membro: o dono precisa continuar entre os responsáveis.', code: 'dono_fora_da_fila' });
+    }
     return e;
   }
 
@@ -226,6 +239,84 @@ export class BookingService {
       if (!r.count) throw new NotFoundException('página de agendamento inexistente');
       return { ok: true as const };
     });
+  }
+
+  // ------------------------------------------------------------------ página pessoal (CAL-PESSOAL)
+
+  /** A página pessoal do colaborador logado (`null` = ainda não criou). */
+  async minha(tenantId: string, identityId: string): Promise<PaginaView | null> {
+    return this.prisma.withTenant(tenantId, async (tx) => {
+      const p = await tx.bookingPage.findUnique({ where: { tenantId_ownerId: { tenantId, ownerId: identityId } }, include: { _count: { select: { reservas: true } } } });
+      return p ? viewPagina(p, p._count.reservas) : null;
+    });
+  }
+
+  /**
+   * Cria (1ª vez) ou atualiza a página pessoal do colaborador. A fila é
+   * imposta pelo servidor: `responsaveis=[ele]`, `distribuicao=fixo`,
+   * `owner_id=ele` — o banco (db/069) é o backstop das duas invariantes.
+   */
+  async salvarMinha(tenantId: string, identityId: string, bruto: unknown): Promise<PaginaView> {
+    const r = MinhaPaginaSchema.safeParse(bruto);
+    if (!r.success) throw erroZod(r.error);
+    const i = r.data;
+    try {
+      return await this.prisma.withTenant(tenantId, async (tx) => {
+        const existe = await tx.bookingPage.findUnique({ where: { tenantId_ownerId: { tenantId, ownerId: identityId } }, select: { id: true } });
+        if (existe) {
+          const p = await tx.bookingPage.update({
+            where: { id: existe.id },
+            data: {
+              ...(i.slug !== undefined ? { slug: i.slug } : {}),
+              ...(i.titulo !== undefined ? { titulo: i.titulo } : {}),
+              ...(i.descricao !== undefined ? { descricao: i.descricao } : {}),
+              ...(i.duracaoMin !== undefined ? { duracaoMin: i.duracaoMin } : {}),
+              ...(i.intervaloMin !== undefined ? { intervaloMin: i.intervaloMin } : {}),
+              ...(i.antecedenciaMinHoras !== undefined ? { antecedenciaMinHoras: i.antecedenciaMinHoras } : {}),
+              ...(i.janelaDias !== undefined ? { janelaDias: i.janelaDias } : {}),
+              ...(i.horarios !== undefined ? { horarios: i.horarios as Prisma.InputJsonValue } : {}),
+              ...(i.fuso !== undefined ? { fuso: i.fuso } : {}),
+              ...(i.local !== undefined ? { local: i.local } : {}),
+              ...(i.tipo !== undefined ? { tipo: i.tipo } : {}),
+              ...(i.perguntas !== undefined ? { perguntas: i.perguntas as unknown as Prisma.InputJsonValue } : {}),
+              ...(i.confirmacaoAutomatica !== undefined ? { confirmacaoAutomatica: i.confirmacaoAutomatica } : {}),
+              ...(i.estilo !== undefined ? { estilo: i.estilo as Prisma.InputJsonValue } : {}),
+              ...(i.ativo !== undefined ? { ativo: i.ativo } : {}),
+              updatedAt: new Date(),
+            },
+            include: { _count: { select: { reservas: true } } },
+          });
+          return viewPagina(p, p._count.reservas);
+        }
+        const usuario = await tx.user.findFirst({ where: { tenantId, identityId }, select: { nome: true } });
+        const nome = (usuario?.nome ?? '').trim() || 'mim';
+        const titulo = i.titulo ?? `Agendar com ${nome}`.slice(0, 120);
+        const slug = i.slug ?? `${slugDe(nome)}-${randomBytes(3).toString('hex')}`;
+        const p = await tx.bookingPage.create({
+          data: {
+            tenantId, slug, titulo, descricao: i.descricao ?? null,
+            ...(i.duracaoMin !== undefined ? { duracaoMin: i.duracaoMin } : {}),
+            ...(i.intervaloMin !== undefined ? { intervaloMin: i.intervaloMin } : {}),
+            ...(i.antecedenciaMinHoras !== undefined ? { antecedenciaMinHoras: i.antecedenciaMinHoras } : {}),
+            ...(i.janelaDias !== undefined ? { janelaDias: i.janelaDias } : {}),
+            horarios: (i.horarios ?? horariosPadrao()) as Prisma.InputJsonValue,
+            ...(i.fuso !== undefined ? { fuso: i.fuso } : {}),
+            responsaveis: [identityId], distribuicao: 'fixo', ownerId: identityId,
+            local: i.local ?? null,
+            ...(i.tipo !== undefined ? { tipo: i.tipo } : {}),
+            perguntas: (i.perguntas ?? []) as unknown as Prisma.InputJsonValue,
+            ...(i.confirmacaoAutomatica !== undefined ? { confirmacaoAutomatica: i.confirmacaoAutomatica } : {}),
+            estilo: (i.estilo ?? {}) as Prisma.InputJsonValue,
+            ...(i.ativo !== undefined ? { ativo: i.ativo } : {}),
+            createdBy: identityId,
+          },
+        });
+        this.log.log(`página pessoal criada: ${p.id} (tenant ${tenantId}, dono ${identityId})`);
+        return viewPagina(p);
+      });
+    } catch (e) {
+      throw this.traduzirErroGravacao(e);
+    }
   }
 
   // ------------------------------------------------------------------ público
@@ -264,12 +355,19 @@ export class BookingService {
       const n = calcularSlots(configSlots(pagina), d, ocupados, agora).length;
       if (n) dias.push({ data: d, horarios: n });
     }
+    // Página pessoal: o visitante vê com quem vai falar ("Agendar com a Ana").
+    let responsavel: { nome: string } | null = null;
+    if (pagina.ownerId) {
+      const u = await this.prisma.withTenant(tenantId, (tx) => tx.user.findFirst({ where: { tenantId, identityId: pagina.ownerId! }, select: { nome: true } }));
+      if (u?.nome.trim()) responsavel = { nome: u.nome.trim() };
+    }
     return {
       titulo: pagina.titulo, descricao: pagina.descricao, duracaoMin: pagina.duracaoMin, fuso: pagina.fuso, local: pagina.local,
       janela: { primeiro, ultimo }, dias,
       perguntas: pagina.perguntas.map(campoParaPublico),
       estilo: pagina.estilo,
       marca: { nome: tenantNome },
+      responsavel,
       carimbo: emitirCarimbo(`booking:${pageId}`),
     };
   }

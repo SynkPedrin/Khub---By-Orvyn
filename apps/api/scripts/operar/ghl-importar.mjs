@@ -190,11 +190,14 @@ try {
       const campos = camposDe(c);
 
       // 3a. contato: já importado (ghl_id) → mantém; mesmo telefone (chegou pela Stevo) → mescla; senão cria.
-      let contato = (await tx.$queryRaw`SELECT id, nome, tags, campos_custom AS "camposCustom" FROM contacts WHERE campos_custom->>'ghl_id' = ${c.id} LIMIT 1`)[0];
+      // Importante: rodando como dono do banco (RLS bypassada) TODA busca precisa
+      // escopar o tenant — telefone igual em outra subconta não pode mesclar aqui.
+      let contato = (await tx.$queryRaw`SELECT id, nome, tags, campos_custom AS "camposCustom" FROM contacts WHERE tenant_id = ${TENANT}::uuid AND campos_custom->>'ghl_id' = ${c.id} LIMIT 1`)[0];
       if (contato) cont.contatosJaImportados++;
       if (!contato && c.phone) {
         const achado = await acharContatoPorTelefone(tx, c.phone);
-        if (achado) {
+        const dono = achado ? (await tx.$queryRaw`SELECT 1 FROM contacts WHERE id = ${achado}::uuid AND tenant_id = ${TENANT}::uuid LIMIT 1`)[0] : null;
+        if (achado && dono) {
           const atual = await tx.contact.findUnique({ where: { id: achado } });
           contato = await tx.contact.update({
             where: { id: achado },
@@ -235,7 +238,7 @@ try {
       // 3b. conversas por canal + mensagens
       const convGhl = conversasGhl.find((x) => x.contactId === c.id);
       for (const [canal, msgs] of plano.get(c.id)?.canais ?? []) {
-        let conv = await tx.conversation.findFirst({ where: { contactId: contato.id, canal } });
+        let conv = await tx.conversation.findFirst({ where: { tenantId: TENANT, contactId: contato.id, canal } });
         const ultima = msgs.at(-1);
         if (!conv) {
           conv = await tx.conversation.create({

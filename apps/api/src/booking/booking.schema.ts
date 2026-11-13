@@ -69,6 +69,15 @@ export const AtualizarPaginaSchema = z.object(camposPagina).partial().strict();
 export type CriarPaginaInput = z.infer<typeof CriarPaginaSchema>;
 export type AtualizarPaginaInput = z.infer<typeof AtualizarPaginaSchema>;
 
+/**
+ * Página pessoal (CAL-PESSOAL, db/069): o colaborador edita a própria página,
+ * mas nunca a fila — `responsaveis=[ele]`, `distribuicao=fixo` e `owner_id`
+ * são impostos pelo servidor. Sem `titulo` na 1ª criação, vira "Agendar com
+ * {nome}"; sem `slug`, vira o slug do nome + sufixo aleatório.
+ */
+export const MinhaPaginaSchema = z.object(camposPagina).partial().omit({ responsaveis: true, distribuicao: true }).strict();
+export type MinhaPaginaInput = z.infer<typeof MinhaPaginaSchema>;
+
 /** Seg a sex, 9h às 12h e 13h às 18h: ponto de partida de uma página nova. */
 export function horariosPadrao(): Horarios {
   const util = [{ de: '09:00', ate: '12:00' }, { de: '13:00', ate: '18:00' }];

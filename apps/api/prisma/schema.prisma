@@ -1849,12 +1849,15 @@ model BookingPage {
   confirmacaoAutomatica Boolean  @default(false) @map("confirmacao_automatica")
   estilo                Json     @default("{}")
   ativo                 Boolean  @default(true)
+  /// Página pessoal (db/069): dono que configurou o próprio link. NULL = página da equipe.
+  ownerId               String?  @map("owner_id") @db.Uuid
   createdBy             String?  @map("created_by") @db.Uuid
   createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
   reservas              BookingReserva[]
 
   @@index([tenantId, createdAt(sort: Desc)], map: "idx_booking_pages_tenant")
+  @@unique([tenantId, ownerId], map: "uq_booking_pages_owner")
   @@map("booking_pages")
 }
 
