@@ -636,7 +636,7 @@ export function InboxAtendimento() {
                   )}
                 >
                   <span className="relative shrink-0">
-                    <AvatarContato nome={c.nome} fotoUrl={c.contato?.fotoUrl} contatoId={c.contato?.id} size={40} />
+                    <AvatarContato nome={c.nome} fotoUrl={c.contato?.fotoUrl} contatoId={c.contato?.id} temFoto={c.contato?.temFoto} size={40} />
                     <SeloCanal canal={c.canal} />
                   </span>
                   <span className="min-w-0 flex-1">
@@ -681,7 +681,7 @@ export function InboxAtendimento() {
                 <Icon name="arrowLeft" size={18} />
               </button>
               <span className="relative shrink-0">
-                <AvatarContato nome={conversa.nome} fotoUrl={conversa.contato?.fotoUrl} contatoId={conversa.contato?.id} size={38} />
+                <AvatarContato nome={conversa.nome} fotoUrl={conversa.contato?.fotoUrl} contatoId={conversa.contato?.id} temFoto={conversa.contato?.temFoto} size={38} />
                 <SeloCanal canal={conversa.canal} />
               </span>
               <div className="min-w-0 flex-1">
@@ -695,7 +695,7 @@ export function InboxAtendimento() {
               <div className="flex items-center gap-2">
                 {conversa.atendimento === 'ia' ? (
                   <>
-                    <span className="pill pill-brand hidden sm:inline-flex">
+                    <span className="pill pill-brand">
                       <Icon name="sparkles" size={12} /> IA respondendo
                     </span>
                     <button type="button" className="btn btn-sm" disabled={trocando} onClick={() => void trocarAtendimento('assumir')}>
@@ -777,7 +777,7 @@ export function InboxAtendimento() {
               )}
             </header>
 
-            <div className="chat-fundo min-h-0 flex-1 overflow-y-auto scrollbar-thin px-4 py-5 lg:px-6">
+            <div className={cx('min-h-0 flex-1 overflow-y-auto scrollbar-thin px-4 py-5 lg:px-6', conversa.canal === 'Instagram' ? 'chat-fundo-insta' : 'chat-fundo')}>
               {erroThread && <ErrorState title="Não consegui abrir esta conversa" description="Tente de novo em instantes." onRetry={() => void abrir(conversa.id)} />}
               {!thread && !erroThread && (
                 <div className="space-y-3">
@@ -824,19 +824,22 @@ export function InboxAtendimento() {
                             'max-w-[78%] rounded-2xl px-3.5 py-2 text-[14px] leading-relaxed shadow-sm sm:max-w-[68%]',
                             !minha && 'rounded-bl-md border border-line bg-[var(--base-0)] text-fg',
                             // Padrão WhatsApp: verde com texto escuro no claro, verde-escuro com texto claro no escuro (o lima da marca não tinha contraste com texto branco).
-                            minha && !ia && !automacao && 'rounded-br-md bg-[#d9fdd3] text-[#111b21] dark:bg-[#005c4b] dark:text-[#e9edef]',
-                            ia && 'rounded-br-md border border-[color-mix(in_srgb,var(--brand)_18%,transparent)] bg-brand-soft text-fg',
-                            automacao && 'rounded-br-md border border-lime-border bg-lime-soft text-fg',
+                            // No Instagram o balão da conta segue o gradiente da DM roxa.
+                            minha && !ia && !automacao && (conversa.canal === 'Instagram' ? 'rounded-br-md bolha-insta' : 'rounded-br-md bg-[#d9fdd3] text-[#111b21] dark:bg-[#005c4b] dark:text-[#e9edef]'),
+                            // IA: halo da marca — quem responde vê de longe que a mensagem foi da agente.
+                            ia && 'rounded-br-md border border-[color-mix(in_srgb,var(--brand)_18%,transparent)] bg-brand-soft text-fg shadow-[0_0_22px_-4px_var(--brand)]',
+                            // Automação: halo lima — distinto da IA e da equipe.
+                            automacao && 'rounded-br-md border border-lime-border bg-lime-soft text-fg shadow-[0_0_22px_-4px_var(--khub-lime)]',
                           )}
                         >
-                          {ia && <p className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold text-brand"><Icon name="sparkles" size={11} /> IA</p>}
+                          {ia && <p className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold text-brand"><Icon name="sparkles" size={11} /> IA{m.agentNome ? ` · ${m.agentNome}` : ''}</p>}
                           {automacao && (
                             <p className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold text-lime-ink">
                               <Icon name="zap" size={11} /> Automação{m.workflowNome ? `: ${m.workflowNome}` : ''}
                             </p>
                           )}
                                                     {!ia && !automacao && minha && (
-                            <p className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold text-[#1f7a57] dark:text-[#7fe0b8]">
+                            <p className={cx('mb-0.5 flex items-center gap-1 text-[11px] font-semibold', conversa.canal === 'Instagram' ? 'text-white/85' : 'text-[#1f7a57] dark:text-[#7fe0b8]')}>
                               {/* Mensagens antigas (importadas antes da migration 036) não
                                   têm autor gravado — o histórico do WhatsApp não traz isso.
                                   Caem no rótulo genérico "Equipe" em vez de ficar sem origem. */}
@@ -851,7 +854,7 @@ export function InboxAtendimento() {
                           ) : (
                             <CorpoMensagem texto={m.texto} />
                           )}
-                          <p className={cx('mt-1 text-right text-[10.5px] tabular', minha && !ia && !automacao ? 'text-[#667781] dark:text-[#e9edef]/70' : 'text-muted')}>
+                          <p className={cx('mt-1 text-right text-[10.5px] tabular', minha && !ia && !automacao ? (conversa.canal === 'Instagram' ? 'text-white/75' : 'text-[#667781] dark:text-[#e9edef]/70') : 'text-muted')}>
                             {m.hora ?? ''}
                           </p>
                         </div>

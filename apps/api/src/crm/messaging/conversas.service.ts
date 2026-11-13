@@ -44,6 +44,14 @@ export class ConversasService {
         orderBy: { updatedAt: 'desc' },
         include: { contact: { select: { id: true, telefone: true, email: true, fotoUrl: true, empresa: true, tag: true, tags: true } } },
       });
+      // Quem tem foto durável (1 query na página): a tela só chama /api/fotos
+      // para esses — sem flag, cada avatar de contato sem foto gerava um 404.
+      const idsContatos = rows.map((r) => r.contact?.id).filter((v): v is string => !!v);
+      const comFoto = new Set(
+        idsContatos.length
+          ? (await tx.contactFoto.findMany({ where: { contactId: { in: idsContatos } }, select: { contactId: true } })).map((f) => f.contactId)
+          : [],
+      );
       return rows.map((c) => ({
         id: c.id, nome: c.nome, canal: c.canal, tipo: c.tipo, status: c.status,
         ultimaPrevia: c.ultimaPrevia, naoLidas: c.naoLidas, ultimaHora: c.ultimaHora,
@@ -51,7 +59,7 @@ export class ConversasService {
         atualizadaEm: c.updatedAt.toISOString(),
         etiquetas: etiquetasDoContato(c.contact),
         contextoExterno: c.contextoExterno ?? null,
-        contato: c.contact ? { id: c.contact.id, telefone: c.contact.telefone, email: c.contact.email, fotoUrl: c.contact.fotoUrl, empresa: c.contact.empresa } : null,
+        contato: c.contact ? { id: c.contact.id, telefone: c.contact.telefone, email: c.contact.email, fotoUrl: c.contact.fotoUrl, empresa: c.contact.empresa, temFoto: comFoto.has(c.contact.id) } : null,
         mensagens: [] as { id: string; de: string; texto: string; hora: string | null; status: string; agentId: string | null }[],
       }));
     });

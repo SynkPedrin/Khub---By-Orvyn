@@ -180,7 +180,7 @@ describe('corrida: duas reservas no mesmo horário', () => {
 // ------------------------------------------------------------------ BookingService.reservar
 
 const PAGE = '44444444-4444-4444-8444-444444444444';
-function montarBooking(criar: jest.Mock) {
+function montarBooking(criar: jest.Mock, atribuicao?: { registrar: jest.Mock }) {
   const amanha = new Date(Date.now() + 2 * 86_400_000);
   const dia = String(diaDaSemana(dataNoFuso(+amanha, SP)));
   const pagina = {
@@ -200,7 +200,7 @@ function montarBooking(criar: jest.Mock) {
   const leads = { capturar: jest.fn(async () => ({ contactId: 'c1', criado: true, tagsAdicionadas: [] })) } as unknown as LeadsService;
   const limite = { consumir: jest.fn(async () => undefined) } as unknown as PublicRateLimiter;
   const inicio = new Date(instanteLocal(dataNoFuso(+amanha, SP), 10 * 60, SP)).toISOString();
-  return { svc: new BookingService(prisma, agenda, leads, limite), tx, leads, inicio };
+  return { svc: new BookingService(prisma, agenda, leads, limite, atribuicao as never), tx, leads, inicio };
 }
 const corpo = (inicio: string, extra: Record<string, unknown> = {}) => ({ inicio, nome: 'Ana Souza', telefone: '(11) 97777-1234', email: 'ana@exemplo.com', carimbo: emitirCarimbo(`booking:${PAGE}`, Date.now() - 8000), ...extra });
 const CTX = { ip: '200.1.2.3', userAgent: null };
@@ -303,5 +303,29 @@ describe('BookingService.salvarMinha (página pessoal)', () => {
     expect(falha).toBeInstanceOf(BadRequestException);
     expect((falha as BadRequestException).getResponse()).toMatchObject({ code: 'dono_fora_da_fila' });
     await expect(svc.atualizar(T, 'p1', { responsaveis: [EU] })).resolves.toMatchObject({ id: 'p1' });
+  });
+});
+
+describe('rastreio do agendamento (db/066)', () => {
+  it('reserva com gclid registra a ficha de origem do contato (google_ads)', async () => {
+    const criar = jest.fn().mockResolvedValue({ id: 'cp1', status: 'confirmado', responsavelId: 'A' });
+    const atribuicao = { registrar: jest.fn(async () => undefined) };
+    const { svc, inicio } = montarBooking(criar, atribuicao);
+    await svc.reservar('consulta-inicial', corpo(inicio, { utm: { utm_source: 'google', utm_campaign: 'busca', gclid: 'g-123' } }), CTX);
+    expect(atribuicao.registrar).toHaveBeenCalledTimes(1);
+    const [tenantId, contactId, toque] = atribuicao.registrar.mock.calls[0] as unknown as [string, string, { fonte: string; confianca: string; cliqueId?: string; campanha?: string }];
+    expect(tenantId).toBe(T);
+    expect(contactId).toBe('c1');
+    expect(toque).toMatchObject({ fonte: 'google_ads', confianca: 'confirmada', cliqueId: 'g-123', campanha: 'busca' });
+  });
+
+  it('reserva sem UTM ainda registra o toque como formulário (origem nunca inventada)', async () => {
+    const criar = jest.fn().mockResolvedValue({ id: 'cp1', status: 'confirmado', responsavelId: 'A' });
+    const atribuicao = { registrar: jest.fn(async () => undefined) };
+    const { svc, inicio } = montarBooking(criar, atribuicao);
+    await svc.reservar('consulta-inicial', corpo(inicio), CTX);
+    expect(atribuicao.registrar).toHaveBeenCalledTimes(1);
+    const toque = (atribuicao.registrar.mock.calls[0] as unknown[])[2] as { fonte: string };
+    expect(toque.fonte).toBe('formulario');
   });
 });

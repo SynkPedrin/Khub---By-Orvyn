@@ -53,6 +53,8 @@ export interface ContatoLista {
   id: string; nome: string; email: string | null; telefone: string | null; empresa: string | null;
   companyId: string | null; tag: string; valor: number; ultimoContatoAt: string | null;
   tags: string[]; ownerId: string | null; optedOutAt: string | null; origem: string | null; createdAt: string | null;
+  /** Fonte estruturada do lead (db/066): meta_ads, google_ads, whatsapp_direto… */
+  fonte?: string | null;
   etapa: { dealId: string; stageId: string; nome: string; cor: string } | null;
 }
 export interface PaginaContatos { items: ContatoLista[]; nextCursor: string | null }

@@ -1,6 +1,7 @@
 'use client';
 
 import { AvatarContato } from '@/components/inbox/AvatarContato';
+import { LOGO_FONTE, ROTULO_FONTE } from '@/components/crm/OrigemLead';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Icon } from '@/components/icons';
@@ -446,7 +447,16 @@ function Celula({ c, coluna, dono }: { c: ContatoLista; coluna: ColunaId; dono: 
           {c.etapa.nome}
         </span>
       ) : vazio;
-    case 'origem': return c.origem ? <span className="text-sm text-muted">{c.origem}</span> : vazio;
+    case 'origem': {
+      const logo = c.fonte ? LOGO_FONTE[c.fonte] : undefined;
+      return c.origem ? (
+        <span className="inline-flex items-center gap-1.5 text-sm text-muted" title={c.fonte ? (ROTULO_FONTE[c.fonte] ?? c.fonte) : undefined}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {logo && <img src={logo} alt="" width={16} height={16} className="h-4 w-4 shrink-0 rounded" />}
+          <span className="truncate">{c.origem}</span>
+        </span>
+      ) : vazio;
+    }
     case 'dono': return dono ? <span className="inline-flex items-center gap-1.5 text-sm text-fg"><Avatar name={dono} size={22} />{dono.split(' ')[0]}</span> : vazio;
     case 'valor': return c.valor > 0 ? <span className="text-sm font-semibold tabular text-fg">{moeda(c.valor)}</span> : vazio;
     case 'criadoEm': return c.createdAt ? <span className="text-sm text-muted">{new Date(c.createdAt).toLocaleDateString('pt-BR')}</span> : vazio;

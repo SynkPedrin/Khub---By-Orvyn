@@ -797,12 +797,15 @@ export class CrmService {
       // — o Inbox não tem como resolver isso sozinho (workflow/user são tenant-scoped).
       const workflowIds = [...new Set(recentes.map((m) => m.workflowId).filter((v): v is string => !!v))];
       const identityIds = [...new Set(recentes.map((m) => m.enviadoPorId).filter((v): v is string => !!v))];
-      const [workflows, usuarios] = await Promise.all([
+      const agentIds = [...new Set(recentes.map((m) => m.agentId).filter((v): v is string => !!v))];
+      const [workflows, usuarios, agentes] = await Promise.all([
         workflowIds.length ? tx.workflow.findMany({ where: { id: { in: workflowIds } }, select: { id: true, nome: true } }) : Promise.resolve([]),
         identityIds.length ? tx.user.findMany({ where: { identityId: { in: identityIds } }, select: { identityId: true, nome: true } }) : Promise.resolve([]),
+        agentIds.length ? tx.agent.findMany({ where: { id: { in: agentIds } }, select: { id: true, nome: true } }) : Promise.resolve([]),
       ]);
       const nomeWorkflow = new Map(workflows.map((w) => [w.id, w.nome]));
       const nomeUsuario = new Map(usuarios.map((u) => [u.identityId, u.nome]));
+      const nomeAgente = new Map(agentes.map((a) => [a.id, a.nome]));
       // Foto de perfil: abrir a conversa agenda a revalidação se a URL assinada
       // venceu (background — a resposta nunca espera a Stevo).
       this.avatares.revalidarSeVencido(tenantId, conv.contact);
@@ -810,6 +813,7 @@ export class CrmService {
         id, total,
         mensagens: recentes.reverse().map((m) => ({
           id: m.id, de: m.autorTipo, texto: m.corpo, hora: m.hora, status: m.deliveryStatus, agentId: m.agentId, criadaEm: m.createdAt.toISOString(),
+          agentNome: m.agentId ? nomeAgente.get(m.agentId) ?? null : null,
           workflowId: m.workflowId, workflowNome: m.workflowId ? nomeWorkflow.get(m.workflowId) ?? null : null,
           enviadoPorId: m.enviadoPorId, enviadoPorNome: m.enviadoPorId ? nomeUsuario.get(m.enviadoPorId) ?? null : null,
         })),
