@@ -527,9 +527,9 @@ function QuadroEsqueleto() {
           <Skeleton key={i} className="h-[86px] rounded-xl" />
         ))}
       </div>
-      <div className="flex gap-3 overflow-hidden pb-3">
+      <div className="flex gap-3 overflow-x-auto pb-3 scrollbar-thin">
         {[0, 1, 2, 3, 4].map((i) => (
-          <div key={i} className="min-w-[272px] flex-1 basis-0 rounded-xl border border-line bg-surface2 p-2.5">
+          <div key={i} className="min-w-[240px] flex-1 basis-0 rounded-xl border border-line bg-surface2 p-2.5 sm:min-w-[272px]">
             <Skeleton className="mx-1.5 mt-1 h-4 w-28 rounded-sm" />
             <div className="mt-3 space-y-2">
               <Skeleton className="h-[76px] rounded-lg" />

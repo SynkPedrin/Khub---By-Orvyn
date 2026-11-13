@@ -67,7 +67,9 @@ const STATUS_FILTROS: { chave: ResumoConversa['status'] | 'todas'; rotulo: strin
 function Inbox() {
   const [canal, setCanal] = useState<Canal | 'todos'>('todos');
   const [status, setStatus] = useState<ResumoConversa['status'] | 'todas'>('todas');
-  const [selecionada, setSelecionada] = useState<string>(CONVERSAS[0]?.id ?? '');
+  // Mobile: lista ↔ thread alternam em tela cheia; desktop mostra tudo junto
+  // (quando nada está selecionado a thread cai na primeira conversa da lista).
+  const [selecionada, setSelecionada] = useState<string>('');
   const [rascunho, setRascunho] = useState('');
 
   const lista = useMemo(
@@ -78,11 +80,14 @@ function Inbox() {
 
   const conversa = CONVERSAS.find((c) => c.id === selecionada) ?? lista[0];
   const naoLidas = CONVERSAS.filter((c) => c.status === 'nao_lida').length;
+  // Abaixo de xl vira navegação de uma coluna: abriu conversa → esconde
+  // filtros e lista; voltou (setSelecionada('')) → mostra a lista de novo.
+  const threadAberta = Boolean(selecionada);
 
   return (
     <div className="grid min-h-0 gap-3 xl:grid-cols-[186px_296px_minmax(0,1fr)] 2xl:grid-cols-[186px_296px_minmax(0,1fr)_292px]">
       {/* 1 — filtros */}
-      <aside className="card min-w-0 p-3">
+      <aside className={cx('card min-w-0 p-3', threadAberta && 'max-xl:hidden')}>
         <Grupo titulo="Canais" extra={`Todos ${CONVERSAS.length}`}>
           <ItemFiltro ativo={canal === 'todos'} onClick={() => setCanal('todos')} icone="users" contagem={CONVERSAS.length}>
             Todos os canais
@@ -138,7 +143,7 @@ function Inbox() {
       </aside>
 
       {/* 2 — lista */}
-      <section className="card flex min-w-0 flex-col" aria-label="Lista de conversas">
+      <section className={cx('card flex min-w-0 flex-col', threadAberta && 'max-xl:hidden')} aria-label="Lista de conversas">
         <div className="border-b border-line p-3">
           <div className="flex gap-2">
             <div className="relative min-w-0 flex-1">
@@ -229,7 +234,7 @@ function Inbox() {
       </section>
 
       {/* 3 — thread */}
-      {conversa ? <Thread conversa={conversa} rascunho={rascunho} setRascunho={setRascunho} /> : null}
+      {conversa ? <Thread conversa={conversa} rascunho={rascunho} setRascunho={setRascunho} ocultaMobile={!threadAberta} onVoltar={() => setSelecionada('')} /> : null}
 
       {/* 4 — dados do lead */}
       {conversa ? <PainelDadosLead conversa={conversa} /> : null}
@@ -243,15 +248,26 @@ function Thread({
   conversa,
   rascunho,
   setRascunho,
+  ocultaMobile = false,
+  onVoltar,
 }: {
   conversa: ResumoConversa;
   rascunho: string;
   setRascunho: (v: string) => void;
+  /** Mobile: escondida até a pessoa escolher uma conversa na lista. */
+  ocultaMobile?: boolean;
+  /** Mobile: volta para a lista de conversas. */
+  onVoltar?: () => void;
 }) {
   return (
-    <section className="card flex min-w-0 flex-col" aria-label={`Conversa com ${conversa.nome}`}>
+    <section className={cx('card flex min-w-0 flex-col', ocultaMobile && 'max-xl:hidden')} aria-label={`Conversa com ${conversa.nome}`}>
       {/* Cabeçalho */}
       <header className="flex items-center gap-3 border-b border-line p-3">
+        {onVoltar && (
+          <button type="button" onClick={onVoltar} className="btn btn-ghost btn-icon btn-sm -ml-1 xl:hidden" aria-label="Voltar para a lista de conversas">
+            <Icon name="arrowLeft" size={18} />
+          </button>
+        )}
         <Avatar name={conversa.nome} size={38} />
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 truncate text-[14.5px] font-bold text-fg">

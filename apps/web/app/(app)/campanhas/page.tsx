@@ -349,7 +349,7 @@ function PainelCampanha({ campanha }: { campanha: Campanha }) {
         {campanha.descricao && <p className="px-4 pt-2 text-[12.5px] leading-relaxed text-muted">{campanha.descricao}</p>}
 
         {/* Números da campanha */}
-        <dl className="grid grid-cols-4 gap-2 border-b border-line p-4">
+        <dl className="grid grid-cols-2 gap-2 border-b border-line p-4 sm:grid-cols-4">
           {[
             { rotulo: 'Envios', valor: campanha.envios },
             { rotulo: 'Respostas', valor: campanha.respostas },

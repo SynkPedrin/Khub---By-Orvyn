@@ -18,6 +18,9 @@ export function permissionFor(controller: string, route: string, method: string)
   // conta (ADR-0045). Antes caía no padrão `organization.manage` e o member
   // não conseguia agendar. Páginas de agendamento (booking-pages) seguem admin.
   if (controller === 'agenda') return read ? 'contacts.read' : 'agenda.write';
+  // Página pessoal (CAL-PESSOAL): cada colaborador configura o próprio link —
+  // o serviço impõe responsáveis = ele mesmo. As páginas da equipe seguem admin.
+  if (controller === 'booking-pages' && route.startsWith('minha')) return read ? 'contacts.read' : 'agenda.write';
   if (controller === 'crm') {
     // Estrutura do funil (criar/renomear/apagar funil e etapa) é configuração,
     // não operação: manager+ (ADR-0042). Mover negócio segue `pipeline.write`.

@@ -16,7 +16,17 @@ import { usePersonalization } from '@/components/app/PersonalizationProvider';
  * clicar (ou ⌘K / Ctrl+K) dispara o evento `khub:command` que a CommandBar
  * escuta. Evita dois campos concorrentes e mantém um único caminho de busca.
  */
-export function Topbar({ onMobileMenu }: { onMobileMenu?: () => void }) {
+/**
+ * Topbar global: busca à esquerda, notificações e conta à direita.
+ *
+ * No mobile a navegação mora na barra inferior (`BottomNav`) — aqui ficam só
+ * busca, tema, notificações e conta, sem hambúrguer duplicado.
+ *
+ * A busca aqui é o **gatilho** da paleta de comandos, não um campo de texto:
+ * clicar (ou ⌘K / Ctrl+K) dispara o evento `khub:command` que a CommandBar
+ * escuta. Evita dois campos concorrentes e mantém um único caminho de busca.
+ */
+export function Topbar() {
   // ADR-0034: a barra "acende" (aro + luz roxa) quando o conteúdo rola por
   // baixo dela — dá profundidade e mostra que há conteúdo acima.
   const [rolou, setRolou] = useState(false);
@@ -35,15 +45,6 @@ export function Topbar({ onMobileMenu }: { onMobileMenu?: () => void }) {
       role="banner"
       data-rolou={rolou}
     >
-      <button
-        type="button"
-        className="btn btn-ghost btn-icon btn-sm lg:hidden"
-        onClick={onMobileMenu}
-        aria-label="Abrir menu de navegação"
-      >
-        <Icon name="menu" size={20} />
-      </button>
-
       <SearchTrigger />
 
       <div className="ml-auto flex shrink-0 items-center gap-1.5">

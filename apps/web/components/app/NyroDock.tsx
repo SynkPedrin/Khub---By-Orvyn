@@ -49,7 +49,7 @@ export function NyroDock() {
         aria-label={open ? 'Fechar a NICO' : 'Chamar a NICO'}
         aria-expanded={open}
         title="NICO, sua agente interna de marketing"
-        className="fixed bottom-5 right-5 z-40 rounded-full transition-transform duration-200 hover:-translate-y-0.5"
+        className="fixed bottom-[calc(6.5rem+env(safe-area-inset-bottom))] right-4 z-40 rounded-full transition-transform duration-200 hover:-translate-y-0.5 lg:bottom-5 lg:right-5"
       >
         <NicoAvatar tamanho={56} estado={open ? estado : 'online'} />
       </button>
@@ -58,7 +58,7 @@ export function NyroDock() {
         <div
           role="dialog"
           aria-label="Conversa com a NICO"
-          className="lg-sheet fixed bottom-24 right-5 z-40 flex max-h-[76vh] w-[390px] max-w-[92vw] animate-scale-in flex-col overflow-hidden rounded-3xl"
+          className="lg-sheet fixed bottom-[calc(12.5rem+env(safe-area-inset-bottom))] right-4 z-40 flex max-h-[76vh] w-[390px] max-w-[92vw] animate-scale-in flex-col overflow-hidden rounded-3xl lg:bottom-24 lg:right-5"
         >
           <div className="flex items-center gap-3 border-b border-line px-4 py-3">
             <NicoAvatar tamanho={38} estado={estado} />
