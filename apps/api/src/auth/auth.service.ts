@@ -4,6 +4,8 @@ import { hash, verify } from '@node-rs/argon2';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantsService } from '../tenants/tenants.service';
 import { TokenService } from './token.service';
+import { Prisma } from '@prisma/client';
+import { modulosDe, papelRestringivel } from './modulos';
 
 export interface SignupInput {
   email: string;
@@ -76,8 +78,13 @@ export class AuthService {
     const displayName = nome?.trim() || invite.email.split('@')[0];
     await this.prisma.withTenant(invite.tenantId, async (tx) => {
       const existing = await tx.user.findFirst({ where: { identityId }, select: { id: true } });
+      // Acesso por módulo escolhido no convite (ADR-0045) entra junto: o
+      // colaborador já chega restrito, sem janela com acesso total.
+      const permissoes = (invite.permissoes ?? {}) as Prisma.InputJsonValue;
       if (!existing) {
-        await tx.user.create({ data: { tenantId: invite.tenantId, identityId, email: invite.email, nome: displayName, role: invite.role } });
+        await tx.user.create({ data: { tenantId: invite.tenantId, identityId, email: invite.email, nome: displayName, role: invite.role, permissoes } });
+      } else if (modulosDe(invite.permissoes) !== null) {
+        await tx.user.update({ where: { id: existing.id }, data: { permissoes } });
       }
       await tx.$executeRaw`INSERT INTO audit_logs (tenant_id, actor_type, actor_id, acao, entidade, entidade_id)
         VALUES (${invite.tenantId}::uuid, 'humano', ${identityId}, 'invite.accept', 'invite', ${invite.id})`;
@@ -150,8 +157,11 @@ export class AuthService {
       this.tenants.myTenant(tenantId),
       this.tenants.membershipsOf(identityId),
     ]);
-    const profile = await this.prisma.withTenant(tenantId, (tx) => tx.user.findFirst({ where: { identityId }, select: { nome: true, role: true } }));
-    return { identityId, email: identity?.email, nome: profile?.nome, role: profile?.role, tenant, memberships };
+    const profile = await this.prisma.withTenant(tenantId, (tx) => tx.user.findFirst({ where: { identityId }, select: { nome: true, role: true, permissoes: true } }));
+    // Módulos efetivos (ADR-0045): owner/admin nunca são restritos.
+    const role = memberships.find((m) => m.tenantId === tenantId)?.role ?? profile?.role ?? '';
+    const modulos = papelRestringivel(role) ? modulosDe(profile?.permissoes) : null;
+    return { identityId, email: identity?.email, nome: profile?.nome, role: profile?.role, modulos, tenant, memberships };
   }
 
   /**

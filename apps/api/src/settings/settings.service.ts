@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
 import { MailerService } from '../common/mailer.service';
 import { Prisma } from '@prisma/client';
+import { modulosDe, normalizarModulos, papelRestringivel } from '../auth/modulos';
 import { ID_NOTIFICACAO, lidasDasPrefs, montarNotificacoes, registrarLida, type Derivada, type NotificationItem } from './notificacoes';
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -25,6 +26,13 @@ export interface DadosConvite {
   nome?: string | null;
   mensagem?: string | null;
   telefone?: string | null;
+  /** Acesso por módulo (ADR-0045). Ausente = sem restrição. */
+  modulos?: string[] | null;
+}
+
+/** JSON de `permissoes` para o papel: owner/admin nunca guardam restrição. */
+function permissoesPara(role: string, modulos: string[] | null | undefined): Prisma.InputJsonValue {
+  return papelRestringivel(role) && Array.isArray(modulos) ? { modulos: normalizarModulos(modulos) } : {};
 }
 
 /** "(11) 99999-0000" → "5511999990000" (wa.me exige DDI). Vazio → null. Inválido → 400. */
@@ -95,14 +103,16 @@ export class SettingsService {
   async members(tenantId: string) {
     return this.prisma.withTenant(tenantId, async (tx) => {
       const members = await tx.$queryRaw<any[]>`
-        SELECT m.identity_id AS "identityId", m.role, m.is_default AS "isDefault", i.email, u.nome, u.idioma
+        SELECT m.identity_id AS "identityId", m.role, m.is_default AS "isDefault", i.email, u.nome, u.idioma, u.permissoes
         FROM memberships m JOIN identities i ON i.id = m.identity_id
         LEFT JOIN users u ON u.identity_id = m.identity_id AND u.tenant_id = ${tenantId}::uuid
         WHERE m.tenant_id = ${tenantId}::uuid ORDER BY m.created_at`;
       const invites = await tx.$queryRaw<any[]>`
-        SELECT id, email, role, expires_at AS "expiresAt", created_at AS "createdAt"
+        SELECT id, email, role, permissoes, expires_at AS "expiresAt", created_at AS "createdAt"
         FROM invites WHERE tenant_id = ${tenantId}::uuid AND accepted_at IS NULL ORDER BY created_at DESC`;
-      return { members, invites };
+      // `modulos` efetivo (null = sem restrição); o JSON cru não sai da API.
+      const comModulos = <T extends { role: string; permissoes?: unknown }>({ permissoes, ...r }: T) => ({ ...r, modulos: papelRestringivel(r.role) ? modulosDe(permissoes) : null });
+      return { members: members.map(comModulos), invites: invites.map(comModulos) };
     });
   }
 
@@ -120,7 +130,7 @@ export class SettingsService {
       if (await tx.invite.findFirst({ where: { tenantId, email, acceptedAt: null, expiresAt: { gt: new Date() } } })) throw new ConflictException('Já existe um convite pendente para este e-mail. Use "Gerar novo link" nele ou revogue antes.');
       // Convite expirado para o mesmo e-mail sai: o novo o substitui.
       await tx.invite.deleteMany({ where: { tenantId, email, acceptedAt: null, expiresAt: { lte: new Date() } } });
-      const inv = await tx.invite.create({ data: { tenantId, email, role: role || 'member', tokenHash: sha256(raw), expiresAt: new Date(Date.now() + 7 * 86400000) } });
+      const inv = await tx.invite.create({ data: { tenantId, email, role: role || 'member', permissoes: permissoesPara(role || 'member', extra.modulos), tokenHash: sha256(raw), expiresAt: new Date(Date.now() + 7 * 86400000) } });
       await audit(tx, tenantId, identityId, 'invite.create', 'invite', inv.id);
       return { inviteId: inv.id, ...(await this.contextoConvite(tx, tenantId, identityId)) };
     });
@@ -204,6 +214,25 @@ export class SettingsService {
       await audit(tx, tenantId, identityId, 'member.role', 'membership', targetIdentityId);
     });
     return { ok: true };
+  }
+
+  /**
+   * Acesso por módulo (ADR-0045). Só owner/admin mexem (rota `members/*` =
+   * users.manage). Owner/admin não têm módulos: são quem gerencia a equipe.
+   * Vale na próxima requisição da pessoa (o JwtAuthGuard lê a cada request).
+   */
+  async changeModulos(tenantId: string, identityId: string, targetIdentityId: string, modulos: string[] | null) {
+    return this.prisma.withTenant(tenantId, async (tx) => {
+      const target = await tx.membership.findUnique({ where: { identityId_tenantId: { identityId: targetIdentityId, tenantId } } });
+      if (!target) throw new NotFoundException('membro inexistente');
+      if (!papelRestringivel(target.role)) throw new BadRequestException('proprietário e administrador sempre veem tudo; mude o papel antes de restringir');
+      const permissoes = permissoesPara(target.role, modulos);
+      const r = await tx.user.updateMany({ where: { tenantId, identityId: targetIdentityId }, data: { permissoes } });
+      if (r.count !== 1) throw new NotFoundException('perfil do membro não encontrado');
+      await tx.$executeRaw`INSERT INTO audit_logs (tenant_id, actor_type, actor_id, acao, entidade, entidade_id, payload)
+        VALUES (${tenantId}::uuid, 'humano', ${identityId}, 'member.modulos', 'membership', ${targetIdentityId}, ${JSON.stringify(permissoes)}::jsonb)`;
+      return { ok: true, modulos: modulosDe(permissoes) };
+    });
   }
 
   /**

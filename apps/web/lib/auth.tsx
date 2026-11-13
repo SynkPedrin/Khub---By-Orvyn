@@ -10,6 +10,8 @@ export interface KhubUser {
   tenantId?: string;
   /** identities.id (Inbox: filtro "Minhas", menções). */
   identityId?: string;
+  /** Módulos que a pessoa vê (ADR-0045). null = sem restrição. */
+  modulos?: string[] | null;
 }
 
 interface AuthCtx {
@@ -30,7 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const r = await fetch('/api/auth/me', { cache: 'no-store' });
       if (r.ok) {
         const d = await r.json();
-        setUser({ name: d.nome || d.email || 'Você', email: d.email, role: d.role, empresa: d.tenant?.nome, tenantId: d.tenant?.id, identityId: d.identityId });
+        setUser({ name: d.nome || d.email || 'Você', email: d.email, role: d.role, empresa: d.tenant?.nome, tenantId: d.tenant?.id, identityId: d.identityId, modulos: Array.isArray(d.modulos) ? d.modulos : null });
       } else {
         setUser(null);
       }

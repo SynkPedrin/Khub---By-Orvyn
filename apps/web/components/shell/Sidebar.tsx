@@ -11,6 +11,8 @@ import { modoDemo } from '@/lib/demo/flag';
 import { useEffect, useState } from 'react';
 import { useLocale } from '@/lib/locale';
 import { useAgency } from '@/components/agency/AgencyProvider';
+import { useAuth } from '@/lib/auth';
+import { filtrarPorModulos } from '@/lib/modulos';
 import { SubaccountSwitcher } from '@/components/agency/SubaccountSwitcher';
 import { motionTokens } from '@/lib/motion';
 import { billingApi, NOME_PLANO, ROTULO_STATUS, type BillingStatus } from '@/lib/billing';
@@ -46,7 +48,9 @@ export function Sidebar({
   // misturada com a operacional de um cliente. `/agency` nunca é rota de
   // um cliente (nome reservado), então esta checagem é segura.
   const modoAgencia = pathname.startsWith('/agency');
-  const nav = modoAgencia ? AGENCY_NAV : PRIMARY_NAV;
+  // Acesso por módulo (ADR-0045): o colaborador só vê no menu o que foi liberado.
+  const { user } = useAuth();
+  const nav = modoAgencia ? AGENCY_NAV : filtrarPorModulos(PRIMARY_NAV, user?.modulos);
   const active = activeHref(pathname, nav);
   const grupos = agruparNav(nav);
 

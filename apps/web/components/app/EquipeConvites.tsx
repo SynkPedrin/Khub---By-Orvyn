@@ -6,6 +6,8 @@ import { Icon } from '@/components/icons';
 import { Button, Confirm, Select, SkeletonRows, Textarea, useToast } from '@/components/kit';
 import { EmailDeliveryStatus, type EmailStatus } from '@/components/app/EmailDeliveryStatus';
 import { RemoverMembro } from '@/components/app/EquipeAcoes';
+import { EditarAcessos, ResumoModulos, SeletorModulos } from '@/components/app/AcessoModulos';
+import { MODULOS_PADRAO, papelRestringivel } from '@/lib/modulos';
 import { settingsApi, type ConviteEntregue, type Invite, type Member } from '@/lib/settings';
 import { useAuth } from '@/lib/auth';
 
@@ -19,7 +21,7 @@ const PAPEIS = [
 const DICA_PAPEL: Record<string, string> = {
   admin: 'Gerencia tudo desta empresa e pode convidar a própria equipe.',
   manager: 'Configura funis, automações e importa contatos. Não gerencia a equipe.',
-  member: 'Atende conversas, cuida de leads e negócios.',
+  member: 'Colaborador do dia a dia: atende, cuida de leads e da agenda.',
   viewer: 'Só visualiza, não altera nada.',
   owner: 'Controle total, inclusive de outros proprietários.',
 };
@@ -55,7 +57,10 @@ export function EquipeConvites() {
   const { user: eu } = useAuth();
   const [emailStatus, setEmailStatus] = useState<EmailStatus | null>(null);
   const [data, setData] = useState<{ members: Member[]; invites: Invite[] } | null>(null);
-  const [form, setForm] = useState({ email: '', nome: '', telefone: '', papel: 'admin', mensagem: '' });
+  // Padrão = colaborador da loja já restrito ao dia a dia (ADR-0045); IA fica para liberar depois.
+  const [form, setForm] = useState({ email: '', nome: '', telefone: '', papel: 'member', mensagem: '' });
+  const [modulos, setModulos] = useState<string[] | null>([...MODULOS_PADRAO]);
+  const [acessos, setAcessos] = useState<Member | null>(null);
   const [busy, setBusy] = useState(false);
   const [entregue, setEntregue] = useState<ConviteEntregue | null>(null);
   const [revogar, setRevogar] = useState<Invite | null>(null);
@@ -68,7 +73,7 @@ export function EquipeConvites() {
     if (!form.email.trim()) return;
     setBusy(true);
     try {
-      const r = await settingsApi.invite(form.email.trim(), form.papel, { nome: form.nome.trim() || undefined, mensagem: form.mensagem.trim() || undefined, telefone: form.telefone.trim() || undefined });
+      const r = await settingsApi.invite(form.email.trim(), form.papel, { nome: form.nome.trim() || undefined, mensagem: form.mensagem.trim() || undefined, telefone: form.telefone.trim() || undefined, modulos: papelRestringivel(form.papel) && modulos !== null ? modulos : undefined });
       setEntregue(r);
       setForm({ email: '', nome: '', telefone: '', papel: form.papel, mensagem: '' });
       toast.success('Convite criado', { description: r.emailSent ? `E-mail enviado para ${r.email}.` : 'Envie pelo WhatsApp ou copie o link.' });
@@ -92,14 +97,25 @@ export function EquipeConvites() {
   return (
     <div className="space-y-5">
       <Card className="p-6">
-        <h2 className="font-bold text-fg">Convidar para esta operação</h2>
-        <p className="mt-1 text-sm text-muted">A pessoa recebe o convite, cria a própria senha e entra só nesta empresa.</p>
+        <h2 className="font-bold text-fg">Convidar colaborador</h2>
+        <p className="mt-1 text-sm text-muted">A pessoa recebe o convite, cria a própria senha e entra só nesta empresa, vendo só o que você liberar.</p>
         <div className="mt-4"><EmailDeliveryStatus status={emailStatus} /></div>
         <form onSubmit={convidar} className="mt-4 grid gap-3 sm:grid-cols-2">
           <Field label="E-mail (vai ser o login)"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="pessoa@empresa.com" required /></Field>
           <Field label="Nome (opcional)"><Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} placeholder="Ana Souza" maxLength={120} /></Field>
           <Field label="WhatsApp (opcional)" hint="Com DDD. Abre a conversa direto com a pessoa."><Input value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} placeholder="(11) 99999-0000" inputMode="tel" maxLength={30} /></Field>
           <Field label="Papel" hint={DICA_PAPEL[form.papel]}><Select value={form.papel} onChange={(v) => setForm({ ...form, papel: v })} options={PAPEIS} /></Field>
+          <div className="sm:col-span-2 rounded-2xl border border-line p-4">
+            <p className="text-sm font-semibold text-fg">O que essa pessoa vai ver</p>
+            {papelRestringivel(form.papel) ? (
+              <>
+                <p className="mb-3 mt-0.5 text-xs text-muted">Dá para mudar depois em Membros › Acessos, inclusive liberar a IA.</p>
+                <SeletorModulos valor={modulos} onChange={setModulos} disabled={busy} />
+              </>
+            ) : (
+              <p className="mt-0.5 text-xs text-muted">Proprietário e administrador sempre veem tudo. Para restringir, escolha outro papel.</p>
+            )}
+          </div>
           <div className="sm:col-span-2">
             <Field label="Recado (opcional)" hint="Aparece no e-mail e na mensagem de WhatsApp.">
               <Textarea value={form.mensagem} onChange={(e) => setForm({ ...form, mensagem: e.target.value })} placeholder="Ex.: Oi, Ana! Este é o sistema onde vamos acompanhar os seus leads e o atendimento." maxLength={600} rows={3} />
@@ -117,7 +133,8 @@ export function EquipeConvites() {
           {data?.members.map((m) => (
             <div key={m.identityId} className="flex flex-wrap items-center gap-3 px-5 py-3 text-sm">
               <Avatar name={m.nome ?? m.email} size={34} />
-              <div className="min-w-0 flex-1"><p className="truncate font-semibold text-fg">{m.nome ?? '-'}</p><p className="truncate text-xs text-muted">{m.email}</p></div>
+              <div className="min-w-0 flex-1"><p className="truncate font-semibold text-fg">{m.nome ?? '-'}</p><p className="truncate text-xs text-muted">{m.email}</p><ResumoModulos role={m.role} modulos={m.modulos} /></div>
+              {papelRestringivel(m.role) && <Button size="sm" variant="secondary" onClick={() => setAcessos(m)}><Icon name="lock" size={14} /> Acessos</Button>}
               <select className="input w-40" value={m.role} aria-label={`Papel de ${m.nome ?? m.email}`} onChange={async (e) => { try { await settingsApi.changeRole(m.identityId, e.target.value); toast.success('Papel atualizado'); load(); } catch (err) { toast.error('Não foi possível alterar', { description: msg(err) }); } }}>
                 {PAPEIS.map((p) => <option key={p.value} value={p.value}>{ROTULO_PAPEL[p.value]}</option>)}
               </select>
@@ -138,6 +155,7 @@ export function EquipeConvites() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold text-fg">{i.email}</p>
                     <p className="text-xs text-muted">{ROTULO_PAPEL[i.role] ?? i.role} · {expirado ? 'expirou' : 'vale até'} {new Date(i.expiresAt).toLocaleDateString('pt-BR')}</p>
+                    <ResumoModulos role={i.role} modulos={i.modulos} />
                   </div>
                   {expirado && <Badge tone="amber">Expirado</Badge>}
                   <Button size="sm" variant="secondary" onClick={() => novoLink(i)}><Icon name="refresh" size={14} /> Gerar novo link</Button>
@@ -148,6 +166,8 @@ export function EquipeConvites() {
           </div>
         </Card>
       )}
+
+      <EditarAcessos membro={acessos} onFechar={() => setAcessos(null)} onSalvo={load} />
 
       <Confirm open={!!revogar} onClose={() => setRevogar(null)} title={`Revogar o convite de ${revogar?.email ?? ''}?`} description="O link enviado deixa de funcionar." confirmLabel="Revogar"
         onConfirm={async () => { if (!revogar) return; try { await settingsApi.revokeInvite(revogar.id); toast.success('Convite revogado'); setRevogar(null); load(); } catch (err) { toast.error('Não foi possível revogar', { description: msg(err) }); } }} />

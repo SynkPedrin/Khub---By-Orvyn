@@ -69,6 +69,19 @@ describe('Tools da Nyro (ADR-0014 — conjunto fechado)', () => {
   });
 });
 
+describe('Visão financeira e guia do sistema', () => {
+  it('são leitura e a Estrategista as enxerga', () => {
+    for (const n of ['resumo_financeiro', 'listar_cobrancas', 'guia_do_sistema']) expect(TOOLS_POR_NOME.get(n)?.sensibilidade).toBe('leitura');
+    const g = toolsDoAgente('growth').map((x) => x.nome);
+    expect(g).toEqual(expect.arrayContaining(['resumo_financeiro', 'listar_cobrancas', 'guia_do_sistema']));
+  });
+  it('guia responde por assunto e cai no mapa inteiro se nada bater', () => {
+    const { consultarGuia, GUIA_SISTEMA } = jest.requireActual('./guia-sistema') as typeof import('./guia-sistema');
+    expect(consultarGuia('cobrar cliente').some((e) => e.rota === '/financeiro')).toBe(true);
+    expect(consultarGuia('xyzqwerty')).toHaveLength(GUIA_SISTEMA.length);
+  });
+});
+
 describe('Agentes (PRD §5.1 — orquestrador multi-agente)', () => {
   it('cada agente enxerga só as tools do papel dele', () => {
     const consultoria = toolsDoAgente('consultoria').map((t) => t.nome);

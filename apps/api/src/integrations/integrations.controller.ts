@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { IsString } from 'class-validator';
 import { IntegrationsService } from './integrations.service';
 import { AdsService } from './ads.service';
+import { AdsSimulatorService } from './ads-simulator.service';
 import { Public, TenantId } from '../auth/decorators';
 
 class CallbackDto {
@@ -59,5 +60,26 @@ export class AdsController {
   @Get('creatives')
   creatives(@TenantId() tenantId: string) {
     return this.ads.creatives(tenantId);
+  }
+}
+
+/**
+ * Simulador de campanhas (ambiente de teste, sem gastar verba). O corpo é
+ * validado por Zod no serviço (payload aninhado com criativos).
+ */
+@Controller('ads/simulador')
+export class AdsSimuladorController {
+  constructor(private readonly sim: AdsSimulatorService) {}
+
+  @Post('simular')
+  @HttpCode(200)
+  simular(@TenantId() tenantId: string, @Body() corpo: unknown) {
+    return this.sim.simular(tenantId, corpo);
+  }
+
+  @Post('analisar')
+  @HttpCode(200)
+  analisar(@TenantId() tenantId: string, @Body() corpo: unknown) {
+    return this.sim.analisar(tenantId, corpo);
   }
 }

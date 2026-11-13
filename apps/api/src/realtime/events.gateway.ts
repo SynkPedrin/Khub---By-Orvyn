@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { Logger, Optional } from '@nestjs/common';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
@@ -9,9 +9,18 @@ import type { Server, Socket } from 'socket.io';
 import type { RealtimeEnvelope, RealtimeEvent, RealtimeEvents } from '@khub/types';
 import { TokenService } from '../auth/token.service';
 import { ConfigService } from '../config/config.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { moduloLiberado, modulosDe, papelRestringivel } from '../auth/modulos';
 
 /** Sala do tenant: cada evento é publicado aqui, nunca em broadcast global. */
 export const salaDoTenant = (tenantId: string): string => `tenant:${tenantId}`;
+/**
+ * Sala das conversas do tenant (ADR-0045): mensagem e conversa levam texto do
+ * cliente, então só entra quem tem o módulo Conversas. Mudança de módulo vale
+ * na próxima conexão do socket (o REST já bloqueia na hora).
+ */
+export const salaDeConversas = (tenantId: string): string => `tenant:${tenantId}:conversas`;
+const EVENTO_DE_CONVERSA = /^(message|conversation)\./;
 
 interface SocketAutenticado extends Socket {
   data: { tenantId: string; identityId: string; role: string };
@@ -39,6 +48,7 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     private readonly tokens: TokenService,
     private readonly config: ConfigService,
+    @Optional() private readonly prisma?: PrismaService,
   ) {}
 
   handleConnection(client: Socket): void {
@@ -54,6 +64,7 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const c = client as SocketAutenticado;
       c.data = { tenantId: claims.tenant_id, identityId: claims.sub, role: claims.role };
       void client.join(salaDoTenant(claims.tenant_id));
+      void this.entrarNasConversas(client, claims.tenant_id, claims.sub, claims.role);
       client.emit('pronto', { tenantId: claims.tenant_id });
       this.log.debug(`socket ${client.id} conectado (tenant ${claims.tenant_id})`);
     } catch (e) {
@@ -69,7 +80,27 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   emitirParaTenant<E extends RealtimeEvent>(tenantId: string, evento: E, dados: RealtimeEvents[E]): void {
     if (!this.server) return; // gateway ainda não inicializado (ex.: teste unitário do serviço)
     const envelope: RealtimeEnvelope<E> = { evento, dados, emitidoEm: new Date().toISOString() };
-    this.server.to(salaDoTenant(tenantId)).emit(evento, envelope);
+    const sala = EVENTO_DE_CONVERSA.test(evento) ? salaDeConversas(tenantId) : salaDoTenant(tenantId);
+    this.server.to(sala).emit(evento, envelope);
+  }
+
+  /** Entra na sala de conversas se o papel/módulos permitirem (lidos do banco, não do ticket). */
+  private async entrarNasConversas(client: Socket, tenantId: string, identityId: string, roleDoTicket: string): Promise<void> {
+    try {
+      let role = roleDoTicket;
+      if (this.prisma) {
+        const m = await this.prisma.membership.findUnique({ where: { identityId_tenantId: { identityId, tenantId } }, select: { role: true } });
+        if (!m) return;
+        role = m.role;
+        if (papelRestringivel(role)) {
+          const u = await this.prisma.withTenant(tenantId, (tx) => tx.user.findFirst({ where: { identityId }, select: { permissoes: true } }));
+          if (!moduloLiberado(modulosDe(u?.permissoes), ['conversas'])) return;
+        }
+      }
+      await client.join(salaDeConversas(tenantId));
+    } catch (e) {
+      this.log.warn(`socket ${client.id} sem sala de conversas: ${(e as Error).message}`);
+    }
   }
 
   private recusar(client: Socket, motivo: string): void {

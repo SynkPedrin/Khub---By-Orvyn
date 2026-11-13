@@ -153,12 +153,6 @@ export default function ContatosPage() {
                 <Field label="E-mail"><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="email@..." /></Field>
                 <Field label="Telefone"><Input value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} placeholder="+55…" /></Field>
               </div>
-              <Field label="Empresa">
-                <select className="input" value={form.companyId} onChange={(e) => setForm({ ...form, companyId: e.target.value })}>
-                  <option value="">- sem empresa -</option>
-                  {empresas.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
-                </select>
-              </Field>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Tag">
                   <select className="input" value={form.tag} onChange={(e) => setForm({ ...form, tag: e.target.value })}>

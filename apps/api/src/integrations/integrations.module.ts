@@ -8,9 +8,10 @@ import { MetaAdsConnector } from './providers/meta-ads.connector';
 import { ADS_CONNECTORS, type AdsConnector } from './ads-connector';
 import { IntegrationsService } from './integrations.service';
 import { AdsService } from './ads.service';
+import { AdsSimulatorService } from './ads-simulator.service';
 import { AdsSyncService } from './ads-sync.service';
 import { AdsSyncProcessor } from './ads-sync.processor';
-import { AdsController, IntegrationsController } from './integrations.controller';
+import { AdsController, AdsSimuladorController, IntegrationsController } from './integrations.controller';
 import { MetaWebhookController } from './meta-webhook.controller';
 
 import { queueConnection, isWorker } from '../common/queue-connection';
@@ -24,7 +25,7 @@ import { queueConnection, isWorker } from '../common/queue-connection';
     // entrega para quem sabe criar contato.
     CrmModule,
   ],
-  controllers: [IntegrationsController, AdsController, MetaWebhookController],
+  controllers: [IntegrationsController, AdsController, AdsSimuladorController, MetaWebhookController],
   providers: [
     MetaLeadsService,
     CryptoService,
@@ -37,6 +38,7 @@ import { queueConnection, isWorker } from '../common/queue-connection';
     },
     IntegrationsService,
     AdsService,
+    AdsSimulatorService,
     AdsSyncService,
     ...(isWorker() ? [AdsSyncProcessor] : []),
   ],

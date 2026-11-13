@@ -1,6 +1,7 @@
 'use client';
 
 import { Icon } from '../icons';
+import { Markdown } from '../Markdown';
 import { ConfigRequired } from './ConfigRequired';
 import { AGENTE_NOME, type Aprovacao, type PassoNyro, type StatusNyro } from '@/lib/nyro';
 import { capacidadeHumana } from '../nico/Nico';
@@ -62,11 +63,24 @@ export function NyroMensagens({ status, bolhas, passos, pensando, erro, sugestoe
       {bolhas.map((b, i) => (
         <div key={i}>
           {b.papel === 'user' ? (
-            <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-brand px-3.5 py-2 text-sm text-white">{b.texto}</p>
+            <div className="ml-auto w-fit max-w-[85%]">
+              {!!b.anexos?.length && (
+                <p className="mb-1 flex flex-wrap justify-end gap-1">
+                  {b.anexos.map((n) => (
+                    <span key={n} className="inline-flex items-center gap-1 rounded-full bg-surface2 px-2 py-0.5 text-2xs text-muted">
+                      <Icon name="paperclip" size={11} /> {n}
+                    </span>
+                  ))}
+                </p>
+              )}
+              <p className="whitespace-pre-wrap rounded-2xl rounded-br-md bg-brand px-3.5 py-2 text-sm text-white">{b.texto}</p>
+            </div>
           ) : (
-            <div className="max-w-[92%]">
+            <div className="max-w-[96%]">
               {b.agente && <p className="mb-1 text-2xs font-bold uppercase tracking-wide text-brand">{AGENTE_NOME[b.agente] ?? b.agente}</p>}
-              <p className="w-fit whitespace-pre-wrap rounded-2xl rounded-bl-md bg-surface2 px-3.5 py-2 text-sm text-fg">{b.texto}</p>
+              <div className="w-fit max-w-full overflow-x-auto rounded-2xl rounded-bl-md bg-surface2 px-4 py-3 text-[14.5px] leading-relaxed text-fg">
+                <Markdown>{b.texto}</Markdown>
+              </div>
               {b.guardrail && <p className="mt-1 text-2xs text-amber-600 dark:text-amber-400">⚠ resposta ajustada por compliance: {b.guardrail}</p>}
               {!!b.fontes?.length && <p className="mt-1 text-2xs text-muted">fontes: {[...new Set(b.fontes.map((f) => f.titulo))].join(' · ')}</p>}
               {b.aprovacoes?.map((a) => (

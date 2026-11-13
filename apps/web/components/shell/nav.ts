@@ -37,7 +37,6 @@ export function agruparNav(items: NavItem[]): { grupo: NavGrupo | null; itens: N
 export const PRIMARY_NAV: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: 'home', grupo: 'Operação' },
   { href: '/leads', label: 'Leads', icon: 'leads', grupo: 'Operação' },
-  { href: '/empresas', label: 'Empresas', icon: 'building', grupo: 'Operação' },
   { href: '/pipeline', label: 'Pipeline', icon: 'chart', grupo: 'Operação' },
   { href: '/conversas', label: 'Conversas', icon: 'chat', badge: 'conversas', grupo: 'Operação' },
   { href: '/agenda', label: 'Agenda', icon: 'calendar', grupo: 'Operação' },

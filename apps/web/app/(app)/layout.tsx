@@ -11,6 +11,9 @@ import { PageTransition } from '@/components/shell/PageTransition';
 import { PersonalizationProvider } from '@/components/app/PersonalizationProvider';
 import { CommandBar } from '@/components/app/CommandBar';
 import { NyroDock } from '@/components/app/NyroDock';
+import { PortaoDeModulo } from '@/components/app/PortaoDeModulo';
+import { useAuth } from '@/lib/auth';
+import { podeVer } from '@/lib/modulos';
 import { Icon } from '@/components/icons';
 import { ToastProvider, useFocusTrap, useScrollLock } from '@/components/kit';
 
@@ -26,6 +29,9 @@ import { ToastProvider, useFocusTrap, useScrollLock } from '@/components/kit';
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [drawer, setDrawer] = useState(false);
   const pathname = usePathname();
+  // Acesso por módulo (ADR-0045): sem o módulo IA, o balão da NICO nem aparece.
+  const { user } = useAuth();
+  const veIa = podeVer(user?.modulos, '/nyro');
 
   // Navegar fecha o drawer — inclusive quando a navegação parte de um link
   // dentro do conteúdo, não só da sidebar.
@@ -67,7 +73,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {/* Assinatura sempre no pé: em página curta não flutua no meio (ADR-0036). */}
             <div className="flex min-h-full flex-col">
               <div className="flex-1">
-                <PageTransition>{children}</PageTransition>
+                <PageTransition><PortaoDeModulo>{children}</PortaoDeModulo></PageTransition>
               </div>
               <BrandSignature className="border-t border-line" />
             </div>
@@ -107,7 +113,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         <CommandBar />
         {/* NICO, a agente interna de marketing, à mão em qualquer tela (ADR-0040). */}
-        <NyroDock />
+        {veIa && <NyroDock />}
       </div>
     </PersonalizationProvider>
     </ToastProvider>

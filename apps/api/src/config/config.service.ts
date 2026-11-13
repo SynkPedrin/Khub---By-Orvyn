@@ -4,7 +4,7 @@ import { HttpException, Injectable, Logger } from '@nestjs/common';
 export type Provider =
   | 'stevo' | 'stevo_api' | 'stevo_webhook' | 'evolution' | 'meta' | 'google_ads' | 'tiktok' | 'stripe'
   | 'voyage' | 'anthropic' | 'email' | 'oauth_google' | 'oauth_github'
-  | 'google_calendar' | 'integrations_crypto' | 'storage' | 'youtube';
+  | 'google_calendar' | 'integrations_crypto' | 'storage' | 'youtube' | 'firecrawl';
 
 /** Variáveis obrigatórias por provedor (Seção 2 do Brief-Finalizacao). */
 const REQUIRED: Record<Provider, string[]> = {
@@ -26,6 +26,8 @@ const REQUIRED: Record<Provider, string[]> = {
   stripe: ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'],
   voyage: ['VOYAGE_API_KEY'],
   anthropic: ['ANTHROPIC_API_KEY'],
+  // Pesquisa na web e leitura de páginas da NICO (benchmark de concorrentes).
+  firecrawl: ['FIRECRAWL_API_KEY'],
   email: ['SMTP_URL'],
   oauth_google: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
   oauth_github: ['GITHUB_ID', 'GITHUB_SECRET'],

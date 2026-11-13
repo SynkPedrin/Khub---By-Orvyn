@@ -6,6 +6,7 @@ import { AGENTES, PROMPT_ROTEADOR, toolsDoAgente, type Agente } from './agentes'
 import { TOOLS_POR_NOME, paraAnthropic } from './tools';
 import { ToolExecutorService, type ContextoNyro } from './tool-executor.service';
 import { instrucaoDoNicho, validarResposta } from './guardrails';
+import { comporMensagemComAnexos, lerAnexos, type AnexoEntrada } from './anexos';
 
 /** Passo da resposta, como a UI mostra ("Analisando histórico…"). */
 export interface PassoNyro {
@@ -42,8 +43,9 @@ const modeloRoteador = () => (provedorNico() === 'anthropic' ? process.env.NICO_
  */
 export function rotaPorPalavras(texto: string): Agente | null {
   const t = texto.toLowerCase();
-  if (/campanh|an[uú]ncio|tr[aá]fego|\bcpl\b|\broas\b|\bctr\b|\bcpc\b|\bcpm\b|biblioteca de an|benchmark|concorrent|relat[oó]rio|rotina|toda (segunda|ter[cç]a|quarta|quinta|sexta|semana|manh[aã])|conte[uú]do|post|reels|criativo|estrat[eé]gia|receita|faturamento|ticket|ltv|\bcac\b|margem|funil|convers[aã]o/.test(t)) return 'growth';
-  if (/prompt|agente|automa[cç]|fluxo|workflow|erro na|n[aã]o (est[aá] )?funciona|configur|cri(e|ar) (um|uma|o|a) (funil|etapa)|instal/.test(t)) return 'configuracao';
+  if (/prompt/.test(t) && !/campanh|an[uú]ncio/.test(t)) return 'configuracao';
+  if (/campanh|an[uú]ncio|tr[aá]fego|\bcpl\b|\broas\b|\bctr\b|\bcpc\b|\bcpm\b|biblioteca de an|benchmark|concorrent|relat[oó]rio|rotina|toda (segunda|ter[cç]a|quarta|quinta|sexta|semana|manh[aã])|conte[uú]do|post|reels|criativo|copy|roteiro|legenda|gancho|\bvsl\b|e-?mail marketing|landing|p[aá]gina de venda|slogan|lan[cç]amento|\bseo\b|calend[aá]rio editorial|estrat[eé]gia|receita|faturamento|ticket|ltv|\bcac\b|margem|funil|convers[aã]o|financeir|cobran[cç]|inadimpl|caixa|lucro|pagamento|vencid|verba|or[cç]amento de an/.test(t)) return 'growth';
+  if (/onde (fica|est[aá]|acho)|como (eu )?(fa[cç]o|configuro|conecto)|engenharia de prompt|prompt|agente|automa[cç]|fluxo|workflow|erro na|n[aã]o (est[aá] )?funciona|configur|cri(e|ar) (um|uma|o|a) (funil|etapa)|instal/.test(t)) return 'configuracao';
   return null;
 }
 
@@ -74,15 +76,18 @@ export class NyroService {
     return this.llm.missing();
   }
 
-  async conversar(ctxBase: { tenantId: string; identityId: string }, texto: string, conversationId?: string): Promise<RespostaNyro> {
+  async conversar(ctxBase: { tenantId: string; identityId: string }, texto: string, conversationId?: string, anexosBrutos?: AnexoEntrada[]): Promise<RespostaNyro> {
     this.llm.exigirCredencial(); // 501 config_required se faltar a chave
+    // lê os arquivos ANTES de criar conversa: anexo inválido não deixa conversa órfã
+    const anexos = await lerAnexos(anexosBrutos);
+    const mensagemUsuario = comporMensagemComAnexos(texto, anexos);
 
     const ctx = await this.montarContexto(ctxBase);
     const conv = conversationId
       ? await this.carregarConversa(ctx.tenantId, conversationId)
       : await this.criarConversa(ctx, texto);
 
-    await this.gravarMensagem(ctx.tenantId, conv.id, 'user', texto);
+    await this.gravarMensagem(ctx.tenantId, conv.id, 'user', mensagemUsuario);
 
     const passos: PassoNyro[] = [];
     const agente = await this.rotear(ctx, texto, passos);

@@ -1,12 +1,20 @@
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post } from '@nestjs/common';
-import { IsBoolean, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ArrayMaxSize, IsArray, IsBoolean, IsOptional, IsString, IsUUID, MaxLength, MinLength, ValidateNested } from 'class-validator';
 import { NyroService } from './nyro.service';
 import { CurrentUser, TenantId, type AuthUser } from '../auth/decorators';
 import { CATALOGO_PUBLICO } from './tools-publicas';
+import { MAX_ANEXOS } from './anexos';
 
+class AnexoDto {
+  @IsString() @MinLength(1) @MaxLength(160) nome!: string;
+  /** Arquivo em base64 (até 10 MB binários ≈ 14 MB de texto). */
+  @IsString() @MinLength(1) @MaxLength(14_500_000) base64!: string;
+}
 class ChatDto {
   @IsString() @MinLength(1) @MaxLength(2000) texto!: string;
   @IsOptional() @IsUUID() conversationId?: string;
+  @IsOptional() @IsArray() @ArrayMaxSize(MAX_ANEXOS) @ValidateNested({ each: true }) @Type(() => AnexoDto) anexos?: AnexoDto[];
 }
 class DecisaoDto {
   @IsBoolean() aprovar!: boolean;
@@ -33,7 +41,7 @@ export class NyroController {
   @Post('chat')
   @HttpCode(200)
   chat(@TenantId() t: string, @CurrentUser() u: AuthUser, @Body() dto: ChatDto) {
-    return this.nyro.conversar({ tenantId: t, identityId: u.identityId }, dto.texto, dto.conversationId);
+    return this.nyro.conversar({ tenantId: t, identityId: u.identityId }, dto.texto, dto.conversationId, dto.anexos);
   }
 
   @Get('conversas')

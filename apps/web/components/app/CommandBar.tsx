@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Icon, type IconName } from '../icons';
 import { crm, type SearchResult } from '@/lib/crm';
+import { useAuth } from '@/lib/auth';
+import { podeVer } from '@/lib/modulos';
 
 interface Item {
   label: string;
@@ -33,6 +35,7 @@ export function CommandBar() {
   const [docs, setDocs] = useState<{ title: string; slug: string }[]>([]);
   const [crmRows, setCrmRows] = useState<SearchResult[]>([]);
   const [buscando, setBuscando] = useState(false);
+  const modulos = useAuth().user?.modulos;
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -81,15 +84,16 @@ export function CommandBar() {
 
   const results = useMemo<Item[]>(() => {
     const term = q.trim().toLowerCase();
-    const nav: Item[] = NAV_ITEMS.filter((n) => !term || n.label.toLowerCase().includes(term)).map((n) => ({ ...n, hint: 'Ir para' }));
+    // Acesso por módulo (ADR-0045): atalho para tela bloqueada não aparece.
+    const nav: Item[] = NAV_ITEMS.filter((n) => podeVer(modulos, n.href) && (!term || n.label.toLowerCase().includes(term))).map((n) => ({ ...n, hint: 'Ir para' }));
     const dados: Item[] = crmRows.map((r) => ({ label: r.titulo, href: r.url, icon: CRM_ICON[r.tipo], hint: CRM_HINT[r.tipo] }));
     const knowledge: Item[] = docs
-      .filter((d) => term && (d.title + d.slug).toLowerCase().includes(term))
+      .filter((d) => term && podeVer(modulos, '/conhecimento') && (d.title + d.slug).toLowerCase().includes(term))
       .slice(0, 4)
       .map((d) => ({ label: d.title, href: `/conhecimento/${d.slug}`, icon: 'knowledge' as IconName, hint: 'Conhecimento' }));
     // dados do tenant primeiro: quem digita um nome quer o contato, não a seção
     return [...dados, ...nav, ...knowledge].slice(0, 12);
-  }, [q, docs, crmRows]);
+  }, [q, docs, crmRows, modulos]);
 
   useEffect(() => { setActive(0); }, [results.length]);
 

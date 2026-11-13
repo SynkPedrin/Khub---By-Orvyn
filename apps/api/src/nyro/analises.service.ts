@@ -186,6 +186,42 @@ export class NicoAnalisesService {
   }
 
   /** Avalia o prompt de um agente (ou de todos os ativos). */
+  /**
+   * O que os LEADS disseram (dores, objeções, linguagem real) — insumo de copy.
+   * Dado pessoal: sem telefone/e-mail/CPF, texto curto, sem repetição, teto de
+   * 120 mensagens. Só o tenant (RLS) e só o que o contato escreveu.
+   */
+  async conversasDosLeads(tenantId: string, dias: number, termo?: string) {
+    const desde = new Date(Date.now() - dias * 86_400_000);
+    const msgs = await this.prisma.withTenant(tenantId, (tx) =>
+      tx.message.findMany({
+        where: { autorTipo: 'contato', createdAt: { gte: desde }, ...(termo ? { corpo: { contains: termo, mode: 'insensitive' as const } } : {}) },
+        orderBy: { createdAt: 'desc' },
+        take: 400,
+        select: { corpo: true },
+      }),
+    );
+    const limpar = (t: string) =>
+      t
+        .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '[e-mail]')
+        .replace(/(\+?\d[\d\s().-]{8,}\d)/g, '[número]')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 280);
+    const vistos = new Set<string>();
+    const amostra: string[] = [];
+    for (const m of msgs) {
+      const l = limpar(m.corpo);
+      const chave = l.toLowerCase();
+      if (l.length < 12 || vistos.has(chave)) continue; // "ok", "bom dia" não ensinam nada
+      vistos.add(chave);
+      amostra.push(l);
+      if (amostra.length >= 120) break;
+    }
+    if (!amostra.length) return { vazio: true, aviso: `Nenhuma mensagem de lead nos últimos ${dias} dias${termo ? ` com "${termo}"` : ''}.` };
+    return { periodoDias: dias, mensagensAnalisadas: msgs.length, amostra, aviso: 'Dados pessoais removidos. Extraia padrões (dores, objeções, perguntas frequentes, palavras do cliente); não cite mensagens individuais com dados identificáveis.' };
+  }
+
   async analisarPromptAgentes(tenantId: string, agentId?: string) {
     const [agentes, tenant] = await this.prisma.withTenant(tenantId, (tx) => Promise.all([
       tx.agent.findMany({ where: { status: { not: 'arquivado' }, ...(agentId ? { id: agentId } : {}) }, select: { nome: true, status: true, instrucoes: true, ferramentas: true, conhecimentoAtivo: true }, take: 10 }),

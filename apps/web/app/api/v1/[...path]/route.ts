@@ -16,7 +16,9 @@ async function forward(req: NextRequest, path: string[]) {
     method: req.method,
     headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey ?? at}`, ...(req.headers.get('idempotency-key') ? {'idempotency-key': req.headers.get('idempotency-key')!} : {}) },
     cache: 'no-store',
-    signal: AbortSignal.timeout(25_000),
+    // Análise de criativo com visão (imagem/frames) leva ~1 min num modelo
+    // local; o resto da API segue com 25 s.
+    signal: AbortSignal.timeout(path.join('/') === 'ads/simulador/analisar' ? 180_000 : 25_000),
   };
   if (req.method !== 'GET' && req.method !== 'HEAD') init.body = await req.text();
   try {

@@ -8,7 +8,7 @@ import { NyroMensagens } from '@/components/app/NyroMensagens';
 import { PageShell } from '@/components/revenue/Page';
 import { NICO, NicoAvatar, NicoStatus, capacidadeHumana, type EstadoNico } from '@/components/nico/Nico';
 import { useNyroChat } from '@/lib/use-nyro-chat';
-import { nyro, type Aprovacao } from '@/lib/nyro';
+import { ANEXO_EXTENSOES, nyro, type Aprovacao } from '@/lib/nyro';
 import { useAuth } from '@/lib/auth';
 
 const SUGESTOES = [
@@ -36,7 +36,8 @@ function saudacao(): string {
  */
 export default function NicoPage() {
   const { user } = useAuth();
-  const { status, bolhas, passos, texto, setTexto, pensando, erro, enviar, decidir } = useNyroChat(true);
+  const { status, bolhas, passos, texto, setTexto, pensando, erro, enviar, decidir, anexos, anexar, removerAnexo } = useNyroChat(true);
+  const arquivoRef = useRef<HTMLInputElement>(null);
   const [pendentes, setPendentes] = useState<Aprovacao[] | null>(null);
   const [decidindo, setDecidindo] = useState<string | null>(null);
   const fimRef = useRef<HTMLDivElement>(null);
@@ -108,7 +109,7 @@ export default function NicoPage() {
                     {nome ? `, ${nome}` : ''}.
                   </h1>
                   <p className="mx-auto mt-2 max-w-md text-[14px] text-muted">
-                    Sou a NICO, da sua equipe de marketing. Me peça para olhar o funil, achar leads quentes, criar tarefas ou montar automações, e eu faço por você.
+                    Sou a NICO, a IA de marketing da sua operação. Analiso tráfego e financeiro, escrevo copy e roteiro, melhoro prompts, monto automações e leio seus arquivos. É só pedir.
                   </p>
                 </div>
               )}
@@ -125,7 +126,33 @@ export default function NicoPage() {
               }}
               className="border-t border-line p-4"
             >
+              {anexos.length > 0 && (
+                <div className="mx-auto mb-2 flex max-w-2xl flex-wrap gap-1.5">
+                  {anexos.map((a) => (
+                    <span key={a.nome} className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface2 px-2.5 py-1 text-[12px] text-fg">
+                      <Icon name="paperclip" size={12} /> {a.nome}
+                      <button type="button" onClick={() => removerAnexo(a.nome)} aria-label={`Remover ${a.nome}`} className="text-muted hover:text-fg">
+                        <Icon name="close" size={12} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
               <div className="mx-auto flex max-w-2xl items-end gap-2">
+                <input
+                  ref={arquivoRef}
+                  type="file"
+                  multiple
+                  hidden
+                  accept={ANEXO_EXTENSOES.map((e) => `.${e}`).join(',')}
+                  onChange={(e) => {
+                    if (e.target.files?.length) void anexar(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+                <button type="button" onClick={() => arquivoRef.current?.click()} disabled={pensando} className="btn btn-ghost btn-icon h-11 w-11" aria-label="Anexar arquivo" title="Anexar PDF, DOCX, PPTX, MD, CSV, JSON, código…">
+                  <Icon name="paperclip" size={18} />
+                </button>
                 <textarea
                   value={texto}
                   onChange={(e) => setTexto(e.target.value)}
@@ -141,12 +168,12 @@ export default function NicoPage() {
                   aria-label="Mensagem para a NICO"
                   className="textarea max-h-40 min-h-[44px] flex-1 resize-none"
                 />
-                <button type="submit" disabled={!texto.trim() || pensando} className="btn btn-primary h-11 px-4">
+                <button type="submit" disabled={(!texto.trim() && !anexos.length) || pensando} className="btn btn-primary h-11 px-4">
                   <Icon name="send" size={17} />
                   <span className="hidden sm:inline">Enviar</span>
                 </button>
               </div>
-              <p className="mx-auto mt-1.5 max-w-2xl text-[11.5px] text-muted">Ela age com as suas permissões. Ações sensíveis aparecem para você aprovar antes.</p>
+              <p className="mx-auto mt-1.5 max-w-2xl text-[11.5px] text-muted">Ela lê PDF, DOCX, PPTX, MD, CSV, JSON e código (até 3 arquivos, 10 MB cada). Age com as suas permissões; ações sensíveis esperam seu ok.</p>
             </form>
           )}
         </section>

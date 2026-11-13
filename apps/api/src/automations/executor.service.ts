@@ -810,7 +810,7 @@ export class ExecutorService {
 /** Ações sem efeito fora do run: rodam de verdade também no teste. */
 const ACOES_SEGURAS_NO_TESTE = new Set<string>(['acao.ia', 'acao.definir_variavel', 'acao.formatar_texto']);
 
-/** `5518991234567` → `+55 18 •••••-2039`: o log mostra o destino sem expor o número. */
+/** `5511988887777` → `+55 11 •••••-7777`: o log mostra o destino sem expor o número. */
 function mascararNumero(d: string): string {
   return d.length >= 8 ? `+${d.slice(0, 2)} ${d.slice(2, 4)} •••••-${d.slice(-4)}` : '••••';
 }

@@ -4,10 +4,12 @@ import { RagModule } from '../rag/rag.module';
 import { AutomationsModule } from '../automations/automations.module';
 import { MarketplaceModule } from '../marketplace/marketplace.module';
 import { BlueprintModule } from '../blueprints/blueprint.module';
+import { FinanceiroModule } from '../financeiro/financeiro.module';
 import { NyroController } from './nyro.controller';
 import { NyroService } from './nyro.service';
 import { ToolExecutorService } from './tool-executor.service';
 import { NicoAnalisesService } from './analises.service';
+import { FirecrawlService } from './firecrawl.service';
 
 /**
  * Nyro IA (Sprint F).
@@ -17,9 +19,9 @@ import { NicoAnalisesService } from './analises.service';
  * É isso que garante o invariante "nunca escreve direto no banco".
  */
 @Module({
-  imports: [CrmModule, RagModule, AutomationsModule, MarketplaceModule, BlueprintModule],
+  imports: [CrmModule, RagModule, AutomationsModule, MarketplaceModule, BlueprintModule, FinanceiroModule],
   controllers: [NyroController],
-  providers: [NyroService, ToolExecutorService, NicoAnalisesService],
+  providers: [NyroService, ToolExecutorService, NicoAnalisesService, FirecrawlService],
   exports: [NyroService, NicoAnalisesService],
 
 })

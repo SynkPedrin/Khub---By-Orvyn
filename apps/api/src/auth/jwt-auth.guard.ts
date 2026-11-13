@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import type { Request } from 'express';
 import { IS_PUBLIC, type AuthUser } from './decorators';
 import { PrismaService } from '../prisma/prisma.service';
+import { modulosDe, papelRestringivel } from './modulos';
 
 /** Prefixo das Private Integrations (chaves de API do tenant). */
 export const API_KEY_PREFIX = 'orv_live_';
@@ -62,7 +63,12 @@ export class JwtAuthGuard implements CanActivate {
       });
       const tenant = await this.prisma.tenant.findUnique({ where: { id: payload.tenant_id }, select: { status: true } });
       if (!membership || tenant?.status !== 'active') throw new Error('vínculo revogado');
-      const user: AuthUser = { identityId: payload.sub, tenantId: payload.tenant_id, role: membership.role, email: payload.email };
+      // Acesso por módulo (ADR-0045): lido a cada request, então tirar um
+      // módulo de alguém vale na hora, sem esperar o token expirar.
+      const modulos = papelRestringivel(membership.role)
+        ? modulosDe((await this.prisma.withTenant(payload.tenant_id, (tx) => tx.user.findFirst({ where: { identityId: payload.sub }, select: { permissoes: true } })))?.permissoes)
+        : null;
+      const user: AuthUser = { identityId: payload.sub, tenantId: payload.tenant_id, role: membership.role, email: payload.email, modulos };
       (req as Request & { user: AuthUser }).user = user;
       return true;
     } catch {

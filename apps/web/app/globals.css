@@ -1903,9 +1903,30 @@ a {
     font-size: 15px;
     font-weight: 650;
   }
+  .prose-khub > :first-child {
+    margin-top: 0;
+  }
   .prose-khub ul,
   .prose-khub ol {
     padding-left: 20px;
+  }
+  .prose-khub ul {
+    list-style: disc;
+  }
+  .prose-khub ol {
+    list-style: decimal;
+  }
+  .prose-khub strong {
+    font-weight: 650;
+  }
+  .prose-khub blockquote {
+    padding-left: 12px;
+    border-left: 3px solid var(--brand);
+    color: var(--text-secondary, inherit);
+  }
+  .prose-khub hr {
+    border: 0;
+    border-top: 1px solid var(--border);
   }
   .prose-khub li + li {
     margin-top: 4px;

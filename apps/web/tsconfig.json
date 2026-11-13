@@ -41,7 +41,8 @@
     ".next-verif/types/**/*.ts",
     ".next-demo/types/**/*.ts",
     ".next-deploy/types/**/*.ts",
-    ".next-canais/types/**/*.ts"
+    ".next-canais/types/**/*.ts",
+    ".next-a0/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
-import { IsEmail, IsIn, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsEmail, IsIn, IsObject, IsOptional, IsString, MaxLength, ValidateIf } from 'class-validator';
+import { MODULOS } from '../auth/modulos';
 import { SettingsService } from './settings.service';
 import { CurrentUser, TenantId, type AuthUser } from '../auth/decorators';
 import { SkipAudit } from '../common/audit.interceptor';
@@ -25,6 +26,12 @@ class InviteDto {
   @IsOptional() @IsString() @MaxLength(120) nome?: string;
   @IsOptional() @IsString() @MaxLength(600) mensagem?: string;
   @IsOptional() @IsString() @MaxLength(30) telefone?: string;
+  /** Acesso por módulo (ADR-0045). Ausente = sem restrição. Ignorado para owner/admin. */
+  @IsOptional() @IsArray() @ArrayMaxSize(MODULOS.length) @IsIn([...MODULOS], { each: true }) modulos?: string[];
+}
+class ModulosDto {
+  /** `null` tira a restrição (vê tudo o que o papel permite). */
+  @ValidateIf((_o, v) => v !== null) @IsArray() @ArrayMaxSize(MODULOS.length) @IsIn([...MODULOS], { each: true }) modulos!: string[] | null;
 }
 class ResendInviteDto {
   @IsOptional() @IsString() @MaxLength(120) nome?: string;
@@ -69,7 +76,7 @@ export class SettingsController {
   }
   @Post('invites')
   invite(@TenantId() t: string, @CurrentUser() u: AuthUser, @Body() dto: InviteDto) {
-    return this.settings.createInvite(t, u.identityId, dto.email, dto.role ?? 'member', { nome: dto.nome, mensagem: dto.mensagem, telefone: dto.telefone });
+    return this.settings.createInvite(t, u.identityId, dto.email, dto.role ?? 'member', { nome: dto.nome, mensagem: dto.mensagem, telefone: dto.telefone, modulos: dto.modulos });
   }
   /** Novo link (o anterior deixa de valer) + reenvio do e-mail + texto de WhatsApp. */
   @Post('invites/:id/resend')
@@ -80,6 +87,11 @@ export class SettingsController {
   @Delete('invites/:id')
   revoke(@TenantId() t: string, @CurrentUser() u: AuthUser, @Param('id') id: string) {
     return this.settings.revokeInvite(t, u.identityId, id);
+  }
+  /** Acesso por módulo de um membro (ADR-0045): vale na próxima requisição dele. */
+  @Patch('members/:identityId/modulos')
+  modulos(@TenantId() t: string, @CurrentUser() u: AuthUser, @Param('identityId', ParseUUIDPipe) target: string, @Body() dto: ModulosDto) {
+    return this.settings.changeModulos(t, u.identityId, target, dto.modulos);
   }
   @Patch('members/:identityId/role')
   role(@TenantId() t: string, @CurrentUser() u: AuthUser, @Param('identityId') target: string, @Body() dto: RoleDto) {

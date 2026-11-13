@@ -156,8 +156,7 @@ export default function Contato360Page() {
                 <Badge tone={TONE[c.tag] ?? 'neutral'}>{c.tag}</Badge>
               </div>
               <p className="mt-0.5 text-sm text-muted">
-                {c.company ? <Link href={`/empresas/${c.company.id}`} className="font-semibold text-brand hover:underline">{c.company.nome}</Link> : c.empresa ?? 'sem empresa'}
-                {' · '}cliente desde {new Date(c.createdAt).toLocaleDateString('pt-BR')}
+                Cliente desde {new Date(c.createdAt).toLocaleDateString('pt-BR')}
               </p>
             </div>
           </div>
@@ -173,12 +172,6 @@ export default function Contato360Page() {
             <Field label="Nome"><Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></Field>
             <Field label="E-mail"><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
             <Field label="Telefone"><Input value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} /></Field>
-            <Field label="Empresa">
-              <select className="input" value={form.companyId} onChange={(e) => setForm({ ...form, companyId: e.target.value })}>
-                <option value="">- sem empresa -</option>
-                {empresas.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
-              </select>
-            </Field>
             <Field label="Tag">
               <select className="input" value={form.tag} onChange={(e) => setForm({ ...form, tag: e.target.value })}>
                 {['Lead', 'Lead quente', 'Paciente', 'Cliente'].map((t) => <option key={t}>{t}</option>)}

@@ -73,7 +73,19 @@ export interface ResultadoGuardrail {
   motivo?: string;
   /** Resposta segura para mostrar no lugar (quando barrada). */
   substituto?: string;
+  /**
+   * A MESMA resposta com só os trechos problemáticos trocados por um aviso.
+   * Preferível ao `substituto` (que joga a resposta inteira fora) quando sobra
+   * conteúdo útil: copy, relatório e conversa não somem por causa de uma frase.
+   */
+  saneado?: string;
 }
+
+/**
+ * Linha que CITA a frase proibida para ensinar o que evitar ("evite dizer
+ * 'resultado garantido'") não é promessa: não deve ser barrada.
+ */
+export const CONTEXTO_NEGATIVO = /(evite|evitar|n[ãa]o\s+(use|usar|diga|dizer|fale|falar|escreva|escrever|prometa|prometer|publique|publicar|pode)|nunca\s+(use|diga|fale|prometa|escreva)|proibid|vedad|ilegal|infra[çc][ãa]o|anti[ée]tic|viola|❌|🚫|exemplo\s+(do\s+que|de\s+(o\s+)?que)\s+n[ãa]o)/i;
 
 /** Nicho do tenant → chave das regras. Nicho desconhecido = sem regra extra. */
 export function chaveDoNicho(nicho: string | null | undefined): string | null {
@@ -94,20 +106,33 @@ export function validarResposta(texto: string, nicho: string | null | undefined)
   const chave = chaveDoNicho(nicho);
   if (!chave) return { ok: true };
 
-  for (const r of REGRAS[chave] ?? []) {
-    if (r.padrao.test(texto)) {
-      return {
-        ok: false,
-        regra: r.regra,
-        motivo: r.motivo,
-        substituto:
-          chave === 'medico'
-            ? 'Isso eu não posso responder: só o profissional da clínica pode avaliar seu caso. Quer que eu agende uma consulta ou peça para alguém da equipe te chamar?'
-            : chave === 'juridico'
-              ? 'Não posso garantir resultado nem antecipar valores — cada caso depende de análise. Quer que eu encaminhe para o advogado responsável avaliar?'
-              : 'Isso depende de análise do contador responsável pela sua conta. Quer que eu abra uma tarefa para ele te retornar?',
-      };
-    }
+  // Por linha: só o trecho que PROMETE/DIAGNOSTICA conta; citar como exemplo do que evitar, não.
+  const linhas = texto.split('\n');
+  const achados: { i: number; r: RegraGuardrail }[] = [];
+  linhas.forEach((l, i) => {
+    if (CONTEXTO_NEGATIVO.test(l)) return;
+    const r = (REGRAS[chave] ?? []).find((x) => x.padrao.test(l));
+    if (r) achados.push({ i, r });
+  });
+  if (achados.length) {
+    const sanear = linhas.map((l, i) => {
+      const a = achados.find((x) => x.i === i);
+      return a ? `⚠️ _[trecho removido por compliance: ${a.r.motivo}]_` : l;
+    });
+    const uteis = sanear.filter((l) => !l.startsWith('⚠️ _[trecho removido')).join('').trim().length;
+    const r = achados[0].r;
+    return {
+      saneado: uteis >= 80 ? sanear.join('\n') : undefined,
+      ok: false,
+      regra: r.regra,
+      motivo: r.motivo,
+      substituto:
+        chave === 'medico'
+          ? 'Isso eu não posso responder: só o profissional da clínica pode avaliar seu caso. Quer que eu agende uma consulta ou peça para alguém da equipe te chamar?'
+          : chave === 'juridico'
+            ? 'Não posso garantir resultado nem antecipar valores — cada caso depende de análise. Quer que eu encaminhe para o advogado responsável avaliar?'
+            : 'Isso depende de análise do contador responsável pela sua conta. Quer que eu abra uma tarefa para ele te retornar?',
+    };
   }
   return { ok: true };
 }

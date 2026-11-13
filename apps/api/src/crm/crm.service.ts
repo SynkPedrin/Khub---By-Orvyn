@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { moduloLiberado, modulosDaRota } from '../auth/modulos';
 import { DomainEventsService } from '../events/domain-events.service';
 import { AvatarContatoService } from './messaging/avatar-contato.service';
 import { ABERTO, escolherFunil, receitaMensal, resumirFunil, type NegocioRef } from './funil';
@@ -701,27 +702,29 @@ export class CrmService {
    * Busca global do CRM (S0-4): contatos, negócios e conversas em uma chamada.
    * Tudo dentro de withTenant — a RLS garante que só o tenant da sessão aparece.
    */
-  async search(tenantId: string, q: string, limitPorTipo = 5): Promise<SearchResult[]> {
+  async search(tenantId: string, q: string, limitPorTipo = 5, modulos?: readonly string[] | null): Promise<SearchResult[]> {
     const termo = q.trim();
     if (termo.length < 2) return [];
     const take = Math.min(Math.max(limitPorTipo, 1), 20);
     const like = { contains: termo, mode: 'insensitive' as const };
+    // Mesmo critério das rotas de leitura (auth/modulos.ts): sem o módulo, nem consulta.
+    const ve = (rota: string) => moduloLiberado(modulos, modulosDaRota('crm', rota, 'GET'));
 
     return this.prisma.withTenant(tenantId, async (tx) => {
       const [contatos, negocios, conversas] = await Promise.all([
-        tx.contact.findMany({
+        !ve('contacts') ? [] : tx.contact.findMany({
           where: { OR: [{ nome: like }, { email: like }, { telefone: like }, { empresa: like }, { tag: like }] },
           orderBy: { ultimoContatoAt: 'desc' },
           take,
           select: { id: true, nome: true, email: true, telefone: true, empresa: true, tag: true },
         }),
-        tx.deal.findMany({
+        !ve('deals') ? [] : tx.deal.findMany({
           where: { OR: [{ titulo: like }, { origem: like }, { contact: { nome: like } }] },
           orderBy: { updatedAt: 'desc' },
           take,
           select: { id: true, titulo: true, valor: true, status: true, stage: { select: { nome: true } }, contact: { select: { nome: true } } },
         }),
-        tx.conversation.findMany({
+        !ve('conversations') ? [] : tx.conversation.findMany({
           where: { OR: [{ nome: like }, { ultimaPrevia: like }, { messages: { some: { corpo: like } } }] },
           orderBy: { updatedAt: 'desc' },
           take,

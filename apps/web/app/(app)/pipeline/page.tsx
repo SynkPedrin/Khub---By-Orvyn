@@ -614,9 +614,6 @@ function Quadro() {
         <select className="select w-auto" aria-label="Filtrar por responsável">
           <option>Todos os owners</option>
         </select>
-        <select className="select w-auto" aria-label="Filtrar por empresa">
-          <option>Todas as empresas</option>
-        </select>
         <select className="select w-auto" aria-label="Filtrar por valor">
           <option>Todos os valores</option>
         </select>

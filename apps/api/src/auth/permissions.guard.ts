@@ -2,6 +2,7 @@ import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@
 import { Reflector } from '@nestjs/core';
 import { PATH_METADATA } from '@nestjs/common/constants';
 import { AuthUser, IS_PUBLIC } from './decorators';
+import { moduloLiberado, modulosDaRota } from './modulos';
 
 export function permissionFor(controller: string, route: string, method: string): string {
   const read = ['GET', 'HEAD', 'OPTIONS'].includes(method);
@@ -13,6 +14,10 @@ export function permissionFor(controller: string, route: string, method: string)
   }
   if (controller.includes('integration') || controller.includes('ads')) return 'integrations.manage';
   if (controller === 'operations') return 'organization.manage';
+  // Marcar/remarcar compromisso é operação de atendente, não configuração da
+  // conta (ADR-0045). Antes caía no padrão `organization.manage` e o member
+  // não conseguia agendar. Páginas de agendamento (booking-pages) seguem admin.
+  if (controller === 'agenda') return read ? 'contacts.read' : 'agenda.write';
   if (controller === 'crm') {
     // Estrutura do funil (criar/renomear/apagar funil e etapa) é configuração,
     // não operação: manager+ (ADR-0042). Mover negócio segue `pipeline.write`.
@@ -35,7 +40,7 @@ export function permissionFor(controller: string, route: string, method: string)
   return read ? 'contacts.read' : 'organization.manage';
 }
 
-const member = new Set(['profile.read', 'contacts.read', 'contacts.write', 'pipeline.read', 'pipeline.write', 'conversations.read', 'conversations.reply', 'automations.read']);
+const member = new Set(['profile.read', 'contacts.read', 'contacts.write', 'pipeline.read', 'pipeline.write', 'conversations.read', 'conversations.reply', 'automations.read', 'agenda.write']);
 export function hasPermission(user: AuthUser, permission: string): boolean {
   if (user.role === 'api') return !['users.manage', 'organization.manage'].includes(permission) && !!user.scopes?.some(s => s === '*' || s === permission);
   if (['owner', 'admin'].includes(user.role)) return true;
@@ -54,6 +59,7 @@ export class PermissionsGuard implements CanActivate {
     const controller = this.reflector.get<string>(PATH_METADATA, ctx.getClass()) ?? '';
     const route = this.reflector.get<string>(PATH_METADATA, ctx.getHandler()) ?? '';
     if (!req.user || !hasPermission(req.user, permissionFor(controller, route, req.method))) throw new ForbiddenException('permissão insuficiente');
+    if (!moduloLiberado(req.user.modulos, modulosDaRota(controller, route, req.method))) throw new ForbiddenException('você não tem acesso a este módulo');
     return true;
   }
 }

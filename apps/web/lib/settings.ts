@@ -13,14 +13,14 @@ const req = clienteApi('/api/v1/');
 
 export interface Profile { id: string; nome: string; email: string; role: string; idioma: string; prefs: Record<string, unknown> }
 export interface Business { nome: string; endereco: string | null; telefone: string | null; website: string | null; idioma: string; nicho: string | null; plano: string; status: string; settings: import('@/components/app/AccountPreferencesForm').AccountPreferences }
-export interface Member { identityId: string; role: string; isDefault: boolean; email: string; nome: string | null; idioma: string | null }
+export interface Member { identityId: string; role: string; isDefault: boolean; email: string; nome: string | null; idioma: string | null; /** ADR-0045: null = vê tudo que o papel permite. */ modulos: string[] | null }
 /** Resultado de criar/reenviar convite (ADR-0042). */
 export interface ConviteEntregue {
   ok: boolean; inviteId: string; email: string; acceptUrl: string;
   emailSent: boolean; missing?: string[]; erro?: string;
   whatsappTexto: string; whatsappUrl: string; linkPublico: boolean;
 }
-export interface Invite { id: string; email: string; role: string; expiresAt: string; createdAt: string }
+export interface Invite { id: string; email: string; role: string; modulos: string[] | null; expiresAt: string; createdAt: string }
 export interface AuditRow { id: string; actorType: string; actorId: string | null; acao: string; entidade: string | null; entidadeId: string | null; ts: string }
 
 export interface NotificationItem { id: string; tipo: 'mensagem' | 'integracao' | 'mencao' | 'disparo_aprovacao' | 'avaliacao_negativa'; titulo: string; detalhe: string; url: string; ts: string; novo: boolean }
@@ -40,12 +40,13 @@ export const settingsApi = {
   business: () => req<Business>('settings/business'),
   updateBusiness: (d: Partial<Business>) => req<{ ok: boolean }>('settings/business', { method: 'PATCH', body: JSON.stringify(d) }),
   members: () => req<{ members: Member[]; invites: Invite[] }>('settings/members'),
-  invite: (email: string, role: string, extra: { nome?: string; mensagem?: string; telefone?: string } = {}) =>
+  invite: (email: string, role: string, extra: { nome?: string; mensagem?: string; telefone?: string; modulos?: string[] } = {}) =>
     req<ConviteEntregue>('settings/invites', { method: 'POST', body: JSON.stringify({ email, role, ...extra }) }),
   resendInvite: (id: string, extra: { nome?: string; mensagem?: string; telefone?: string } = {}) =>
     req<ConviteEntregue>(`settings/invites/${id}/resend`, { method: 'POST', body: JSON.stringify(extra) }),
   revokeInvite: (id: string) => req<{ ok: boolean }>(`settings/invites/${id}`, { method: 'DELETE' }),
   changeRole: (identityId: string, role: string) => req<{ ok: boolean }>(`settings/members/${identityId}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }),
+  changeModulos: (identityId: string, modulos: string[] | null) => req<{ ok: boolean; modulos: string[] | null }>(`settings/members/${identityId}/modulos`, { method: 'PATCH', body: JSON.stringify({ modulos }) }),
   removeMember: (identityId: string) => req<{ ok: boolean; sessoesRevogadas: number; conversasLiberadas: number }>(`settings/members/${identityId}`, { method: 'DELETE' }),
   revokeAllSessions: () => req<{ ok: boolean; sessoesRevogadas: number }>('settings/sessions/revoke-all', { method: 'POST' }),
   audit: () => req<AuditRow[]>('settings/audit'),

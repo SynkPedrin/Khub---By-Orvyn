@@ -10,6 +10,8 @@ export interface AuthUser {
   role: string;
   email: string;
   scopes?: string[];
+  /** Módulos que a pessoa vê (ADR-0045). Ausente/null = sem restrição. */
+  modulos?: string[] | null;
 }
 
 /** Injeta o usuário autenticado (setado pelo JwtAuthGuard a partir do JWT). */

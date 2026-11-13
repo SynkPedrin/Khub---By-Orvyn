@@ -68,6 +68,67 @@ export const TOOLS: Tool[] = [
     () => 'listar as automações',
   ),
 
+  t(
+    'resumo_financeiro',
+    'Visão financeira da conta: recebido, a receber, vencido (valores em centavos), número de cobranças pagas/vencidas e, junto, o valor no funil. Use para qualquer pergunta de caixa, inadimplência, receita ou previsão.',
+    z.object({}),
+    'leitura',
+    () => 'ler o resumo financeiro',
+  ),
+  t(
+    'listar_cobrancas',
+    'Lista as cobranças da conta (descrição, valor em centavos, vencimento, status). Filtre por status para achar inadimplentes ou o que falta receber.',
+    z.object({ status: z.enum(['rascunho', 'enviada', 'paga', 'vencida', 'cancelada']).optional() }),
+    'leitura',
+    (a) => (a.status ? `listar cobranças ${a.status}s` : 'listar as cobranças'),
+  ),
+  t(
+    'guia_do_sistema',
+    'Mapa do KHUB: onde fica cada tela, o que ela faz e como fazer tarefas comuns (criar automação, conectar WhatsApp, ver campanhas, cobrar cliente...). Use quando perguntarem "onde fica", "como faço" ou "como configuro".',
+    z.object({ assunto: z.string().max(120).optional() }),
+    'leitura',
+    (a) => (a.assunto ? `consultar o mapa do sistema: "${a.assunto}"` : 'consultar o mapa do sistema'),
+  ),
+
+  t(
+    'pesquisar_web',
+    'Pesquisa na web (Google-like) e devolve títulos, links e resumo. Com lerPaginas=true traz também o conteúdo dos resultados: use para benchmark de concorrentes, tendências, preços de mercado, referências de copy, notícias e dúvidas que a base interna não responde. Cite a URL de onde tirou cada informação.',
+    z.object({ consulta: z.string().min(3).max(300), limite: z.number().int().min(1).max(8).default(5), lerPaginas: z.boolean().default(false) }),
+    'leitura',
+    (a) => `pesquisar na web: "${a.consulta}"`,
+  ),
+  t(
+    'ler_pagina',
+    'Lê uma página pública da web (site de concorrente, landing page, artigo, perfil) e devolve o texto em Markdown. Use para analisar a oferta, a copy e a estrutura de uma página específica.',
+    z.object({ url: z.string().url().max(500) }),
+    'leitura',
+    (a) => `ler a página ${a.url.replace(/^https?:\/\//, '').slice(0, 60)}`,
+  ),
+  t(
+    'atualizar_plano',
+    'Registra e atualiza o PLANO de trabalho visível para o usuário. Chame no início de tarefas com 3 ou mais etapas (objetivo + passos) e de novo a cada etapa concluída, marcando o status. Não use em conversa simples.',
+    z.object({
+      objetivo: z.string().min(3).max(200),
+      passos: z.array(z.object({ texto: z.string().min(2).max(160), status: z.enum(['pendente', 'fazendo', 'feito']) })).min(1).max(10),
+    }),
+    'leitura',
+    (a) => `plano: ${a.objetivo}`,
+  ),
+  t(
+    'insights_conversas',
+    'Lê as mensagens recentes que os LEADS enviaram nas conversas (sem telefone nem e-mail) para você extrair dores, objeções, dúvidas e linguagem real do cliente. Use antes de escrever copy, roteiro, FAQ ou melhorar o prompt do agente. Resuma padrões; não cite dados pessoais.',
+    z.object({ dias: z.number().int().min(1).max(90).default(30), termo: z.string().max(60).optional() }),
+    'leitura',
+    (a) => `ler o que os leads falaram nos últimos ${a.dias} dias`,
+  ),
+  t(
+    'esquecer',
+    'Apaga um fato da memória da conta (use quando o usuário corrigir ou disser que algo mudou).',
+    z.object({ chave: z.string().min(2).max(60) }),
+    'escrita',
+    (a) => `esquecer "${a.chave}"`,
+  ),
+
   // ---------------- Escrita (efeito interno, reversível) ----------------
   t(
     'criar_contato',
@@ -297,5 +358,6 @@ function tipoJson(campo: z.ZodTypeAny): Record<string, unknown> {
   if (tn === z.ZodFirstPartyTypeKind.ZodBoolean) return { type: 'boolean' };
   if (tn === z.ZodFirstPartyTypeKind.ZodEnum) return { type: 'string', enum: (campo._def as { values: string[] }).values };
   if (tn === z.ZodFirstPartyTypeKind.ZodArray) return { type: 'array', items: tipoJson((campo._def as { type: z.ZodTypeAny }).type) };
+  if (tn === z.ZodFirstPartyTypeKind.ZodObject) return zodParaJsonSchema(campo);
   throw new Error(`tipo de campo não suportado nas tools: ${tn}`);
 }

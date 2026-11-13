@@ -200,11 +200,11 @@ describe('StevoApiProvider.sendText — contrato oficial', () => {
 
   it('POST /v1/instances/{id}/messages com to (só dígitos), text, Bearer e Idempotency-Key', async () => {
     const f = responder(201, { data: { engine: 'smv2', sent: true, result: null, message_id: 'wamid-77', status: 'sent' } });
-    const r = await new StevoApiProvider(new ConfigService()).sendText('+55 (18) 99165-2039', 'Olá', INST, 'agent:m1');
+    const r = await new StevoApiProvider(new ConfigService()).sendText('+55 (11) 98888-7777', 'Olá', INST, 'agent:m1');
     expect(r).toEqual({ providerId: 'wamid-77' });
     const [url, init] = f.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(`https://openapi.stevo.chat/v1/instances/${INST}/messages`);
-    expect(JSON.parse(String(init.body))).toEqual({ to: '5518991234567', text: 'Olá' });
+    expect(JSON.parse(String(init.body))).toEqual({ to: '5511988887777', text: 'Olá' });
     expect(init.headers).toMatchObject({ authorization: 'Bearer stevo_sk_teste', 'idempotency-key': 'agent:m1' });
   });
 

@@ -50,6 +50,19 @@ if [ "$JA" = "t" ]; then
   exit 1
 fi
 
+echo "1b/5 Preparando os papéis da aplicação…"
+# Postgres 16+: o dono do banco só passa a propriedade de objetos (ALTER ... OWNER TO)
+# para papéis que ele consiga assumir. Cria os papéis antes da migração 000 (que é
+# idempotente) e dá ao dono o direito de assumi-los. Os nomes khub_* vêm da 035.
+"${PSQL[@]}" "$NEON_ADMIN_URL" -v ON_ERROR_STOP=1 -q <<'SQL'
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='orvyn_app')     THEN CREATE ROLE orvyn_app LOGIN NOBYPASSRLS; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='orvyn_service') THEN CREATE ROLE orvyn_service LOGIN BYPASSRLS; END IF;
+END $$;
+GRANT orvyn_app, orvyn_service TO CURRENT_USER WITH SET TRUE, INHERIT TRUE;
+GRANT USAGE, CREATE ON SCHEMA public TO orvyn_app, orvyn_service;
+SQL
+
 echo "2/5 Aplicando as migrações em ordem…"
 ( cd "$RAIZ/apps/api" && npx prisma generate >/dev/null && ADMIN_DATABASE_URL="$NEON_ADMIN_URL" node scripts/db-migrate.mjs )
 

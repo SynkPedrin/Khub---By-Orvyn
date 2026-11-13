@@ -83,9 +83,13 @@ filtro() { # $1 = tabela → cláusula WHERE da origem
     tenants) echo "where id::text in ($TENANTS)";;
     agencies) echo "where id in ($AGENCIAS)";;
     agency_members) echo "where agency_id in ($AGENCIAS)";;
+    agency_member_client_prefs) echo "where client_account_id in (select id from agency_client_accounts where tenant_id::text in ($TENANTS)) and agency_member_id in (select id from agency_members where agency_id in ($AGENCIAS))";;
     agency_member_client_access) echo "where client_account_id in (select id from agency_client_accounts where tenant_id::text in ($TENANTS))";;
     identities) echo "where id in ($IDENTIDADES)";;
     *)
+      if [ -z "$(src -Atc "select 1 from information_schema.columns where table_schema='public' and table_name='$1' and column_name='tenant_id'")" ]; then
+        echo "AVISO: a tabela $1 não tem tenant_id nem regra de filtro; NÃO foi copiada." >&2; echo "where false"; return 0
+      fi
       if [ "$(src -Atc "select is_nullable from information_schema.columns where table_schema='public' and table_name='$1' and column_name='tenant_id'")" = "YES" ]; then
         echo "where tenant_id is null or tenant_id::text in ($TENANTS)"
       else

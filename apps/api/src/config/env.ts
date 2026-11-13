@@ -18,6 +18,8 @@ const schema = z.object({
   /** Base da Messages API (padrão https://api.anthropic.com). Só https em produção. */
   ANTHROPIC_BASE_URL: z.string().url().optional(),
   VOYAGE_API_KEY: z.string().optional(),
+  /** Firecrawl (busca e leitura de páginas da NICO). Ausente = a NICO avisa para conectar. */
+  FIRECRAWL_API_KEY: z.string().optional(),
 
   // Cripto dos tokens OAuth por tenant (AES-256-GCM, 32 bytes base64)
   INTEGRATIONS_ENCRYPTION_KEY: z.string().optional(),

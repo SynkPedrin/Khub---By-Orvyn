@@ -1,5 +1,8 @@
 # Deploy do KHUB (Neon + Render + Vercel)
 
+**Estado em 12/11/2026:** no ar. Web `https://khub-os.vercel.app` (futuro `app.kromads.com.br`), API `https://khub-api-ucey.onrender.com` (Render, plano gratuito, serviço `khub-api` + Redis `khub-queue`), banco Neon `khub-by-orvyn` com as 56 migrações e as duas subcontas copiadas do dev. As credenciais ficam só em `deploy/.env.render` (fora do git). Falta: CNAMEs no Registro.br (`app` e `api`), trocar a API para o plano pago antes de ligar o WhatsApp dos clientes e a virada do WhatsApp (seção 4).
+
+
 Ordem: **1. Neon** (banco) → **2. Render** (API + fila) → **3. Vercel** (web). O código vem do GitHub `SynkPedrin/Khub---By-Orvyn` (branch `main`).
 
 ## 1. Neon: banco novo e vazio
@@ -42,7 +45,7 @@ Copia as subcontas listadas em `SUBCONTAS` com tudo (contatos, conversas, mensag
    |---|---|
    | `DATABASE_URL` | a URL impressa no passo 1 (usuário `khub_app`) |
    | `WEB_URL` | `https://app.kromads.com.br` |
-   | `CORS_ORIGINS` | `https://app.kromads.com.br,https://orvyn-os.vercel.app` |
+   | `CORS_ORIGINS` | `https://app.kromads.com.br,https://khub-os.vercel.app` |
    | `INTEGRATIONS_ENCRYPTION_KEY` | 32 bytes aleatórios em base64 (`openssl rand -base64 32`) |
    | `SMTP_FROM` | remetente real, ex.: `KHUB <no-reply@seu-dominio>` (sem ela o padrão ainda é `no-reply@orvyn.app`) |
    | `KHUB_PROXY_SECRET` | o valor que está em `deploy/.env.render` (arquivo local, fora do git). O mesmo valor já está na Vercel; é o que separa o limite de taxa por visitante nas páginas públicas (formulários e agendamento) |
@@ -63,7 +66,7 @@ Copia as subcontas listadas em `SUBCONTAS` com tudo (contatos, conversas, mensag
 
 ## 3. Vercel: web
 
-1. Projeto Vercel `orvyn-os` (raiz `apps/web`). Variáveis de produção:
+1. Projeto Vercel `orvyn-os` (raiz `apps/web`; endereço público `https://khub-os.vercel.app`). Variáveis de produção:
 
    | Variável | Valor |
    |---|---|

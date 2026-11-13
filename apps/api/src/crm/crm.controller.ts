@@ -128,8 +128,9 @@ export class CrmController {
 
   /** Busca global (Cmd+K): contatos + negócios + conversas do tenant da sessão. */
   @Get('search')
-  search(@TenantId() tenantId: string, @Query('q') q?: string) {
-    return this.crm.search(tenantId, q ?? '');
+  search(@TenantId() tenantId: string, @CurrentUser() u: AuthUser, @Query('q') q?: string) {
+    // Acesso por módulo (ADR-0045): a busca não vaza o que a pessoa não vê.
+    return this.crm.search(tenantId, q ?? '', 5, u.modulos);
   }
 
   @Post('contacts')

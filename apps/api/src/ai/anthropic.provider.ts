@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '../config/config.service';
+import { consumirNdjsonOllama, consumirSseAnthropic, type RespostaAnthropicStream, type RespostaOllamaStream } from './stream-parsers';
 import { CircuitBreaker } from '../common/circuit-breaker';
 import {
   causaPorStatus,
@@ -143,6 +144,13 @@ export class AnthropicProvider implements AIProvider {
   async conversar(input: {
     modelo: string;
     system: string;
+    /**
+     * Parte do system que muda a cada turno (data, memória). Vai DEPOIS do bloco
+     * estável: o prefixo `system`+tools fica no cache de prompt da Anthropic.
+     */
+    systemDinamico?: string;
+    /** Recebe cada trecho de texto assim que o modelo o produz (streaming real). */
+    onTexto?: (delta: string) => void;
     mensagens: MensagemLLM[];
     tools?: ToolDef[];
     maxTokens?: number;
@@ -184,16 +192,21 @@ export class AnthropicProvider implements AIProvider {
     const corpo: Record<string, unknown> = {
       model: input.modelo,
       max_tokens: input.maxTokens ?? 2048,
-      system: input.system,
+      // Cache de prompt: o bloco estável (persona, regras) e as tools são o grosso
+      // do prompt e idênticos a cada volta do loop; só a parte dinâmica muda.
+      system: input.systemDinamico
+        ? [{ type: 'text', text: input.system, cache_control: { type: 'ephemeral' } }, { type: 'text', text: input.systemDinamico }]
+        : input.system,
       messages: input.mensagens,
     };
+    if (input.onTexto) corpo.stream = true;
     // Mandar temperatura para quem não aceita é 400 garantido (BUG-017).
     if (aceitaTemperatura(input.modelo)) corpo.temperature = input.temperatura ?? 0.3;
     const outputConfig: Record<string, unknown> = {};
     if (input.effort && aceitaEffort(input.modelo)) outputConfig.effort = input.effort;
     if (input.jsonSchema) outputConfig.format = { type: 'json_schema', schema: input.jsonSchema };
     if (Object.keys(outputConfig).length) corpo.output_config = outputConfig;
-    if (input.tools?.length) corpo.tools = input.tools;
+    if (input.tools?.length) corpo.tools = input.tools.map((t, i, todas) => (i === todas.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t));
 
     const headers: Record<string, string> = {
       'content-type': 'application/json',
@@ -230,12 +243,9 @@ export class AnthropicProvider implements AIProvider {
       );
     }
 
-    const j = (await res.json()) as {
-      content: { type: string; text?: string; id?: string; name?: string; input?: Record<string, unknown> }[];
-      stop_reason: string;
-      usage: { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number };
-      model: string;
-    };
+    const j: RespostaAnthropicStream = input.onTexto && res.body
+      ? await consumirSseAnthropic(res.body, input.onTexto)
+      : ((await res.json()) as RespostaAnthropicStream);
 
     const texto = j.content.filter((c) => c.type === 'text').map((c) => c.text ?? '').join('\n').trim();
     const toolCalls = j.content
@@ -244,7 +254,7 @@ export class AnthropicProvider implements AIProvider {
 
     const entrada = j.usage.input_tokens ?? 0;
     const saida = j.usage.output_tokens ?? 0;
-    const cache = j.usage.cache_read_input_tokens ?? 0;
+    const cache = (j.usage.cache_read_input_tokens ?? 0);
 
     // Com fallback, quem atendeu pode ser outro modelo: o custo segue `j.model`.
     const modelo = j.model ?? input.modelo;
@@ -327,7 +337,7 @@ export class AnthropicProvider implements AIProvider {
       }
     }
 
-    const mensagens: Record<string, unknown>[] = [{ role: 'system', content: input.system }];
+    const mensagens: Record<string, unknown>[] = [{ role: 'system', content: input.systemDinamico ? `${input.system}\n\n${input.systemDinamico}` : input.system }];
     for (const m of input.mensagens) {
       if (typeof m.content === 'string') { mensagens.push({ role: m.role, content: m.content }); continue; }
       if (!Array.isArray(m.content)) { mensagens.push({ role: m.role, content: JSON.stringify(m.content) }); continue; }
@@ -351,14 +361,18 @@ export class AnthropicProvider implements AIProvider {
           });
         }
         const texto = blocos.filter((b) => b.type === 'text').map((b) => b.text ?? '').join('\n');
-        if (texto) mensagens.push({ role: 'user', content: texto });
+        // Visão: bloco `image` (base64, formato Anthropic) → `images` do Ollama.
+        const imagens = (blocos as { type?: string; source?: { type?: string; data?: string } }[])
+          .filter((b) => b.type === 'image' && b.source?.type === 'base64' && b.source.data)
+          .map((b) => b.source!.data as string);
+        if (texto || imagens.length) mensagens.push({ role: 'user', content: texto, ...(imagens.length ? { images: imagens } : {}) });
       }
     }
 
     const corpo: Record<string, unknown> = {
       model: modelo,
       think: false,
-      stream: false,
+      stream: !!input.onTexto,
       // Sem `keep_alive` o Ollama descarrega o modelo após 5 min ocioso e o
       // próximo cliente paga 10–30 s de recarga.
       keep_alive: process.env.OLLAMA_KEEP_ALIVE || '60m',
@@ -394,13 +408,8 @@ export class AnthropicProvider implements AIProvider {
       throw new ErroProvedorIA(`Ollama ${res.status}: ${detalhe}`, causaPorStatus(res.status), 'ollama', res.status);
     }
 
-    const j = (await res.json()) as {
-      model?: string;
-      done_reason?: string;
-      message?: { content?: string; tool_calls?: { function: { name: string; arguments: Record<string, unknown> | string } }[] };
-      prompt_eval_count?: number;
-      eval_count?: number;
-    };
+    const j: RespostaOllamaStream | { model?: string; done_reason?: string; message?: RespostaOllamaStream['message']; prompt_eval_count?: number; eval_count?: number } =
+      input.onTexto && res.body ? await consumirNdjsonOllama(res.body, input.onTexto) : ((await res.json()) as { model?: string; done_reason?: string; message?: RespostaOllamaStream['message']; prompt_eval_count?: number; eval_count?: number });
     const msg = j.message ?? {};
     const toolCalls = (msg.tool_calls ?? []).map((t, i) => {
       let args: Record<string, unknown> = {};
