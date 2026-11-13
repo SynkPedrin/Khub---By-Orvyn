@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { moduloLiberado, modulosDaRota } from '../auth/modulos';
 import { DomainEventsService } from '../events/domain-events.service';
 import { AvatarContatoService } from './messaging/avatar-contato.service';
+import { formatarListaGhl } from './messaging/formato-lista-ghl';
 import { ABERTO, escolherFunil, receitaMensal, resumirFunil, type NegocioRef } from './funil';
 import { orderByDaOrdem, whereDoFiltro, type FiltroContatos, type OrdemContatos } from './contatos-filtro';
 import { idsPorTelefone } from './contatos-sql';
@@ -812,7 +813,7 @@ export class CrmService {
       return {
         id, total,
         mensagens: recentes.reverse().map((m) => ({
-          id: m.id, de: m.autorTipo, texto: m.corpo, hora: m.hora, status: m.deliveryStatus, agentId: m.agentId, criadaEm: m.createdAt.toISOString(),
+          id: m.id, de: m.autorTipo, texto: formatarListaGhl(m.corpo), hora: m.hora, status: m.deliveryStatus, agentId: m.agentId, criadaEm: m.createdAt.toISOString(),
           agentNome: m.agentId ? nomeAgente.get(m.agentId) ?? null : null,
           workflowId: m.workflowId, workflowNome: m.workflowId ? nomeWorkflow.get(m.workflowId) ?? null : null,
           enviadoPorId: m.enviadoPorId, enviadoPorNome: m.enviadoPorId ? nomeUsuario.get(m.enviadoPorId) ?? null : null,

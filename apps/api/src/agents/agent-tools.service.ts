@@ -8,8 +8,10 @@ import { TasksService } from '../crm/tasks.service';
 import { AgendaService } from '../agenda/agenda.service';
 import { WorkflowsService } from '../automations/workflows.service';
 import { RetrievalService } from '../rag/retrieval.service';
+import { calcularSlots, dataNoFuso, instanteLocal, somarDias, DATA_RE, type ConfigSlots, type Horarios, type Ocupado, type Slot } from '../booking/booking.schema';
 import { FERRAMENTAS_POR_NOME } from './catalogo';
-import type { AcaoRegra } from './config/agent-config';
+import { resolverConfig, type AcaoRegra } from './config/agent-config';
+import { DIAS_SEMANA, type ConfigHorario } from './config/horario';
 
 /**
  * Contexto da execução. `contactId` e `tenantId` vêm da CONVERSA e da sessão
@@ -34,6 +36,12 @@ export interface ContextoAgente {
   exigirConfirmacao?: readonly string[];
   workflowsPermitidos?: readonly string[];
   etapasPermitidas?: readonly string[];
+  /**
+   * Horário de atendimento do agente (config.horario): as ferramentas de
+   * agenda sugerem e aceitam SÓ horários dentro das faixas, no fuso dele,
+   * pulando feriados. Ausente = janela comercial genérica (9h–18h).
+   */
+  horario?: ConfigHorario;
 }
 
 export interface FonteUsada {
@@ -197,6 +205,8 @@ export class AgentToolsService {
       runId: exec.e.runId,
       workflowsPermitidos: cfg.permissoes?.workflowsPermitidos ?? [],
       etapasPermitidas: cfg.permissoes?.etapasPermitidas ?? [],
+      // A validação da janela de agenda vale também na execução aprovada.
+      horario: resolverConfig(exec.agente?.config ?? {}).config.horario,
     };
     const t0 = Date.now();
     try {
@@ -331,14 +341,26 @@ export class AgentToolsService {
         const proximos = await this.prisma.withTenant(ctx.tenantId, (tx) =>
           tx.agendaCompromisso.findMany({ where: { contactId: id, inicio: { gte: new Date() }, status: { in: ['agendado', 'confirmado'] } }, orderBy: { inicio: 'asc' }, take: 5, select: { id: true, titulo: true, inicio: true, fim: true, status: true } }),
         );
-        const livres = a.data ? await this.agenda.sugerirHorarios(ctx.tenantId, String(a.data), typeof a.duracaoMin === 'number' ? a.duracaoMin : 60) : undefined;
+        const slots = a.data ? await this.slotsDoDia(ctx, String(a.data), typeof a.duracaoMin === 'number' ? a.duracaoMin : 60) : undefined;
+        const livres = slots?.map((s) => ({ inicio: s.inicio, fim: s.fim }));
         return { ok: true, dados: { compromissos: proximos, ...(livres ? { horariosLivres: livres.slice(0, 12) } : {}) } };
       }
       case 'solicitar_agendamento': {
         const id = this.exigirContato(ctx);
         const inicio = new Date(String(a.inicio));
+        if (isNaN(+inicio)) throw new Error('horário inválido');
         if (inicio.getTime() < Date.now()) throw new Error('horário no passado');
         const dur = typeof a.duracaoMin === 'number' ? a.duracaoMin : 60;
+        // Só agenda horário que a disponibilidade real oferece (faixas do
+        // agente, fuso, feriados, agenda). O lock da AgendaService continua
+        // como backstop do choque de última hora.
+        if (ctx.horario) {
+          const data = dataNoFuso(+inicio, ctx.horario.fuso);
+          const slots = await this.slotsDoDia(ctx, data, dur);
+          if (!slots.some((s) => +new Date(s.inicio) === +inicio)) {
+            throw new Error('horário fora da disponibilidade: escolha um dos horários livres oferecidos');
+          }
+        }
         const c = await this.agenda.criar(ctx.tenantId, ctx.agentId ?? '', {
           titulo: String(a.titulo ?? `Atendimento — agendado por ${ctx.agentNome}`).slice(0, 120),
           inicio: inicio.toISOString(),
@@ -368,6 +390,34 @@ export class AgentToolsService {
       default:
         throw new Error(`ferramenta sem implementação: ${nome}`);
     }
+  }
+
+  /**
+   * Horários livres de um dia para o agente agendar. Com `config.horario` usa
+   * as FAIXAS da empresa (por dia da semana, no fuso do agente, pulando
+   * feriados) e desconta os compromissos reais da agenda — o mesmo motor da
+   * página pública de agendamento (booking.schema). Sem config, cai na janela
+   * genérica 9h–18h (comportamento anterior).
+   */
+  private async slotsDoDia(ctx: ContextoAgente, data: string, duracaoMin: number): Promise<Slot[]> {
+    if (!DATA_RE.test(data)) throw new BadRequestException('data deve ser YYYY-MM-DD');
+    const h = ctx.horario;
+    if (!h) {
+      const livres = await this.agenda.sugerirHorarios(ctx.tenantId, data, duracaoMin);
+      return livres.map((l) => ({ inicio: l.inicio, fim: l.fim, livres: [] }));
+    }
+    if (h.feriados.includes(data)) return [];
+    const horarios: Horarios = {};
+    DIAS_SEMANA.forEach((dia, i) => {
+      const faixas = h.dias[dia];
+      if (faixas.length) horarios[String(i) as keyof Horarios] = faixas.map((f) => ({ de: f.inicio, ate: f.fim }));
+    });
+    const cfg: ConfigSlots = { duracaoMin, intervaloMin: 0, antecedenciaMinHoras: 0, janelaDias: 180, horarios, fuso: h.fuso, responsaveis: [] };
+    const de = new Date(instanteLocal(somarDias(data, -1), 0, h.fuso)).toISOString();
+    const ate = new Date(instanteLocal(somarDias(data, 2), 0, h.fuso)).toISOString();
+    const compromissos = await this.agenda.listar(ctx.tenantId, { de, ate, status: ['agendado', 'confirmado'] });
+    const ocupados: Ocupado[] = compromissos.map((c) => ({ id: c.id, inicio: +c.inicio, fim: +c.fim, responsavelId: c.responsavelId }));
+    return calcularSlots(cfg, data, ocupados, Date.now());
   }
 
   private async acharEtapa(ctx: ContextoAgente, nomeOuId?: string): Promise<{ id: string; nome: string }> {

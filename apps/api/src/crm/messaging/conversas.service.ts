@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DomainEventsService } from '../../events/domain-events.service';
 import { CANAIS, condicaoStatus, etiquetasDoContato, whereConversas, type FiltroConversas } from './conversas-filtro';
+import { previaLegivel } from './formato-lista-ghl';
 
 /** Teto da lista: a tela pagina por rolagem do lado do cliente; 500 cobre o uso real (405 conversas no maior cliente). */
 const LIMITE_LISTA = 500;
@@ -54,7 +55,7 @@ export class ConversasService {
       );
       return rows.map((c) => ({
         id: c.id, nome: c.nome, canal: c.canal, tipo: c.tipo, status: c.status,
-        ultimaPrevia: c.ultimaPrevia, naoLidas: c.naoLidas, ultimaHora: c.ultimaHora,
+        ultimaPrevia: c.ultimaPrevia ? previaLegivel(c.ultimaPrevia) : c.ultimaPrevia, naoLidas: c.naoLidas, ultimaHora: c.ultimaHora,
         atendimento: c.atendimento, agentId: c.agentId, assigneeId: c.assigneeId, handoffMotivo: c.handoffMotivo,
         atualizadaEm: c.updatedAt.toISOString(),
         etiquetas: etiquetasDoContato(c.contact),

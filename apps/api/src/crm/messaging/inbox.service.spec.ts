@@ -14,10 +14,11 @@ const ANA = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const CONV = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
 
-function ambiente(opts: { storage?: boolean; membros?: string[]; contato?: { telefone: string | null }; conversaExistente?: boolean; respostas?: { id: string; criadoPor: string | null; atalho: string; titulo: string; corpo: string }[] } = {}) {
+function ambiente(opts: { storage?: boolean; membros?: string[]; contato?: { telefone: string | null }; conversaExistente?: boolean; contatoPorTelefone?: { id: string; nome: string; telefone: string } | null; respostas?: { id: string; criadoPor: string | null; atalho: string; titulo: string; corpo: string }[] } = {}) {
   const notas: Record<string, unknown>[] = [];
   const notificacoes: Record<string, unknown>[] = [];
   const conversasCriadas: Record<string, unknown>[] = [];
+  const contatosCriados: Record<string, unknown>[] = [];
   const membros = opts.membros ?? [EU, ANA];
   const tx = {
     conversation: {
@@ -25,7 +26,11 @@ function ambiente(opts: { storage?: boolean; membros?: string[]; contato?: { tel
       findFirst: jest.fn(async () => (opts.conversaExistente ? { id: CONV } : null)),
       create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => { conversasCriadas.push(data); return { id: 'nova' }; }),
     },
-    contact: { findUnique: jest.fn(async () => ({ id: 'c1', nome: 'Marina', telefone: opts.contato ? opts.contato.telefone : '+55 11 99999-0000' })) },
+    contact: {
+      findUnique: jest.fn(async () => ({ id: 'c1', nome: 'Marina', telefone: opts.contato ? opts.contato.telefone : '+55 11 99999-0000' })),
+      findFirst: jest.fn(async () => opts.contatoPorTelefone ?? null),
+      create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => { contatosCriados.push(data); return { id: 'c9', nome: data.nome, telefone: data.telefone }; }),
+    },
     user: {
       findMany: jest.fn(async ({ where }: { where: { identityId: { in: string[] } } }) => where.identityId.in.filter((i) => membros.includes(i)).map((identityId) => ({ identityId }))),
       findFirst: jest.fn(async () => ({ nome: 'Pedro' })),
@@ -38,7 +43,7 @@ function ambiente(opts: { storage?: boolean; membros?: string[]; contato?: { tel
       update: jest.fn(async ({ data }: { data: Record<string, unknown> }) => data),
       delete: jest.fn(async () => ({})),
     },
-    $queryRaw: jest.fn(async () => []),
+    $queryRaw: jest.fn(async () => (opts.contatoPorTelefone ? [opts.contatoPorTelefone] : [])),
     $executeRaw: jest.fn(async () => 1),
   };
   const prisma = { withTenant: jest.fn(async (_t: string, w: (t: unknown) => Promise<unknown>) => w(tx)) } as unknown as PrismaService;
@@ -54,7 +59,7 @@ function ambiente(opts: { storage?: boolean; membros?: string[]; contato?: { tel
   const publicados: { evento: string; dados: unknown }[] = [];
   const eventos = { publicar: jest.fn((_t: string, evento: string, dados: unknown) => publicados.push({ evento, dados })) } as unknown as DomainEventsService;
   const svc = new InboxService(prisma, {} as CrmService, messages, storage, new NotificationsService(), eventos);
-  return { svc, tx, notas, notificacoes, conversasCriadas, enviados, uploads, publicados };
+  return { svc, tx, notas, notificacoes, conversasCriadas, contatosCriados, enviados, uploads, publicados };
 }
 
 describe('InboxService — notas internas com @menção', () => {
@@ -115,20 +120,44 @@ describe('InboxService — mídia de saída', () => {
 describe('InboxService — iniciar conversa', () => {
   it('cria conversa de WhatsApp com quem iniciou como responsável', async () => {
     const a = ambiente();
-    expect(await a.svc.iniciarConversa(T, 'c1', EU)).toEqual({ id: 'nova', criada: true });
+    expect(await a.svc.iniciarConversa(T, { contactId: 'c1' }, EU)).toEqual({ id: 'nova', criada: true });
     expect(a.conversasCriadas[0]).toMatchObject({ canal: 'WhatsApp', atendimento: 'humano', assigneeId: EU, contactId: 'c1' });
     expect(a.publicados[0].evento).toBe('conversation.updated');
   });
 
   it('já existe conversa: devolve a mesma, sem duplicar', async () => {
     const a = ambiente({ conversaExistente: true });
-    expect(await a.svc.iniciarConversa(T, 'c1', EU)).toEqual({ id: CONV, criada: false });
+    expect(await a.svc.iniciarConversa(T, { contactId: 'c1' }, EU)).toEqual({ id: CONV, criada: false });
     expect(a.conversasCriadas).toHaveLength(0);
   });
 
   it('contato sem telefone: 422', async () => {
     const a = ambiente({ contato: { telefone: null } });
-    await expect(a.svc.iniciarConversa(T, 'c1', EU)).rejects.toBeInstanceOf(UnprocessableEntityException);
+    await expect(a.svc.iniciarConversa(T, { contactId: 'c1' }, EU)).rejects.toBeInstanceOf(UnprocessableEntityException);
+  });
+
+  it('número direto sem contato: cria o contato com DDI 55 e abre a conversa', async () => {
+    const a = ambiente();
+    expect(await a.svc.iniciarConversa(T, { telefone: '(18) 99777-6655' }, EU)).toEqual({ id: 'nova', criada: true });
+    expect(a.contatosCriados[0]).toMatchObject({ telefone: '+5518997776655', nome: '+5518997776655' });
+    expect(a.conversasCriadas[0]).toMatchObject({ contactId: 'c9', canal: 'WhatsApp' });
+  });
+
+  it('número direto de contato existente: reusa o contato, não cria outro', async () => {
+    const a = ambiente({ contatoPorTelefone: { id: 'c1', nome: 'Marina', telefone: '+55 18 99777-6655' } });
+    await a.svc.iniciarConversa(T, { telefone: '5518997776655' }, EU);
+    expect(a.contatosCriados).toHaveLength(0);
+    expect(a.conversasCriadas[0]).toMatchObject({ contactId: 'c1', nome: 'Marina' });
+  });
+
+  it('número incompleto: 422', async () => {
+    const a = ambiente();
+    await expect(a.svc.iniciarConversa(T, { telefone: '9777-665' }, EU)).rejects.toBeInstanceOf(UnprocessableEntityException);
+  });
+
+  it('sem contato nem telefone: 400', async () => {
+    const a = ambiente();
+    await expect(a.svc.iniciarConversa(T, {}, EU)).rejects.toBeInstanceOf(BadRequestException);
   });
 });
 

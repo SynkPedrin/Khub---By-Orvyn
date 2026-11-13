@@ -99,8 +99,12 @@ export const inbox = {
     req<ResultadoMidia>(`conversations/${conversationId}/midia`, { method: 'POST', headers: { ...json, 'idempotency-key': key }, body: JSON.stringify(corpo) }),
   criarNota: (conversationId: string, corpo: string, mencoes: string[]) =>
     req<ItemThread>(`conversations/${conversationId}/notas`, { method: 'POST', headers: json, body: JSON.stringify({ corpo, mencoes }) }),
-  iniciarConversa: (contactId: string) =>
-    req<{ id: string; criada: boolean }>('conversations', { method: 'POST', headers: json, body: JSON.stringify({ contactId, canal: 'WhatsApp' }) }),
+  iniciarConversa: (entrada: string | { contactId?: string; telefone?: string; nome?: string }) =>
+    req<{ id: string; criada: boolean }>('conversations', {
+      method: 'POST',
+      headers: json,
+      body: JSON.stringify(typeof entrada === 'string' ? { contactId: entrada, canal: 'WhatsApp' } : { ...entrada, canal: 'WhatsApp' }),
+    }),
   respostas: () => req<RespostaRapida[]>('quick-replies'),
   criarResposta: (d: { atalho: string; titulo: string; corpo: string }) => req<RespostaRapida>('quick-replies', { method: 'POST', headers: json, body: JSON.stringify(d) }),
   atualizarResposta: (id: string, d: Partial<{ atalho: string; titulo: string; corpo: string }>) =>

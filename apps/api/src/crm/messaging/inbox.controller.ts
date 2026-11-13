@@ -19,8 +19,11 @@ class NotaDto {
   @IsOptional() @IsArray() @ArrayMaxSize(20) @IsUUID('all', { each: true }) mencoes?: string[];
 }
 class IniciarConversaDto {
-  @IsUUID() contactId!: string;
+  @IsOptional() @IsUUID() contactId?: string;
   @IsIn(['WhatsApp']) canal!: 'WhatsApp';
+  /** Número direto, sem contato cadastrado: a conversa cria o contato. */
+  @IsOptional() @IsString() @MinLength(8) @MaxLength(20) telefone?: string;
+  @IsOptional() @IsString() @MaxLength(120) nome?: string;
 }
 class MarcarDto {
   @IsIn(['resolvida', 'aberta', 'nao_lida']) acao!: 'resolvida' | 'aberta' | 'nao_lida';
@@ -104,7 +107,7 @@ export class InboxController {
   @Post('conversations')
   iniciar(@CurrentUser() user: AuthUser, @Body() dto: IniciarConversaDto) {
     if (user.role === 'viewer') throw new ForbiddenException('perfil somente leitura');
-    return this.inbox.iniciarConversa(user.tenantId, dto.contactId, user.identityId);
+    return this.inbox.iniciarConversa(user.tenantId, { contactId: dto.contactId, telefone: dto.telefone, nome: dto.nome }, user.identityId);
   }
 
   @Get('quick-replies')

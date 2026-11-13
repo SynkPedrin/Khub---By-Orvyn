@@ -120,16 +120,17 @@ function ferramentas(contato: Record<string, unknown> | null = { nome: 'Marina',
     stage: { findMany: jest.fn(async () => [{ id: '00000000-0000-4000-8000-0000000000aa', nome: 'Qualificado' }, { id: '00000000-0000-4000-8000-0000000000bb', nome: 'Proposta' }]) },
     deal: { findFirst: jest.fn(async () => ({ id: 'd1' })) },
     agentToolExecution: { create: jest.fn(async () => ({ id: 'ex1' })), updateMany: jest.fn(async () => ({ count: 1 })) },
+    agendaCompromisso: { findMany: jest.fn(async () => []) },
     $executeRaw: jest.fn(async () => 1),
   };
   const prisma = { withTenant: jest.fn(async (_t: string, work: (t: unknown) => Promise<unknown>) => work(tx)) } as unknown as PrismaService;
   const crm = { updateContact: jest.fn(async () => ({ ok: true })), moveDeal: jest.fn(async () => ({ ok: true })), createDeal: jest.fn(async () => ({ id: 'd2' })) } as unknown as CrmService;
   const notas = { create: jest.fn(async () => ({ id: 'n1' })) } as unknown as NotesService;
   const tarefas = { create: jest.fn(async () => ({ id: 't1' })), update: jest.fn(async () => ({ ok: true })) } as unknown as TasksService;
-  const agenda = { criar: jest.fn(async () => ({ id: 'cp1', inicio: new Date() })), sugerirHorarios: jest.fn(async () => []) } as unknown as AgendaService;
+  const agenda = { criar: jest.fn(async () => ({ id: 'cp1', inicio: new Date() })), sugerirHorarios: jest.fn(async () => []), listar: jest.fn(async () => []) } as unknown as AgendaService;
   const workflows = { dispararPorAgente: jest.fn(async () => ({ runId: 'r1' })) } as unknown as WorkflowsService;
   const rag = { searchAgente: jest.fn(async () => []) } as unknown as RetrievalService;
-  return { svc: new AgentToolsService(prisma, crm, notas, tarefas, agenda, workflows, rag), tx, crm, notas, tarefas, workflows, rag };
+  return { svc: new AgentToolsService(prisma, crm, notas, tarefas, agenda, workflows, rag), tx, crm, notas, tarefas, workflows, rag, agenda };
 }
 
 const CTX: ContextoAgente = {
@@ -250,5 +251,86 @@ describe('catálogo', () => {
   it('JSON Schema das tools é estrito (additionalProperties: false)', () => {
     const s = paraJsonSchema(FERRAMENTAS_POR_NOME.get('atualizar_contato')!.schema);
     expect(s).toMatchObject({ additionalProperties: false, required: ['campo', 'valor'], properties: { campo: { enum: ['nome', 'email', 'empresa'] } } });
+  });
+});
+
+// ------------------------------------------------------------------ agenda do agente (respeito às faixas)
+
+import { instanteLocal } from '../booking/booking.schema';
+import { horarioSchema } from './config/horario';
+
+const SP = 'America/Sao_Paulo';
+const horarioPadrao = () => horarioSchema.parse({});
+
+/** Próxima data (YYYY-MM-DD) que cai no dia da semana pedido, ao menos 7 dias à frente. */
+function proximoDiaDaSemana(dow: number, minimoDias = 7): string {
+  const d = new Date(Date.now() + minimoDias * 86_400_000);
+  const delta = (dow - d.getUTCDay() + 7) % 7;
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + delta)).toISOString().slice(0, 10);
+}
+const horaLocalSP = (iso: string) =>
+  new Intl.DateTimeFormat('en-GB', { timeZone: SP, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
+
+describe('ferramentas de agenda respeitam o horário do agente', () => {
+  it('ver_agendamentos oferece só horários dentro das faixas (segunda 08:00–18:00)', async () => {
+    const f = ferramentas();
+    const data = proximoDiaDaSemana(1);
+    const r = await f.svc.executar('ver_agendamentos', { data, duracaoMin: 60 }, { ...CTX, horario: horarioPadrao() }, TODAS);
+    const livres = (r.dados as { horariosLivres: { inicio: string }[] }).horariosLivres;
+    expect(livres.length).toBeGreaterThan(0);
+    expect(horaLocalSP(livres[0].inicio)).toBe('08:00');
+    for (const s of livres) {
+      const [h] = horaLocalSP(s.inicio).split(':').map(Number);
+      expect(h).toBeGreaterThanOrEqual(8);
+      expect(h).toBeLessThan(18);
+    }
+  });
+
+  it('horário ocupado na agenda some da lista oferecida', async () => {
+    const f = ferramentas();
+    const data = proximoDiaDaSemana(1);
+    const ini = instanteLocal(data, 10 * 60, SP);
+    (f.agenda.listar as jest.Mock).mockResolvedValue([{ id: 'x', inicio: new Date(ini), fim: new Date(ini + 3_600_000), responsavelId: null }]);
+    const r = await f.svc.executar('ver_agendamentos', { data, duracaoMin: 60 }, { ...CTX, horario: horarioPadrao() }, TODAS);
+    const horas = (r.dados as { horariosLivres: { inicio: string }[] }).horariosLivres.map((s) => horaLocalSP(s.inicio));
+    expect(horas).not.toContain('10:00');
+    expect(horas).toContain('09:00');
+  });
+
+  it('domingo (fechado) e feriado não oferecem horário', async () => {
+    const f = ferramentas();
+    const domingo = proximoDiaDaSemana(0);
+    const r1 = await f.svc.executar('ver_agendamentos', { data: domingo, duracaoMin: 60 }, { ...CTX, horario: horarioPadrao() }, TODAS);
+    expect((r1.dados as { horariosLivres: unknown[] }).horariosLivres).toEqual([]);
+    const segunda = proximoDiaDaSemana(1);
+    const r2 = await f.svc.executar('ver_agendamentos', { data: segunda, duracaoMin: 60 }, { ...CTX, horario: horarioSchema.parse({ feriados: [segunda] }) }, TODAS);
+    expect((r2.dados as { horariosLivres: unknown[] }).horariosLivres).toEqual([]);
+  });
+
+  it('solicitar_agendamento fora da faixa é recusado (nada é gravado)', async () => {
+    const f = ferramentas();
+    const data = proximoDiaDaSemana(1);
+    const inicio = new Date(instanteLocal(data, 7 * 60, SP)).toISOString(); // 07:00, antes de abrir
+    const r = await f.svc.executar('solicitar_agendamento', { inicio, duracaoMin: 60 }, { ...CTX, horario: horarioPadrao() }, TODAS);
+    expect(r.ok).toBe(false);
+    expect(r.erro).toContain('disponibilidade');
+    expect((f.agenda.criar as jest.Mock)).not.toHaveBeenCalled();
+  });
+
+  it('solicitar_agendamento num horário livre cria pela AgendaService como IA', async () => {
+    const f = ferramentas();
+    const data = proximoDiaDaSemana(1);
+    const inicio = new Date(instanteLocal(data, 9 * 60, SP)).toISOString();
+    const r = await f.svc.executar('solicitar_agendamento', { inicio, duracaoMin: 60 }, { ...CTX, horario: horarioPadrao() }, TODAS);
+    expect(r.ok).toBe(true);
+    expect(f.agenda.criar).toHaveBeenCalledWith(TENANT, 'ag1', expect.objectContaining({ contactId: 'c1', inicio }), 'nyro');
+  });
+
+  it('sem config de horário, cai na janela genérica (comportamento anterior)', async () => {
+    const f = ferramentas();
+    (f.agenda.sugerirHorarios as jest.Mock).mockResolvedValue([{ inicio: '2026-11-20T12:00:00.000Z', fim: '2026-11-20T13:00:00.000Z' }]);
+    const r = await f.svc.executar('ver_agendamentos', { data: '2026-11-20', duracaoMin: 60 }, CTX, TODAS);
+    expect(f.agenda.sugerirHorarios).toHaveBeenCalledWith(TENANT, '2026-11-20', 60);
+    expect((r.dados as { horariosLivres: unknown[] }).horariosLivres).toHaveLength(1);
   });
 });
