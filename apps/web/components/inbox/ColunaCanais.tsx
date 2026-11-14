@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/kit';
 import type { ContagensConversas } from '@/lib/inbox';
 import { STATUS_LISTA, alternarEtiqueta, canaisDaColuna, type FiltroLista, type StatusLista } from '@/lib/conversas-filtro';
 import { CanalIcone, canalInfo } from './CanalIcone';
+import { ItemInstagram } from './MenuInstagram';
 
 const ICONE_STATUS: Record<StatusLista, IconName> = { todas: 'grid', nao_lidas: 'chat', em_atendimento: 'refresh', aguardando: 'clock', resolvidas: 'check2' };
 
@@ -73,7 +74,16 @@ export function ColunaCanais({ contagens, filtro, onFiltro, onConectar }: { cont
             <Item ativo={filtro.canal === 'todos'} onClick={() => onFiltro({ ...filtro, canal: 'todos' })} icone={<Icon name="users" size={14} />} total={contagens.total}>
               Todos os canais
             </Item>
-            {canais.map((c) => (
+            {canais.map((c) =>
+              c.canal === 'Instagram' ? (
+                <ItemInstagram
+                  key={c.canal}
+                  ativo={filtro.canal === c.canal}
+                  total={c.total}
+                  titulo={c.conectado ? undefined : 'Conta não conectada: só o histórico'}
+                  onDirect={() => onFiltro({ ...filtro, canal: c.canal })}
+                />
+              ) : (
               <Item
                 key={c.canal}
                 ativo={filtro.canal === c.canal}
@@ -84,7 +94,8 @@ export function ColunaCanais({ contagens, filtro, onFiltro, onConectar }: { cont
               >
                 {canalInfo(c.canal).rotulo}
               </Item>
-            ))}
+              ),
+            )}
             {semNenhumConectado && (
               <li className="mt-2 rounded-xl border border-dashed border-line px-3 py-3 text-center">
                 <p className="text-[12.5px] text-muted">Nenhum canal conectado ainda.</p>

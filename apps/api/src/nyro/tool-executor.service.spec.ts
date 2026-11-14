@@ -25,7 +25,7 @@ function amb() {
   const blueprints = { aplicar: jest.fn(async () => ({ jaAplicado: false, blueprint: 'saude.odontologia', funil: { id: 'pl1' }, automacoes: [] })) } as unknown as BlueprintService;
   const prisma = { withTenant: jest.fn(async (_t: string, w: (tx: unknown) => unknown) => w({ $executeRaw: jest.fn() })) } as unknown as PrismaService;
   const vazio = {} as never;
-  const svc = new ToolExecutorService(prisma, crm, vazio as MessagesService, vazio as TasksService, vazio as NotesService, vazio as WorkflowsService, vazio as RetrievalService, marketplace, blueprints, vazio as NicoAnalisesService, vazio as never, vazio as never);
+  const svc = new ToolExecutorService(prisma, crm, vazio as MessagesService, vazio as TasksService, vazio as NotesService, vazio as WorkflowsService, vazio as RetrievalService, marketplace, blueprints, vazio as NicoAnalisesService, vazio as never, vazio as never, vazio as never);
   return { svc, crm, marketplace, blueprints };
 }
 

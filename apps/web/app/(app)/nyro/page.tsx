@@ -37,7 +37,8 @@ function saudacao(): string {
  */
 export default function NicoPage() {
   const { user } = useAuth();
-  const { status, bolhas, passos, texto, setTexto, pensando, erro, enviar, decidir, anexos, anexar, removerAnexo, aoVivo, plano, parar } = useNyroChat(true);
+  const { status, bolhas, passos, texto, setTexto, pensando, erro, enviar, decidir, anexos, anexar, removerAnexo, aoVivo, plano, parar, conversationId, carregarConversa, novaConversa } = useNyroChat(true);
+  const [conversas, setConversas] = useState<{ id: string; titulo: string | null; updatedAt: string }[] | null>(null);
   const [insights, setInsights] = useState<Insight[]>([]);
   const [relatorios, setRelatorios] = useState<RelatorioResumo[] | null>(null);
   const [rotinas, setRotinas] = useState<Rotina[] | null>(null);
@@ -76,6 +77,12 @@ export default function NicoPage() {
     if (status?.configurada === false || status == null) return;
     nyro.insights().then(setInsights).catch(() => setInsights([]));
   }, [status]);
+
+  // Histórico de conversas: recarrega quando uma conversa nasce ou recebe resposta.
+  useEffect(() => {
+    if (status?.configurada === false || status == null) return;
+    nyro.conversas().then(setConversas).catch(() => setConversas([]));
+  }, [status, bolhas.length, conversationId]);
 
   const abrirRelatorio = useCallback((id: string) => {
     nyro.relatorio(id).then(setAberto).catch(() => undefined);
@@ -132,7 +139,7 @@ export default function NicoPage() {
             <NicoAvatar tamanho={46} estado={estado} />
             <div className="min-w-0 flex-1">
               <p className="flex items-center gap-2.5">
-                <Image src="/nico-logo.png" alt={NICO.nome} width={2172} height={724} unoptimized priority className="h-8 w-auto object-contain" />
+                <Image src="/nico-logo.png" alt={NICO.nome} width={2172} height={724} unoptimized priority className="h-11 w-auto object-contain" />
                 <span className="rounded-full bg-lime-soft px-2 py-0.5 text-[11px] font-semibold text-lime-ink">Equipe interna</span>
               </p>
               <p className="text-[13px] text-muted">{NICO.papel}</p>
@@ -243,7 +250,37 @@ export default function NicoPage() {
         </section>
 
         {/* PAINEL LATERAL */}
-        <aside className="min-w-0 space-y-4">
+        <aside className="min-w-0 space-y-4 xl:max-h-[calc(100dvh-170px)] xl:min-h-[560px] xl:overflow-y-auto xl:pr-1 scrollbar-thin">
+          <section className="card p-5" aria-label="Histórico de conversas">
+            <div className="flex items-center justify-between gap-2">
+              <p className="t-section">Conversas</p>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={novaConversa} disabled={pensando}>
+                <Icon name="plus" size={14} /> Nova
+              </button>
+            </div>
+            {conversas === null ? (
+              <div className="skeleton mt-3 h-10 w-full rounded-lg" />
+            ) : conversas.length === 0 ? (
+              <p className="mt-2 text-[13px] text-muted">Suas conversas com a NICO ficam guardadas aqui.</p>
+            ) : (
+              <ul className="mt-3 max-h-64 space-y-0.5 overflow-y-auto scrollbar-thin">
+                {conversas.map((c) => (
+                  <li key={c.id}>
+                    <button
+                      type="button"
+                      onClick={() => void carregarConversa(c.id)}
+                      aria-current={c.id === conversationId ? 'true' : undefined}
+                      className={`w-full rounded-lg px-2.5 py-1.5 text-left transition-colors hover:bg-[var(--fill-4)] ${c.id === conversationId ? 'bg-[var(--fill-4)]' : ''}`}
+                    >
+                      <span className="block truncate text-[13px] text-fg">{c.titulo?.trim() || 'Conversa sem título'}</span>
+                      <span className="block text-[11.5px] text-muted">{new Date(c.updatedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
           <section className="card p-5">
             <p className="t-section">Quem é a NICO</p>
             <p className="mt-2 text-[13.5px] leading-relaxed text-muted">{NICO.resumo}</p>

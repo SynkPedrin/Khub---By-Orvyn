@@ -107,6 +107,16 @@ describe('CanaisIngestaoService', () => {
     expect(a.tx.contact.create).not.toHaveBeenCalled();
   });
 
+  it('grava a mensagem com a hora REAL da rede (não a hora em que chegou ao KHUB); futuro cai para agora', async () => {
+    const antiga = new Date('2026-11-10T13:05:00Z');
+    const a = ingestao();
+    await a.svc.receber({ ...DM, idExterno: 'mid-antiga', recebidoEm: antiga });
+    expect(a.mensagens[0].createdAt).toEqual(antiga);
+    const b = ingestao();
+    await b.svc.receber({ ...DM, idExterno: 'mid-futuro', recebidoEm: new Date(Date.now() + 86_400_000) });
+    expect((b.mensagens[0].createdAt as Date).getTime()).toBeLessThanOrEqual(Date.now());
+  });
+
   it('webhook da Meta sem tenant dono: descarta sem escrita', async () => {
     const a = ingestao();
     a.prisma.$queryRaw.mockResolvedValueOnce([{ tenant_id: null }]);

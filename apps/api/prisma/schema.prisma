@@ -932,6 +932,78 @@ model FinanceiroCobranca {
   @@map("financeiro_cobrancas")
 }
 
+/// Categoria de entrada/saída do fluxo de caixa (db/070).
+model FinanceiroCategoria {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  nome      String
+  tipo      String // entrada|saida
+  cor       String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("financeiro_categorias")
+}
+
+/// Entrada/saída do fluxo de caixa da empresa (db/070). Valores em centavos.
+model FinanceiroTransacao {
+  id              String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  tipo            String // entrada|saida
+  categoriaId     String?  @map("categoria_id") @db.Uuid
+  descricao       String
+  valorCentavos   Int      @map("valor_centavos")
+  dataCompetencia DateTime @default(now()) @map("data_competencia") @db.Date
+  status          String   @default("pago") // pago|pendente
+  contactId       String?  @map("contact_id") @db.Uuid
+  cobrancaId      String?  @map("cobranca_id") @db.Uuid
+  compromissoId   String?  @map("compromisso_id") @db.Uuid
+  responsavelId   String?  @map("responsavel_id") @db.Uuid
+  /// Profissional do catálogo (db/071) a quem o lançamento é atribuído.
+  profissionalId  String?  @map("profissional_id") @db.Uuid
+  origem          String   @default("manual") // manual|agenda|cobranca|importacao|comissao
+  /// Hash da linha importada + ocorrência no arquivo: reimportar não duplica.
+  chaveImportacao String?  @map("chave_importacao")
+  observacao      String?
+  createdBy       String?  @map("created_by") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("financeiro_transacoes")
+}
+
+/// Cargo + % de comissão de um membro da equipe (db/070). Estende o membership.
+model EquipeComissao {
+  tenantId        String   @map("tenant_id") @db.Uuid
+  identityId      String   @map("identity_id") @db.Uuid
+  cargo           String?
+  comissaoPercent Decimal  @default(0) @map("comissao_percent") @db.Decimal(5, 2)
+  updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@id([tenantId, identityId])
+  @@map("equipe_comissoes")
+}
+
+/// Comissão gerada por entrada atribuída a membro com % > 0 (db/070).
+model FinanceiroComissao {
+  id                   String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId             String    @map("tenant_id") @db.Uuid
+  /// Membro da conta que recebe. NULL quando a comissão é de um profissional do catálogo (db/071).
+  identityId           String?   @map("identity_id") @db.Uuid
+  profissionalId       String?   @map("profissional_id") @db.Uuid
+  transacaoId          String?   @map("transacao_id") @db.Uuid
+  baseCentavos         Int       @map("base_centavos")
+  percent              Decimal   @db.Decimal(5, 2)
+  valorCentavos        Int       @map("valor_centavos")
+  competencia          DateTime  @db.Date
+  status               String    @default("prevista") // prevista|paga
+  pagoEm               DateTime? @map("pago_em") @db.Timestamptz(6)
+  /// Saída lançada no caixa ao pagar a comissão (origem 'comissao').
+  pagamentoTransacaoId String?   @map("pagamento_transacao_id") @db.Uuid
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("financeiro_comissoes")
+}
+
 /// Assinatura do PRÓPRIO KHUB (billing da plataforma) — não confundir com
 /// FinanceiroCobranca (o tenant cobrando OS CLIENTES dele). migration 028.
 model Subscription {
@@ -964,6 +1036,11 @@ model AgendaCompromisso {
   local         String?
   notas         String?
   googleEventId String?   @map("google_event_id")
+  /// Valor do atendimento em centavos (db/070): ao concluir, vira entrada no financeiro.
+  valorCentavos Int?      @map("valor_centavos")
+  /// Catálogo (db/071): serviço realizado e profissional que atendeu (não é usuário do sistema).
+  servicoId       String?   @map("servico_id") @db.Uuid
+  profissionalId  String?   @map("profissional_id") @db.Uuid
   confirmadoEm  DateTime? @map("confirmado_em") @db.Timestamptz(6)
   faltouEm      DateTime? @map("faltou_em") @db.Timestamptz(6)
   concluidoEm   DateTime? @map("concluido_em") @db.Timestamptz(6)
@@ -1979,4 +2056,103 @@ model RedesSnapshot {
 
   @@unique([conexaoId, dia], map: "redes_snap_dia_uq")
   @@map("redes_snapshots")
+}
+
+
+// ==================== Catálogo, estoque e importações (db/071) ====================
+/// Cada lote importado (Avec etc.): auditar e desfazer o lote inteiro.
+model Importacao {
+  id           String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  fonte        String    @default("avec")
+  /// clientes|agenda|financeiro|servicos|profissionais|estoque|comissoes
+  entidade     String
+  arquivoNome  String?   @map("arquivo_nome")
+  linhasTotal  Int       @default(0) @map("linhas_total")
+  criados      Int       @default(0)
+  atualizados  Int       @default(0)
+  ignorados    Int       @default(0)
+  erros        Int       @default(0)
+  /// concluida|desfeita
+  status       String    @default("concluida")
+  resumo       Json      @default("{}")
+  createdBy    String?   @map("created_by") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  desfeitaEm   DateTime? @map("desfeita_em") @db.Timestamptz(6)
+
+  @@map("importacoes")
+}
+
+/// Quem atende e recebe comissão. NÃO é usuário do sistema (vínculo opcional).
+model Profissional {
+  id              String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  nome            String
+  especialidade   String?
+  comissaoPercent Decimal  @default(0) @map("comissao_percent") @db.Decimal(5, 2)
+  email           String?
+  telefone        String?
+  identityId      String?  @map("identity_id") @db.Uuid
+  ativo           Boolean  @default(true)
+  importacaoId    String?  @map("importacao_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("profissionais")
+}
+
+model Servico {
+  id              String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  nome            String
+  categoria       String?
+  duracaoMin      Int      @default(30) @map("duracao_min")
+  precoCentavos   Int      @default(0) @map("preco_centavos")
+  /// NULL = usa a comissão padrão do profissional.
+  comissaoPercent Decimal? @map("comissao_percent") @db.Decimal(5, 2)
+  ativo           Boolean  @default(true)
+  importacaoId    String?  @map("importacao_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("servicos")
+}
+
+model Produto {
+  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  nome          String
+  sku           String?
+  categoria     String?
+  unidade       String   @default("un")
+  custoCentavos Int      @default(0) @map("custo_centavos")
+  precoCentavos Int      @default(0) @map("preco_centavos")
+  estoqueMinimo Decimal  @default(0) @map("estoque_minimo") @db.Decimal(12, 3)
+  ativo         Boolean  @default(true)
+  importacaoId  String?  @map("importacao_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("produtos")
+}
+
+/// Razão do estoque: `delta` com sinal (entrada +, saída −). Saldo = SUM(delta).
+model EstoqueMovimento {
+  id              String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  produtoId       String   @map("produto_id") @db.Uuid
+  /// entrada|saida|ajuste
+  tipo            String
+  delta           Decimal  @db.Decimal(12, 3)
+  custoCentavos   Int?     @map("custo_centavos")
+  motivo          String?
+  dataMovimento   DateTime @default(now()) @map("data_movimento") @db.Date
+  /// manual|importacao
+  origem          String   @default("manual")
+  chaveImportacao String?  @map("chave_importacao")
+  importacaoId    String?  @map("importacao_id") @db.Uuid
+  createdBy       String?  @map("created_by") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("estoque_movimentos")
 }

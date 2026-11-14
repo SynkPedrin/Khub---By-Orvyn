@@ -10,6 +10,7 @@ import { MailerService } from '../common/mailer.service';
 import { AiService, type TarefaIA } from '../ai/ai.service';
 import { soDigitos } from '../crm/telefone';
 import { CustomFieldsService } from '../crm/custom-fields.service';
+import { AtendimentoService } from '../crm/messaging/atendimento.service';
 import { AvaliacoesService } from '../avaliacoes/avaliacoes.service';
 import { validarConfig, type Grafo, type No, type Ramo, type Regra, type TipoNo } from './catalogo';
 import { NosMotor } from './nos-motor';
@@ -116,6 +117,8 @@ export class ExecutorService {
     private readonly camposCustom: CustomFieldsService,
     // Opcional: specs antigos constroem o executor sem ele (Q4.4).
     @Optional() private readonly avaliacoes?: AvaliacoesService,
+    // Opcional pelo mesmo motivo (nó "Ativar IA" / "Passar para humano").
+    @Optional() private readonly atendimento?: AtendimentoService,
   ) {
     this.motor = new NosMotor(prisma, crm, camposCustom, (t, c) => this.interpolar(t, c), (campo, c) => this.valorDoCampo(campo, c));
   }
@@ -144,6 +147,10 @@ export class ExecutorService {
         return this.motor.removerDeFluxo(tenantId, noValido, ctx);
       case 'acao.atribuir_usuario':
         return this.motor.atribuirUsuario(tenantId, noValido, ctx);
+      case 'acao.ativar_ia':
+        return this.ativarIa(tenantId, noValido, ctx);
+      case 'acao.passar_humano':
+        return this.passarHumano(tenantId, noValido, ctx);
       case 'acao.nao_perturbe':
         return this.motor.naoPerturbe(tenantId, noValido, ctx);
       case 'acao.atualizar_negocio':
@@ -259,6 +266,10 @@ export class ExecutorService {
         return simulado('Atualizaria a oportunidade', { campos: cfg.campos ?? null });
       case 'acao.atribuir_usuario':
         return simulado('Atribuiria um responsável ao contato');
+      case 'acao.ativar_ia':
+        return simulado(`Ativaria a IA na conversa do contato (${cfg.agentId ? 'agente escolhido' : 'agente padrão'})`);
+      case 'acao.passar_humano':
+        return simulado('Transferiria a conversa para a equipe');
       case 'acao.nao_perturbe':
         return simulado('Mudaria o "não perturbe" do contato');
       case 'acao.remover_de_fluxo':
@@ -576,6 +587,47 @@ export class ExecutorService {
       });
       return nova.id;
     });
+  }
+
+  /** Conversa mais recente do contato (qualquer canal) — alvo dos nós de atendimento. */
+  private async conversaDoContato(tenantId: string, contactId: string): Promise<string> {
+    const conv = await this.prisma.withTenant(tenantId, (tx) =>
+      tx.conversation.findFirst({ where: { contactId }, orderBy: { updatedAt: 'desc' }, select: { id: true } }),
+    );
+    if (!conv) throw new UnrecoverableError('o contato não tem conversa para este nó de atendimento');
+    return conv.id;
+  }
+
+  /**
+   * Nó "Ativar IA": liga um agente na conversa do contato. Agente inexistente
+   * ou inativo é erro de CONFIGURAÇÃO (não transitório): direto à DLQ, sem
+   * retentar — o operador precisa ativar/escolher o agente.
+   */
+  private async ativarIa(tenantId: string, no: No, ctx: Contexto): Promise<ResultadoNo> {
+    if (!this.atendimento) throw new UnrecoverableError('atendimento indisponível neste serviço');
+    if (!ctx.contato) throw new Error('nó "Ativar IA" sem contato no contexto');
+    const conversationId = await this.conversaDoContato(tenantId, ctx.contato.id);
+    const agentId = (no.config as { agentId?: string }).agentId;
+    try {
+      const estado = await this.atendimento.ativarIaSistema(tenantId, conversationId, agentId);
+      return { saida: { atendimento: estado.atendimento, agentId: estado.agentId, conversationId } };
+    } catch (e) {
+      throw new UnrecoverableError(`ativar IA: ${(e as Error).message}`);
+    }
+  }
+
+  /** Nó "Passar para humano": tira a IA e distribui para a equipe. */
+  private async passarHumano(tenantId: string, no: No, ctx: Contexto): Promise<ResultadoNo> {
+    if (!this.atendimento) throw new UnrecoverableError('atendimento indisponível neste serviço');
+    if (!ctx.contato) throw new Error('nó "Passar para humano" sem contato no contexto');
+    const conversationId = await this.conversaDoContato(tenantId, ctx.contato.id);
+    const motivo = (no.config as { motivo?: string }).motivo ?? 'automação passou para a equipe';
+    try {
+      const estado = await this.atendimento.transferirParaHumano(tenantId, conversationId, motivo, { tipo: 'sistema' });
+      return { saida: { atendimento: estado.atendimento, assigneeId: estado.assigneeId, conversationId } };
+    } catch (e) {
+      throw new UnrecoverableError(`passar para humano: ${(e as Error).message}`);
+    }
   }
 
   /**

@@ -57,6 +57,9 @@ export function modulosDaRota(controller: string, route: string, method: string)
       return leitura ? ['agenda', 'conversas', 'leads', 'dashboard'] : ['agenda'];
     case 'financeiro':
       return ['financeiro'];
+    case 'redes':
+    case 'redes/instagram':
+      return ['automacoes'];
     case 'analytics':
       return ['analytics', 'dashboard'];
     case 'automations':

@@ -25,7 +25,7 @@ export const MODULOS: ModuloInfo[] = [
   { chave: 'agenda', nome: 'Agenda', descricao: 'Ver e marcar compromissos', icone: 'calendar', rotas: ['/agenda'] },
   { chave: 'tarefas', nome: 'Tarefas', descricao: 'Lista de tarefas da equipe', icone: 'check2', rotas: ['/tarefas'] },
   { chave: 'ia', nome: 'IA', descricao: 'NICO e os agentes de IA que atendem no WhatsApp', icone: 'sparkles', rotas: ['/nyro', '/agentes', '/ia', '/conhecimento'] },
-  { chave: 'automacoes', nome: 'Automações e campanhas', descricao: 'Automações, campanhas, formulários e anúncios', icone: 'zap', rotas: ['/automacoes', '/campanhas', '/formularios', '/marketing'] },
+  { chave: 'automacoes', nome: 'Automações e campanhas', descricao: 'Automações, campanhas, formulários, anúncios e redes sociais', icone: 'zap', rotas: ['/automacoes', '/campanhas', '/formularios', '/marketing', '/redes'] },
   { chave: 'analytics', nome: 'Analytics', descricao: 'Relatórios e funil de conversão', icone: 'trend', rotas: ['/analytics'] },
   { chave: 'financeiro', nome: 'Financeiro', descricao: 'Cobranças e links de pagamento', icone: 'finance', rotas: ['/financeiro'] },
 ];

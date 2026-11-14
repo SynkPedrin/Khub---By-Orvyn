@@ -18,6 +18,7 @@ import {
   variaveisDesconhecidas,
   VARIAVEIS_RESPOSTA,
 } from './midia';
+import { horaCurta } from '../../common/hora';
 
 /** Papéis que podem ser mencionados / receber conversa (viewer só lê). */
 const PAPEIS_EQUIPE = ['owner', 'admin', 'manager', 'member'];
@@ -119,7 +120,7 @@ export class InboxService {
           de: 'nota' as const,
           interna: true as const,
           texto: n.corpo,
-          hora: n.createdAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          hora: horaCurta(n.createdAt),
           criadaEm: n.createdAt.toISOString(),
           enviadoPorId: n.autorId,
           enviadoPorNome: n.autorId ? nome.get(n.autorId) ?? null : null,
@@ -240,7 +241,7 @@ export class InboxService {
           de: 'nota' as const,
           interna: true as const,
           texto: nota.corpo,
-          hora: nota.createdAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          hora: horaCurta(nota.createdAt),
           criadaEm: nota.createdAt.toISOString(),
           enviadoPorId: autorId,
           enviadoPorNome: autor?.nome ?? null,

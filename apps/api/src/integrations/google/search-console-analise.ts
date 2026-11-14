@@ -88,7 +88,7 @@ function mediana(v: number[]): number {
 }
 
 export interface Oportunidade extends Linha {
-  /** Cliques a mais se a consulta atingisse o CTR mediano das consultas do próprio site. */
+  /** Cliques a mais se a consulta atingisse o CTR médio (ponderado) do próprio site. */
   cliquesPotenciais: number;
 }
 
@@ -96,14 +96,19 @@ export interface CriteriosOportunidade { posicaoMin: number; posicaoMax: number;
 
 /**
  * Oportunidades: consultas com muitas impressões, CTR baixo e posição de 4
- * a 15 (página 1 baixa ou começo da página 2). "Muitas" e "baixo" são
- * relativos ao próprio site (mediana), sem benchmark inventado.
+ * a 15 (página 1 baixa ou começo da página 2). "Muitas" = acima da mediana
+ * de impressões das consultas; "baixo" = abaixo do CTR ponderado do site.
+ * Tudo relativo ao próprio site, sem benchmark inventado.
  */
 export function oportunidades(consultas: Linha[], limite = 20): { itens: Oportunidade[]; criterios: CriteriosOportunidade } {
   const comImpressao = consultas.filter((c) => c.impressoes > 0);
   const impressoesMin = Math.max(10, mediana(comImpressao.map((c) => c.impressoes)));
   const relevantes = comImpressao.filter((c) => c.impressoes >= impressoesMin);
-  const ctrReferencia = mediana(relevantes.map((c) => c.ctr));
+  // CTR de referência = CTR ponderado do próprio site (cliques / impressões de
+  // todas as consultas). A mediana das consultas seria puxada para baixo pelas
+  // próprias consultas fracas que queremos achar.
+  const totalImpressoes = comImpressao.reduce((s, c) => s + c.impressoes, 0);
+  const ctrReferencia = totalImpressoes ? comImpressao.reduce((s, c) => s + c.cliques, 0) / totalImpressoes : 0;
   const itens = relevantes
     .filter((c) => c.posicao >= 4 && c.posicao <= 15 && c.ctr < ctrReferencia)
     .map((c) => ({ ...c, cliquesPotenciais: Math.round(c.impressoes * (ctrReferencia - c.ctr)) }))

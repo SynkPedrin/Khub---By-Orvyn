@@ -53,9 +53,17 @@ export class ConversasService {
           ? (await tx.contactFoto.findMany({ where: { contactId: { in: idsContatos } }, select: { contactId: true } })).map((f) => f.contactId)
           : [],
       );
+      // Hora REAL da última mensagem (ISO): `ultimaHora` é texto gravado no
+      // fuso do servidor e `updatedAt` muda em qualquer ação (atribuir, ler,
+      // importar). A tela formata `ultimaMensagemEm` no fuso do navegador.
+      const ultimas = new Map(
+        (await tx.message.groupBy({ by: ['conversationId'], where: { conversationId: { in: rows.map((r) => r.id) } }, _max: { createdAt: true } }))
+          .map((g) => [g.conversationId, g._max.createdAt?.toISOString() ?? null] as const),
+      );
       return rows.map((c) => ({
         id: c.id, nome: c.nome, canal: c.canal, tipo: c.tipo, status: c.status,
         ultimaPrevia: c.ultimaPrevia ? previaLegivel(c.ultimaPrevia) : c.ultimaPrevia, naoLidas: c.naoLidas, ultimaHora: c.ultimaHora,
+        ultimaMensagemEm: ultimas.get(c.id) ?? null,
         atendimento: c.atendimento, agentId: c.agentId, assigneeId: c.assigneeId, handoffMotivo: c.handoffMotivo,
         atualizadaEm: c.updatedAt.toISOString(),
         etiquetas: etiquetasDoContato(c.contact),

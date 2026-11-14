@@ -11,6 +11,7 @@ import { AtendimentoService, type EstadoAtendimento } from './atendimento.servic
 import { StevoApiProvider } from './stevo-api.provider';
 import type { MidiaSaida } from './provider.contract';
 import { CanaisService } from './canais/canais.service';
+import { horaCurta } from '../../common/hora';
 
 /**
  * Autoria do envio. `humano` com `identityId` = alguém digitou no Inbox (e por
@@ -75,7 +76,7 @@ export class MessagesService {
   }
 
   private hora(): string {
-    return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    return horaCurta();
   }
 
   /**

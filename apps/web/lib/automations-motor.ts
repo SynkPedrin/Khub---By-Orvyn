@@ -72,6 +72,8 @@ export function configPadraoMotor(tipo: string): Record<string, unknown> | undef
     case 'controle.meta': return { evento: 'agendamento_criado', seNaoAtingida: 'seguir' };
     case 'acao.remover_de_fluxo': return { alvo: 'este', workflowIds: [] };
     case 'acao.atribuir_usuario': return { modo: 'rodizio', usuarios: [], soSemDono: true, negocio: false };
+    case 'acao.ativar_ia': return {};
+    case 'acao.passar_humano': return {};
     case 'acao.nao_perturbe': return { ativar: true };
     case 'acao.atualizar_negocio': return { status: 'ganho', dono: 'manter', campos: [] };
     case 'gatilho.agendado': return { frequencia: 'diario', hora: '09:00', diasSemana: [1], diaMes: 1, alvo: 'sem_contato', tags: [] };
@@ -92,6 +94,8 @@ export function resumirMotor(tipo: string, cfg: Record<string, any>): string | u
     case 'controle.meta': return `meta: ${rotuloEvento(cfg.evento).toLowerCase()}`;
     case 'acao.remover_de_fluxo': return cfg.alvo === 'outros' ? `de ${(cfg.workflowIds ?? []).length} fluxo(s)` : cfg.alvo === 'todos' ? 'de todos os outros fluxos' : 'deste fluxo';
     case 'acao.atribuir_usuario': return cfg.modo === 'rodizio' ? `rodízio entre ${(cfg.usuarios ?? []).length}` : cfg.usuarioId ? 'responsável fixo' : 'escolha o responsável';
+    case 'acao.ativar_ia': return cfg.agentId ? 'agente escolhido' : 'agente padrão do canal';
+    case 'acao.passar_humano': return cfg.motivo ? String(cfg.motivo).slice(0, 60) : 'entrega para a equipe';
     case 'acao.nao_perturbe': return cfg.ativar === false ? 'desliga o não perturbe' : 'liga o não perturbe';
     case 'acao.atualizar_negocio': {
       const p = [cfg.status ? `status ${cfg.status}` : '', cfg.valor ? `valor ${cfg.valor}` : '', cfg.stageId ? 'etapa' : '', cfg.dono && cfg.dono !== 'manter' ? 'dono' : '', (cfg.campos ?? []).length ? 'campos' : ''].filter(Boolean);
@@ -102,7 +106,9 @@ export function resumirMotor(tipo: string, cfg: Record<string, any>): string | u
       return p.join(' · ') || 'escolha o que atualizar';
     }
     case 'gatilho.agendado': {
-      const quando = cfg.frequencia === 'semanal' ? (cfg.diasSemana ?? []).map((d: number) => DIAS_SEMANA[d]).join(', ') : cfg.frequencia === 'mensal' ? `dia ${cfg.diaMes ?? 1}` : 'todo dia';
+      const quando = cfg.frequencia === 'uma_vez'
+        ? (cfg.data ? `em ${String(cfg.data).split('-').reverse().join('/')}` : 'escolha a data')
+        : cfg.frequencia === 'semanal' ? (cfg.diasSemana ?? []).map((d: number) => DIAS_SEMANA[d]).join(', ') : cfg.frequencia === 'mensal' ? `dia ${cfg.diaMes ?? 1}` : 'todo dia';
       return `${quando} às ${cfg.hora ?? '09:00'}${cfg.alvo === 'segmento' ? ' · segmento' : ''}`;
     }
     case 'gatilho.data_contato': {

@@ -10,8 +10,10 @@ import { ApiError } from '@/lib/api-error';
 import { ads } from '@/lib/ads';
 import { settingsApi } from '@/lib/settings';
 import { whatsappApi, type ConexaoWhatsApp } from '@/lib/whatsapp';
+import { redesApi, type EstadoRede, type RedeSocial } from '@/lib/redes';
+import { googleApi } from '@/lib/google';
 
-type Categoria = 'anuncios' | 'mensageria' | 'pagamentos' | 'produtividade' | 'ia';
+type Categoria = 'anuncios' | 'mensageria' | 'redes' | 'pagamentos' | 'produtividade' | 'ia';
 
 interface App {
   key: string;
@@ -39,6 +41,7 @@ const CATS: { key: Categoria; label: string; icon: Parameters<typeof Icon>[0]['n
   { key: 'pagamentos', label: 'Pagamentos', icon: 'finance' },
   { key: 'produtividade', label: 'Produtividade', icon: 'calendar' },
   { key: 'ia', label: 'Inteligência', icon: 'sparkles' },
+  { key: 'redes', label: 'Redes sociais', icon: 'instagram' },
 ];
 
 // Catálogo real: o que o KHUB integra. Conexão passa pelo fluxo do servidor
@@ -56,10 +59,16 @@ const APPS: App[] = [
   // Evolution API própria — CANAL_MVP (CLAUDE.md). Conexão por QR code, não
   // por OAuth: NÃO reaproveitar o fluxo `conectar()` genérico de redirect.
   { key: 'whatsapp', nome: 'WhatsApp Business', brand: 'whatsapp', categoria: 'mensageria', provider: 'evolution', estado: 'qr', desc: 'Atendimento e disparos via Evolution API, conexão por QR code.' },
+  // Redes sociais (db/068): OAuth próprio em /v1/integrations/redes; painel em /redes. Mesma conta de Conversas.
+  { key: 'redes_instagram', nome: 'Instagram (posts e métricas)', brand: 'instagram', categoria: 'redes', provider: 'redes_instagram', estado: 'oauth', desc: 'Posts, insights, crescimento e publicação da conta profissional.' },
+  { key: 'redes_tiktok', nome: 'TikTok', brand: 'tiktok', categoria: 'redes', provider: 'redes_tiktok', estado: 'oauth', desc: 'Vídeos, métricas, seguidores e publicação pelo Login Kit do TikTok.' },
+  { key: 'redes_youtube', nome: 'YouTube', brand: 'youtube', categoria: 'redes', provider: 'redes_youtube', estado: 'oauth', desc: 'Vídeos, estatísticas, YouTube Analytics e envio de vídeos.' },
   { key: 'messenger', nome: 'Messenger', brand: 'messenger', categoria: 'mensageria', provider: 'meta', estado: 'oauth', desc: 'Mensagens do Facebook no mesmo Inbox.' },
   { key: 'anthropic', nome: 'Claude (NICO)', brand: 'claude', categoria: 'ia', provider: 'anthropic', estado: 'nativa', desc: 'O motor da NICO. Ligado por credencial no servidor, sem OAuth.' },
   { key: 'webhook', nome: 'Webhook / API', brand: 'webhook', categoria: 'produtividade', provider: 'webhook', estado: 'nativa', desc: 'Dispare fluxos de qualquer sistema com uma URL de entrada.' },
   { key: 'stripe', nome: 'Stripe', brand: 'stripe', categoria: 'pagamentos', provider: 'stripe', estado: 'planejado', desc: 'Cobranças, assinaturas e receita ligadas ao contato do CRM.' },
+  // Presença Google (Tag Manager, Search Console, Meu Negócio): OAuth próprio em /v1/google, tela em /marketing/google.
+  { key: 'google_presenca', nome: 'Google (Tag Manager, Search Console e Meu Negócio)', brand: 'google', categoria: 'anuncios', provider: 'google_presenca', estado: 'oauth', desc: 'Diagnóstico do Tag Manager, SEO no Search Console e avaliações do Perfil da Empresa.' },
   { key: 'google_calendar', nome: 'Google Calendar', brand: 'google_calendar', categoria: 'produtividade', provider: 'google_calendar', estado: 'planejado', desc: 'Agendamentos da Agenda sincronizados nos dois sentidos.' },
   { key: 'gmail', nome: 'Gmail', brand: 'gmail', categoria: 'produtividade', provider: 'gmail', estado: 'planejado', desc: 'Envie e receba e-mail do contato sem sair do KHUB.' },
 ];
@@ -73,6 +82,7 @@ export function IntegrationsMarketplace() {
   const [whatsappAberto, setWhatsappAberto] = useState(false);
   const [erroCarregar, setErroCarregar] = useState(false);
   const [waStatus, setWaStatus] = useState<ConexaoWhatsApp | null>(null);
+  const [redes, setRedes] = useState<EstadoRede[]>([]);
 
   const recarregar = () => {
     setErroCarregar(false);
@@ -83,15 +93,24 @@ export function IntegrationsMarketplace() {
     // Evolution"). Sem perguntar aqui também, um número já conectado fora
     // desta tela aparece como desconectado até alguém abrir o modal.
     whatsappApi.status().then(setWaStatus).catch(() => setWaStatus(null));
+    redesApi.estado().then(setRedes).catch(() => setRedes([]));
   };
   useEffect(() => { recarregar(); }, []);
 
-  const conectado = (provider: string) => rows?.find((r) => r.provider === provider) ?? null;
+  const conectado = (provider: string) => {
+    if (provider.startsWith('redes_')) {
+      const r = redes.find((x) => `redes_${x.rede}` === provider);
+      return r?.conectado ? { provider, status: 'connected', health: r.contas.some((c) => c.erro) ? 'degraded' : 'ok', lastSyncAt: null } : null;
+    }
+    return rows?.find((r) => r.provider === provider) ?? null;
+  };
 
   const conectar = async (app: App) => {
     setGated(null); setMsg(null); setBusy(app.key);
     try {
-      const { url } = await ads.authUrl(app.provider, app.capability);
+      const { url } = app.provider === 'google_presenca' ? await googleApi.urlConexao('leitura')
+        : app.provider.startsWith('redes_') ? await redesApi.urlConexao(app.provider.slice(6) as RedeSocial)
+        : await ads.authUrl(app.provider, app.capability);
       window.location.href = url;
     } catch (e) {
       const cr = e instanceof ApiError ? e.configRequired : null;

@@ -13,6 +13,7 @@ import { ToolExecutorService } from './tool-executor.service';
 import { NicoAnalisesService } from './analises.service';
 import { FirecrawlService } from './firecrawl.service';
 import { NicoInsightsService } from './insights.service';
+import { NicoConsultasService } from './consultas.service';
 import { FILA_NICO_ROTINAS, NicoRotinasProcessor, NicoRotinasScheduler } from './nico-rotinas.worker';
 
 /**
@@ -25,7 +26,7 @@ import { FILA_NICO_ROTINAS, NicoRotinasProcessor, NicoRotinasScheduler } from '.
 @Module({
   imports: [BullModule.registerQueue({ name: FILA_NICO_ROTINAS }), CrmModule, RagModule, AutomationsModule, MarketplaceModule, BlueprintModule, FinanceiroModule],
   controllers: [NyroController],
-  providers: [NyroService, ToolExecutorService, NicoAnalisesService, FirecrawlService, NicoInsightsService, NicoRotinasScheduler, ...(isWorker() ? [NicoRotinasProcessor] : [])],
+  providers: [NyroService, ToolExecutorService, NicoAnalisesService, FirecrawlService, NicoInsightsService, NicoConsultasService, NicoRotinasScheduler, ...(isWorker() ? [NicoRotinasProcessor] : [])],
   exports: [NyroService, NicoAnalisesService],
 
 })

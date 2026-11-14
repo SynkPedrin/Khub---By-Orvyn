@@ -17,7 +17,7 @@ export interface SecaoProps {
  * seção (PATCH `{ config: { [secao]: ... } }`); o servidor valida com Zod e
  * devolve o agente — a UI nunca decide se a config é válida.
  */
-export function useSecaoConfig<K extends SecaoConfig>(agente: Agente, secao: K, onAtualizado: (a: Agente) => void) {
+export function useSecaoConfig<K extends Exclude<SecaoConfig, 'modo'>>(agente: Agente, secao: K, onAtualizado: (a: Agente) => void) {
   const toast = useToast();
   const original = agente.config[secao];
   const [rascunho, setRascunho] = useState<AgentConfig[K]>(() => clonar(original));

@@ -26,6 +26,9 @@ import { Logs } from '@/components/agents/secoes/Logs';
 import { Versoes } from '@/components/agents/secoes/Versoes';
 import { Permissoes } from '@/components/agents/secoes/Permissoes';
 import { AoVivo } from '@/components/agents/secoes/AoVivo';
+import { Horario } from '@/components/agents/secoes/Horario';
+import { Construtor, ROTULO_MODO, modoDoAgente } from '@/components/agents/construtor/Construtor';
+import { Menu, type MenuEntry } from '@/components/kit';
 
 type Aba = { id: string; rotulo: string; icone: IconName; grupo: string; C: ComponentType<SecaoProps> };
 
@@ -38,6 +41,7 @@ const ABAS: Aba[] = [
   { id: 'comportamento', rotulo: 'Comportamento', icone: 'target', grupo: 'Configuração', C: Comportamento },
   { id: 'inteligencia', rotulo: 'Inteligência', icone: 'ai', grupo: 'Configuração', C: Inteligencia },
   { id: 'comunicacao', rotulo: 'Comunicação', icone: 'whatsapp', grupo: 'Configuração', C: Comunicacao },
+  { id: 'horario', rotulo: 'Horário de atendimento', icone: 'clock', grupo: 'Configuração', C: Horario },
   { id: 'conhecimento', rotulo: 'Base de conhecimento', icone: 'knowledge', grupo: 'Dados', C: Conhecimento },
   { id: 'memoria', rotulo: 'Memória e perfis', icone: 'users', grupo: 'Dados', C: Memoria },
   { id: 'ferramentas', rotulo: 'Ferramentas do CRM', icone: 'bolt', grupo: 'Ações', C: Ferramentas },
@@ -64,7 +68,9 @@ export default function AgenteWorkspace() {
   const [publicar, setPublicar] = useState(false);
   const [notas, setNotas] = useState('');
   const [arquivar, setArquivar] = useState(false);
-  const aba = ABAS.find((a) => a.id === busca.get('aba')) ?? ABAS[0];
+  // Sem `?aba=` abre o CONSTRUTOR (prompt + configurações + testar, estilo GHL);
+  // as áreas detalhadas continuam em `?aba=<id>` (menu "Avançado").
+  const aba = ABAS.find((a) => a.id === busca.get('aba')) ?? null;
 
   const carregar = useCallback(async () => {
     setErro(null);
@@ -84,7 +90,7 @@ export default function AgenteWorkspace() {
     void agentesApi.obter(a.id).then(setAgente).catch(() => undefined);
   }, []);
 
-  const irPara = (abaId: string) => router.replace(`/agentes/${id}?aba=${abaId}`, { scroll: false });
+  const irPara = (abaId: string | null) => router.replace(abaId ? `/agentes/${id}?aba=${abaId}` : `/agentes/${id}`, { scroll: false });
 
   const mudarStatus = async (status: 'ativo' | 'pausado' | 'arquivado') => {
     const a = await executar(`status:${status}`, () => agentesApi.status(id, status), status === 'ativo' ? 'Agente ativado: já atende conversas novas' : status === 'pausado' ? 'Agente pausado: conversas vão para a equipe' : 'Agente arquivado');
@@ -111,7 +117,8 @@ export default function AgenteWorkspace() {
   if (erro) return <div className="mx-auto max-w-3xl p-6"><Erro texto={erro} tentar={carregar} /></div>;
   if (!agente || !catalogo) return <div className="mx-auto max-w-[1680px] p-6"><Esqueleto linhas={8} /></div>;
 
-  const Secao = aba.C;
+  const Secao = aba?.C ?? null;
+  const modo = modoDoAgente(agente);
   const naoPublicado = agente.alteracoesNaoPublicadas === true || !agente.versaoPublicada;
 
   return (
@@ -125,7 +132,8 @@ export default function AgenteWorkspace() {
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="t-display truncate">{agente.nome}</h1>
               <StatusAgentePill status={agente.status} />
-              {agente.padrao && <span className="pill pill-brand">Padrão do WhatsApp</span>}
+              {modo !== 'desativado' && <span className={cx('pill', modo === 'automatico' ? 'pill-brand' : 'pill-info')}>{ROTULO_MODO[modo]}</span>}
+              {agente.padrao && <span className="pill pill-brand">Agente principal</span>}
             </div>
             <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted">
               <span>{agente.config.identidade.cargo || 'Agente de atendimento'}</span>
@@ -142,7 +150,6 @@ export default function AgenteWorkspace() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button className="btn btn-ghost btn-sm" onClick={() => irPara('simulador')}><Icon name="chat" size={14} /> Testar</button>
           {agente.status === 'ativo' ? (
             <button className="btn btn-soft btn-sm" disabled={!!ocupado} onClick={() => mudarStatus('pausado')}><Icon name="pause" size={14} /> Pausar</button>
           ) : (
@@ -163,6 +170,31 @@ export default function AgenteWorkspace() {
         </div>
       )}
 
+      {/* Construir (padrão) | Avançado (todas as áreas detalhadas) */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="segbar" role="tablist" aria-label="Modo de edição">
+          <button type="button" role="tab" aria-selected={!aba} className="seg px-4" onClick={() => irPara(null)}>
+            <Icon name="edit" size={13} /> Construir
+          </button>
+          <button type="button" role="tab" aria-selected={!!aba} className="seg px-4" onClick={() => irPara(aba?.id ?? 'aovivo')}>
+            <Icon name="grid" size={13} /> Avançado
+          </button>
+        </div>
+        <Menu
+          label="Áreas avançadas do agente"
+          triggerClassName="btn btn-ghost btn-sm !w-auto gap-1.5"
+          menuClassName="w-64"
+          trigger={<>{aba ? aba.rotulo : 'Ir para…'}<Icon name="chevronDown" size={14} /></>}
+          items={GRUPOS.flatMap((g): MenuEntry[] => [
+            { type: 'label', id: `g-${g}`, label: g } as MenuEntry,
+            ...ABAS.filter((a) => a.grupo === g).map((a): MenuEntry => ({ id: a.id, label: a.rotulo, icon: a.icone, onSelect: () => irPara(a.id) })),
+          ])}
+        />
+      </div>
+
+      {!aba || !Secao ? (
+        <Construtor agente={agente} catalogo={catalogo} onAtualizado={onAtualizado} />
+      ) : (
       <div className="grid gap-5 lg:grid-cols-[232px_minmax(0,1fr)]">
         {/* Navegação das áreas */}
         <nav aria-label="Áreas do agente" className="card h-max p-2.5 max-lg:scroll-fade-x max-lg:flex max-lg:gap-1 max-lg:overflow-x-auto lg:sticky lg:top-4">
@@ -191,6 +223,7 @@ export default function AgenteWorkspace() {
           <Secao key={aba.id} agente={agente} catalogo={catalogo} onAtualizado={onAtualizado} />
         </main>
       </div>
+      )}
 
       <Modal
         aberto={publicar}

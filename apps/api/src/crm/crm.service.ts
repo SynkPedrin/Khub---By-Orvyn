@@ -166,12 +166,34 @@ export class CrmService {
 
   async overview(tenantId: string) {
     return this.prisma.withTenant(tenantId, async (tx) => {
-      const [{ funis, etapas, negocios }, contactsCount, atividades, contatosRecentes] = await Promise.all([
+      const [{ funis, etapas, negocios }, contactsCount, atividades, contatosRecentes, porOrigem] = await Promise.all([
         this.baseFunil(tx),
         tx.contact.count(),
         tx.activity.findMany({ orderBy: { createdAt: 'desc' }, take: 6 }),
         tx.contact.findMany({ orderBy: { createdAt: 'desc' }, take: 5 }),
+        // Leads por origem (cards Meta e Google do Dashboard). Fonte = atribuição
+        // gravada na entrada (db/066); contato antigo sem atribuição cai no texto
+        // de `origem`. Mês no fuso de Brasília.
+        tx.$queryRaw<{ fonte: string; total: bigint; mes: bigint; semana: bigint }[]>`
+          WITH f AS (
+            SELECT created_at,
+              CASE
+                WHEN atribuicao->>'fonte' IN ('meta_ads', 'google_ads') THEN atribuicao->>'fonte'
+                WHEN coalesce(atribuicao->>'fonte', '') = '' AND origem ~* '(meta|facebook|instagram ads|lead ads|fb ads)' THEN 'meta_ads'
+                WHEN coalesce(atribuicao->>'fonte', '') = '' AND origem ~* '(google|gclid|adwords)' THEN 'google_ads'
+              END AS fonte
+            FROM contacts
+          )
+          SELECT fonte,
+                 count(*) AS total,
+                 count(*) FILTER (WHERE created_at >= (date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo')) AS mes,
+                 count(*) FILTER (WHERE created_at >= now() - interval '7 days') AS semana
+          FROM f WHERE fonte IS NOT NULL GROUP BY fonte`,
       ]);
+      const origem = (fonte: string) => {
+        const l = porOrigem.find((o) => o.fonte === fonte);
+        return { total: Number(l?.total ?? 0), mes: Number(l?.mes ?? 0), semana: Number(l?.semana ?? 0) };
+      };
       const funil = escolherFunil(funis, negocios);
       const r = funil ? resumirFunil(funil.id, etapas, negocios) : null;
 
@@ -188,6 +210,7 @@ export class CrmService {
           ganhos: r?.ganhos ?? 0,
           perdidos: r?.perdidos ?? 0,
         },
+        leadsPorOrigem: { meta: origem('meta_ads'), google: origem('google_ads') },
         funilNome: funil?.nome ?? null,
         funil: r?.etapas ?? [],
         // Receita fechada (todos os funis) por mês — base do gráfico de crescimento.

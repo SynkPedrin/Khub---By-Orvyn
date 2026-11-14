@@ -355,7 +355,7 @@ export function AdsSimulador() {
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-3">
-                  <div><Rotulo>Nome da página</Rotulo><input className="input" value={pagina} onChange={(e) => setPagina(e.target.value)} placeholder="Studio da Beleza" /></div>
+                  <div><Rotulo>Nome da página</Rotulo><input className="input" value={pagina} onChange={(e) => setPagina(e.target.value)} placeholder="Clínica Exemplo" /></div>
                   <div><Rotulo>Negócio (para a IA)</Rotulo><input className="input" value={negocio} maxLength={200} onChange={(e) => setNegocio(e.target.value)} placeholder="Clínica de estética" /></div>
                 </div>
                 <button type="button" onClick={() => setAvancado((v) => !v)} className="flex items-center gap-1 text-xs font-semibold text-muted hover:text-fg">

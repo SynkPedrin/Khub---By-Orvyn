@@ -3,6 +3,11 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigRequiredException, ConfigService } from '../config/config.service';
 import { ehRespostaAfirmativa } from './confirmacao';
+import { CaixaService } from '../financeiro/caixa.service';
+import { acharContatoPorTelefone } from '../crm/telefone';
+import { MAX_LINHAS_POR_LOTE } from '../crm/importacao.service';
+import { acharMembroPorNomeOuEmail, dataPlanilha, horaPlanilha, statusAgendamento, valorEmCentavos, type MembroImportacao } from '../financeiro/importacao-fin';
+import { instanteLocal } from '../booking/booking.schema';
 
 async function audit(tx: Prisma.TransactionClient, tenantId: string, actorId: string, acao: string, entidadeId?: string, actorType: 'humano' | 'nyro' | 'sistema' = 'humano') {
   await tx.$executeRaw`INSERT INTO audit_logs (tenant_id, actor_type, actor_id, acao, entidade, entidade_id)
@@ -10,6 +15,68 @@ async function audit(tx: Prisma.TransactionClient, tenantId: string, actorId: st
 }
 
 const ATIVOS = ['agendado', 'confirmado'];
+
+/** Fuso das planilhas importadas (horário de parede do salão/clínica). */
+const FUSO_IMPORTACAO = 'America/Sao_Paulo';
+
+/** Linha da importação de agendamentos, já mapeada pelo front (tudo texto). */
+export interface LinhaAgenda {
+  titulo?: string;
+  /** Data e hora juntas ("13/11/2026 14:30") ou só a data. */
+  inicio?: string;
+  data?: string;
+  hora?: string;
+  /** Data e hora do fim, ou só a hora do fim ("15:30"). */
+  fim?: string;
+  duracaoMin?: string;
+  contatoTelefone?: string;
+  /** Profissional: nome ou e-mail. `responsavelEmail` = nome antigo do campo. */
+  responsavel?: string;
+  responsavelEmail?: string;
+  valor?: string;
+  status?: string;
+}
+
+export interface ResultadoImportacaoAgenda {
+  total: number;
+  criados: number;
+  ignorados: number;
+  erros: { linha: number; motivo: string }[];
+  avisos: { linha: number; motivo: string }[];
+}
+
+/**
+ * Início/fim de uma linha importada, no fuso local. `inicio` pode trazer data
+ * e hora juntas; senão `data` + `hora`. Sem hora → 09:00 (aviso). Fim: `fim`
+ * (data e hora, ou só hora no mesmo dia) ou `duracaoMin` (padrão 60).
+ */
+export function horarioDaLinha(l: LinhaAgenda, fuso = FUSO_IMPORTACAO): { inicio: Date; fim: Date; semHora: boolean } {
+  const bruto = String(l.inicio ?? '').trim() || String(l.data ?? '').trim();
+  const dia = dataPlanilha(bruto);
+  if (!dia) throw new Error(`data inválida: "${bruto.slice(0, 40)}" (use dd/mm/aaaa)`);
+  const horaTexto = String(l.hora ?? '').trim();
+  let minutos = horaPlanilha(horaTexto || bruto);
+  if (horaTexto && minutos === null) throw new Error(`hora inválida: "${horaTexto.slice(0, 20)}" (use hh:mm)`);
+  const semHora = minutos === null;
+  if (minutos === null) minutos = 9 * 60;
+  const inicio = new Date(instanteLocal(dia, minutos, fuso));
+  let fim: Date | null = null;
+  const fimTexto = String(l.fim ?? '').trim();
+  if (fimTexto) {
+    const diaFim = dataPlanilha(fimTexto) ?? dia;
+    const minFim = horaPlanilha(fimTexto);
+    if (minFim === null) throw new Error(`fim inválido: "${fimTexto.slice(0, 40)}"`);
+    fim = new Date(instanteLocal(diaFim, minFim, fuso));
+  } else {
+    const durTexto = String(l.duracaoMin ?? '').trim();
+    const dur = durTexto ? Number(durTexto.replace(',', '.')) : 60;
+    if (!Number.isFinite(dur) || dur <= 0 || dur > 24 * 60) throw new Error(`duração inválida: "${durTexto.slice(0, 20)}" (minutos)`);
+    fim = new Date(+inicio + Math.round(dur) * 60_000);
+  }
+  if (fim <= inicio) throw new Error('o fim deve ser depois do início');
+  if (+fim - +inicio > 24 * 3_600_000) throw new Error('o atendimento pode durar no máximo 24 horas');
+  return { inicio, fim, semHora };
+}
 
 /** Status do compromisso (migration 054: `nao_compareceu` virou `faltou`). */
 export const STATUS_AGENDA = ['agendado', 'confirmado', 'concluido', 'cancelado', 'faltou'] as const;
@@ -36,6 +103,8 @@ export interface CompromissoInput {
   responsavelId?: string | null;
   /** Status inicial: `confirmado` quando a página pública confirma automaticamente (Q4.2). */
   status?: 'agendado' | 'confirmado';
+  /** Valor do atendimento em centavos: ao concluir, vira entrada no financeiro (db/070). */
+  valorCentavos?: number | null;
 }
 
 /** Edição parcial (arrastar, redimensionar, reagendar, editar campos). */
@@ -59,7 +128,11 @@ export interface FiltroAgenda {
 export class AgendaService {
   private readonly log = new Logger('Agenda');
 
-  constructor(private readonly prisma: PrismaService, private readonly config: ConfigService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+    private readonly caixa: CaixaService,
+  ) {}
 
   listar(tenantId: string, filtro: FiltroAgenda = {}) {
     const where: Prisma.AgendaCompromissoWhereInput = {};
@@ -148,6 +221,7 @@ export class AgendaService {
           tenantId, titulo, inicio, fim, contactId: dto.contactId ?? null, local: dto.local ?? null, notas: dto.notas ?? null,
           tipo: dto.tipo ?? 'reuniao', responsavelId, createdBy: actorType === 'humano' ? identityId : null,
           ...(dto.status ? { status: dto.status } : {}),
+          ...(dto.valorCentavos != null ? { valorCentavos: dto.valorCentavos } : {}),
         },
       });
       await audit(tx, tenantId, identityId, 'compromisso.criado', c.id, actorType);
@@ -182,8 +256,11 @@ export class AgendaService {
           ...(patch.contactId !== undefined ? { contactId: patch.contactId } : {}),
           ...(patch.local !== undefined ? { local: patch.local } : {}),
           ...(patch.notas !== undefined ? { notas: patch.notas } : {}),
+          ...(patch.valorCentavos !== undefined ? { valorCentavos: patch.valorCentavos } : {}),
         },
       });
+      // Atendimento já concluído: valor/responsável/título editados acompanham no caixa.
+      if (c.status === 'concluido') await this.caixa.sincronizarCompromisso(tx, tenantId, c);
       await audit(tx, tenantId, identityId, +inicio !== +atual.inicio ? 'compromisso.reagendado' : 'compromisso.editado', id, actorType);
       return c;
     });
@@ -202,9 +279,103 @@ export class AgendaService {
       // Timestamps (confirmado_em, faltou_em...) e o evento de outbox saem dos
       // triggers da migration 054, para valer em qualquer caminho de escrita.
       const c = await tx.agendaCompromisso.update({ where: { id }, data: { status } });
+      // Concluído com valor → entrada no caixa + comissão do responsável;
+      // saiu de concluído → a entrada automática sai (comissão paga trava: 409).
+      // Mesma transação; idempotente (concluir duas vezes não duplica).
+      await this.caixa.sincronizarCompromisso(tx, tenantId, c);
       await audit(tx, tenantId, identityId, `compromisso.${status}`, id, actorType);
       return c;
     });
+  }
+
+  /**
+   * Importação de agendamentos em lote (CSV/XLSX do Avec ou planilha, já
+   * mapeado pelo front). Cada linha roda num SAVEPOINT: erro de uma não aborta
+   * as demais. Regras:
+   * - data/hora no formato brasileiro, no fuso local (horarioDaLinha);
+   * - contato casa por telefone; profissional por e-mail ou nome (aviso se
+   *   não achar: entra na agenda geral);
+   * - reimportar não duplica: mesmo início + título + contato + profissional
+   *   é ignorado;
+   * - sem checagem de choque de horário: é o histórico/agenda do sistema de
+   *   origem, que já resolveu encaixes (o salão atende em paralelo);
+   * - concluído com valor gera a entrada no caixa (comissão só com
+   *   `gerarComissoes`: o histórico costuma já estar pago);
+   * - NÃO dispara automações: os eventos de outbox desta transação são
+   *   neutralizados (mesmo padrão da importação de contatos).
+   */
+  async importar(
+    tenantId: string,
+    identityId: string,
+    linhas: LinhaAgenda[],
+    opcoes: { gerarComissoes?: boolean } = {},
+    linhaInicial = 1,
+  ): Promise<ResultadoImportacaoAgenda> {
+    if (!Array.isArray(linhas) || linhas.length === 0) throw new BadRequestException('nenhuma linha para importar');
+    if (linhas.length > MAX_LINHAS_POR_LOTE) throw new BadRequestException(`lote máximo de ${MAX_LINHAS_POR_LOTE} linhas`);
+    const res: ResultadoImportacaoAgenda = { total: linhas.length, criados: 0, ignorados: 0, erros: [], avisos: [] };
+    await this.prisma.withTenant(tenantId, async (tx) => {
+      const membros = await tx.$queryRaw<MembroImportacao[]>`
+        SELECT m.identity_id AS "identityId", u.nome, i.email
+        FROM memberships m JOIN identities i ON i.id = m.identity_id
+        LEFT JOIN users u ON u.identity_id = m.identity_id AND u.tenant_id = m.tenant_id
+        WHERE m.tenant_id = ${tenantId}::uuid`;
+      for (let i = 0; i < linhas.length; i++) {
+        const nLinha = linhaInicial + i;
+        const l = (linhas[i] ?? {}) as LinhaAgenda;
+        await tx.$executeRawUnsafe('SAVEPOINT agenda_linha');
+        try {
+          const { inicio, fim, semHora } = horarioDaLinha(l);
+          const status = statusAgendamento(l.status);
+          if (!status) throw new Error(`status não reconhecido: "${String(l.status).slice(0, 40)}"`);
+          let valorCentavos: number | null = null;
+          if (String(l.valor ?? '').trim()) {
+            valorCentavos = valorEmCentavos(l.valor);
+            if (valorCentavos === null || valorCentavos < 0) throw new Error(`valor inválido: "${String(l.valor).slice(0, 40)}"`);
+            if (valorCentavos === 0) valorCentavos = null;
+          }
+          const titulo = String(l.titulo ?? '').replace(/\s+/g, ' ').trim().slice(0, 200) || 'Atendimento';
+          let contactId: string | null = null;
+          if (String(l.contatoTelefone ?? '').trim()) {
+            contactId = await acharContatoPorTelefone(tx, l.contatoTelefone);
+            if (!contactId) res.avisos.push({ linha: nLinha, motivo: `cliente com telefone "${String(l.contatoTelefone).slice(0, 30)}" não encontrado: importe os clientes antes para vincular` });
+          }
+          let responsavelId: string | null = null;
+          const prof = String(l.responsavel ?? l.responsavelEmail ?? '').trim();
+          if (prof) {
+            responsavelId = acharMembroPorNomeOuEmail(membros, prof);
+            if (!responsavelId) res.avisos.push({ linha: nLinha, motivo: `profissional "${prof.slice(0, 60)}" não encontrado na equipe: entrou na agenda geral` });
+          }
+          if (semHora) res.avisos.push({ linha: nLinha, motivo: 'sem hora: marcado às 09:00' });
+          const igual = await tx.agendaCompromisso.findFirst({
+            where: { inicio, titulo: { equals: titulo, mode: 'insensitive' }, contactId, responsavelId },
+            select: { id: true },
+          });
+          if (igual) {
+            res.ignorados++;
+            await tx.$executeRawUnsafe('RELEASE SAVEPOINT agenda_linha');
+            continue;
+          }
+          const c = await tx.agendaCompromisso.create({
+            data: { tenantId, titulo, inicio, fim, contactId, responsavelId, tipo: 'outro', status, valorCentavos, createdBy: identityId },
+          });
+          if (status === 'concluido') await this.caixa.sincronizarCompromisso(tx, tenantId, c, { gerarComissao: !!opcoes.gerarComissoes });
+          await tx.$executeRawUnsafe('RELEASE SAVEPOINT agenda_linha');
+          res.criados++;
+        } catch (e) {
+          await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT agenda_linha');
+          const msg = e instanceof Error ? e.message : 'erro desconhecido';
+          res.erros.push({ linha: nLinha, motivo: (msg.split('\n').pop() ?? msg).slice(0, 200) });
+        }
+      }
+      // Importação não dispara automação (lembrete, confirmação, pós-atendimento).
+      await tx.$executeRaw`UPDATE outbox_events SET status = 'processed', processed_at = now(), last_error = 'importacao_agenda: não dispara automação'
+        WHERE tenant_id = ${tenantId}::uuid AND status = 'pending' AND created_at = now() AND kind LIKE 'appointment.%'`;
+      await tx.$executeRaw`INSERT INTO audit_logs (tenant_id, actor_type, actor_id, acao, entidade, entidade_id, payload)
+        VALUES (${tenantId}::uuid, 'humano', ${identityId}, 'compromisso.importacao', 'agenda_compromisso', NULL,
+                ${JSON.stringify({ total: res.total, criados: res.criados, ignorados: res.ignorados, erros: res.erros.length, linhaInicial, gerarComissoes: !!opcoes.gerarComissoes })}::jsonb)`;
+    }, { timeout: 120_000, maxWait: 10_000 });
+    return res;
   }
 
   /**

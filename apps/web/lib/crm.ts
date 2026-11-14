@@ -15,6 +15,7 @@ export function brl(v: number): string {
  */
 const req = clienteApi('/api/crm/');
 
+export interface ContagemOrigem { total: number; mes: number; semana: number }
 export interface Overview {
   /** `negocios`/`valorFunil` = só ABERTOS do funil principal; `conversaoBase` diz de onde veio a taxa. */
   kpis: {
@@ -22,6 +23,8 @@ export interface Overview {
     /** Contagem de negócios ganhos/perdidos do funil principal (base honesta da conversão, Q1.9). Opcional até a API enviar. */
     ganhos?: number; perdidos?: number;
   };
+  /** Leads que vieram de anúncio (atribuição da entrada; contato antigo usa o texto de origem). */
+  leadsPorOrigem?: { meta: ContagemOrigem; google: ContagemOrigem };
   funilNome?: string | null;
   funil: { id: string; nome: string; cor: string; total: number; valor: number }[];
   /** Receita fechada por mês (AAAA-MM), últimos 6 meses com zeros. */
@@ -96,6 +99,8 @@ export interface Conversa {
   handoffMotivo: string | null;
   /** ISO da última atividade (a lista é leve: as mensagens vêm de `crm.mensagens`). */
   atualizadaEm?: string;
+  /** ISO da última mensagem: é o que a lista mostra (ver lib/hora-conversa.ts). */
+  ultimaMensagemEm?: string | null;
   contato?: { id: string; telefone: string | null; email: string | null; fotoUrl?: string | null; empresa?: string | null; temFoto?: boolean } | null;
   mensagens: { id: string; de: string; texto: string; hora: string | null; agentId?: string | null }[];
   /** Conversas omnichannel (db/063): DM ou comentário, aberta/resolvida e etiquetas do contato. */
@@ -106,7 +111,7 @@ export interface Conversa {
 }
 export interface MensagemConversa {
   id: string; de: string; texto: string; hora: string | null; status?: string; agentId?: string | null; criadaEm?: string;
-  /** Nome da agente de IA que enviou (de='ia') — ex.: "Ritinha". */
+  /** Nome da agente de IA que enviou (de='ia') — ex.: "Ana". */
   agentNome?: string | null;
   /** Origem (migration 036): automação que enviou (de='automacao') ou atendente que digitou (de='humano'). */
   workflowId?: string | null; workflowNome?: string | null;

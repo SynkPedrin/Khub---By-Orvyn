@@ -42,7 +42,9 @@
     ".next-demo/types/**/*.ts",
     ".next-deploy/types/**/*.ts",
     ".next-canais/types/**/*.ts",
-    ".next-a0/types/**/*.ts"
+    ".next-a0/types/**/*.ts",
+    ".next-fa/types/**/*.ts",
+    ".next-fork/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

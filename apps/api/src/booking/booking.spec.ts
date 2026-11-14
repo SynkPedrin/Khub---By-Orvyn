@@ -5,6 +5,7 @@ import { emitirCarimbo } from '../common/public-request';
 import { calcularSlots, dataNoFuso, diaDaSemana, gerarIcs, instanteLocal, ordemDeTentativa, type ConfigSlots, type Ocupado } from './booking.schema';
 import { BookingService } from './booking.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { CaixaService } from '../financeiro/caixa.service';
 import type { LeadsService } from '../crm/leads.service';
 import type { PublicRateLimiter } from '../common/public-request';
 
@@ -160,7 +161,7 @@ const T = '11111111-1111-4111-8111-111111111111';
 describe('corrida: duas reservas no mesmo horário', () => {
   it('AgendaService.criar com lock: uma passa, a outra recebe 409', async () => {
     const { prisma, linhas } = bancoConcorrente();
-    const agenda = new AgendaService(prisma, new ConfigService());
+    const agenda = new AgendaService(prisma, new ConfigService(), { sincronizarCompromisso: jest.fn() } as unknown as CaixaService);
     const dto = { titulo: 'Consulta', inicio: '2026-11-20T12:00:00Z', fim: '2026-11-20T13:00:00Z', responsavelId: null };
     const r = await Promise.allSettled([agenda.criar(T, 'c1', dto, 'sistema'), agenda.criar(T, 'c2', dto, 'sistema')]);
     expect(r.filter((x) => x.status === 'fulfilled')).toHaveLength(1);
@@ -171,7 +172,7 @@ describe('corrida: duas reservas no mesmo horário', () => {
 
   it('status inicial confirmado quando a página confirma automaticamente', async () => {
     const { prisma, linhas } = bancoConcorrente();
-    const agenda = new AgendaService(prisma, new ConfigService());
+    const agenda = new AgendaService(prisma, new ConfigService(), { sincronizarCompromisso: jest.fn() } as unknown as CaixaService);
     await agenda.criar(T, 'c1', { titulo: 'X', inicio: '2026-11-20T12:00:00Z', fim: '2026-11-20T13:00:00Z', responsavelId: null, status: 'confirmado' }, 'sistema');
     expect(linhas[0].status).toBe('confirmado');
   });

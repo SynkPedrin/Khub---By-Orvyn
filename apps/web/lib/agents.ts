@@ -101,6 +101,25 @@ export interface AgentConfig {
   memoria: { curtoPrazo: boolean; longoPrazo: boolean; operacional: boolean; resumirAPartirDe: number; retencaoDias: number };
   crm: { camposAutomaticos: string[]; sincronizarContato: ('nome' | 'email' | 'empresa')[]; mapaCamposCustom: Record<string, string>; limiarConfiancaAuto: number };
   permissoes: { exigirConfirmacao: string[]; acoesPorRegra: boolean; workflowsPermitidos: string[]; etapasPermitidas: string[] };
+  /** Horário de atendimento (ADR-0042). Desligado = 24h. */
+  horario: ConfigHorario;
+  /**
+   * Modo de atendimento (estilo GHL). Ausente = 'automatico'.
+   * - automatico (piloto automático): como agente principal, responde em toda conversa do canal que não está com humano;
+   * - sugestivo: não responde sozinho; só nas conversas em que foi ATIVADO (nó "Ativar IA" ou botão na conversa).
+   * Desativado não é modo: é `status !== 'ativo'`.
+   */
+  modo?: ModoAgente;
+}
+export type ModoAgente = 'automatico' | 'sugestivo';
+export type DiaSemanaAgente = 'dom' | 'seg' | 'ter' | 'qua' | 'qui' | 'sex' | 'sab';
+export interface ConfigHorario {
+  ativo: boolean;
+  fuso: string;
+  dias: Record<DiaSemanaAgente, { inicio: string; fim: string }[]>;
+  feriados: string[];
+  foraDoHorario: 'responder_na_abertura' | 'avisar_e_responder_na_abertura' | 'transferir_para_equipe';
+  mensagemFora: string;
 }
 export type SecaoConfig = keyof AgentConfig;
 

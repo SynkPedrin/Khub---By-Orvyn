@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import type { AtendimentoConversa } from '@khub/types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DomainEventsService } from '../../events/domain-events.service';
+import { modoDoAgente } from '../../common/modo-agente';
 
 type Tx = Prisma.TransactionClient;
 
@@ -44,9 +45,12 @@ export class AtendimentoService {
   async estadoInicial(tx: Tx, canal: string): Promise<{ atendimento: AtendimentoConversa; agentId: string | null }> {
     const padrao = await tx.agent.findFirst({
       where: { padrao: true, status: 'ativo', canais: { has: canal } },
-      select: { id: true },
+      select: { id: true, config: true },
     });
-    return padrao ? { atendimento: 'ia', agentId: padrao.id } : { atendimento: 'humano', agentId: null };
+    // Modo sugestivo (ADR-0048): a conversa nasce com humano; a IA só entra
+    // quando uma automação ("Ativar IA") ou alguém na conversa a ativar.
+    if (!padrao || modoDoAgente(padrao.config) === 'sugestivo') return { atendimento: 'humano', agentId: null };
+    return { atendimento: 'ia', agentId: padrao.id };
   }
 
   /**
@@ -98,6 +102,28 @@ export class AtendimentoService {
       });
       if (!agente) throw new BadRequestException(agentId ? 'agente inexistente ou não está ativo' : 'não há agente padrão ativo — escolha um agente');
       return this.gravar(tx, tenantId, conversationId, { atendimento: 'ia', agentId: agente.id, assigneeId: null, handoffMotivo: null, handoffAt: null }, { tipo: 'humano', identityId: actorId }, 'conversa.devolvida_ia');
+    });
+    this.publicar(tenantId, estado);
+    return estado;
+  }
+
+  /**
+   * Nó de automação "Ativar IA": liga o agente na conversa em nome do sistema.
+   * Mesmas regras do `devolverParaIa`, mas o agente precisa atender o CANAL da
+   * conversa e o autor registrado é `sistema` (não um humano).
+   */
+  async ativarIaSistema(tenantId: string, conversationId: string, agentId?: string): Promise<EstadoAtendimento> {
+    const estado = await this.prisma.withTenant(tenantId, async (tx) => {
+      const conv = await tx.conversation.findUnique({ where: { id: conversationId }, select: { id: true, canal: true } });
+      if (!conv) throw new NotFoundException('conversa inexistente');
+      const agente = await tx.agent.findFirst({
+        where: agentId
+          ? { id: agentId, status: 'ativo', canais: { has: conv.canal } }
+          : { padrao: true, status: 'ativo', canais: { has: conv.canal } },
+        select: { id: true },
+      });
+      if (!agente) throw new BadRequestException(agentId ? 'agente inexistente, inativo ou não atende este canal' : 'não há agente padrão ativo para este canal');
+      return this.gravar(tx, tenantId, conversationId, { atendimento: 'ia', agentId: agente.id, assigneeId: null, handoffMotivo: null, handoffAt: null }, { tipo: 'sistema' }, 'conversa.devolvida_ia');
     });
     this.publicar(tenantId, estado);
     return estado;

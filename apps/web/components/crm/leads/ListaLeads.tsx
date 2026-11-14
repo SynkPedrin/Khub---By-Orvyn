@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Icon } from '@/components/icons';
 import { Avatar, cx } from '@/components/ui';
-import { Button, Confirm, Menu, Modal, Select, SkeletonRows, Switch, useToast, type MenuEntry } from '@/components/kit';
+import { Button, Confirm, Menu, Modal, PaginacaoCursor, Select, SkeletonRows, Switch, useToast, type MenuEntry } from '@/components/kit';
 import { EmptyState, ErrorState } from '@/components/revenue/States';
 import { Quando } from '@/components/revenue/Quando';
 import { ApiError } from '@/lib/api-error';
@@ -57,6 +57,8 @@ export function ListaLeads({ versao, vazio }: { versao: number; vazio: ReactNode
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(false);
   const [carregandoMais, setCarregandoMais] = useState(false);
+  // Paginação por cursor: cada posição guarda o cursor que abre aquela página (a 1ª é null).
+  const [cursores, setCursores] = useState<(string | null)[]>([null]);
   const [recarga, setRecarga] = useState(0);
 
   const [marcados, setMarcados] = useState<Set<string>>(new Set());
@@ -94,6 +96,7 @@ export function ListaLeads({ versao, vazio }: { versao: number; vazio: ReactNode
     let vivo = true;
     setCarregando(true);
     setErro(false);
+    setCursores([null]);
     setMarcados(new Set());
     setTodosDoFiltro(false);
     const t = window.setTimeout(() => {
@@ -107,13 +110,24 @@ export function ListaLeads({ versao, vazio }: { versao: number; vazio: ReactNode
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chave, versao, recarga]);
 
-  const carregarMais = () => {
-    if (!pagina?.nextCursor) return;
+  const abrirPagina = (cursor: string | null, depois: (p: { items: ContatoLista[]; nextCursor: string | null }) => void) => {
     setCarregandoMais(true);
-    contatos.listar(filtroEfetivo, { ordem, limit: 50, cursor: pagina.nextCursor })
-      .then((p) => setPagina((a) => (a ? { items: [...a.items, ...p.items], nextCursor: p.nextCursor } : p)))
-      .catch((e) => toast.error(mensagem(e, 'Não foi possível carregar mais leads.')))
+    contatos.listar(filtroEfetivo, { ordem, limit: 50, ...(cursor ? { cursor } : {}) })
+      .then((p) => {
+        setPagina(p);
+        depois(p);
+        // cada página começa do topo: a lista não vira um scroll sem fim
+        window.requestAnimationFrame(() => document.getElementById('conteudo')?.scrollTo({ top: 0, behavior: 'smooth' }));
+      })
+      .catch((e) => toast.error(mensagem(e, 'Não foi possível abrir essa página de leads.')))
       .finally(() => setCarregandoMais(false));
+  };
+  const irProxima = () => {
+    const cursor = pagina?.nextCursor;
+    if (cursor) abrirPagina(cursor, () => setCursores((c) => [...c, cursor]));
+  };
+  const irAnterior = () => {
+    if (cursores.length > 1) abrirPagina(cursores[cursores.length - 2], () => setCursores((c) => c.slice(0, -1)));
   };
 
   const nomeDono = useMemo(() => new Map(atendentes.map((a) => [a.identityId, a.nome])), [atendentes]);
@@ -359,10 +373,8 @@ export function ListaLeads({ versao, vazio }: { versao: number; vazio: ReactNode
           </div>
         )}
 
-        {pagina?.nextCursor && !carregando && (
-          <div className="border-t border-line p-3 text-center">
-            <Button size="sm" onClick={carregarMais} loading={carregandoMais}>Carregar mais</Button>
-          </div>
+        {!carregando && pagina && (
+          <PaginacaoCursor pagina={cursores.length} temProxima={!!pagina.nextCursor} carregando={carregandoMais} onAnterior={irAnterior} onProxima={irProxima} mostrando={itens.length} rotulo="leads" />
         )}
       </section>
 

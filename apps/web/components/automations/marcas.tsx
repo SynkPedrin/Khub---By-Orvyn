@@ -28,7 +28,7 @@ const KHUB: Marca = { src: '/khub-mark.png', nome: 'KHUB CRM', escura: true };
 
 const DO_CRM = new Set([
   'gatilho.contato_criado', 'gatilho.tag_adicionada', 'gatilho.negocio_criado', 'gatilho.etapa_mudou', 'gatilho.negocio_status',
-  'acao.adicionar_tag', 'acao.remover_tag', 'acao.atualizar_contato', 'acao.atribuir_usuario', 'acao.nao_perturbe',
+  'acao.adicionar_tag', 'acao.remover_tag', 'acao.atualizar_contato', 'acao.atribuir_usuario', 'acao.ativar_ia', 'acao.passar_humano', 'acao.nao_perturbe',
   'acao.criar_oportunidade', 'acao.mover_etapa', 'acao.atualizar_negocio', 'acao.criar_tarefa', 'acao.criar_nota',
   'acao.chamar_workflow', 'acao.remover_de_fluxo',
 ]);

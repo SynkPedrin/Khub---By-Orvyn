@@ -1,3 +1,4 @@
+import { MODELO_PADRAO } from './catalogo';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { AgentsService } from './agents.service';
 import { AgentToolsService, type ContextoAgente } from './agent-tools.service';
@@ -63,10 +64,11 @@ describe('AgentsService — allowlist e permissões', () => {
     await expect(svc.criar(TENANT, { identityId: 'id-bia', role: 'member' }, { nome: 'Lia' })).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('agente nasce como rascunho com o modelo padrão (Opus 5.5)', async () => {
+  it('agente nasce como rascunho com o modelo padrão (Sonnet 5.5, decisão de 2026-11-13)', async () => {
     const { svc, tx } = servico();
     const a = await svc.criar(TENANT, ADMIN, { nome: 'Lia' });
-    expect(a).toMatchObject({ status: 'rascunho', modelo: 'claude-opus-5-5' });
+    expect(a).toMatchObject({ status: 'rascunho', modelo: MODELO_PADRAO });
+    expect(MODELO_PADRAO).toBe('claude-sonnet-5-5');
     expect(tx.$executeRaw).toHaveBeenCalled(); // auditoria
   });
 

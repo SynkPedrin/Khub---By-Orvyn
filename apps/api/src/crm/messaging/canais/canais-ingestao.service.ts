@@ -10,6 +10,7 @@ import { CryptoService } from '../../../integrations/crypto.service';
 import { AtribuicaoService } from '../../atribuicao.service';
 import { toqueDeReferralMeta } from '../../atribuicao';
 import { AvatarContatoService } from '../avatar-contato.service';
+import { horaCurta } from '../../../common/hora';
 
 /** Entrada já normalizada (DM ou comentário), de qualquer rede. */
 export interface EntradaCanal {
@@ -125,7 +126,10 @@ export class CanaisIngestaoService {
         ON CONFLICT (provider, event_id) DO NOTHING`;
       if (!nova) return { duplicada: true as const };
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${e.tenantId + ':' + e.canal + ':' + externo}, 0))`;
-      const hora = (e.recebidoEm ?? new Date()).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      // Hora REAL do evento na rede (comentário antigo do YouTube, DM que a Meta
+      // reentrega): é ela que a tela mostra. Data no futuro (relógio torto) cai para agora.
+      const quando = e.recebidoEm && e.recebidoEm.getTime() <= Date.now() + 60_000 ? e.recebidoEm : new Date();
+      const hora = horaCurta(quando);
       let conv = await tx.conversation.findFirst({ where: { canal: e.canal, externoId: externo }, select: { id: true, contactId: true, naoLidas: true } });
       let contatoNovo = false;
       let contato: { id: string; nome: string } | null = null;
@@ -153,7 +157,7 @@ export class CanaisIngestaoService {
         if (conv.contactId) await tx.contact.update({ where: { id: conv.contactId }, data: { lastInboundAt: new Date(), ultimoContatoAt: new Date() } });
       }
       const msg = await tx.message.create({
-        data: { tenantId: e.tenantId, conversationId: conv.id, autorTipo: 'contato', corpo: e.texto, hora, providerId: e.idExterno },
+        data: { tenantId: e.tenantId, conversationId: conv.id, autorTipo: 'contato', corpo: e.texto, hora, providerId: e.idExterno, createdAt: quando },
         select: { id: true },
       });
       return { duplicada: false as const, conversationId: conv.id, messageId: msg.id, contatoNovo, contato, hora, naoLidas: conv.naoLidas };

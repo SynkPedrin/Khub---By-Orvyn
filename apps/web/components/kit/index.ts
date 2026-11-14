@@ -14,3 +14,4 @@ export { Skeleton, SkeletonLines, SkeletonRows, SkeletonCards, SkeletonDetail } 
 export { Tooltip, type TooltipProps } from './Tooltip';
 export { Menu, type MenuProps, type MenuEntry } from './Menu';
 export { useFocusTrap, useScrollLock, focaveis } from './focus';
+export { Paginacao, PaginacaoCursor, usePaginacao, janelaDePaginas, TAMANHOS_PAGINA } from './Paginacao';

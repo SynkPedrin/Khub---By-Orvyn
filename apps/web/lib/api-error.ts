@@ -41,6 +41,7 @@ export const PROVIDER_LABEL: Record<string, string> = {
   integrations_crypto: 'Cifra de credenciais',
   storage: 'Armazenamento de arquivos',
   youtube: 'YouTube (Google)',
+  google_presenca: 'Google (Tag Manager, Search Console e Meu Negócio)',
   ollama: 'Ollama (IA local)',
   openai: 'OpenAI',
 };

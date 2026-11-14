@@ -36,6 +36,7 @@ import { TIPOS_FONTE } from './knowledge/text-extraction';
 import { PERSONAS } from './simulator/simulator.service';
 import { EvaluationService } from './evaluation/evaluation.service';
 import { hashSnapshot, snapshotDoAgente, type SnapshotAgente } from './versioning/versioning.service';
+import { modoDoAgente } from '../common/modo-agente';
 
 /** Campos editáveis de um agente (o que a API aceita). */
 export interface AgenteInput {
@@ -206,6 +207,7 @@ export class AgentsService {
         data: { ...dados, ...(config ? { config: config as unknown as Prisma.InputJsonValue } : {}), ...(input.nome !== undefined ? { nome: input.nome.trim() } : {}), updatedAt: new Date() },
       });
       await this.auditar(tx, tenantId, ator.identityId, 'agente.atualizado', id, { campos: Object.keys(input), secoes: input.config ? Object.keys(input.config) : [] });
+      await this.aplicarModo(tx, tenantId, ator.identityId, a, modoDoAgente(atual.config));
       return this.publico(a);
     });
   }
@@ -223,6 +225,7 @@ export class AgentsService {
         await tx.agentFollowup.updateMany({ where: { agentId: id, status: 'agendado' }, data: { status: 'cancelado', motivo: 'agente arquivado' } });
       }
       await this.auditar(tx, tenantId, ator.identityId, `agente.${status}`, id, {});
+      if (status === 'ativo') await this.aplicarModo(tx, tenantId, ator.identityId, a, null);
       return this.publico(a);
     });
   }
@@ -409,6 +412,30 @@ export class AgentsService {
       createdAt: a.createdAt,
       updatedAt: a.updatedAt,
     };
+  }
+
+  /**
+   * Modo do agente vale para TODOS os clientes (ADR-0048, pedido do product owner):
+   * - piloto automático + principal + ativo: toda conversa aberta do canal que
+   *   não está com um humano (sem responsável e sem transferência da IA) passa
+   *   para a IA. Ela só fala quando o cliente mandar a próxima mensagem.
+   * - virou sugestivo: a IA sai das conversas onde estava (voltam para humano,
+   *   com o agente guardado para "Devolver para a IA"); dali em diante só entra
+   *   pelo nó "Ativar IA" da automação ou pelo botão na conversa.
+   */
+  private async aplicarModo(tx: Tx, tenantId: string, atorId: string, a: { id: string; status: string; padrao: boolean; canais: string[]; config: unknown }, modoAnterior: string | null): Promise<void> {
+    const modo = modoDoAgente(a.config);
+    if (modo === 'sugestivo' && modoAnterior === 'automatico') {
+      const r = await tx.conversation.updateMany({ where: { agentId: a.id, atendimento: 'ia' }, data: { atendimento: 'humano', handoffMotivo: null, handoffAt: null } });
+      if (r.count) await this.auditar(tx, tenantId, atorId, 'agente.modo_sugestivo', a.id, { conversasLiberadas: r.count });
+      return;
+    }
+    if (modo !== 'automatico' || a.status !== 'ativo' || !a.padrao || !a.canais.length) return;
+    const r = await tx.conversation.updateMany({
+      where: { atendimento: 'humano', assigneeId: null, handoffMotivo: null, status: { not: 'resolvida' }, canal: { in: a.canais } },
+      data: { atendimento: 'ia', agentId: a.id },
+    });
+    if (r.count) await this.auditar(tx, tenantId, atorId, 'agente.piloto_automatico', a.id, { conversasAssumidas: r.count });
   }
 
   private async auditar(tx: Tx, tenantId: string, actorId: string, acao: string, id: string, payload: Record<string, unknown>) {

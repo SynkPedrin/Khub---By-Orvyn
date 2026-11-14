@@ -1,6 +1,7 @@
 'use client';
 
 import { clienteApi } from './session-fetch';
+import type { ResultadoImportacao } from './financeiro';
 
 /**
  * Cliente autenticado deste módulo.
@@ -31,6 +32,8 @@ export interface Compromisso {
   confirmadoEm: string | null;
   faltouEm: string | null;
   lembreteEnviadoEm: string | null;
+  /** Valor do atendimento em centavos: ao concluir, vira entrada no financeiro. */
+  valorCentavos: number | null;
 }
 
 export interface NovoCompromisso {
@@ -42,6 +45,7 @@ export interface NovoCompromisso {
   notas?: string;
   tipo?: TipoAgenda;
   responsavelId?: string | null;
+  valorCentavos?: number | null;
 }
 
 /** PATCH parcial (arrastar, redimensionar, reagendar). `null` limpa o campo. */
@@ -68,4 +72,7 @@ export const agenda = {
     req<Compromisso>(`compromissos/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) }),
   sincronizar: (id: string) => req<{ googleEventId: string }>(`compromissos/${id}/sincronizar`, { method: 'POST' }),
   remover: (id: string) => req<{ ok: boolean }>(`compromissos/${id}`, { method: 'DELETE' }),
+  /** Importação em lote (planilha do Avec): máx. 500 linhas por chamada; manager+. */
+  importar: (linhas: Record<string, unknown>[], opcoes: { gerarComissoes?: boolean }, linhaInicial: number) =>
+    req<ResultadoImportacao>('importar', { method: 'POST', body: JSON.stringify({ linhas, opcoes, linhaInicial }) }),
 };

@@ -38,7 +38,8 @@ export const MODELOS = [
   },
 ] as const;
 export type ModeloAgente = (typeof MODELOS)[number]['id'];
-export const MODELO_PADRAO: ModeloAgente = 'claude-opus-5-5';
+/** Padrão de agente novo: Sonnet 5.5 (decisão do dono em 2026-11-13: qualidade de atendimento com custo de Sonnet). */
+export const MODELO_PADRAO: ModeloAgente = 'claude-sonnet-5-5';
 export const IDS_MODELOS: readonly string[] = MODELOS.map((m) => m.id);
 
 /** Tom de voz: vira uma instrução curta no system prompt. */

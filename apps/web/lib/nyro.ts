@@ -102,6 +102,14 @@ async function chatStream(texto: string, conversationId: string | undefined, ane
     await req<StatusNyro>('status').catch(() => undefined);
     r = await chamar();
   }
+  // API mais antiga que a tela (ainda sem o endpoint de streaming): cai no chat normal em vez de quebrar.
+  if (r.status === 404 || r.status === 405) {
+    const resposta = await req<RespostaNyro>('chat', { method: 'POST', body: corpo, signal: sinal });
+    onEvento({ tipo: 'conversa', conversationId: resposta.conversationId });
+    for (const passo of resposta.passos.filter((p) => p.tipo !== 'texto')) onEvento({ tipo: 'passo', passo });
+    if (resposta.plano) onEvento({ tipo: 'plano', plano: resposta.plano });
+    return resposta;
+  }
   if (!r.ok || !r.body) throw new ApiError(r.status, await r.json().catch(() => ({})));
   let final: RespostaNyro | null = null;
   let erro: Extract<EventoNyro, { tipo: 'erro' }> | null = null;
