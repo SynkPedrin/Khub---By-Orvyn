@@ -18,6 +18,10 @@ if (process.env.SENTRY_DSN) {
   Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV ?? 'development', tracesSampleRate: 0 });
 }
 
+/** Rotas com corpo grande (ver o parser por rota em `bootstrap`). Exportadas para teste. */
+export const ROTAS_WEBHOOK = /^\/v1\/(webhooks|hooks)\//;
+export const ROTAS_UPLOAD = /^\/v1\/(agents\/[0-9a-f-]{36}\/conhecimento|crm\/import\/contacts|nyro\/chat|nyro\/chat\/stream|crm\/conversations\/[0-9a-f-]{36}\/midia|ads\/simulador\/analisar)$/;
+
 /** Origens de CORS: CSV explícito; senão libera em dev e restringe ao WEB_URL em prod. */
 function corsOrigins(env: ReturnType<typeof loadEnv>): true | string[] {
   if (env.CORS_ORIGINS) return env.CORS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean);
@@ -41,26 +45,24 @@ async function bootstrap(): Promise<void> {
     (req as { rawBody?: Buffer }).rawBody = buf;
   };
   // Ordem importa: específicos primeiro (body-parser pula corpo já lido).
+  // O caminho é testado DENTRO do middleware: `app.use(/regex/, fn)` não casa
+  // no Express 4.22 e o corpo caía no parser padrão de 100 kb — webhook do
+  // WhatsApp com mídia dava 500 PayloadTooLargeError em produção (2026-11-14).
+  type Parser = ReturnType<typeof json>;
+  const quando = (rota: RegExp, parser: Parser) =>
+    function parserPorRota(req: Parameters<Parser>[0], res: Parameters<Parser>[1], next: Parameters<Parser>[2]) {
+      if (rota.test((req as { path?: string }).path ?? req.url ?? '')) return parser(req, res, next);
+      next();
+    };
   // 1) Webhooks de mensageria (Stevo/Evolution/Meta): mídia em base64 e
   //    histórico de sync — limite alto. (Produção: mover mídia p/ storage.)
   const parserWebhook = json({ limit: '100mb', verify: capturaRaw });
-  app.use(/^\/v1\/(webhooks|hooks)\//, function webhookJson(req: Parameters<typeof parserWebhook>[0], res: Parameters<typeof parserWebhook>[1], next: Parameters<typeof parserWebhook>[2]) {
-    parserWebhook(req, res, next);
-  });
-  // 2) Upload de fonte de conhecimento (PDF/DOCX em base64, até 15 MB), anexos do chat da NICO e
-  //    lote de importação de contatos (até 500 linhas por chamada).
+  app.use(quando(ROTAS_WEBHOOK, parserWebhook));
+  // 2) Upload de fonte de conhecimento (PDF/DOCX em base64, até 15 MB), anexos do chat da NICO,
+  //    lote de importação de contatos (até 500 linhas por chamada), mídia de saída do Inbox (Q2.5)
+  //    e imagem/frames do simulador de anúncios.
   const parserUpload = json({ limit: '22mb', verify: capturaRaw });
-  app.use(/^\/v1\/(agents\/[0-9a-f-]{36}\/conhecimento|crm\/import\/contacts|nyro\/chat|nyro\/chat\/stream)$/, function uploadConhecimentoJson(req: Parameters<typeof parserUpload>[0], res: Parameters<typeof parserUpload>[1], next: Parameters<typeof parserUpload>[2]) {
-    parserUpload(req, res, next);
-  });
-  // 2b) Mídia de saída do Inbox (Q2.5): arquivo em base64, até 15 MB.
-  app.use(/^\/v1\/crm\/conversations\/[0-9a-f-]{36}\/midia$/, function midiaInboxJson(req: Parameters<typeof parserUpload>[0], res: Parameters<typeof parserUpload>[1], next: Parameters<typeof parserUpload>[2]) {
-    parserUpload(req, res, next);
-  });
-  // 2c) Simulador de anúncios: imagem/frames do vídeo em base64 para a análise da IA (até 4 × ~1,5 MB).
-  app.use(/^\/v1\/ads\/simulador\/analisar$/, function simuladorJson(req: Parameters<typeof parserUpload>[0], res: Parameters<typeof parserUpload>[1], next: Parameters<typeof parserUpload>[2]) {
-    parserUpload(req, res, next);
-  });
+  app.use(quando(ROTAS_UPLOAD, parserUpload));
   // 3) Resto da API: limites padrão do Express, com rawBody preservado.
   //    urlencoded TAMBÉM precisa do limite alto: a Evolution/Stevo posta o
   //    webhook como form-urlencoded, e o default (100 kb) derrubava cada
