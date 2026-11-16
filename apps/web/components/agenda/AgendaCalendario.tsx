@@ -10,6 +10,7 @@ import { ApiError } from '@/lib/api-error';
 import { useAuth } from '@/lib/auth';
 import { crm } from '@/lib/crm';
 import { hora } from '@/lib/format';
+import { MARCA_STATUS, paletaEquipe, procedimento, type CorEquipe } from './cores-equipe';
 import { settingsApi, type Member } from '@/lib/settings';
 import {
   STATUS_ATIVOS,
@@ -294,6 +295,13 @@ export function AgendaCalendario() {
   const total = visiveis.length;
   const abrir = (id: string, ancora: DOMRect | null) => setAberto({ id, ancora });
 
+  // Salão/clínica: cor por profissional em todas as visões (mesma tabela no resumo,
+  // na equipe e no calendário); sem catálogo, segue a cor por tipo.
+  const corDe = useMemo(
+    () => (profissionais.length ? paletaEquipe(profissionais, (visiveis ?? []).map((c) => c.profissionalId)) : null),
+    [profissionais, visiveis],
+  );
+
   return (
     <div className="space-y-3">
       {/* Barra de navegação */}
@@ -407,11 +415,13 @@ export function AgendaCalendario() {
         </div>
       ) : visao === 'equipe' ? (
         <>
-          <ResumoDia eventos={eventosDoDia(visiveis, ref)} profissionais={profissionais} agora={agora} ehHoje={mesmoDia(ref, agora)} />
-          <AgendaEquipe dia={ref} eventos={visiveis} profissionais={profissionais} nomes={nomes} agora={agora} onAbrir={abrir} onCriar={criarEm} />
+          <ResumoDia corDe={corDe} eventos={eventosDoDia(visiveis, ref)} profissionais={profissionais} agora={agora} ehHoje={mesmoDia(ref, agora)} />
+          <AgendaEquipe corDe={corDe} dia={ref} eventos={visiveis} profissionais={profissionais} nomes={nomes} agora={agora} onAbrir={abrir} onCriar={criarEm} />
         </>
       ) : visao === 'mes' ? (
         <GradeMes
+          corDe={corDe}
+          nomes={nomes}
           dias={dias}
           mesRef={ref}
           eventos={visiveis}
@@ -424,13 +434,23 @@ export function AgendaCalendario() {
           onCriar={(d) => criarEm(dataNoDia(d, 9 * 60))}
         />
       ) : visao === 'lista' ? (
-        <Lista dias={dias} eventos={visiveis} nomes={nomes} nomeMembro={nomeMembro} onAbrir={abrir} onNovo={() => setModal({})} />
+        <Lista corDe={corDe} dias={dias} eventos={visiveis} nomes={nomes} nomeMembro={nomeMembro} onAbrir={abrir} onNovo={() => setModal({})} />
       ) : (
-        <GradeHorarios dias={dias} eventos={visiveis} agora={agora} nomes={nomes} permitirArraste={!celular} onAbrir={abrir} onCriar={criarEm} onMover={mover} />
+        <GradeHorarios corDe={corDe} dias={dias} eventos={visiveis} agora={agora} nomes={nomes} permitirArraste={!celular} onAbrir={abrir} onCriar={criarEm} onMover={mover} />
       )}
 
-      {/* Legenda de tipos */}
-      {itens !== null && !erro && (
+      {/* Legenda: profissionais (salão/clínica) ou tipos */}
+      {itens !== null && !erro && corDe && visao !== 'equipe' && (
+        <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs" aria-label="Cores das profissionais">
+          {profissionais.filter((p) => (visiveis ?? []).some((c) => c.profissionalId === p.id)).map((p) => (
+            <li key={p.id} className={cx('flex items-center gap-1.5 font-medium', corDe(p.id).texto)}>
+              <span className={cx('h-2.5 w-2.5 rounded-full', corDe(p.id).faixa)} aria-hidden />
+              {p.nome}
+            </li>
+          ))}
+        </ul>
+      )}
+      {itens !== null && !erro && !corDe && (
         <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted" aria-label="Legenda de tipos">
           {TIPO_ORDEM.map((t) => (
             <li key={t} className="flex items-center gap-1.5">
@@ -486,6 +506,7 @@ interface Arraste {
 }
 
 function GradeHorarios({
+  corDe,
   dias,
   eventos,
   agora,
@@ -495,6 +516,7 @@ function GradeHorarios({
   onCriar,
   onMover,
 }: {
+  corDe: ((id: string | null | undefined) => CorEquipe) | null;
   dias: Date[];
   eventos: Compromisso[];
   agora: Date;
@@ -639,13 +661,15 @@ function GradeHorarios({
                       const tom = TIPO_TOM[c.tipo] ?? TIPO_TOM.outro;
                       const arrastavel = permitirArraste && STATUS_ATIVOS.includes(c.status);
                       const emPrevia = previa?.id === c.id;
+                      const cor = corDe ? corDe(c.profissionalId) : null;
+                      const cliente = nomeCliente(c, nomes);
                       return (
                         <div
                           key={c.id}
                           data-evento
                           className={cx(
                             'group absolute z-[1] select-none overflow-hidden rounded-md border border-l-[3px] border-line px-1.5 py-0.5 text-left shadow-sm',
-                            classesEvento(c),
+                            cor ? cx(cor.borda, cor.fundo, 'text-fg', MARCA_STATUS[c.status].bloco) : classesEvento(c),
                             arrastavel ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
                             emPrevia && 'z-[3] shadow-lg ring-2 ring-brand',
                           )}
@@ -673,15 +697,18 @@ function GradeHorarios({
                             if (!arrastavel || (e.nativeEvent as PointerEvent).pointerType === 'touch') onAbrir(c.id, e.currentTarget.getBoundingClientRect());
                           }}
                         >
-                          <span className="flex items-center gap-1">
-                            <Icon name={tom.icone} size={11} className="shrink-0 opacity-70" />
-                            <span className="truncate text-xs font-semibold leading-tight">{nomeCliente(c, nomes) ?? c.titulo}</span>
+                          {/* Hora e procedimento em negrito; cliente e profissional embaixo. */}
+                          <span className="flex items-baseline gap-1">
+                            {!cor && <Icon name={tom.icone} size={11} className="shrink-0 self-center opacity-70" />}
+                            <span className="shrink-0 text-2xs font-bold tabular leading-tight">{hora(c.inicio)}</span>
+                            <span className="truncate text-xs font-bold leading-tight">{procedimento(c)}</span>
+                            {cor && MARCA_STATUS[c.status].icone && (
+                              <Icon name={MARCA_STATUS[c.status].icone!} size={11} className={cx('ml-auto shrink-0 self-center', MARCA_STATUS[c.status].iconeCor)} />
+                            )}
                           </span>
                           {alturaPx >= 36 && (
-                            <span className="block truncate text-2xs tabular leading-tight opacity-80">
-                              {hora(c.inicio)} às {hora(c.fim)}
-                              {nomeCliente(c, nomes) ? ` · ${nomeServico(c)}` : ''}
-                              {c.profissionalNome ? ` · ${c.profissionalNome}` : ''}
+                            <span className="block truncate text-2xs leading-tight text-muted">
+                              {[cliente, c.profissionalNome].filter(Boolean).join(' · ') || `até ${hora(c.fim)}`}
                             </span>
                           )}
                           {arrastavel && (
@@ -714,6 +741,8 @@ function GradeHorarios({
 /* ================================================================ Mês */
 
 function GradeMes({
+  corDe,
+  nomes,
   dias,
   mesRef,
   eventos,
@@ -722,6 +751,8 @@ function GradeMes({
   onDia,
   onCriar,
 }: {
+  corDe: ((id: string | null | undefined) => CorEquipe) | null;
+  nomes: Record<string, string | null>;
   dias: Date[];
   mesRef: Date;
   eventos: Compromisso[];
@@ -776,9 +807,10 @@ function GradeMes({
                         (c.status === 'cancelado' || c.status === 'faltou') && 'line-through opacity-70',
                       )}
                     >
-                      <span className={cx('h-1.5 w-1.5 shrink-0 rounded-full', (TIPO_TOM[c.tipo] ?? TIPO_TOM.outro).ponto)} aria-hidden />
-                      <span className="tabular text-muted">{hora(c.inicio)}</span>
-                      <span className="truncate text-fg">{c.contatoNome ? `${c.contatoNome} · ${nomeServico(c)}` : c.titulo}</span>
+                      <span className={cx('h-1.5 w-1.5 shrink-0 rounded-full', corDe ? corDe(c.profissionalId).faixa : (TIPO_TOM[c.tipo] ?? TIPO_TOM.outro).ponto)} aria-hidden />
+                      <span className="font-semibold tabular text-fg">{hora(c.inicio)}</span>
+                      <span className="shrink-0 font-bold text-fg">{procedimento(c)}</span>
+                      {nomeCliente(c, nomes) && <span className="truncate text-muted">· {nomeCliente(c, nomes)}</span>}
                     </button>
                   </li>
                 ))}
@@ -808,6 +840,7 @@ function GradeMes({
 /* ================================================================ Lista */
 
 function Lista({
+  corDe,
   dias,
   eventos,
   nomes,
@@ -815,6 +848,7 @@ function Lista({
   onAbrir,
   onNovo,
 }: {
+  corDe: ((id: string | null | undefined) => CorEquipe) | null;
   dias: Date[];
   eventos: Compromisso[];
   nomes: Record<string, string | null>;
@@ -855,15 +889,18 @@ function Lista({
                   <button
                     type="button"
                     onClick={(e) => onAbrir(c.id, e.currentTarget.getBoundingClientRect())}
-                    className={cx('flex w-full items-start gap-3 rounded-md border border-l-[3px] border-line px-3 py-2 text-left hover:bg-surface2', tom.barra)}
+                    className={cx('flex w-full items-start gap-3 rounded-md border border-l-[3px] border-line px-3 py-2 text-left hover:bg-surface2', corDe ? corDe(c.profissionalId).borda : tom.barra)}
                   >
                     <span className="w-[64px] shrink-0 pt-0.5 text-base font-bold tabular text-fg">{hora(c.inicio)}</span>
                     {nomeCliente(c, nomes) || c.profissionalNome ? (
                       // Atendimento (salão/clínica): cliente em destaque, serviço e profissional ao lado.
                       <span className="grid min-w-0 flex-1 gap-x-4 gap-y-0.5 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,0.8fr)] sm:items-center">
-                        <span className={cx('truncate text-sm font-semibold', c.status === 'cancelado' ? 'text-muted line-through' : 'text-fg')}>{nomeCliente(c, nomes) ?? 'Sem cliente'}</span>
-                        <span className="truncate text-sm text-fg">{nomeServico(c)}</span>
-                        <span className="truncate text-sm text-muted">{c.profissionalNome ?? nomeMembro(c.responsavelId) ?? '—'}</span>
+                        <span className={cx('truncate text-sm font-bold', c.status === 'cancelado' ? 'text-muted line-through' : 'text-fg')}>{procedimento(c)}</span>
+                        <span className="truncate text-sm text-fg">{nomeCliente(c, nomes) ?? 'Sem cliente'}</span>
+                        <span className={cx('flex min-w-0 items-center gap-1.5 truncate text-sm font-medium', corDe ? corDe(c.profissionalId).texto : 'text-muted')}>
+                          {corDe && <span className={cx('h-2 w-2 shrink-0 rounded-full', corDe(c.profissionalId).faixa)} aria-hidden />}
+                          <span className="truncate">{c.profissionalNome ?? nomeMembro(c.responsavelId) ?? '—'}</span>
+                        </span>
                       </span>
                     ) : (
                       <span className="min-w-0 flex-1">
