@@ -1,9 +1,11 @@
 # Deploy do KHUB (Neon + Render + Vercel)
 
-**Estado em 12/11/2026:** no ar. Web `https://khub-os.vercel.app` (futuro `app.kromads.com.br`), API `https://khub-api-ucey.onrender.com` (Render, plano gratuito, serviço `khub-api` + Redis `khub-queue`), banco Neon `khub-by-orvyn` com as 56 migrações e as duas subcontas copiadas do dev. As credenciais ficam só em `deploy/.env.render` (fora do git). Falta: CNAMEs no Registro.br (`app` e `api`), trocar a API para o plano pago antes de ligar o WhatsApp dos clientes e a virada do WhatsApp (seção 4).
+**Estado em 16/11/2026:** no ar. Web `https://khub-os.vercel.app` (futuro `app.kromads.com.br`), API `https://khub-api-ucey.onrender.com` (Render, plano gratuito, serviço `khub-api` + Redis `khub-queue`), banco Neon `khub-by-orvyn` com as 56 migrações e as duas subcontas copiadas do dev. As credenciais ficam só em `deploy/.env.render` (fora do git). Falta: CNAMEs no Registro.br (`app` e `api`), trocar a API para o plano pago antes de ligar o WhatsApp dos clientes e a virada do WhatsApp (seção 4).
+
+> **Repositório:** o canônico é `SynkPedrin/orvyn-os` (branch `main`). O serviço `khub-api` no Render ainda OBSERVA o repositório antigo `SynkPedrin/Khub---By-Orvyn` (a API do Render não permite trocar o repo via PATCH; só no painel). Enquanto isso, os dois repos são mantidos sincronizados: `git push origin HEAD:main` e `git push producao HEAD:main` (remote `producao` = Khub---By-Orvyn). Em 16/11/2026 o repo antigo foi alinhado por force-with-lease (SHA anterior: `3ca7fde`, conteúdo íntegro em orvyn-os). O caminho definitivo é repontar o serviço no painel do Render para `orvyn-os`.
 
 
-Ordem: **1. Neon** (banco) → **2. Render** (API + fila) → **3. Vercel** (web). O código vem do GitHub `SynkPedrin/Khub---By-Orvyn` (branch `main`).
+Ordem: **1. Neon** (banco) → **2. Render** (API + fila) → **3. Vercel** (web). O código vem do GitHub `SynkPedrin/orvyn-os` (branch `main`), espelhado em `SynkPedrin/Khub---By-Orvyn` até o Render ser repontado.
 
 ## 1. Neon: banco novo e vazio
 
