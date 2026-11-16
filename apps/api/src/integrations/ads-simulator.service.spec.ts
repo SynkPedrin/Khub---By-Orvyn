@@ -22,9 +22,15 @@ function montar(opts: { configurado?: boolean; respostas?: string[]; historico?:
   const tx = {
     $queryRaw: jest.fn(async () => [opts.historico === null ? { impressoes: 0, cliques: 0, gasto: 0, leads: 0, conversoes: 0 } : (opts.historico ?? { impressoes: 0, cliques: 0, gasto: 0, leads: 0, conversoes: 0 })]),
     aiUsageEvent: { create: jest.fn(async (a: unknown) => { usos.push(a); return {}; }) },
+    integration: { findFirst: jest.fn(async () => null) },
   };
   const prisma = { withTenant: (_t: string, fn: (t: typeof tx) => unknown) => fn(tx) };
-  return { svc: new AdsSimulatorService(prisma as never, llm), chamadas, usos };
+  const crypto = { decryptJson: jest.fn(() => ({ accessToken: 'tok' })) };
+  const graph = { get: jest.fn(async () => ({ data: [] })) };
+  const redesConexao = { contas: jest.fn(async (): Promise<unknown[]> => []), ativa: jest.fn() };
+  const redesHttp = { metaGet: jest.fn() };
+  const svc = new AdsSimulatorService(prisma as never, llm, crypto as never, graph as never, redesConexao as never, redesHttp as never);
+  return { svc, chamadas, usos, tx, crypto, graph, redesConexao, redesHttp };
 }
 
 const criativo = { nome: 'A', formato: 'imagem', hook: 'Você ainda sente dor ao sorrir?', copy: 'Agende hoje.', titulo: 'Avaliação', cta: 'enviar_mensagem' };
@@ -109,7 +115,8 @@ describe('Simulações salvas (db/067)', () => {
     };
     const prisma = { withTenant: (_t: string, fn: (t: typeof tx) => unknown) => fn(tx) };
     const llm = { configured: () => false, missing: () => ['OLLAMA_BASE_URL'] } as unknown as AIProvider;
-    return { svc: new AdsSimulatorService(prisma as never, llm), tx };
+    const vazio = {} as never;
+    return { svc: new AdsSimulatorService(prisma as never, llm, vazio, vazio, vazio, vazio), tx };
   }
 
   it('salvar: valida nome e entrada (400)', async () => {
@@ -137,5 +144,133 @@ describe('Simulações salvas (db/067)', () => {
     const linhas = [{ id: 's1', nome: 'A', entrada: {}, resumo: {}, salvoEm: new Date() }];
     const { svc } = montarSalvas(linhas);
     await expect(svc.listarSalvas('t1')).resolves.toEqual(linhas);
+  });
+});
+
+describe('Leads qualificados (taxaQualificacao)', () => {
+  it('sem taxa, todos os resultados contam (comportamento anterior); com taxa, qualificados e vendas caem na proporção', async () => {
+    const sem = await montar().svc.simular('t1', simulacao);
+    expect(sem.total.leadsQualificados!.p50).toBeCloseTo(sem.total.resultados.p50, 6);
+    const com = await montar().svc.simular('t1', { ...simulacao, taxaQualificacao: 50 });
+    expect(com.total.leadsQualificados!.p50).toBeCloseTo(com.total.resultados.p50 / 2, 6);
+    expect(com.total.vendas).toBeCloseTo(com.total.resultados.p50 * 0.5 * (simulacao.taxaFechamento / 100), 6);
+    expect(com.total.custoPorLeadQualificado!.p50).toBeCloseTo(com.total.custoPorResultado.p50 * 2, 6);
+    expect(com.criativos[0].leadsQualificados!.p50).toBeCloseTo(com.criativos[0].resultados.p50 / 2, 6);
+  });
+
+  it('objetivo sem intenção (engajamento) não tem lead qualificado', async () => {
+    const r = await montar().svc.simular('t1', { ...simulacao, objetivo: 'engajamento' });
+    expect(r.total.leadsQualificados).toBeNull();
+    expect(r.total.custoPorLeadQualificado).toBeNull();
+    expect(r.criativos[0].leadsQualificados).toBeNull();
+  });
+});
+
+describe('Posts do Instagram para o simulador', () => {
+  const midia = { id: 'm1', caption: 'Você ainda sente dor ao sorrir?\nAgende.', media_type: 'VIDEO', media_product_type: 'REELS', thumbnail_url: 'https://img/m1.jpg', permalink: 'https://ig/p/m1', timestamp: '2026-11-01T10:00:00Z', like_count: 120, comments_count: 14 };
+  const insight = (name: string, value: number) => ({ name, total_value: { value } });
+
+  it('sem conta conectada, avisa para conectar (nunca post inventado)', async () => {
+    const { svc } = montar();
+    const r = await svc.postsInstagram('t1');
+    expect(r.conectado).toBe(false);
+    expect(r.posts).toEqual([]);
+    expect(r.status.status).toBe('sem_dados');
+  });
+
+  it('com conta, devolve posts com métricas reais de insights', async () => {
+    const { svc, redesConexao, redesHttp } = montar();
+    redesConexao.contas.mockResolvedValue([{ id: 'c1', nome: '@clinica', status: 'conectado' }]);
+    redesConexao.ativa.mockResolvedValue({ id: 'c1', externalId: 'ig1', token: 'tok' });
+    redesHttp.metaGet
+      .mockResolvedValueOnce({ data: [midia] })
+      .mockResolvedValueOnce({ data: [insight('reach', 3000), insight('likes', 130), insight('comments', 14), insight('shares', 9), insight('saved', 22), insight('total_interactions', 175)] });
+    const r = await svc.postsInstagram('t1');
+    expect(r.conectado).toBe(true);
+    expect(r.posts).toHaveLength(1);
+    expect(r.posts[0].tipo).toBe('reels');
+    expect(r.posts[0].legenda).toContain('dor ao sorrir');
+    expect(r.posts[0].metricas.curtidas).toBe(130);
+    expect(r.posts[0].metricas.alcance).toBe(3000);
+    expect(r.posts[0].metricas.engajamento).toBeCloseTo(5.83, 2);
+  });
+});
+
+describe('Biblioteca de anúncios (ads_archive)', () => {
+  it('pesquisa curta demais → 400', async () => {
+    const { svc } = montar();
+    await expect(svc.biblioteca('t1', 'a')).rejects.toThrow('pelo menos 2 letras');
+  });
+
+  it('sem integração Meta, explica o que falta', async () => {
+    const { svc } = montar();
+    const r = await svc.biblioteca('t1', 'clínica estética');
+    expect(r.anuncios).toEqual([]);
+    expect(r.status.mensagem).toContain('Conecte a conta Meta');
+  });
+
+  it('com integração, mapeia os anúncios e passa o token da subconta', async () => {
+    const { svc, tx, graph } = montar();
+    (tx.integration.findFirst as jest.Mock).mockResolvedValue({ credentialsEncrypted: 'enc' });
+    (graph.get as jest.Mock).mockResolvedValue({
+      data: [{ id: '1', page_name: 'Concorrente', ad_delivery_start_time: '2026-10-01', ad_creative_bodies: ['Agende sua avaliação'], ad_creative_link_titles: ['Clínica X'], ad_snapshot_url: 'https://fb/ads/1', publisher_platforms: ['instagram', 'facebook'] }],
+    });
+    const r = await svc.biblioteca('t1', 'estética', 'BR');
+    expect(r.status.status).toBe('ok');
+    expect(r.anuncios).toHaveLength(1);
+    expect(r.anuncios[0].pagina).toBe('Concorrente');
+    expect(r.anuncios[0].plataformas).toEqual(['instagram', 'facebook']);
+    expect((graph.get as jest.Mock).mock.calls[0][2]).toBe('tok');
+    expect(String((graph.get as jest.Mock).mock.calls[0][1].ad_reached_countries)).toContain('BR');
+  });
+
+  it('erro da Meta vira status legível, não exceção', async () => {
+    const { svc, tx, graph } = montar();
+    (tx.integration.findFirst as jest.Mock).mockResolvedValue({ credentialsEncrypted: 'enc' });
+    (graph.get as jest.Mock).mockRejectedValue(new Error('Meta Graph 400: (#10) permissão'));
+    const r = await svc.biblioteca('t1', 'estética');
+    expect(r.status.status).toBe('erro');
+    expect(r.status.mensagem).toContain('Meta');
+  });
+});
+
+describe('Relatório final da simulação', () => {
+  const relatorioOk = JSON.stringify({
+    veredicto: 'Vale rodar depois de reescrever o hook.',
+    notaGeral: 68,
+    resumo: 'Projeção de 40 a 90 conversas na faixa provável.',
+    pontosFortes: ['Verba suficiente para sair do aprendizado'],
+    riscos: ['Frequência passa de 3 na segunda semana'],
+    melhorias: ['Troque o hook por uma pergunta direta'],
+    proximosPassos: ['Meça o custo por conversa nos 3 primeiros dias'],
+  });
+
+  it('sem IA configurada → 501 config_required', async () => {
+    const { svc } = montar({ configurado: false });
+    const e = await svc.relatorio('t1', { entrada: simulacao }).catch((x) => x);
+    expect((e as HttpException).getStatus()).toBe(501);
+  });
+
+  it('com IA, devolve o relatório e manda os números da simulação no prompt', async () => {
+    const { svc, chamadas } = montar({ respostas: [relatorioOk] });
+    const r = await svc.relatorio('t1', {
+      nome: 'Captação novembro',
+      negocio: 'Clínica odontológica',
+      entrada: { ...simulacao, taxaQualificacao: 60 },
+      posts: [{ tipo: 'reels', engajamento: 5.8, curtidas: 130, comentarios: 14, compartilhamentos: 9, salvamentos: 22, alcance: 3000 }],
+      biblioteca: [{ pagina: 'Concorrente', texto: 'Agende sua avaliação', plataformas: ['instagram'] }],
+    });
+    expect(r.veredicto).toContain('Vale rodar');
+    expect(r.notaGeral).toBe(68);
+    const prompt = JSON.stringify(chamadas[0]);
+    expect(prompt).toContain('Leads qualificados');
+    expect(prompt).toContain('engajamento 5.8%');
+    expect(prompt).toContain('Concorrente');
+    expect(prompt).toContain('Captação novembro');
+  });
+
+  it('resposta inválida duas vezes → 502', async () => {
+    const e = await montar({ respostas: ['x', 'y'] }).svc.relatorio('t1', { entrada: simulacao }).catch((x) => x);
+    expect((e as HttpException).getStatus()).toBe(502);
   });
 });

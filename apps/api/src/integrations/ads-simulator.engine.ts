@@ -63,6 +63,8 @@ export interface EntradaSimulacao {
   ticketMedio: number;
   /** % dos resultados que viram venda (0–100). */
   taxaFechamento: number;
+  /** % dos resultados que são lead qualificado (0–100). Vazio = 100 (todos). */
+  taxaQualificacao?: number;
   criativos: CriativoSim[];
   /** Sobrescreve a base (o operador conhece o mercado dele). */
   premissas?: { cpm?: number; ctr?: number; conversao?: number };
@@ -104,6 +106,9 @@ export interface ResultadoCriativo {
   cpm: number;
   resultados: Faixa;
   custoPorResultado: Faixa;
+  /** Leads qualificados (resultados × taxa de qualificação); null em objetivos sem intenção. */
+  leadsQualificados: Faixa | null;
+  custoPorLeadQualificado: Faixa | null;
   vendas: number;
   receita: number | null;
   roas: number | null;
@@ -122,7 +127,9 @@ export interface ResultadoSimulacao {
   base: { cpm: number; ctr: number; conversao: number; fonte: 'conta' | 'referencia' | 'mista' | 'manual'; pesoConta: number };
   total: {
     investimento: number; impressoes: number; alcance: number; frequencia: number; cliques: number;
-    ctr: number; cpm: number; resultados: Faixa; custoPorResultado: Faixa; vendas: number; receita: number | null; roas: number | null;
+    ctr: number; cpm: number; resultados: Faixa; custoPorResultado: Faixa;
+    leadsQualificados: Faixa | null; custoPorLeadQualificado: Faixa | null;
+    vendas: number; receita: number | null; roas: number | null;
   };
   criativos: ResultadoCriativo[];
   vencedor: string | null;
@@ -490,6 +497,7 @@ export function simular(e: EntradaSimulacao, cal?: Calibracao | null): Resultado
   }
 
   const geraVenda = GERA_VENDA[e.objetivo];
+  const qualif = Math.min(100, Math.max(0, e.taxaQualificacao ?? 100)) / 100;
   const criativos: ResultadoCriativo[] = e.criativos.map((c, i) => {
     const rs = porCriativo[i];
     const res = faixa(rs.map((x) => x.resultados));
@@ -498,7 +506,9 @@ export function simular(e: EntradaSimulacao, cal?: Calibracao | null): Resultado
     const alcance = mediana(rs.map((x) => x.alcance));
     const cliques = mediana(rs.map((x) => x.cliques));
     const cpr = faixa(rs.map((x) => (x.resultados > 0 ? investimento / x.resultados : investimento)));
-    const vendas = geraVenda ? res.p50 * (e.taxaFechamento / 100) : 0;
+    const leadsQualificados = geraVenda ? faixa(rs.map((x) => x.resultados * qualif)) : null;
+    const custoPorLeadQualificado = geraVenda ? faixa(rs.map((x) => (x.resultados * qualif > 0 ? investimento / (x.resultados * qualif) : investimento))) : null;
+    const vendas = geraVenda ? res.p50 * qualif * (e.taxaFechamento / 100) : 0;
     const receita = geraVenda ? vendas * e.ticketMedio : null;
     const saidas = rs.map((x) => x.saida);
     const saiu = saidas.filter((s): s is number => s !== null);
@@ -517,6 +527,8 @@ export function simular(e: EntradaSimulacao, cal?: Calibracao | null): Resultado
       resultados: res,
       // Faixa de custo invertida: p10 de custo = cenário bom.
       custoPorResultado: { p10: cpr.p10, p50: cpr.p50, p90: cpr.p90 },
+      leadsQualificados,
+      custoPorLeadQualificado,
       vendas,
       receita,
       roas: receita !== null && investimento > 0 ? receita / investimento : null,
@@ -534,7 +546,9 @@ export function simular(e: EntradaSimulacao, cal?: Calibracao | null): Resultado
   const impressoes = criativos.reduce((s, c) => s + c.impressoes, 0);
   const cliques = criativos.reduce((s, c) => s + c.cliques, 0);
   const alcance = Math.min(e.publico, criativos.reduce((s, c) => s + c.alcance, 0));
-  const vendas = geraVenda ? resultados.p50 * (e.taxaFechamento / 100) : 0;
+  const leadsQualificadosTot = geraVenda ? faixa(totRes.map((x) => x * qualif)) : null;
+  const cprQualTot = geraVenda ? faixa(totRes.map((x) => (x * qualif > 0 ? investimento / (x * qualif) : investimento))) : null;
+  const vendas = geraVenda ? resultados.p50 * qualif * (e.taxaFechamento / 100) : 0;
   const receita = geraVenda ? vendas * e.ticketMedio : null;
 
   const serie: Dia[] = Array.from({ length: e.dias }, (_, d) => {
@@ -565,7 +579,9 @@ export function simular(e: EntradaSimulacao, cal?: Calibracao | null): Resultado
       investimento, impressoes, alcance, frequencia: impressoes / Math.max(alcance, 1), cliques,
       ctr: impressoes ? (cliques / impressoes) * 100 : 0,
       cpm: impressoes ? (investimento / impressoes) * 1000 : 0,
-      resultados, custoPorResultado: cprTot, vendas, receita,
+      resultados, custoPorResultado: cprTot,
+      leadsQualificados: leadsQualificadosTot, custoPorLeadQualificado: cprQualTot,
+      vendas, receita,
       roas: receita !== null && investimento > 0 ? receita / investimento : null,
     },
     criativos,

@@ -1,58 +1,36 @@
-# MAPA AVEC — o que existe de verdade (verificado em 2026-11-16)
+# MAPA AVEC — verificado ao vivo em 2026-11-16
 
-## Arquitetura atual: extração + importação (NÃO é integração viva)
+## Duas camadas de acesso (ambas já demonstradas)
 
-```
-Avec (web do salão, id 62338)
-  │  login headless Playwright (entrar.mjs) — credenciais em ~/.khub/avec.env
-  ▼
-Relatórios /admin/relatorios/listar (puxar-tudo.mjs, puxar-mensal.mjs) + telas (telas.mjs, servicos.mjs, listar.mjs, filtros.mjs)
-  │  → ~/Downloads/avec-export/<data>/ (CSV+JSON, pasta 700)
-  ▼
-converter.py → khub/{contatos,agenda,financeiro}.json
-  ▼
-importar.mjs → rotas oficiais da API KHUB (lotes de 200, idempotente)
-```
+**1. Relatórios (histórico, batch)** — `/admin/relatorios/listar` via sessão web
+- Códigos: 0155/0248 (agendamentos por status), 0387/0385/0180 (financeiro), 0186/8123/0028 (comissões), 0229 (usuários), 0004 (clientes).
+- Usado na importação de 14/11 (20.890 agendamentos; financeiro 1:1). Scripts em `apps/api/scripts/operar/avec/`.
 
-**Sentido único, somente leitura, sob demanda (manual).** Sem webhooks, sem job agendado, sem cliente de API, sem escrita.
+**2. Grade de agenda ao vivo (tempo real, READ-ONLY verificado hoje)** — app `admin.avec.beauty/admin/agenda-v2`
+- `POST /admin/agenda/listarTodosProfissionaisComAgendaAndServicos` → profissionais ativos + serviços por profissional + **comissão por serviço** (verificado: 8 profissionais — Rita, Thaina, Gabriela, Carmelita, cristina, isabela, Mel, Vitória).
+- `POST /admin/agenda/carregarAgenda` → por dia e profissional: **jornada** (hora_inicio/hora_fim), **reservas** (cliente, telefone, serviço, início/fim, status) e **bloqueios**. Horários livres = jornada − reservas − bloqueios (o campo `livres` vem vazio; a UI calcula no cliente).
+- Verificado ao vivo (16/11 ~14h UTC): terça 17/11 com 8 profissionais em jornada (06:00–20:00 conforme a pessoa) e reservas reais (ex.: Rita 6, Gabriela 11); quarta 18/11 (Gabriela 20 reservas); sábado 21/11.
+- **Requisito de sessão:** login web (`entrar.mjs`) + uma visita à página `agenda-v2` no navegador para primar os cookies; depois `ctx.request` responde JSON puro. Sessão expira — o job precisa re-login automático.
+- Payload: form-urlencoded `dados={"data":"AAAA-MM-DD","profissionalIdArr":[{"id":"…"}]}`.
 
-## O que já foi extraído/importado (14/11, Tasks AVEC-1/2)
+## Escrita (criar/reagendar/cancelar): NÃO verificada
+- O app de agenda certamente tem endpoints de escrita, mas não foram mapeados (exigiria criar um agendamento real de teste no sistema da cliente — **só com autorização e reversão**, fase de canário).
+- Não há evidência de API pública/documentada do Avec. O acesso é a endpoints internos do próprio admin (risco de mudança sem aviso; sem contrato).
+- **Contrato seguro vigente (v3 da Ritinha):** IA consulta disponibilidade real via probe read-only → oferece horários → coleta aceite → **a escrita é da equipe** (ou de um caminho de escrita validado em canário), nunca confirmação otimista.
 
-- 21.985 agendamentos (desde 02/2020) → 20.890 no Neon (1.094 duplicatas do próprio Avec ignoradas; 13.732 ligados a contato; 4.130 futuros).
-- Financeiro conferido 1:1 com o Avec: 44.611 entradas = R$ 4.379.594,60; 715 saídas = R$ 642.739,34; 0 erros. Importação não vinculada a atendimentos (sem receita em dobro).
-- 10 profissionais, 5.840 clientes, serviços, regras de comissão extraídos para arquivos locais.
+## Estado dos dados no KHUB (pós-correção de 16/11)
+- 20.890 compromissos: **20.886 com profissional, 20.888 com serviço e contato, 0 no formato antigo** (os 2 restantes são agendamentos de teste da Ritinha de 11/11).
+- Catálogo: **85 serviços** (36 com duração real do Avec) e **23 profissionais** (nomes reais: Rita, Carmelita, Cris/Cristina, Vitoria, Vivi, Mel, Ana Julia, Manu, Judite, Lana…).
+- Backup pré-correção: `~/khub-backups/agenda-studio-2026-11-16.csv` e `contatos-studio-2026-11-16.csv`.
+- ⚠️ `valor_centavos` continua 0 (decisão de design do LEIAME: dinheiro só do financeiro). Comissões por serviço/profissional existem no Avec e na extração — AVEC-3/4 pendentes (equipe + entidade de comissões).
 
-## Lacunas verificadas (Neon, 16/11)
-
-| Item | Estado |
-|---|---|
-| `agenda_compromissos.profissional_id` | **0/20.890 preenchidos** |
-| `agenda_compromissos.servico_id` | **0/20.890** |
-| `agenda_compromissos.valor_centavos` | **0/20.890** |
-| Catálogo `servicos` / `profissionais` (db/071) | **0 registros** no tenant |
-| Correção pronta | `corrigir-agenda.mjs`: QA 20.888 corrigidos; Neon simulado OK; **gravação aguarda autorização** |
-| Profissionais como equipe KHUB (AVEC-3) | não feito (aguarda decisão de e-mails) |
-| Comissões como entidade (AVEC-4) | não feito (depende de AVEC-3) |
-| Sincronização contínua (AVEC-5) | **não existe** — dados de 14/11, já defasados |
-
-## Capacidades do contrato funcional (master §4) × realidade
-
-| Capacidade | Estado | Caminho |
-|---|---|---|
-| Consultar serviços | ✅ via extração (snapshot 14/11) | `servicos.mjs` / relatórios |
-| Consultar profissionais | ✅ via extração | `telas.mjs` |
-| Disponibilidade real | ❌ não implementado | verificar se o Avec expõe agenda por relatório/tela de grade |
-| Criar agendamento | ❌ | Avec tem API pública? investigar; alternativa: equipe confirma (modelo v2) |
-| Reagendar / cancelar / confirmar | ❌ | idem |
-| Detectar alterações externas | ❌ (re-extração periódica manual) | AVEC-5 |
-| Idempotência na importação | ✅ provada (2ª rodada 0 criados) | `importar.mjs` |
-
-## Decisão de design já registrada (LEIAME.md)
-
-Agenda importada **sem valor** (dinheiro só do financeiro por competência) para não contar receita duas vezes; contatos só com telefone; profissional não-membro fica no título.
+## Sincronização contínua (AVEC-5) — desenho proposto
+1. Job diário (ou sob demanda no turno da conversa): re-login se necessário → `carregarAgenda` por dia/profissional → projeta em `agenda_compromissos` (somente futuro, com `ref_externa` quando houver) ou em cache próprio `avec_agenda_cache`.
+2. Reconciliação: relatório 0248 (futuro, por status) 1×/dia para detectar cancelamentos/alterações externas.
+3. Escrita: fase posterior, com idempotency key = hash(cliente+serviço+início), reversão documentada e canário no contato autorizado.
+4. **Regra mantida:** o KHUB nunca confirma disponibilidade por conta própria; toda oferta de horário nasce de um probe fresco ou de cache com carimbo < N min.
 
 ## Riscos
-
-- Scraping quebra com mudança de layout do Avec (sem contrato).
-- Credencial web do salão em `~/.khub/avec.env` (fora do repo, ok).
-- Enquanto o Avec for a fonte oficial e o KHUB tiver agenda própria desatualizada, **qualquer "disponibilidade" calculada pelo KHUB é inválida** — a regra do master (KHUB = projeção/cache, nunca confirma sozinho) está violável hoje: `ver_agendamentos` calcula slots só com dados KHUB (BUG-039).
+- Endpoints internos sem contrato → podem mudar; o job precisa de healthcheck e fallback (degrada para "equipe confirma").
+- Sessão web expira → re-login headless com credencial em `~/.khub/avec.env` (fora do repo).
+- Escrita por endpoint interno pode contornar validações do Avec (comissão, comanda) → só após canário medido.

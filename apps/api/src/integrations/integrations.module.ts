@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { CrmModule } from '../crm/crm.module';
+import { RedesModule } from '../redes/redes.module';
 import { MetaLeadsService } from './meta-leads.service';
 import { CryptoService } from './crypto.service';
 import { MetaGraphClient, META_GRAPH } from './providers/meta-graph.client';
@@ -25,6 +26,9 @@ import { queueConnection, isWorker } from '../common/queue-connection';
     // integrations, então não há ciclo: quem tem a credencial busca o lead e
     // entrega para quem sabe criar contato.
     CrmModule,
+    // integrations -> redes (o simulador puxa posts do Instagram). Redes não
+    // importa integrations como módulo, então não há ciclo.
+    RedesModule,
   ],
   controllers: [IntegrationsController, AdsController, AdsSimuladorController, MetaWebhookController],
   providers: [

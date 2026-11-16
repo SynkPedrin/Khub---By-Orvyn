@@ -295,15 +295,21 @@ export function ResultadoSimulacaoPainel({ r, orcamentoDia, onOrcamento }: { r: 
     { rotulo: 'Investimento', valor: t.investimento, formatar: (v: number) => brl(v), sub: `${r.serie.length} dias · ${brl(orcamentoDia)}/dia` },
     { rotulo: r.resultadoNome[0].toUpperCase() + r.resultadoNome.slice(1), valor: t.resultados.p50, formatar: num, sub: `provável entre ${num(t.resultados.p10)} e ${num(t.resultados.p90)}`, destaque: true },
     { rotulo: 'Custo por resultado', valor: t.custoPorResultado.p50, formatar: cpr, sub: `entre ${cpr(t.custoPorResultado.p10)} e ${cpr(t.custoPorResultado.p90)}` },
+    ...(t.leadsQualificados
+      ? [
+          { rotulo: 'Leads qualificados', valor: t.leadsQualificados.p50, formatar: num, sub: `entre ${num(t.leadsQualificados.p10)} e ${num(t.leadsQualificados.p90)}` },
+          { rotulo: 'Custo por lead qualificado', valor: t.custoPorLeadQualificado!.p50, formatar: cpr, sub: `entre ${cpr(t.custoPorLeadQualificado!.p10)} e ${cpr(t.custoPorLeadQualificado!.p90)}` },
+        ]
+      : []),
     geraVenda
-      ? { rotulo: 'Receita estimada', valor: t.receita ?? 0, formatar: (v: number) => brl(v), sub: `${num(t.vendas)} vendas · ROAS ${(t.roas ?? 0).toFixed(1)}x` }
+      ? { rotulo: 'Receita estimada', valor: t.receita ?? 0, formatar: (v: number) => brl(v), sub: `${num(t.vendas)} vendas · ROAS ${(t.roas ?? 0).toFixed(1)}x${t.roas !== null && t.investimento > 0 ? ` · ROI ${(((t.receita ?? 0) - t.investimento) / t.investimento * 100).toFixed(0)}%` : ''}` }
       : { rotulo: 'Cliques no link', valor: t.cliques, formatar: num, sub: `CTR ${t.ctr.toFixed(2)}% · CPM ${brl(t.cpm)}` },
     { rotulo: 'Alcance', valor: t.alcance, formatar: compacto, sub: `frequência ${t.frequencia.toFixed(1)} · ${compacto(t.impressoes)} impressões` },
   ], [r, t, geraVenda, orcamentoDia]);
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className={`grid gap-3 sm:grid-cols-2 ${kpis.length > 5 ? 'xl:grid-cols-4 2xl:grid-cols-7' : 'xl:grid-cols-5'}`}>
         {kpis.map((k, i) => <Kpi key={k.rotulo} {...k} i={i} />)}
       </div>
 

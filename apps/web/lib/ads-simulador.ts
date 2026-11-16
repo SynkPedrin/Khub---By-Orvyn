@@ -33,6 +33,8 @@ export interface EntradaSimulacao {
   posicionamento: Posicionamento;
   ticketMedio: number;
   taxaFechamento: number;
+  /** % dos resultados que são lead qualificado (0–100). Vazio = 100. */
+  taxaQualificacao?: number;
   criativos: CriativoSim[];
   premissas?: { cpm?: number; ctr?: number; conversao?: number };
 }
@@ -45,7 +47,9 @@ export interface Dia { dia: number; gasto: number; impressoes: number; cliques: 
 
 export interface ResultadoCriativo {
   nome: string; nota: NotaCriativo; orcamentoDia: number; investimento: number; impressoes: number; alcance: number; frequencia: number;
-  cliques: number; ctr: number; cpc: number; cpm: number; resultados: Faixa; custoPorResultado: Faixa; vendas: number;
+  cliques: number; ctr: number; cpc: number; cpm: number; resultados: Faixa; custoPorResultado: Faixa;
+  leadsQualificados: Faixa | null; custoPorLeadQualificado: Faixa | null;
+  vendas: number;
   receita: number | null; roas: number | null; saidaAprendizado: number | null; chanceMelhor: number; serie: Dia[];
 }
 
@@ -55,7 +59,9 @@ export interface ResultadoSimulacao {
   base: { cpm: number; ctr: number; conversao: number; fonte: 'conta' | 'referencia' | 'mista' | 'manual'; pesoConta: number };
   total: {
     investimento: number; impressoes: number; alcance: number; frequencia: number; cliques: number; ctr: number; cpm: number;
-    resultados: Faixa; custoPorResultado: Faixa; vendas: number; receita: number | null; roas: number | null;
+    resultados: Faixa; custoPorResultado: Faixa;
+    leadsQualificados: Faixa | null; custoPorLeadQualificado: Faixa | null;
+    vendas: number; receita: number | null; roas: number | null;
   };
   criativos: ResultadoCriativo[];
   vencedor: string | null;
@@ -77,9 +83,83 @@ export const simulador = {
   simular: (e: EntradaSimulacao) => req<ResultadoSimulacao>('simular', { method: 'POST', body: JSON.stringify(e) }),
   analisar: (corpo: { objetivo: Objetivo; criativo: Omit<CriativoSim, 'notaVisualIa'>; negocio?: string; imagens: ImagemAnalise[] }) =>
     req<AnaliseIa>('analisar', { method: 'POST', body: JSON.stringify(corpo) }),
+  postsInstagram: () => req<PostsInstagramResp>('posts-instagram'),
+  biblioteca: (q: string, pais = 'BR') => req<BibliotecaResp>(`biblioteca?q=${encodeURIComponent(q)}&pais=${encodeURIComponent(pais)}`),
+  relatorio: (corpo: RelatorioEntrada) => req<RelatorioSimulacao>('relatorio', { method: 'POST', body: JSON.stringify(corpo) }),
 };
 
 export interface SimulacaoSalvaApi { id: string; nome: string; entrada: EntradaSimulacao; resumo: Record<string, unknown>; salvoEm: string }
+
+/* ------------------------------ posts do Instagram ------------------------------ */
+
+export interface SecaoStatus { status: 'ok' | 'sem_permissao' | 'token' | 'limite' | 'config' | 'sem_dados' | 'erro'; mensagem?: string; faltando?: string[]; doc?: string }
+
+export interface MetricasPostIg {
+  visualizacoes: number | null;
+  alcance: number | null;
+  curtidas: number | null;
+  comentarios: number | null;
+  compartilhamentos: number | null;
+  salvamentos: number | null;
+  engajamento: number | null;
+}
+
+export interface PostIg {
+  id: string;
+  tipo: string;
+  legenda: string;
+  miniatura: string | null;
+  link: string | null;
+  publicadoEm: string | null;
+  duracaoSeg: number | null;
+  metricas: MetricasPostIg;
+}
+
+export interface PostsInstagramResp {
+  conectado: boolean;
+  conta: string | null;
+  posts: PostIg[];
+  status: SecaoStatus;
+  metricasStatus: SecaoStatus;
+}
+
+/* ------------------------------ biblioteca de anúncios ------------------------------ */
+
+export interface AnuncioBiblioteca {
+  id: string;
+  pagina: string;
+  inicio: string | null;
+  fim: string | null;
+  textos: string[];
+  titulos: string[];
+  snapshotUrl: string | null;
+  plataformas: string[];
+}
+
+export interface BibliotecaResp { pesquisa: string; pais: string; anuncios: AnuncioBiblioteca[]; status: SecaoStatus }
+
+/* ------------------------------ relatório final ------------------------------ */
+
+export interface RelatorioSimulacao {
+  veredicto: string;
+  notaGeral: number;
+  resumo: string;
+  pontosFortes: string[];
+  riscos: string[];
+  melhorias: string[];
+  proximosPassos: string[];
+  modelo: string;
+  provedor: string;
+  geradoEm: string;
+}
+
+export interface RelatorioEntrada {
+  nome?: string;
+  negocio?: string;
+  entrada: EntradaSimulacao;
+  posts?: { tipo: string; engajamento: number | null; curtidas: number | null; comentarios: number | null; compartilhamentos: number | null; salvamentos: number | null; alcance: number | null }[];
+  biblioteca?: { pagina: string; texto: string; plataformas: string[] }[];
+}
 
 /** Simulações salvas na subconta (db/067). A tela cai no localStorage se a API falhar. */
 export const simuladorSalvas = {

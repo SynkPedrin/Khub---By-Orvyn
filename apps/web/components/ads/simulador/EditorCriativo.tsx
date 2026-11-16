@@ -66,7 +66,9 @@ export function EditorCriativo({
     setAnalisando(true);
     setErroIa(null);
     try {
-      const imagens = midia ? await framesParaAnalise(midia) : [];
+      // Mídia remota (miniatura do Instagram) pode ser bloqueada por CORS no
+      // canvas: nesse caso a análise segue só com o texto, sem derrubar o fluxo.
+      const imagens = midia ? await framesParaAnalise(midia).catch(() => []) : [];
       const { notaVisualIa: _ignorada, ...semNota } = criativo;
       void _ignorada;
       const r = await simulador.analisar({ objetivo, criativo: semNota, negocio, imagens });

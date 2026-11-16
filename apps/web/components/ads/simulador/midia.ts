@@ -2,12 +2,12 @@
 
 import type { ImagemAnalise } from '@/lib/ads-simulador';
 
-/** Mídia carregada no navegador (não sobe para o servidor, só os frames da análise). */
+/** Mídia carregada no navegador (não sobe para o servidor, só os frames da análise). Sem `arquivo` quando vem de URL remota (ex.: miniatura de post do Instagram). */
 export interface Midia {
   tipo: 'imagem' | 'video';
   url: string;
   nome: string;
-  arquivo: File;
+  arquivo?: File;
   segundos?: number;
   largura?: number;
   altura?: number;

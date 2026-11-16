@@ -19,5 +19,7 @@ import { FILA_REDES, RedesProcessor, RedesScheduler } from './redes.worker';
   imports: [BullModule.registerQueue({ name: FILA_REDES })],
   controllers: [RedesController, RedesConexaoController, RedesInstagramController],
   providers: [CryptoService, RedesHttp, RedesConexaoService, RedesService, RedesInstagramService, RedesPublicacaoService, RedesScheduler, ...(isWorker() ? [RedesProcessor] : [])],
+  // Conexão e HTTP também alimentam o simulador de campanhas (posts do Instagram).
+  exports: [RedesConexaoService, RedesHttp],
 })
 export class RedesModule {}

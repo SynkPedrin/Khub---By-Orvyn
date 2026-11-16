@@ -6,12 +6,15 @@ import { Icon } from '../icons';
 import { ApiError } from '@/lib/api-error';
 import {
   OBJETIVO_ROTULO, POSICIONAMENTO_ROTULO, PUBLICOS, simulador, simuladorSalvas,
-  type CriativoSim, type EntradaSimulacao, type Objetivo, type Posicionamento, type ResultadoSimulacao,
+  type AnuncioBiblioteca, type CriativoSim, type EntradaSimulacao, type Objetivo, type Posicionamento, type PostIg, type RelatorioSimulacao, type ResultadoSimulacao,
 } from '@/lib/ads-simulador';
 import { MetaLogoAnimado } from '../ads/MetaLogoAnimado';
 import { EditorCriativo } from '../ads/simulador/EditorCriativo';
 import { PreviewAnuncio } from '../ads/simulador/PreviewAnuncio';
 import { ResultadoSimulacaoPainel } from '../ads/simulador/ResultadoSimulacao';
+import { SeletorPostInstagram } from '../ads/simulador/SeletorPostInstagram';
+import { BibliotecaAnuncios } from '../ads/simulador/BibliotecaAnuncios';
+import { RelatorioFinalCarregando, RelatorioFinalPainel } from '../ads/simulador/RelatorioFinal';
 import type { Midia } from '../ads/simulador/midia';
 
 /**
@@ -28,7 +31,7 @@ import type { Midia } from '../ads/simulador/midia';
  * análise.
  */
 
-interface CriativoUi { id: string; c: CriativoSim; midia: Midia | null }
+interface CriativoUi { id: string; c: CriativoSim; midia: Midia | null; fonte: 'novo' | 'instagram'; origem: PostIg | null }
 interface Salva { id: string; nome: string; entrada: EntradaSimulacao; negocio: string; pagina: string; resumo: { resultados: number; cpr: number; nome: string; investimento: number }; salvoEm: string }
 
 const CHAVE = 'khub:ads-simulador:v2';
@@ -39,6 +42,7 @@ const GERA_VENDA: Record<Objetivo, boolean> = { mensagens: true, leads: true, co
 const FRASES = ['Entrando no leilão da Meta…', 'Passando pela fase de aprendizado…', 'Medindo cansaço do criativo…', 'Rodando 400 cenários…'];
 
 const criativoVazio = (letra: string): CriativoSim => ({ nome: `Criativo ${letra}`, formato: 'video', hook: '', copy: '', titulo: '', cta: 'enviar_mensagem', videoSegundos: 15, legendas: true, rosto: true, textoNaImagem: 'pouco' });
+const criativoUiVazio = (letra: string): CriativoUi => ({ id: uid(), c: criativoVazio(letra), midia: null, fonte: 'novo', origem: null });
 
 function lerSalvas(): Salva[] {
   try {
@@ -106,8 +110,8 @@ export function AdsSimulador() {
   const [nome, setNome] = useState('');
   const [negocio, setNegocio] = useState('');
   const [pagina, setPagina] = useState('');
-  const [campanha, setCampanha] = useState<Omit<EntradaSimulacao, 'criativos'>>({ objetivo: 'mensagens', orcamentoDia: 50, dias: 14, publico: 400_000, posicionamento: 'automatico', ticketMedio: 300, taxaFechamento: 20 });
-  const [criativos, setCriativos] = useState<CriativoUi[]>([{ id: uid(), c: criativoVazio('A'), midia: null }]);
+  const [campanha, setCampanha] = useState<Omit<EntradaSimulacao, 'criativos'>>({ objetivo: 'mensagens', orcamentoDia: 50, dias: 14, publico: 400_000, posicionamento: 'automatico', ticketMedio: 300, taxaFechamento: 20, taxaQualificacao: 100 });
+  const [criativos, setCriativos] = useState<CriativoUi[]>([criativoUiVazio('A')]);
   const [ativo, setAtivo] = useState(0);
   const [avancado, setAvancado] = useState(false);
   const [resultado, setResultado] = useState<ResultadoSimulacao | null>(null);
@@ -116,6 +120,10 @@ export function AdsSimulador() {
   const [frase, setFrase] = useState(0);
   const [erro, setErro] = useState<string | null>(null);
   const [salvoOk, setSalvoOk] = useState(false);
+  const [biblioteca, setBiblioteca] = useState<AnuncioBiblioteca[]>([]);
+  const [relatorio, setRelatorio] = useState<RelatorioSimulacao | null>(null);
+  const [gerandoRelatorio, setGerandoRelatorio] = useState(false);
+  const [erroRelatorio, setErroRelatorio] = useState<string | null>(null);
   const resultadoRef = useRef<HTMLDivElement>(null);
   const seq = useRef(0);
 
@@ -130,7 +138,7 @@ export function AdsSimulador() {
   // Libera os object URLs da mídia ao sair.
   const midiasRef = useRef<CriativoUi[]>(criativos);
   midiasRef.current = criativos;
-  useEffect(() => () => { midiasRef.current.forEach((x) => x.midia && URL.revokeObjectURL(x.midia.url)); }, []);
+  useEffect(() => () => { midiasRef.current.forEach((x) => x.midia?.arquivo && URL.revokeObjectURL(x.midia.url)); }, []);
 
   const entrada: EntradaSimulacao = useMemo(
     () => ({ ...campanha, criativos: criativos.map((x, i) => ({ ...x.c, nome: `Criativo ${LETRAS[i]}` })) }),
@@ -157,6 +165,7 @@ export function AdsSimulador() {
   // Depois da primeira simulação, cada mudança recalcula ao vivo.
   useEffect(() => {
     if (!resultado || simulando) return;
+    setRelatorio(null); // os números mudaram: o relatório anterior não vale mais
     const t = setTimeout(() => { void rodar(entrada, true); }, 650);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -169,27 +178,31 @@ export function AdsSimulador() {
   }, [simulando]);
 
   const novo = () => {
-    criativos.forEach((x) => x.midia && URL.revokeObjectURL(x.midia.url));
+    criativos.forEach((x) => x.midia?.arquivo && URL.revokeObjectURL(x.midia.url));
     setIdAtual(null);
     setNome('');
-    setCriativos([{ id: uid(), c: criativoVazio('A'), midia: null }]);
+    setCriativos([criativoUiVazio('A')]);
     setAtivo(0);
     setResultado(null);
     setErro(null);
+    setRelatorio(null);
+    setBiblioteca([]);
     setAberto(true);
   };
 
   const abrir = (s: Salva) => {
-    criativos.forEach((x) => x.midia && URL.revokeObjectURL(x.midia.url));
+    criativos.forEach((x) => x.midia?.arquivo && URL.revokeObjectURL(x.midia.url));
     const { criativos: cs, ...camp } = s.entrada;
     setIdAtual(s.id);
     setNome(s.nome);
     setNegocio(s.negocio);
     setPagina(s.pagina);
-    setCampanha(camp);
-    setCriativos(cs.map((c) => ({ id: uid(), c, midia: null })));
+    setCampanha({ taxaQualificacao: 100, ...camp });
+    setCriativos(cs.map((c) => ({ id: uid(), c, midia: null, fonte: 'novo' as const, origem: null })));
     setAtivo(0);
     setResultado(null);
+    setRelatorio(null);
+    setBiblioteca([]);
     setAberto(true);
     void rodar(s.entrada, false);
   };
@@ -235,21 +248,72 @@ export function AdsSimulador() {
   const setCriativo = (i: number, c: CriativoSim) => setCriativos((l) => l.map((x, j) => (j === i ? { ...x, c } : x)));
   const setMidia = (i: number, m: Midia | null) => setCriativos((l) => l.map((x, j) => {
     if (j !== i) return x;
-    if (x.midia && x.midia.url !== m?.url) URL.revokeObjectURL(x.midia.url);
+    if (x.midia?.arquivo && x.midia.url !== m?.url) URL.revokeObjectURL(x.midia.url);
     return { ...x, midia: m };
   }));
+  const setFonte = (i: number, fonte: 'novo' | 'instagram') => setCriativos((l) => l.map((x, j) => (j === i ? { ...x, fonte } : x)));
+  const escolherPost = (i: number, post: PostIg) => setCriativos((l) => l.map((x, j) => {
+    if (j !== i) return x;
+    const primeiraLinha = post.legenda.split('\n').map((linha) => linha.trim()).find(Boolean) ?? '';
+    const hook = primeiraLinha.split(/\s+/).slice(0, 14).join(' ').slice(0, 300);
+    return {
+      ...x,
+      fonte: 'instagram' as const,
+      origem: post,
+      midia: post.miniatura ? { tipo: 'imagem' as const, url: post.miniatura, nome: 'Post do Instagram' } : x.midia,
+      c: {
+        ...x.c,
+        formato: post.tipo === 'reels' || post.tipo === 'video' ? 'video' as const : post.tipo === 'carrossel' ? 'carrossel' as const : 'imagem' as const,
+        hook: hook || x.c.hook,
+        copy: post.legenda.slice(0, 3000) || x.c.copy,
+        videoSegundos: post.duracaoSeg ?? x.c.videoSegundos,
+        notaVisualIa: undefined,
+      },
+    };
+  }));
+  const desvincularPost = (i: number) => setCriativos((l) => l.map((x, j) => (j === i ? { ...x, origem: null } : x)));
   const variacao = () => {
     if (criativos.length >= 3) return;
     const base = criativos[ativo].c;
-    setCriativos((l) => [...l, { id: uid(), c: { ...base, nome: `Criativo ${LETRAS[l.length]}`, notaVisualIa: undefined }, midia: null }]);
+    setCriativos((l) => [...l, { id: uid(), c: { ...base, nome: `Criativo ${LETRAS[l.length]}`, notaVisualIa: undefined }, midia: null, fonte: 'novo' as const, origem: null }]);
     setAtivo(criativos.length);
   };
   const tirarVariacao = (i: number) => {
     if (criativos.length <= 1) return;
     const m = criativos[i].midia;
-    if (m) URL.revokeObjectURL(m.url);
+    if (m?.arquivo) URL.revokeObjectURL(m.url);
     setCriativos((l) => l.filter((_, j) => j !== i));
     setAtivo((a) => Math.max(0, a >= i ? a - 1 : a));
+  };
+
+  const gerarRelatorio = async () => {
+    if (!resultado || gerandoRelatorio) return;
+    setGerandoRelatorio(true);
+    setErroRelatorio(null);
+    try {
+      const r = await simulador.relatorio({
+        nome: nome.trim(),
+        negocio: negocio.trim(),
+        entrada,
+        posts: criativos.filter((x) => x.origem).map((x) => ({
+          tipo: x.origem!.tipo,
+          engajamento: x.origem!.metricas.engajamento,
+          curtidas: x.origem!.metricas.curtidas,
+          comentarios: x.origem!.metricas.comentarios,
+          compartilhamentos: x.origem!.metricas.compartilhamentos,
+          salvamentos: x.origem!.metricas.salvamentos,
+          alcance: x.origem!.metricas.alcance,
+        })),
+        biblioteca: biblioteca.slice(0, 5).map((a) => ({ pagina: a.pagina, texto: a.textos[0] ?? a.titulos[0] ?? '', plataformas: a.plataformas })),
+      });
+      setRelatorio(r);
+      setTimeout(() => document.getElementById('relatorio-final')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+    } catch (e) {
+      const cr = e instanceof ApiError ? e.configRequired : null;
+      setErroRelatorio(cr ? `Configure a IA (${cr.provider}: ${cr.missing.join(', ') || 'credencial'}) para gerar o relatório.` : e instanceof ApiError && e.status === 502 ? 'A IA não devolveu um relatório válido. Tente de novo.' : 'Não consegui gerar o relatório agora. Tente de novo.');
+    } finally {
+      setGerandoRelatorio(false);
+    }
   };
 
   const publicoPreset = PUBLICOS.some((p) => p.valor === campanha.publico);
@@ -349,10 +413,17 @@ export function AdsSimulador() {
                   <Segmentado id="pos" valor={campanha.posicionamento} onChange={(v: Posicionamento) => setCamp({ posicionamento: v })} opcoes={(Object.keys(POSICIONAMENTO_ROTULO) as Posicionamento[]).map((p) => ({ v: p, rotulo: p === 'automatico' ? 'Automático' : POSICIONAMENTO_ROTULO[p] }))} />
                 </div>
                 {GERA_VENDA[campanha.objetivo] && (
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
                     <div><Rotulo>Ticket médio (R$)</Rotulo><input type="number" min={0} className="input" value={campanha.ticketMedio} onChange={(e) => setCamp({ ticketMedio: Math.max(0, Number(e.target.value) || 0) })} /></div>
+                    <div>
+                      <Rotulo>Qualificação (%)</Rotulo>
+                      <input type="number" min={0} max={100} className="input" value={campanha.taxaQualificacao ?? 100} onChange={(e) => setCamp({ taxaQualificacao: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })} />
+                    </div>
                     <div><Rotulo>Fechamento (%)</Rotulo><input type="number" min={0} max={100} className="input" value={campanha.taxaFechamento} onChange={(e) => setCamp({ taxaFechamento: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })} /></div>
                   </div>
+                )}
+                {GERA_VENDA[campanha.objetivo] && (
+                  <p className="-mt-1.5 text-2xs text-muted">Dos {OBJETIVO_ROTULO[campanha.objetivo].toLowerCase()}, quantos % viram lead qualificado; dos qualificados, quantos % fecham. O ROI sai dessa cadeia.</p>
                 )}
                 <div className="grid grid-cols-2 gap-3">
                   <div><Rotulo>Nome da página</Rotulo><input className="input" value={pagina} onChange={(e) => setPagina(e.target.value)} placeholder="Clínica Exemplo" /></div>
@@ -405,6 +476,54 @@ export function AdsSimulador() {
                 </div>
                 {criativos.map((x, i) => (
                   <div key={x.id} hidden={i !== ativo}>
+                    {/* fonte do conteúdo: criar do zero ou puxar um post/reels real */}
+                    <div className="mb-3">
+                      <Rotulo>Conteúdo do anúncio</Rotulo>
+                      <Segmentado
+                        id={`fonte-${x.id}`}
+                        valor={x.fonte}
+                        onChange={(v) => setFonte(i, v)}
+                        opcoes={[{ v: 'novo' as const, rotulo: 'Criar novo' }, { v: 'instagram' as const, rotulo: 'Puxar do Instagram' }]}
+                      />
+                    </div>
+                    {x.fonte === 'instagram' && (
+                      <div className="mb-3">
+                        {x.origem ? (
+                          <div className="rounded-xl border border-brand/30 bg-brand/[0.04] p-3">
+                            <div className="flex items-start gap-3">
+                              {x.origem.miniatura ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={x.origem.miniatura} alt="" className="h-16 w-16 shrink-0 rounded-lg object-cover" />
+                              ) : (
+                                <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-surface3 text-muted"><Icon name="instagram" size={20} /></span>
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <p className="flex items-center gap-1.5 text-xs font-bold text-fg">
+                                  <Icon name="instagram" size={13} className="text-brand" />
+                                  {x.origem.tipo === 'reels' ? 'Reels' : x.origem.tipo === 'carrossel' ? 'Carrossel' : x.origem.tipo === 'video' ? 'Vídeo' : 'Post'} do Instagram
+                                  {x.origem.link && <a href={x.origem.link} target="_blank" rel="noreferrer" className="ml-auto flex items-center gap-1 text-2xs font-semibold text-brand hover:underline">ver post <Icon name="external" size={11} /></a>}
+                                </p>
+                                <p className="mt-0.5 text-2xs font-semibold uppercase tracking-wide text-muted">Engajamento real no orgânico</p>
+                                <div className="mt-1 grid grid-cols-3 gap-x-3 gap-y-1 text-2xs text-muted sm:grid-cols-6">
+                                  <span>Engaj. <b className="text-fg">{x.origem.metricas.engajamento != null ? `${x.origem.metricas.engajamento.toFixed(1)}%` : '-'}</b></span>
+                                  <span>Curtidas <b className="text-fg">{x.origem.metricas.curtidas ?? '-'}</b></span>
+                                  <span>Coment. <b className="text-fg">{x.origem.metricas.comentarios ?? '-'}</b></span>
+                                  <span>Compart. <b className="text-fg">{x.origem.metricas.compartilhamentos ?? '-'}</b></span>
+                                  <span>Salvos <b className="text-fg">{x.origem.metricas.salvamentos ?? '-'}</b></span>
+                                  <span>Alcance <b className="text-fg">{x.origem.metricas.alcance?.toLocaleString('pt-BR') ?? '-'}</b></span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="mt-2 flex gap-2 border-t border-line/60 pt-2">
+                              <button type="button" onClick={() => desvincularPost(i)} className="text-2xs font-semibold text-muted hover:text-fg">Trocar post</button>
+                              <span className="text-2xs text-faint">A legenda virou a copy e a nota do criativo entra na simulação. Edite à vontade abaixo.</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <SeletorPostInstagram onEscolher={(p) => escolherPost(i, p)} />
+                        )}
+                      </div>
+                    )}
                     <EditorCriativo criativo={x.c} midia={x.midia} objetivo={campanha.objetivo} negocio={negocio} onChange={(c) => setCriativo(i, c)} onMidia={(m) => setMidia(i, m)} />
                   </div>
                 ))}
@@ -418,6 +537,11 @@ export function AdsSimulador() {
               </section>
             </div>
 
+            {/* biblioteca de anúncios (referência de concorrência, entra no relatório) */}
+            <div className="mt-5">
+              <BibliotecaAnuncios negocio={negocio} onResultado={setBiblioteca} />
+            </div>
+
             {/* ação */}
             <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface2/60 px-4 py-3">
               <p className="text-xs text-muted">
@@ -425,6 +549,11 @@ export function AdsSimulador() {
                 {resultado && <span className="ml-1 text-faint">Atualiza sozinho enquanto você edita.</span>}
               </p>
               <div className="flex items-center gap-2">
+                {resultado && (
+                  <motion.button whileTap={{ scale: 0.96 }} type="button" onClick={gerarRelatorio} disabled={gerandoRelatorio} className="btn btn-ghost text-sm disabled:opacity-60">
+                    <Icon name="sparkles" size={15} /> {gerandoRelatorio ? 'Gerando…' : relatorio ? 'Refazer relatório' : 'Relatório final'}
+                  </motion.button>
+                )}
                 {resultado && (
                   <motion.button whileTap={{ scale: 0.96 }} type="button" onClick={salvar} className="btn btn-ghost text-sm">
                     <Icon name={salvoOk ? 'check' : 'download'} size={15} /> {salvoOk ? 'Salva' : 'Salvar simulação'}
@@ -457,6 +586,11 @@ export function AdsSimulador() {
                       {(recalculando || simulando) && <span className="flex items-center gap-1.5 text-2xs text-muted"><MetaLogoAnimado size={14} simulando comFundo={false} /> recalculando</span>}
                     </div>
                     <ResultadoSimulacaoPainel r={resultado} orcamentoDia={campanha.orcamentoDia} onOrcamento={(v) => setCamp({ orcamentoDia: v })} />
+                    <div id="relatorio-final" className="scroll-mt-4">
+                      {gerandoRelatorio && <RelatorioFinalCarregando />}
+                      {erroRelatorio && !gerandoRelatorio && <p className="mt-4 rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">{erroRelatorio}</p>}
+                      {relatorio && !gerandoRelatorio && <RelatorioFinalPainel r={relatorio} />}
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>

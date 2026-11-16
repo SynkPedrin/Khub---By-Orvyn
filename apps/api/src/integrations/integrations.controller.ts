@@ -83,6 +83,22 @@ export class AdsSimuladorController {
     return this.sim.analisar(tenantId, corpo);
   }
 
+  @Get('posts-instagram')
+  postsInstagram(@TenantId() tenantId: string) {
+    return this.sim.postsInstagram(tenantId);
+  }
+
+  @Get('biblioteca')
+  biblioteca(@TenantId() tenantId: string, @Query('q') q?: string, @Query('pais') pais?: string) {
+    return this.sim.biblioteca(tenantId, q ?? '', pais);
+  }
+
+  @Post('relatorio')
+  @HttpCode(200)
+  relatorio(@TenantId() tenantId: string, @Body() corpo: unknown) {
+    return this.sim.relatorio(tenantId, corpo);
+  }
+
   @Get('simulacoes')
   listarSalvas(@TenantId() tenantId: string) {
     return this.sim.listarSalvas(tenantId);
