@@ -16,19 +16,42 @@ export function brl(v: number): string {
 const req = clienteApi('/api/crm/');
 
 export interface ContagemOrigem { total: number; mes: number; semana: number }
+export type PeriodoDashboard = '7d' | '30d' | '90d';
+/** KPI do mockup: total histórico + movimento do período + série diária (sparkline). */
+export interface KpiPeriodo {
+  total: number;
+  noPeriodo: number;
+  /** % vs. período anterior; null = sem base (período anterior zerado). */
+  delta: number | null;
+  serie: { dia: string; valor: number }[];
+}
 export interface Overview {
+  periodo?: PeriodoDashboard;
   /** `negocios`/`valorFunil` = só ABERTOS do funil principal; `conversaoBase` diz de onde veio a taxa. */
   kpis: {
     contatos: number; negocios: number; valorFunil: number; ganho: number; conversao: number; conversaoBase?: 'fechados' | 'etapa_final' | null;
     /** Contagem de negócios ganhos/perdidos do funil principal (base honesta da conversão, Q1.9). Opcional até a API enviar. */
     ganhos?: number; perdidos?: number;
+    /** KPIs do mockup do Dashboard (opcionais até a API nova ir ao ar). */
+    leads?: KpiPeriodo; conversas?: KpiPeriodo; agendamentos?: KpiPeriodo; receita?: KpiPeriodo;
   };
   /** Leads que vieram de anúncio (atribuição da entrada; contato antigo usa o texto de origem). */
   leadsPorOrigem?: { meta: ContagemOrigem; google: ContagemOrigem };
   funilNome?: string | null;
-  funil: { id: string; nome: string; cor: string; total: number; valor: number }[];
+  /** `novos`/`deltaNovos` = negócios criados no período vs. período anterior; `pct` = fatia dos abertos. */
+  funil: { id: string; nome: string; cor: string; total: number; valor: number; novos?: number; deltaNovos?: number | null; pct?: number }[];
   /** Receita fechada por mês (AAAA-MM), últimos 6 meses com zeros. */
   receitaMensal?: { mes: string; valor: number }[];
+  /** Receita fechada por dia no período — gráfico "Desempenho Geral". */
+  receitaSerie?: { dia: string; valor: number }[];
+  /** Rosca "Fontes de Leads": grupos fixos (Meta Ads, Google Ads, Indicação, Orgânico, Outros). */
+  fontes?: { rotulo: string; valor: number; pct: number }[];
+  /** Barras "Receita por Canal": receita ganha no período por grupo de fonte. */
+  receitaPorCanal?: { canal: string; valor: number; pct: number }[];
+  /** Insights determinísticos (sem LLM) calculados no servidor a partir dos números reais. */
+  insights?: { icone: 'chart' | 'leads' | 'check2' | 'clock'; texto: string }[];
+  /** Meta de receita do trimestre (settings do tenant) + realizado; null = não definida. */
+  meta?: { valor: number; realizado: number } | null;
   atividades: { actor: string; acao: string; tone: string; createdAt: string }[];
   contatosRecentes: { id: string; nome: string; tag: string; valor: number }[];
 }
@@ -138,7 +161,9 @@ export interface SearchResult {
 }
 
 export const crm = {
-  overview: () => req<Overview>('overview'),
+  overview: (periodo?: PeriodoDashboard) => req<Overview>(`overview${periodo ? `?periodo=${periodo}` : ''}`),
+  /** Meta de receita do trimestre (card "Meta em foco" do Dashboard). */
+  definirMetaReceita: (valor: number) => req<{ ok: boolean; valor: number }>('overview/meta', { method: 'PATCH', body: JSON.stringify({ valor }) }),
   search: (q: string) => req<SearchResult[]>(`search?q=${encodeURIComponent(q)}`),
   pipeline: (pipelineId?: string) => req<PipelineData>(`pipeline${pipelineId ? `?pipelineId=${encodeURIComponent(pipelineId)}` : ''}`),
 

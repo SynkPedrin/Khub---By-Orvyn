@@ -183,6 +183,63 @@ export function AreaReceita({
 }
 
 /* ------------------------------------------------------------------ */
+/* Sparkline — mini-tendência dentro do cartão de KPI                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Linha de tendência sem eixos, para o rodapé do KPI (mockup do Dashboard).
+ * Não é gráfico de análise: comunica direção, não valor — por isso sem
+ * tooltip e sem grade. Padding vertical para o traço nunca encostar na borda.
+ */
+export function Sparkline({
+  dados,
+  cor = 'var(--brand)',
+  altura = 44,
+  className,
+}: {
+  dados: number[];
+  cor?: string;
+  altura?: number;
+  className?: string;
+}) {
+  const id = useId();
+  if (dados.length < 2) return null;
+  const max = Math.max(...dados);
+  const min = Math.min(...dados);
+  const amplitude = max - min || 1;
+  const passo = 100 / (dados.length - 1);
+  const pts = dados.map((v, i) => `${i * passo},${96 - ((v - min) / amplitude) * 88}`).join(' ');
+
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      style={{ height: altura }}
+      className={cx('w-full', className)}
+      role="img"
+      aria-label={`Tendência do período: de ${numero(dados[0])} a ${numero(dados[dados.length - 1])}`}
+    >
+      <defs>
+        <linearGradient id={`spark-${id}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={cor} stopOpacity="0.22" />
+          <stop offset="100%" stopColor={cor} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <polygon points={`0,100 ${pts} 100,100`} fill={`url(#spark-${id})`} />
+      <polyline
+        points={pts}
+        fill="none"
+        stroke={cor}
+        strokeWidth="2.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Barras verticais — receita por canal (sequencial, um hue)           */
 /* ------------------------------------------------------------------ */
 
