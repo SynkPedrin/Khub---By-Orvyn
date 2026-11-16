@@ -1,0 +1,35 @@
+# Mantém a API de produção (Render, plano gratuito) acordada.
+# O plano gratuito dorme após 15 min sem tráfego e leva ~1 min para acordar;
+# o Stevo (WhatsApp) espera só 10 s, então mensagem que chega com a API dormindo
+# falha e, após várias falhas, o Stevo desativa o webhook. Por isso o ping é a
+# cada 5 min (bem abaixo dos 15), com folga para os atrasos do agendador do GitHub.
+# Falha do job (API sem responder 200 em 3 tentativas) gera aviso por e-mail do GitHub.
+name: Manter API acordada
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: manter-api-acordada
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Ping /v1/ready
+        run: |
+          URL="https://khub-api-ucey.onrender.com/v1/ready"
+          for i in 1 2 3; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 90 "$URL" || echo 000)
+            if [ "$code" = "200" ]; then echo "API acordada (HTTP 200)"; exit 0; fi
+            echo "tentativa $i: HTTP $code"
+            sleep 20
+          done
+          echo "::error::A API não respondeu 200 em 3 tentativas"
+          exit 1
