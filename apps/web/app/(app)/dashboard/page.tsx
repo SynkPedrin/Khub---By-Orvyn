@@ -22,7 +22,8 @@ import {
   VALOR_PIPELINE,
 } from '@/lib/demo/dataset';
 import { EmptyState, ErrorState } from '@/components/revenue/States';
-import { crm, type KpiPeriodo, type Overview, type PeriodoDashboard, type Tarefa } from '@/lib/crm';
+import { crm, type KpiPeriodo, type Overview, type PeriodoDashboard } from '@/lib/crm';
+import { nyro, type Insight as InsightNico } from '@/lib/nyro';
 import { useRealtime } from '@/lib/realtime';
 
 /**
@@ -106,8 +107,9 @@ function AbasPeriodo({ periodo, onChange }: { periodo: PeriodoDashboard; onChang
 /**
  * Dashboard com dado REAL do tenant — consulta `crm.overview(periodo)`
  * (KPIs com série diária e delta honesto, funil por etapa, fontes de lead,
- * receita por canal, insights — tudo calculado no banco, nunca chumbado)
- * e `crm.tasks('hoje')`.
+ * receita por canal — tudo calculado no banco, nunca chumbado) e os
+ * insights que a NICO nota sozinha (`nyro.insights()`, cache de 5 min no
+ * servidor: campanhas, cobranças, automações, conversas paradas).
  *
  * Tempo real: os eventos de domínio do tenant (contato, negócio, mensagem,
  * agenda, pagamento) disparam um refetch com debounce; um polling de 60s
@@ -115,17 +117,21 @@ function AbasPeriodo({ periodo, onChange }: { periodo: PeriodoDashboard; onChang
  */
 function DashboardReal({ periodo, onPeriodo }: { periodo: PeriodoDashboard; onPeriodo: (p: PeriodoDashboard) => void }) {
   const [overview, setOverview] = useState<Overview | null>(null);
-  const [tarefas, setTarefas] = useState<Tarefa[] | null>(null);
+  const [insightsNico, setInsightsNico] = useState<InsightNico[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
 
   const carregar = useCallback(() => {
     setErro(null);
-    Promise.all([crm.overview(periodo), crm.tasks('hoje')])
-      .then(([o, t]) => {
-        setOverview(o);
-        setTarefas(t);
-      })
+    // A NICO é independente do overview: sem módulo de IA ou com a análise
+    // indisponível, a seção cai nos insights determinísticos do overview.
+    nyro
+      .insights()
+      .then(setInsightsNico)
+      .catch(() => setInsightsNico(null));
+    crm
+      .overview(periodo)
+      .then(setOverview)
       .catch(() => setErro('Não consegui carregar os dados agora.'))
       .finally(() => setCarregando(false));
   }, [periodo]);
@@ -239,24 +245,41 @@ function DashboardReal({ periodo, onPeriodo }: { periodo: PeriodoDashboard; onPe
         </Section>
       </div>
 
-      <div className="mb-6 grid items-stretch gap-4 xl:grid-cols-3">
+      <div className="mb-6 grid items-stretch gap-4 xl:grid-cols-2">
         <Section
-          title="Insights Inteligentes"
-          info={`Baseado nos seus dados dos últimos ${rotuloDias} dias`}
+          title="Insights da NICO"
+          info="A NICO analisa sua operação continuamente"
           action={
-            <Link href="/analytics" className="flex items-center gap-1 text-[13px] font-medium text-brand hover:underline">
-              Ver detalhes <Icon name="arrowRight" size={14} />
+            <Link href="/nyro" className="flex items-center gap-1 text-[13px] font-medium text-brand hover:underline">
+              Conversar com a NICO <Icon name="arrowRight" size={14} />
             </Link>
           }
         >
-          {!overview.insights || overview.insights.length === 0 ? (
-            <VazioCompacto
-              icon="ai"
-              title="Ainda sem insights"
-              description="A NICO analisa pipeline, leads e conversas para sugerir ações quando houver mais atividade."
-              cta={{ href: '/nyro', label: 'Perguntar à NICO' }}
-            />
-          ) : (
+          {insightsNico && insightsNico.length > 0 ? (
+            <ul className="space-y-3">
+              {insightsNico.map((i) => (
+                <li key={i.id}>
+                  <Link
+                    href={`/nyro?q=${encodeURIComponent(i.pergunta)}`}
+                    className="group flex items-start gap-3 rounded-xl border border-line bg-surface p-3.5 transition-colors hover:border-brand-border hover:bg-brand-softer"
+                  >
+                    <span className={cx('icon-tile h-9 w-9 shrink-0', tomDaGravidade(i.gravidade))}>
+                      <Icon name={iconeDaGravidade(i.gravidade)} size={16} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13.5px] font-medium text-fg">{i.titulo}</span>
+                      <span className="mt-0.5 block text-xs leading-relaxed text-muted">{i.detalhe}</span>
+                      <span className="mt-1.5 inline-flex items-center gap-1 text-[12.5px] font-medium text-brand">
+                        Resolver com a NICO <Icon name="arrowRight" size={13} />
+                      </span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : overview.insights && overview.insights.length > 0 ? (
+            // Sem a análise da NICO (módulo de IA desligado), ficam os
+            // insights determinísticos calculados dos mesmos números reais.
             <ul className="space-y-3.5">
               {overview.insights.map((i, idx) => (
                 <li key={idx} className="flex items-start gap-2.5">
@@ -267,6 +290,13 @@ function DashboardReal({ periodo, onPeriodo }: { periodo: PeriodoDashboard; onPe
                 </li>
               ))}
             </ul>
+          ) : (
+            <VazioCompacto
+              icon="ai"
+              title="Ainda sem insights"
+              description="A NICO analisa pipeline, campanhas, cobranças e conversas para sugerir ações quando houver mais atividade."
+              cta={{ href: '/nyro', label: 'Perguntar à NICO' }}
+            />
           )}
         </Section>
 
@@ -293,55 +323,6 @@ function DashboardReal({ periodo, onPeriodo }: { periodo: PeriodoDashboard; onPe
                     <p className="truncate text-xs text-muted">{a.actor}</p>
                   </div>
                   <Quando data={a.createdAt} className="shrink-0 text-xs text-muted" />
-                </li>
-              ))}
-            </ul>
-          )}
-        </Section>
-
-        <Section
-          title="Próximas Tarefas"
-          action={
-            <Link href="/tarefas" className="flex items-center gap-1 text-[13px] font-medium text-brand hover:underline">
-              Ver tarefas <Icon name="arrowRight" size={14} />
-            </Link>
-          }
-          bodyClassName="p-0"
-        >
-          {!tarefas || tarefas.length === 0 ? (
-            <VazioCompacto
-              icon="check2"
-              title="Nada vencendo hoje"
-              description="Tarefas com prazo para hoje aparecem aqui."
-              cta={{ href: '/tarefas', label: 'Criar tarefa' }}
-            />
-          ) : (
-            <ul className="divide-y divide-line">
-              {tarefas.map((t) => (
-                <li key={t.id} className="flex items-start gap-3 px-5 py-3">
-                  <button
-                    type="button"
-                    onClick={() => crm.toggleTask(t.id).then(carregar)}
-                    aria-label={t.status === 'concluida' ? `Reabrir "${t.titulo}"` : `Concluir "${t.titulo}"`}
-                    className={cx(
-                      'mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border transition-colors',
-                      t.status === 'concluida' ? 'border-brand bg-brand text-white' : 'border-line-strong hover:border-brand',
-                    )}
-                  >
-                    {t.status === 'concluida' && <Icon name="check" size={11} strokeWidth={3} />}
-                  </button>
-                  <div className="min-w-0 flex-1">
-                    <p className={cx('truncate text-[13.5px] font-medium', t.status === 'concluida' ? 'text-muted line-through' : 'text-fg')}>
-                      {t.titulo}
-                    </p>
-                    {t.dueAt && (
-                      <p className={cx('truncate text-xs', t.atrasada ? 'font-medium text-danger' : 'text-muted')}>
-                        {t.atrasada ? 'Atrasada · ' : 'Hoje · '}
-                        {hora(t.dueAt)}
-                      </p>
-                    )}
-                  </div>
-                  {t.prioridade === 'alta' && <span className="pill pill-warning shrink-0">Alta</span>}
                 </li>
               ))}
             </ul>
@@ -507,7 +488,20 @@ function CardDesempenho({ overview }: { overview: Overview }) {
   );
 }
 
-/** "Meta em foco": meta de receita do trimestre (definida pelo tenant) + realizado. */
+/** Gravidade do insight da NICO → ícone e tom do tile. */
+function iconeDaGravidade(g: InsightNico['gravidade']): IconName {
+  return g === 'alta' ? 'flame' : g === 'media' ? 'zap' : 'info';
+}
+function tomDaGravidade(g: InsightNico['gravidade']): string {
+  return g === 'alta' ? 'icon-tile-danger' : g === 'media' ? 'icon-tile-warning' : 'icon-tile-neutral';
+}
+
+/**
+ * "Meta em foco": meta de receita do trimestre (definida pelo tenant) +
+ * realizado. O degradê é escuro de propósito e NÃO usa tokens de tema: a
+ * marca do produto é clara (lima) no tema claro e texto branco sobre ela
+ * não tinha contraste — o card precisa ler bem nos dois temas.
+ */
 function CardMeta({ meta, onMudou }: { meta: { valor: number; realizado: number } | null; onMudou: () => void }) {
   const [editando, setEditando] = useState(false);
   const [valor, setValor] = useState('');
@@ -532,7 +526,7 @@ function CardMeta({ meta, onMudou }: { meta: { valor: number; realizado: number 
   return (
     <section
       className="card relative flex min-w-0 flex-col overflow-hidden p-5 text-white"
-      style={{ background: 'linear-gradient(140deg, var(--brand) 0%, color-mix(in srgb, var(--brand-2) 55%, #12002b) 100%)' }}
+      style={{ background: 'linear-gradient(140deg, #3b1478 0%, #1a0533 55%, #0d0118 100%)' }}
     >
       <p className="flex items-center gap-2 text-[13px] font-medium text-white/85">
         <Icon name="bolt" size={15} />

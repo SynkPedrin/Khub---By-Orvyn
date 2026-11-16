@@ -82,29 +82,40 @@ export function dividirPeriodos(rows: { dia: string; valor: number }[], inicio: 
 /* Fontes de lead → grupos do mockup                                   */
 /* ------------------------------------------------------------------ */
 
-export type GrupoFonte = 'Meta Ads' | 'Google Ads' | 'Indicação' | 'Orgânico' | 'Outros';
+export type GrupoFonte = 'Meta Ads' | 'Google Ads' | 'Tráfego Pago' | 'Indicação' | 'Orgânico' | 'Importação' | 'Outros';
 
-export const ORDEM_GRUPOS: GrupoFonte[] = ['Meta Ads', 'Google Ads', 'Indicação', 'Orgânico', 'Outros'];
+export const ORDEM_GRUPOS: GrupoFonte[] = ['Meta Ads', 'Google Ads', 'Tráfego Pago', 'Indicação', 'Orgânico', 'Importação', 'Outros'];
+
+/** A rosca do mockup tem no máximo 4 fatias; o resto vira "Outros". */
+export const MAX_FATIAS = 4;
 
 /**
  * Grupo de exibição da fonte de UM contato. Prioridade: atribuição gravada
- * na entrada (db/066); sem ela, o texto legado de `origem` (mesma regra do
- * card "Leads do Meta Ads" do overview).
+ * na entrada (db/066); sem ela, o texto legado de `origem` — que na base
+ * real aparece como "importacao", "Avec", "Instagram", "Meta Ads",
+ * "Tráfego"… (o que a primeira versão não reconhecia: 97% caía em Outros).
  */
 export function grupoDaFonte(fonte: string | null | undefined, origem: string | null | undefined): GrupoFonte {
   const f = (fonte ?? '').trim();
   if (f === 'meta_ads') return 'Meta Ads';
   if (f === 'google_ads') return 'Google Ads';
   if (f === 'indicacao') return 'Indicação';
-  if (['whatsapp_direto', 'instagram_direto', 'messenger_direto', 'formulario', 'importacao', 'manual'].includes(f)) return 'Orgânico';
+  if (f === 'importacao') return 'Importação';
+  if (['whatsapp_direto', 'instagram_direto', 'messenger_direto', 'formulario', 'manual'].includes(f)) return 'Orgânico';
   if (f) return 'Outros'; // tiktok_ads, desconhecida…
 
   const o = (origem ?? '').toLowerCase();
   if (!o) return 'Outros';
+  // Import primeiro: "importacao" e sistemas antigos (Avec) não dizem a
+  // origem real do lead — rótulo honesto é "veio de uma importação".
+  if (/(importa|avec|csv|planilha|ghl)/.test(o)) return 'Importação';
   if (/(meta|facebook|instagram ads|lead ads|fb ads)/.test(o)) return 'Meta Ads';
   if (/(google|gclid|adwords)/.test(o)) return 'Google Ads';
+  // "Tráfego" sozinho (rótulo comum de import do GHL) = anúncio sem plataforma
+  // identificada; separar de Meta/Google é o que a base permite afirmar.
+  if (/tr[áa]fego/.test(o)) return 'Tráfego Pago';
   if (/indica/.test(o)) return 'Indicação';
-  if (/(whatsapp|site|formul|organico|orgânico|instagram)/.test(o)) return 'Orgânico';
+  if (/(whatsapp|instagram|messenger|site|formul|organico|orgânico|agendamento)/.test(o)) return 'Orgânico';
   return 'Outros';
 }
 
@@ -115,8 +126,9 @@ export interface FatiaFonte {
 }
 
 /**
- * Agrega linhas `{ fonte, origem, total }` nos grupos do mockup, na ordem
- * fixa, com percentual inteiro. Grupos zerados não aparecem.
+ * Agrega linhas `{ fonte, origem, total }` nos grupos do mockup, com
+ * percentual inteiro. Mais de 4 grupos com dado: ficam os 4 maiores e o
+ * resto soma em "Outros" (limite visual da rosca, ver charts.tsx).
  */
 export function agruparFontes(rows: { fonte: string; origem: string; total: number }[]): FatiaFonte[] {
   const soma = new Map<GrupoFonte, number>();
@@ -127,11 +139,16 @@ export function agruparFontes(rows: { fonte: string; origem: string; total: numb
     geral += r.total;
   }
   if (geral <= 0) return [];
-  return ORDEM_GRUPOS.filter((g) => (soma.get(g) ?? 0) > 0).map((g) => ({
-    rotulo: g,
-    valor: soma.get(g)!,
-    pct: Math.round(((soma.get(g)! / geral) * 1000) / 10),
-  }));
+  const presentes = ORDEM_GRUPOS.filter((g) => (soma.get(g) ?? 0) > 0).sort((a, b) => (soma.get(b)! - soma.get(a)! || ORDEM_GRUPOS.indexOf(a) - ORDEM_GRUPOS.indexOf(b)));
+  const visiveis = presentes.slice(0, MAX_FATIAS);
+  const resto = presentes.slice(MAX_FATIAS).reduce((s, g) => s + soma.get(g)!, 0);
+  const fatias = visiveis.map((g) => ({ rotulo: g, valor: soma.get(g)! }));
+  if (resto > 0) {
+    const i = fatias.findIndex((f) => f.rotulo === 'Outros');
+    if (i >= 0) fatias[i] = { rotulo: 'Outros', valor: fatias[i].valor + resto };
+    else fatias.push({ rotulo: 'Outros', valor: resto });
+  }
+  return fatias.map((f) => ({ ...f, pct: Math.round(((f.valor / geral) * 1000) / 10) }));
 }
 
 /* ------------------------------------------------------------------ */

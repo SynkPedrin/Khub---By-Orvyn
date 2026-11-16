@@ -65,6 +65,7 @@ describe('dashboard (regras puras)', () => {
       expect(grupoDaFonte('meta_ads', 'Qualquer coisa')).toBe('Meta Ads');
       expect(grupoDaFonte('google_ads', null)).toBe('Google Ads');
       expect(grupoDaFonte('indicacao', null)).toBe('Indicação');
+      expect(grupoDaFonte('importacao', 'Meta Ads')).toBe('Importação');
       expect(grupoDaFonte('whatsapp_direto', null)).toBe('Orgânico');
       expect(grupoDaFonte('formulario', null)).toBe('Orgânico');
       expect(grupoDaFonte('tiktok_ads', null)).toBe('Outros');
@@ -73,14 +74,24 @@ describe('dashboard (regras puras)', () => {
     it('sem atribuição, infere pelo texto legado de origem', () => {
       expect(grupoDaFonte(null, 'Meta Lead Ads')).toBe('Meta Ads');
       expect(grupoDaFonte(null, 'google ads')).toBe('Google Ads');
+      expect(grupoDaFonte(null, 'Tráfego')).toBe('Tráfego Pago');
+      expect(grupoDaFonte(null, 'trafego pago')).toBe('Tráfego Pago');
       expect(grupoDaFonte(null, 'Indicação da Maria')).toBe('Indicação');
       expect(grupoDaFonte(null, 'WhatsApp')).toBe('Orgânico');
+      expect(grupoDaFonte(null, 'Instagram')).toBe('Orgânico');
       expect(grupoDaFonte(null, 'Panfleto')).toBe('Outros');
       expect(grupoDaFonte(null, null)).toBe('Outros');
     });
+
+    it('valores reais da base importada: "importacao" e "Avec" são Importação, não Outros', () => {
+      expect(grupoDaFonte(null, 'importacao')).toBe('Importação');
+      expect(grupoDaFonte(null, 'Avec')).toBe('Importação');
+      expect(grupoDaFonte(null, 'Formulário: Contato QA')).toBe('Orgânico');
+      expect(grupoDaFonte(null, 'Agendamento: Consulta QA')).toBe('Orgânico');
+    });
   });
 
-  it('agruparFontes soma por grupo, na ordem fixa, sem grupo zerado', () => {
+  it('agruparFontes soma por grupo, ordenado do maior para o menor', () => {
     const f = agruparFontes([
       { fonte: 'meta_ads', origem: '', total: 68 },
       { fonte: 'google_ads', origem: '', total: 18 },
@@ -94,6 +105,22 @@ describe('dashboard (regras puras)', () => {
       ['Orgânico', 5, 5],
     ]);
     expect(agruparFontes([])).toEqual([]);
+  });
+
+  it('mais de 4 grupos: ficam os 4 maiores e o resto vira Outros (limite da rosca)', () => {
+    const f = agruparFontes([
+      { fonte: '', origem: 'importacao', total: 3310 },
+      { fonte: '', origem: 'Avec', total: 3222 },
+      { fonte: '', origem: 'Instagram', total: 56 },
+      { fonte: '', origem: 'Meta Ads', total: 26 },
+      { fonte: '', origem: 'Indicação', total: 22 },
+      { fonte: '', origem: 'Google Ads', total: 21 },
+      { fonte: '', origem: 'Tráfego', total: 10 },
+    ]);
+    expect(f.map((x) => x.rotulo)).toEqual(['Importação', 'Orgânico', 'Meta Ads', 'Indicação', 'Outros']);
+    // Google Ads (21) e Tráfego Pago (10) dobraram em Outros.
+    expect(f.find((x) => x.rotulo === 'Outros')!.valor).toBe(31);
+    expect(f.reduce((s, x) => s + x.valor, 0)).toBe(6667);
   });
 
   describe('construirInsights', () => {
