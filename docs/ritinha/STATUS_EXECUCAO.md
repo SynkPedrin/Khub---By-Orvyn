@@ -34,7 +34,8 @@ Ver `AUDITORIA_INICIAL.md`. Achados-chave: Ritinha fora da linha de frente (padr
 
 - Pedido do dono: agenda legível mesmo com muitos atendimentos no dia, histórico acessível, financeiro com gestão de todo o fluxo de caixa.
 - Implementado (commit `158189a`): Resumo do dia com mini-trilhas por profissional, ocupação no cabeçalho da Equipe, calor por dia no Mês, stepper de mês no Financeiro, gráfico diário entradas×saídas + saldo acumulado.
-- Verificação: vitest 250/250 (9 novos), tsc limpo, lint limpo. Deploy web disparado (`vercel deploy --prod`).
+- Verificação: vitest 250/250 (9 novos), tsc limpo, lint limpo.
+- **Deploy web em produção (16/11 ~15h47 UTC):** `vercel deploy --prod` Ready, alias `app.kromads.com.br` (⚠️ DNS do domínio próprio não resolve — acesso por `https://khub-os.vercel.app`). Conteúdo verificado ao vivo: chunk de `/agenda` contém o ResumoDia; chunk de `/financeiro` contém o gráfico "saldo acumulado". Branch `feat/ritinha-avec-go-live` enviada ao GitHub.
 - Nota: Pedro adicionou `.github/workflows/manter-api-acordada.yml` (ping 5 min no Render) — mitiga o sono do plano free; plano pago segue recomendado para o SLA.
 
 ---
