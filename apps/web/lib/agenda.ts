@@ -1,6 +1,7 @@
 'use client';
 
 import { clienteApi } from './session-fetch';
+import type { ResultadoImportacao } from './financeiro';
 
 /**
  * Cliente autenticado deste módulo.
@@ -31,6 +32,22 @@ export interface Compromisso {
   confirmadoEm: string | null;
   faltouEm: string | null;
   lembreteEnviadoEm: string | null;
+  /** Valor do atendimento em centavos: ao concluir, vira entrada no financeiro. */
+  valorCentavos: number | null;
+  /** Catálogo (db/071): quem atende e o serviço. */
+  profissionalId?: string | null;
+  servicoId?: string | null;
+  /** Vêm prontos na lista (sem buscar contato por contato). */
+  contatoNome?: string | null;
+  contatoTelefone?: string | null;
+  profissionalNome?: string | null;
+  servicoNome?: string | null;
+}
+
+export interface ProfissionalAgenda {
+  id: string;
+  nome: string;
+  especialidade: string | null;
 }
 
 export interface NovoCompromisso {
@@ -42,6 +59,7 @@ export interface NovoCompromisso {
   notas?: string;
   tipo?: TipoAgenda;
   responsavelId?: string | null;
+  valorCentavos?: number | null;
 }
 
 /** PATCH parcial (arrastar, redimensionar, reagendar). `null` limpa o campo. */
@@ -52,11 +70,13 @@ export type PatchCompromisso = Partial<Omit<NovoCompromisso, 'contactId' | 'loca
 };
 
 export const agenda = {
-  compromissos: (filtro?: { de?: string; ate?: string; responsavelId?: string; status?: StatusAgenda[] }) => {
+  profissionais: () => req<ProfissionalAgenda[]>('profissionais'),
+  compromissos: (filtro?: { de?: string; ate?: string; responsavelId?: string; profissionalId?: string; status?: StatusAgenda[] }) => {
     const qs = new URLSearchParams();
     if (filtro?.de) qs.set('de', filtro.de);
     if (filtro?.ate) qs.set('ate', filtro.ate);
     if (filtro?.responsavelId) qs.set('responsavelId', filtro.responsavelId);
+    if (filtro?.profissionalId) qs.set('profissionalId', filtro.profissionalId);
     if (filtro?.status?.length) qs.set('status', filtro.status.join(','));
     return req<Compromisso[]>(`compromissos${qs.toString() ? `?${qs}` : ''}`);
   },
@@ -68,4 +88,7 @@ export const agenda = {
     req<Compromisso>(`compromissos/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) }),
   sincronizar: (id: string) => req<{ googleEventId: string }>(`compromissos/${id}/sincronizar`, { method: 'POST' }),
   remover: (id: string) => req<{ ok: boolean }>(`compromissos/${id}`, { method: 'DELETE' }),
+  /** Importação em lote (planilha do Avec): máx. 500 linhas por chamada; manager+. */
+  importar: (linhas: Record<string, unknown>[], opcoes: { gerarComissoes?: boolean }, linhaInicial: number) =>
+    req<ResultadoImportacao>('importar', { method: 'POST', body: JSON.stringify({ linhas, opcoes, linhaInicial }) }),
 };

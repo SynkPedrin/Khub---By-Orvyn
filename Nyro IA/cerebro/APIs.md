@@ -75,6 +75,7 @@ Front (Next, cookies httpOnly): `POST /api/auth/{signup,login,refresh,logout}`, 
 | POST | `/v1/integrations/:provider/callback` | **público**; state HMAC carrega o tenant; cifra credencial + enfileira sync |
 | POST | `/v1/integrations/:id/sync` | enfileira sync (BullMQ) |
 | GET | `/v1/ads/overview` · `/campaigns` · `/creatives` | agregados por tenant; melhor criativo |
+| GET | `/v1/redes/instagram/publico?conexaoId&dias(7–28)` | público e descoberta do Instagram: `{conectado, conexaoId, periodoDias, publico{idade,genero,cidades,paises,status}, seguidores{ganhos,perdidos,status}, cliquesPerfil{total,botoes,status}, alcancePorFormato{fatias,status}, alcancePorRelacao{fatias,status}}`; cada `status` = SecaoStatus de Redes (sem_permissao/token/limite/sem_dados com o que falta). Fonte: IG User Insights (`follower_demographics` timeframe=this_month; `follows_and_unfollows`, `profile_links_taps`, `reach` com breakdown). Leitura `contacts.read`, módulo `automacoes`. 400 conexaoId inválido. |
 | POST | `/v1/ads/simulador/simular` | simulador de campanhas: `{objetivo, orcamentoDia(6–100000), dias(1–90), publico, posicionamento, ticketMedio, taxaFechamento, criativos[1–3]{nome, formato, hook, copy, titulo, cta, videoSegundos?, legendas?, rosto?, textoNaImagem?, notaVisualIa?}, premissas?{cpm,ctr,conversao}}` → totais com faixa p10–p50–p90, série diária, notas por criativo com motivos, A/B, curva de verba, alertas, base usada e calibração (ad_insights 90d do tenant). 400 corpo inválido. |
 | POST | `/v1/ads/simulador/analisar` | análise do criativo com IA: `{objetivo, criativo, negocio?, imagens[0–4]{tipo, base64, rotulo}}` (corpo até 22 MB) → `{notaVisual, resumo, pontosFortes, melhorias, hooksAlternativos, copySugerida, riscosPolitica, modelo, provedor, analisouImagem}`. 501 `config_required` sem provedor de IA; 502 `ia_invalida` se a IA não devolver JSON válido em 2 tentativas. |
 | GET/POST | `/v1/webhooks/meta` | **público**; verify + ack idempotente |
@@ -182,6 +183,20 @@ Todo erro segue `application/problem+json`:
 - API keys por tenant para integrações externas (escopo por chave).
 - Webhooks de saída assinados via HMAC; retry com backoff.
 - Rate limiting por tenant e por integração ([[RegrasNegocio]]).
+
+### 5.1 Conector MCP — Claude e ChatGPT ([[Arquitetura|ADR-0049]])
+Fora do `/v1` (raiz do host da API):
+| Rota | Uso |
+|---|---|
+| `GET /.well-known/oauth-protected-resource` (e `/mcp`) | RFC 9728: `{ resource: <api>/mcp, authorization_servers: [<api>] }` |
+| `GET /.well-known/oauth-authorization-server` (e `openid-configuration`) | RFC 8414; PKCE `S256`; auth `none`/`client_secret_post`/`client_secret_basic` |
+| `POST /oauth/register` | RFC 7591. Redirect https (ou http em loopback). 30/h por IP |
+| `GET /oauth/authorize` | valida e redireciona para `WEB_URL/conectar-ia/<pedido>`; erro antes de validar o redirect = página 400 |
+| `POST /oauth/token` | `authorization_code` (+`code_verifier`) e `refresh_token` (rotativo). Erros `{error, error_description}` RFC 6749 |
+| `POST /oauth/revoke` | RFC 7009; desliga a conexão; sempre 200 |
+| `POST /mcp` | JSON-RPC 2.0 (initialize, ping, tools/list, tools/call; notificação → 202). Sem token → 401 + `WWW-Authenticate: Bearer resource_metadata="…"` . 120/min por conexão. `GET`/`DELETE` → 405 |
+
+Sob `/v1/conector-ia` (sessão do KHUB): `GET info` (URL + ferramentas), `GET pedido/:pedido` (tela de consentimento; inclui URL de negar), `POST decidir {pedido, aprovar}` (dono/admin) → `{ redirect }`, `GET conexoes`, `DELETE conexoes/:id`.
 
 > ⚠️ LACUNA: TTL do access/refresh token, formato/algoritmo de assinatura JWT (HS256 vs RS256), rotação de refresh e revogação não estão no PRD. Definir no Bloco 3 e registrar ADR se estrutural.
 

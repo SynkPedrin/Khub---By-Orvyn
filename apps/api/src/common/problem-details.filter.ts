@@ -17,8 +17,9 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     const req = ctx.getRequest<Request>();
 
     const isHttp = exception instanceof HttpException;
-    const status = isHttp ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
-    const title = isHttp ? exception.message : 'Erro interno';
+    const upstream = isHttp ? null : erroDeProvedor(exception);
+    const status = isHttp ? exception.getStatus() : upstream ? upstream.status : HttpStatus.INTERNAL_SERVER_ERROR;
+    const title = isHttp ? exception.message : upstream ? upstream.title : 'Erro interno';
     const correlationId =
       (req.headers['x-correlation-id'] as string | undefined) ?? currentCorrelationId();
 
@@ -60,7 +61,37 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         if (p.status === 'config_required') body.code = 'config_required';
       }
     }
+    if (upstream) {
+      body.code = upstream.code;
+      body.provider = upstream.provider;
+      body.retryable = upstream.retryable;
+      if (upstream.retryable) res.setHeader('Retry-After', '30');
+    }
     res.setHeader('x-correlation-id', correlationId);
     res.status(status).type('application/problem+json').send(body);
   }
+}
+
+/**
+ * Erro de provedor externo que escapou do serviço (ex.: `StevoApiError` no QR
+ * do WhatsApp). Não é bug nosso: vira 502 (provedor falhou/recusou) ou 503
+ * (limite/indisponível), com `code` e `retryable` para a UI dizer "a Stevo
+ * está instável, tente de novo" em vez de "erro interno" — e sem marcar o
+ * canal como desconectado. Reconhecido pelo formato (o filtro é de `common`
+ * e não importa o interno do módulo de mensageria).
+ */
+export function erroDeProvedor(e: unknown): { status: number; title: string; code: string; provider: string; retryable: boolean } | null {
+  if (!(e instanceof Error) || e.name !== 'StevoApiError') return null;
+  const x = e as Error & { status?: unknown; codigo?: unknown; retryable?: unknown };
+  const st = typeof x.status === 'number' ? x.status : 0;
+  const retryable = x.retryable === true || st === 429 || st >= 500 || st === 0;
+  return {
+    status: st === 429 || st === 503 ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.BAD_GATEWAY,
+    title: retryable
+      ? 'O provedor do WhatsApp (Stevo) está instável agora. Tente de novo em alguns segundos.'
+      : 'O provedor do WhatsApp (Stevo) recusou a operação.',
+    code: `stevo_${typeof x.codigo === 'string' ? x.codigo : 'erro'}`,
+    provider: 'stevo_api',
+    retryable,
+  };
 }

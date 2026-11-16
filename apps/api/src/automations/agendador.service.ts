@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RunsService } from './runs.service';
 import { grafoSchema, validarConfig, type Grafo, type No } from './catalogo';
 import { contatoDoRegistro } from './contexto';
-import { diasNoMes, fusoOuPadrao, isoData, partesNoFuso, proximaJanela, somarDias, type Recorrencia } from './tempo';
+import { diasNoMes, fusoOuPadrao, isoData, janelaUnica, partesNoFuso, proximaJanela, somarDias, type Recorrencia } from './tempo';
 
 /** Gatilhos por TEMPO (Q3.2): têm linha em `workflow_schedules` (db/057). */
 export const GATILHOS_AGENDADOS = ['gatilho.agendado', 'gatilho.data_contato'] as const;
@@ -33,9 +33,16 @@ export interface CfgDataContato {
   fuso?: string;
 }
 
-/** Próximo disparo do nó estritamente depois de `depois`. data_contato = varredura diária na hora configurada. */
-export function proximoDoNo(tipo: TipoAgendado, cfg: CfgAgendado | CfgDataContato, fuso: string, depois: Date): Date {
-  if (tipo === 'gatilho.agendado') return proximaJanela(cfg as CfgAgendado, fuso, depois);
+/**
+ * Próximo disparo do nó estritamente depois de `depois`. data_contato =
+ * varredura diária na hora configurada. `null` = não há próximo (agendado
+ * `uma_vez` que já passou ou já disparou): a linha da agenda sai.
+ */
+export function proximoDoNo(tipo: TipoAgendado, cfg: CfgAgendado | CfgDataContato, fuso: string, depois: Date): Date | null {
+  if (tipo === 'gatilho.agendado') {
+    const c = cfg as CfgAgendado;
+    return c.frequencia === 'uma_vez' ? janelaUnica(c, fuso, depois) : proximaJanela(c, fuso, depois);
+  }
   return proximaJanela({ frequencia: 'diario', hora: (cfg as CfgDataContato).hora, diasSemana: [], diaMes: 1 }, fuso, depois);
 }
 
@@ -74,8 +81,10 @@ export async function sincronizarAgendas(tx: Prisma.TransactionClient, tenantId:
     if (!v.ok) continue; // a publicação já recusa config inválida; rollback para versão antiga não derruba a transação
     const cfg = v.dados as CfgAgendado | CfgDataContato;
     const fuso = fusoOuPadrao(cfg.fuso || wf.timezone);
+    const proximoEm = proximoDoNo(tipo, cfg, fuso, agora);
+    if (!proximoEm) continue; // "uma vez" com data que já passou: nada a agendar
     await tx.workflowSchedule.create({
-      data: { tenantId, workflowId, versionId: wf.versaoAtiva.id, nodeId: no.id, tipo: TIPO_LINHA[tipo], proximoEm: proximoDoNo(tipo, cfg, fuso, agora) },
+      data: { tenantId, workflowId, versionId: wf.versaoAtiva.id, nodeId: no.id, tipo: TIPO_LINHA[tipo], proximoEm },
     });
     n++;
   }
@@ -152,10 +161,11 @@ export class AgendadorService {
     }
 
     const depois = new Date(Math.max(agora.getTime(), janela.getTime()));
-    await this.prisma.withTenant(tenantId, (tx) => tx.workflowSchedule.updateMany({
-      where: onde,
-      data: { proximoEm: proximoDoNo(tipo, cfg, fuso, depois), ultimaJanela: janela, leaseUntil: null, updatedAt: new Date() },
-    }));
+    const proximoEm = proximoDoNo(tipo, cfg, fuso, depois);
+    await this.prisma.withTenant(tenantId, (tx) => proximoEm
+      ? tx.workflowSchedule.updateMany({ where: onde, data: { proximoEm, ultimaJanela: janela, leaseUntil: null, updatedAt: new Date() } })
+      // "uma vez": já disparou (ou perdeu a janela), não volta mais
+      : tx.workflowSchedule.deleteMany({ where: onde }));
     return abertos;
   }
 

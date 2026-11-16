@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Avatar, Badge, Button, Card, Field, Input } from '@/components/ui';
+import { PaginacaoCursor } from '@/components/kit';
 import { Icon } from '@/components/icons';
 import { crm, brl, type Contato, type Empresa } from '@/lib/crm';
 import { ApiError } from '@/lib/api-error';
@@ -16,6 +17,7 @@ export default function ContatosPage() {
   const router = useRouter();
   const [rows, setRows] = useState<Contato[] | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
+  const [cursores, setCursores] = useState<(string | null)[]>([null]);
   const [q, setQ] = useState('');
   const [modal, setModal] = useState(false);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
@@ -29,28 +31,34 @@ export default function ContatosPage() {
       const p = await crm.contacts({ q: query, limit: PAGINA });
       setRows(p.items);
       setCursor(p.nextCursor);
+      setCursores([null]);
     } catch {
       setRows([]);
       setCursor(null);
+      setCursores([null]);
     }
   }, []);
 
-  // páginas seguintes: acumulam pelo cursor (keyset — não repete nem pula linha)
-  const carregarMais = async () => {
-    if (!cursor || carregandoMais) return;
+  // Páginas por cursor (keyset: não repete nem pula linha). Cada posição guarda o cursor que abre aquela página.
+  const abrirPagina = async (alvo: string | null, depois: () => void) => {
+    if (carregandoMais) return;
     setCarregandoMais(true);
     try {
-      const p = await crm.contacts({ q: q || undefined, cursor, limit: PAGINA });
-      setRows((r) => [...(r ?? []), ...p.items]);
+      const p = await crm.contacts({ q: q || undefined, ...(alvo ? { cursor: alvo } : {}), limit: PAGINA });
+      setRows(p.items);
       setCursor(p.nextCursor);
+      depois();
+      window.requestAnimationFrame(() => document.getElementById('conteudo')?.scrollTo({ top: 0, behavior: 'smooth' }));
     } catch (e) {
       // cursor expirado (o contato-âncora foi excluído por alguém): recomeça a
-      // lista em vez de deixar o botão morto
+      // lista em vez de deixar a navegação morta
       if (e instanceof ApiError && e.status === 400) await load(q || undefined);
     } finally {
       setCarregandoMais(false);
     }
   };
+  const irProxima = () => { if (cursor) void abrirPagina(cursor, () => setCursores((c) => [...c, cursor])); };
+  const irAnterior = () => { if (cursores.length > 1) void abrirPagina(cursores[cursores.length - 2], () => setCursores((c) => c.slice(0, -1))); };
 
   useEffect(() => { crm.companies().then(setEmpresas).catch(() => setEmpresas([])); }, []);
   useEffect(() => { const t = setTimeout(() => load(q || undefined), 250); return () => clearTimeout(t); }, [q, load]);
@@ -134,13 +142,7 @@ export default function ContatosPage() {
             </tbody>
           </table>
         </div>
-        {cursor && (
-          <div className="border-t border-line p-3 text-center">
-            <Button variant="ghost" onClick={carregarMais} disabled={carregandoMais}>
-              {carregandoMais ? 'Carregando…' : 'Carregar mais'}
-            </Button>
-          </div>
-        )}
+        {rows && <PaginacaoCursor pagina={cursores.length} temProxima={!!cursor} carregando={carregandoMais} onAnterior={irAnterior} onProxima={irProxima} mostrando={rows.length} rotulo="contatos" />}
       </Card>
 
       {modal && (

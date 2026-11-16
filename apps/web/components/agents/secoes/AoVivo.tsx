@@ -19,9 +19,9 @@ import type { SecaoProps } from '../editor';
 
 const FOCOS = ['Vendas', 'Agendamento', 'Atendimento', 'Suporte', 'Qualificação de leads'];
 
-type PassoFluxo = { rotulo: string; detalhe?: string; tag: 'CONVERSA' | 'AGENTE' | 'CRM'; ok: boolean };
+export type PassoFluxo = { rotulo: string; detalhe?: string; tag: 'CONVERSA' | 'AGENTE' | 'CRM'; ok: boolean };
 
-function passosDoRun(run: RunAtividade | null): PassoFluxo[] {
+export function passosDoRun(run: RunAtividade | null): PassoFluxo[] {
   if (!run) return [];
   const t = run.trace ?? {};
   const passos: PassoFluxo[] = [
@@ -51,7 +51,7 @@ function passosDoRun(run: RunAtividade | null): PassoFluxo[] {
   return passos;
 }
 
-const COR_TAG: Record<PassoFluxo['tag'], string> = {
+export const COR_TAG: Record<PassoFluxo['tag'], string> = {
   CONVERSA: 'bg-brand-soft text-brand',
   AGENTE: 'bg-lime-soft text-lime-ink',
   CRM: 'bg-[var(--base-2)] text-muted',

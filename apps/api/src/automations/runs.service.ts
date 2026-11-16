@@ -32,6 +32,8 @@ const NOS_DA_JANELA = new Set(['acao.enviar_sms', 'acao.enviar_email', 'acao.ped
  *  `noRamificado` no catálogo. */
 
 export const FILA_PASSOS = 'automation-steps';
+/** Job que chegou enquanto o passo anterior ainda segura o lease: tenta de novo logo. */
+export const LEASE_OCUPADO_RETRY_MS = 1_000;
 
 export interface PassoJob {
   tenantId: string;
@@ -166,12 +168,18 @@ export class RunsService {
    */
   private async jobAdiantado(job: PassoJob): Promise<{ adiantadoMs?: number }> {
     const run = await this.prisma.withTenant(job.tenantId, (tx) =>
-      tx.workflowRun.findUnique({ where: { id: job.runId, tenantId: job.tenantId }, select: { noAtual: true, generation: true, status: true, scheduledAt: true } }),
+      tx.workflowRun.findUnique({ where: { id: job.runId, tenantId: job.tenantId }, select: { noAtual: true, generation: true, status: true, scheduledAt: true, leaseUntil: true } }),
     );
     if (!run || run.noAtual !== job.noId || !['rodando', 'esperando'].includes(run.status)) return {};
     if (job.generation !== undefined && run.generation !== job.generation) return {};
     const falta = run.scheduledAt.getTime() - Date.now();
-    return falta > 0 ? { adiantadoMs: falta } : {};
+    if (falta > 0) return { adiantadoMs: falta };
+    // O passo anterior enfileira este ANTES de soltar o próprio lease (o `finally`
+    // de processarPasso). Com concorrência, o worker pega este job nesse intervalo,
+    // o claim é recusado pelo lease alheio e o job era descartado: o fluxo ativo só
+    // seguia ~5 s depois pelo reconcile, e o teste de rascunho parava para sempre.
+    if (run.leaseUntil && run.leaseUntil.getTime() > Date.now()) return { adiantadoMs: LEASE_OCUPADO_RETRY_MS };
+    return {};
   }
 
   private async executarPasso(job: PassoJob, tentativa: number): Promise<void> {

@@ -8,6 +8,7 @@ import { ConfigRequiredException } from '../../config/config.service';
 import { CrmService } from '../crm.service';
 import { MessagesService, type AutorEnvio, type MidiaEnvio } from './messages.service';
 import type { TipoMidia } from './provider.contract';
+import type { StatusLeitura } from './leitura-midia.contrato';
 import {
   LIMITE_BASE64_SEM_STORAGE,
   MENSAGEM_ERRO_MIDIA,
@@ -18,11 +19,33 @@ import {
   variaveisDesconhecidas,
   VARIAVEIS_RESPOSTA,
 } from './midia';
+import { horaCurta } from '../../common/hora';
 
 /** Papéis que podem ser mencionados / receber conversa (viewer só lê). */
 const PAPEIS_EQUIPE = ['owner', 'admin', 'manager', 'member'];
 /** Quem pode editar resposta rápida de outra pessoa. */
 const PAPEIS_GESTAO = ['owner', 'admin', 'manager'];
+
+/**
+ * Leitura da mídia pela IA como a tela a recebe (contrato em
+ * `leitura-midia.contrato.ts`): transcrição do áudio/vídeo, descrição da
+ * imagem, texto do documento. Só o que o Inbox mostra — nada do arquivo.
+ */
+export interface LeituraParaTela {
+  status: StatusLeitura;
+  /** Conteúdo lido (só em `pronta`), limitado a `LIMITE_LEITURA_TELA` caracteres. */
+  texto?: string;
+  /** O texto passou do limite e foi cortado para a tela (a IA recebe o original). */
+  truncado?: boolean;
+  /** Quem leu (auditoria): 'groq-whisper', 'claude-visao'… */
+  por?: string;
+  /** Motivo curto, sem dado pessoal (falhou / nao_suportado). */
+  motivo?: string;
+  /** Variáveis de ambiente que faltam (config_required) — só os nomes. */
+  faltando?: string[];
+  /** ISO 8601: quando entrou em `pendente` (a tela desiste do "lendo…" depois de um limite). */
+  desde?: string;
+}
 
 export interface AnexoMensagem {
   tipo: TipoMidia;
@@ -34,7 +57,24 @@ export interface AnexoMensagem {
   url: string | null;
   /** Figurinha do WhatsApp (mídia recebida): exibida pequena e sem recorte. */
   figurinha?: boolean;
+  /** Vídeo recebido (chega à tela como arquivo para baixar; a leitura dele é uma transcrição). */
+  video?: boolean;
+  /** Leitura da mídia pela IA, quando houver. */
+  leitura?: LeituraParaTela;
 }
+
+/** Teto do texto da leitura no DTO da thread (até 300 mensagens por resposta). */
+export const LIMITE_LEITURA_TELA = 20_000;
+
+/**
+ * Mensagem escrita pela equipe FORA do KHUB (WhatsApp do celular), registrada
+ * a partir do `message.sent` da Stevo: autor humano, sem `enviadoPorId` e com
+ * a chave de idempotência neste prefixo. A chave nunca sai da API — a tela
+ * recebe só o booleano `peloCelular`.
+ */
+const PREFIXO_CELULAR = 'celular:';
+
+const STATUS_LEITURA: readonly StatusLeitura[] = ['pendente', 'pronta', 'falhou', 'nao_suportado', 'config_required'];
 
 export interface EntradaMidia {
   tipo: TipoMidia;
@@ -55,6 +95,34 @@ interface AnexoGravado {
   /** Mídia RECEBIDA pequena guardada na própria mensagem quando não há S3 (stevo-api-eventos). */
   dataUrl?: string;
   figurinha?: boolean;
+  video?: boolean;
+  leitura?: LeituraParaTela;
+}
+
+const textoCurto = (v: unknown, limite: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, limite) : undefined);
+
+/** `anexo.leitura` do banco (Json) → DTO da tela. Status desconhecido = sem leitura. */
+function leituraGravada(v: unknown): LeituraParaTela | undefined {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined;
+  const o = v as Record<string, unknown>;
+  const status = STATUS_LEITURA.find((s) => s === o.status);
+  if (!status) return undefined;
+  const leitura: LeituraParaTela = { status };
+  if (status === 'pronta' && typeof o.texto === 'string') {
+    const texto = o.texto.trim();
+    leitura.texto = texto.slice(0, LIMITE_LEITURA_TELA);
+    if (texto.length > LIMITE_LEITURA_TELA) leitura.truncado = true;
+  }
+  const por = textoCurto(o.por, 60);
+  if (por) leitura.por = por;
+  const motivo = status === 'falhou' || status === 'nao_suportado' ? textoCurto(o.motivo, 200) : undefined;
+  if (motivo) leitura.motivo = motivo;
+  if (status === 'config_required' && Array.isArray(o.faltando)) {
+    const faltando = o.faltando.filter((f): f is string => typeof f === 'string' && /^[A-Z0-9_]{1,64}$/.test(f)).slice(0, 10);
+    if (faltando.length) leitura.faltando = faltando;
+  }
+  if (status === 'pendente' && typeof o.desde === 'string' && !Number.isNaN(Date.parse(o.desde))) leitura.desde = o.desde;
+  return leitura;
 }
 
 function anexoGravado(v: Prisma.JsonValue | null): AnexoGravado | null {
@@ -67,6 +135,8 @@ function anexoGravado(v: Prisma.JsonValue | null): AnexoGravado | null {
     tipo,
     dataUrl: typeof o.dataUrl === 'string' && o.dataUrl.startsWith('data:') ? o.dataUrl : undefined,
     figurinha: o.tipo === 'figurinha' || undefined,
+    video: o.tipo === 'video' || undefined,
+    leitura: leituraGravada(o.leitura),
     mime: String(o.mime ?? ''),
     nome: String(o.nome ?? 'arquivo'),
     tamanho: Number(o.tamanho ?? 0),
@@ -104,9 +174,15 @@ export class InboxService {
   async thread(tenantId: string, conversationId: string) {
     const base = await this.crm.mensagensDaConversa(tenantId, conversationId);
     const ids = base.mensagens.map((m) => m.id);
-    const { anexos, notas } = await this.prisma.withTenant(tenantId, async (tx) => {
-      const [comAnexo, notas] = await Promise.all([
+    const { anexos, peloCelular, notas } = await this.prisma.withTenant(tenantId, async (tx) => {
+      const [comAnexo, doCelular, notas] = await Promise.all([
         ids.length ? tx.message.findMany({ where: { id: { in: ids }, NOT: { anexo: { equals: Prisma.DbNull } } }, select: { id: true, anexo: true } }) : Promise.resolve([]),
+        // Escritas no WhatsApp do celular: o filtro roda no banco e só o id volta
+        // (a chave de idempotência não sai daqui). Exigir autor humano SEM
+        // `enviadoPorId` impede que um envio do KHUB com chave forjada ganhe o selo.
+        ids.length
+          ? tx.message.findMany({ where: { id: { in: ids }, autorTipo: 'humano', enviadoPorId: null, idempotencyKey: { startsWith: PREFIXO_CELULAR } }, select: { id: true } })
+          : Promise.resolve([]),
         tx.conversationNote.findMany({ where: { conversationId }, orderBy: { createdAt: 'desc' }, take: 300 }),
       ]);
       const autores = [...new Set(notas.map((n) => n.autorId).filter((v): v is string => !!v))];
@@ -114,12 +190,13 @@ export class InboxService {
       const nome = new Map(usuarios.map((u) => [u.identityId, u.nome]));
       return {
         anexos: new Map(comAnexo.map((m) => [m.id, anexoGravado(m.anexo)])),
+        peloCelular: new Set(doCelular.map((m) => m.id)),
         notas: notas.map((n) => ({
           id: n.id,
           de: 'nota' as const,
           interna: true as const,
           texto: n.corpo,
-          hora: n.createdAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          hora: horaCurta(n.createdAt),
           criadaEm: n.createdAt.toISOString(),
           enviadoPorId: n.autorId,
           enviadoPorNome: n.autorId ? nome.get(n.autorId) ?? null : null,
@@ -129,7 +206,7 @@ export class InboxService {
     });
     const mensagens = base.mensagens.map((m) => {
       const a = anexos.get(m.id);
-      return { ...m, anexo: a ? this.anexoParaTela(a) : null };
+      return { ...m, anexo: a ? this.anexoParaTela(a) : null, peloCelular: peloCelular.has(m.id) };
     });
     const tudo = [...mensagens, ...notas].sort((x, y) => (x.criadaEm < y.criadaEm ? -1 : x.criadaEm > y.criadaEm ? 1 : 0));
     return { id: base.id, total: base.total + notas.length, mensagens: tudo };
@@ -144,6 +221,8 @@ export class InboxService {
       legenda: a.legenda,
       url: a.storageKey ? this.storage.urlLeitura(a.storageKey, VALIDADE_TELA_S) : a.dataUrl ?? null,
       ...(a.figurinha ? { figurinha: true } : {}),
+      ...(a.video ? { video: true } : {}),
+      ...(a.leitura ? { leitura: a.leitura } : {}),
     };
   }
 
@@ -240,7 +319,7 @@ export class InboxService {
           de: 'nota' as const,
           interna: true as const,
           texto: nota.corpo,
-          hora: nota.createdAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          hora: horaCurta(nota.createdAt),
           criadaEm: nota.createdAt.toISOString(),
           enviadoPorId: autorId,
           enviadoPorNome: autor?.nome ?? null,

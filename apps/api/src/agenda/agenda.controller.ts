@@ -1,8 +1,9 @@
 import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
-import { IsIn, IsISO8601, IsOptional, IsString, IsUUID, MaxLength, ValidateIf } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsISO8601, IsInt, IsObject, IsOptional, IsString, IsUUID, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { CurrentUser, TenantId, type AuthUser } from '../auth/decorators';
 import { SkipAudit } from '../common/audit.interceptor';
-import { AgendaService, STATUS_AGENDA, TIPOS_AGENDA, type StatusAgenda, type TipoAgenda } from './agenda.service';
+import { AgendaService, STATUS_AGENDA, TIPOS_AGENDA, type LinhaAgenda, type StatusAgenda, type TipoAgenda } from './agenda.service';
 
 class CriarCompromissoDto {
   @IsString() @MaxLength(200) titulo!: string;
@@ -14,6 +15,8 @@ class CriarCompromissoDto {
   @IsOptional() @IsIn([...TIPOS_AGENDA]) tipo?: TipoAgenda;
   /** `null` = agenda geral (sem responsável). Ausente = quem cria. */
   @IsOptional() @ValidateIf((_o, v) => v !== null) @IsUUID() responsavelId?: string | null;
+  /** Valor do atendimento em centavos: ao concluir, vira entrada no financeiro. */
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsInt() @Min(0) valorCentavos?: number | null;
 }
 /** PATCH parcial: arrastar/redimensionar mandam só inicio/fim. `null` limpa o campo. */
 class AtualizarCompromissoDto {
@@ -25,6 +28,16 @@ class AtualizarCompromissoDto {
   @IsOptional() @ValidateIf((_o, v) => v !== null) @IsString() @MaxLength(1000) notas?: string | null;
   @IsOptional() @IsIn([...TIPOS_AGENDA]) tipo?: TipoAgenda;
   @IsOptional() @ValidateIf((_o, v) => v !== null) @IsUUID() responsavelId?: string | null;
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsInt() @Min(0) valorCentavos?: number | null;
+}
+class OpcoesImportacaoAgendaDto {
+  @IsOptional() @IsBoolean() gerarComissoes?: boolean;
+}
+/** Importação em lote (Avec/planilha): linhas já mapeadas pelo front, validadas linha a linha no serviço. */
+class ImportarAgendaDto {
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(500) @IsObject({ each: true }) linhas!: LinhaAgenda[];
+  @IsOptional() @ValidateNested() @Type(() => OpcoesImportacaoAgendaDto) opcoes?: OpcoesImportacaoAgendaDto;
+  @IsOptional() @IsInt() @Min(1) linhaInicial?: number;
 }
 class StatusDto {
   @IsIn([...STATUS_AGENDA]) status!: StatusAgenda;
@@ -52,9 +65,17 @@ export class AgendaController {
     @Query('ate') ate?: string,
     @Query('responsavelId') responsavelId?: string,
     @Query('status') status?: string,
+    @Query('profissionalId') profissionalId?: string,
   ) {
     if (responsavelId && !UUID_RE.test(responsavelId)) throw new BadRequestException('responsavelId inválido');
-    return this.agenda.listar(t, { de, ate, responsavelId, status: statusDaQuery(status) });
+    if (profissionalId && !UUID_RE.test(profissionalId)) throw new BadRequestException('profissionalId inválido');
+    return this.agenda.listar(t, { de, ate, responsavelId, profissionalId, status: statusDaQuery(status) });
+  }
+
+  /** Profissionais do catálogo (quem atende; não precisa ser usuário) para a agenda por profissional. */
+  @Get('profissionais')
+  profissionais(@TenantId() t: string) {
+    return this.agenda.profissionais(t);
   }
   @Get('horarios')
   horarios(
@@ -79,6 +100,10 @@ export class AgendaController {
   @Post('compromissos')
   criar(@TenantId() t: string, @CurrentUser() u: AuthUser, @Body() dto: CriarCompromissoDto) {
     return this.agenda.criar(t, u.identityId, dto);
+  }
+  @Post('importar')
+  importar(@TenantId() t: string, @CurrentUser() u: AuthUser, @Body() dto: ImportarAgendaDto) {
+    return this.agenda.importar(t, u.identityId, dto.linhas, dto.opcoes ?? {}, dto.linhaInicial ?? 1);
   }
   @Patch('compromissos/:id')
   atualizar(@TenantId() t: string, @CurrentUser() u: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: AtualizarCompromissoDto) {

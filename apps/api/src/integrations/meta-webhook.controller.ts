@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MetaLeadsService } from './meta-leads.service';
 import { CanaisIngestaoService } from '../crm/messaging/canais/canais-ingestao.service';
 import { eventosDeConversa } from '../crm/messaging/canais/meta-canais.parse';
+import { registrarNoOutbox } from '../common/outbox';
 
 /**
  * Webhook Meta (Lead Ads). GET = verificação do subscription; POST = eventos.
@@ -72,7 +73,7 @@ export class MetaWebhookController {
         return res.status(503).send('page mapping unavailable');
       }
       const dedupeKey=`meta:${ev.pageId}:${ev.leadgenId}`;
-      await this.prisma.withTenant(tenantId,tx=>tx.outboxEvent.upsert({where:{tenantId_dedupeKey:{tenantId,dedupeKey}},create:{tenantId,kind:'meta.lead',dedupeKey,payload:{...ev}},update:{}}));
+      await this.prisma.withTenant(tenantId,tx=>registrarNoOutbox(tx,{tenantId,kind:'meta.lead',dedupeKey,payload:{...ev}}));
     }
     return res.status(200).send('EVENT_RECEIVED');
   }

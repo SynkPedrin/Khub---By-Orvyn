@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Field, Input } from '@/components/ui';
 import { Icon } from '@/components/icons';
 import { CAMPOS_CONDICAO, type NoGrafo } from '@/lib/automations';
+import { agentesApi } from '@/lib/agents';
 import { crm, type PipelineData } from '@/lib/crm';
 import { customFields, type CampoDef } from '@/lib/custom-fields';
 import { pipelineApi, type MotivoPerda } from '@/lib/pipeline';
@@ -15,6 +16,7 @@ import {
 /** Tipos cujo painel mora aqui (Q3.1/Q3.2). */
 export const TIPOS_MOTOR = new Set([
   'controle.esperar_ate', 'controle.meta', 'acao.remover_de_fluxo', 'acao.atribuir_usuario', 'acao.nao_perturbe',
+  'acao.ativar_ia', 'acao.passar_humano',
   'acao.atualizar_negocio', 'acao.atualizar_contato', 'gatilho.agendado', 'gatilho.data_contato',
   'gatilho.formulario_enviado', 'gatilho.pagamento_recebido',
 ]);
@@ -61,6 +63,7 @@ export function PainelNoMotor({ no, set, outrosFluxos }: {
     || ((t === 'controle.meta' || (t === 'controle.esperar_ate' && cfg.modo === 'evento')) && cfg.evento === 'etapa_mudou');
   const precisaForms = t === 'gatilho.formulario_enviado' || ((t === 'controle.meta' || t === 'controle.esperar_ate') && cfg.evento === 'formulario_enviado');
   const membros = useLista<Responsavel>(precisaMembros, motorApi.responsaveis);
+  const agentes = useLista<{ id: string; nome: string; status: string }>(t === 'acao.ativar_ia', () => agentesApi.listar().then((l) => l.filter((a) => a.status === 'ativo')));
   const etapas = useLista<{ id: string; nome: string }>(precisaEtapas, () => crm.pipeline().then((p: PipelineData) => p.stages.map((s) => ({ id: s.id, nome: s.nome }))));
   const forms = useLista<FormularioResumo>(precisaForms, motorApi.formularios);
   const camposContato = useLista<CampoDef>(['acao.atualizar_contato', 'gatilho.data_contato', 'controle.esperar_ate'].includes(t), () => customFields.list('contact').then((l) => l.filter((c) => !c.arquivado)));
@@ -73,13 +76,18 @@ export function PainelNoMotor({ no, set, outrosFluxos }: {
       return (
         <>
           <div className="grid grid-cols-2 gap-2">
-            <Field label="Repetir">
-              <select className="input" value={cfg.frequencia ?? 'diario'} onChange={(e) => set({ frequencia: e.target.value })}>
-                <option value="diario">Todo dia</option><option value="semanal">Toda semana</option><option value="mensal">Todo mês</option>
+            <Field label="Quando">
+              <select className="input" value={cfg.frequencia ?? 'diario'} onChange={(e) => set(e.target.value === 'uma_vez' && !cfg.data ? { frequencia: 'uma_vez', data: amanhaIso() } : { frequencia: e.target.value })}>
+                <option value="uma_vez">Uma vez</option><option value="diario">Todo dia</option><option value="semanal">Toda semana</option><option value="mensal">Todo mês</option>
               </select>
             </Field>
             <Field label="Horário"><Input type="time" value={cfg.hora ?? '09:00'} onChange={(e) => set({ hora: e.target.value || '09:00' })} /></Field>
           </div>
+          {cfg.frequencia === 'uma_vez' && (
+            <Field label="Data" hint="Dispara uma única vez, no fuso do fluxo. Precisa estar publicado e ativo até lá.">
+              <Input type="date" value={cfg.data ?? ''} min={hojeIso()} onChange={(e) => set({ data: e.target.value || undefined })} />
+            </Field>
+          )}
           {cfg.frequencia === 'semanal' && (
             <Field label="Dias da semana">
               <div className="flex flex-wrap gap-1">
@@ -357,6 +365,30 @@ export function PainelNoMotor({ no, set, outrosFluxos }: {
         </>
       );
 
+    case 'acao.ativar_ia':
+      return (
+        <>
+          <FalhaLista lista={agentes} oque="os agentes" />
+          <Field label="Agente">
+            <select className="input" value={cfg.agentId ?? ''} onChange={(e) => set({ agentId: e.target.value || undefined })}>
+              <option value="">Agente padrão do canal</option>
+              {agentes.itens.map((a) => <option key={a.id} value={a.id}>{a.nome}</option>)}
+            </select>
+          </Field>
+          <Aviso>Liga a IA na conversa do contato: a partir da próxima mensagem, quem responde é o agente. Se ele estiver pausado, o passo falha e cai na fila de erros.</Aviso>
+        </>
+      );
+
+    case 'acao.passar_humano':
+      return (
+        <>
+          <Field label="Motivo (opcional)">
+            <input className="input" maxLength={300} value={cfg.motivo ?? ''} onChange={(e) => set({ motivo: e.target.value || undefined })} placeholder="Ex.: lead pediu proposta personalizada" />
+          </Field>
+          <Aviso>Tira a conversa da IA e distribui para quem da equipe tem menos conversas abertas.</Aviso>
+        </>
+      );
+
     case 'acao.nao_perturbe':
       return (
         <>
@@ -543,3 +575,10 @@ export function useCamposCondicao(): { valor: string; rotulo: string }[] {
     ...negocio.itens.map((c) => ({ valor: `negocio.campos.${c.chave}`, rotulo: `Negócio · ${c.rotulo}` })),
   ];
 }
+
+/** AAAA-MM-DD no fuso do navegador (o input date trabalha no dia local). */
+function isoLocal(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+const hojeIso = () => isoLocal(new Date());
+const amanhaIso = () => isoLocal(new Date(Date.now() + 864e5));

@@ -8,11 +8,12 @@ import { agenda, type Compromisso, type TipoAgenda } from '@/lib/agenda';
 import { crm, type Contato } from '@/lib/crm';
 import type { Member } from '@/lib/settings';
 import { duracao as formatarDuracao, hora } from '@/lib/format';
+import { lerValor, valorParaCampo } from '@/lib/dinheiro';
 import { TIPO_LABEL, TIPO_ORDEM, chaveDia, horaInput, mensagemErro, montarData } from './agenda-utils';
 
 const DURACOES = [15, 30, 45, 60, 90, 120, 180, 240];
 
-type Erros = Partial<Record<'titulo' | 'dia' | 'horario', string>>;
+type Erros = Partial<Record<'titulo' | 'dia' | 'horario' | 'valor', string>>;
 
 export interface ModalCompromissoProps {
   open: boolean;
@@ -57,6 +58,7 @@ export function CompromissoModal({ open, onClose, onSaved, compromisso, inicioSu
   const [contato, setContato] = useState<{ id: string; nome: string } | null>(null);
   const [local, setLocal] = useState('');
   const [notas, setNotas] = useState('');
+  const [valor, setValor] = useState('');
   const [erros, setErros] = useState<Erros>({});
   const [erroApi, setErroApi] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -74,6 +76,7 @@ export function CompromissoModal({ open, onClose, onSaved, compromisso, inicioSu
     setContato(compromisso?.contactId ? { id: compromisso.contactId, nome: nomeContato ?? 'Contato' } : null);
     setLocal(compromisso?.local ?? '');
     setNotas(compromisso?.notas ?? '');
+    setValor(compromisso?.valorCentavos ? valorParaCampo(compromisso.valorCentavos) : '');
     setErros({});
     setErroApi(null);
     setSalvando(false);
@@ -106,6 +109,8 @@ export function CompromissoModal({ open, onClose, onSaved, compromisso, inicioSu
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) novos.dia = 'Escolha a data.';
     if (!/^\d{2}:\d{2}$/.test(horario)) novos.horario = 'Escolha o horário de início.';
     else if (!inicio && !novos.dia) novos.horario = 'Data ou horário inválido.';
+    const valorCentavos = valor.trim() ? lerValor(valor) : null;
+    if (valor.trim() && valorCentavos === null) novos.valor = 'Valor inválido. Use o formato 120,00.';
     setErros(novos);
     setErroApi(null);
     if (Object.keys(novos).length > 0 || !inicio || !fim) return;
@@ -118,6 +123,7 @@ export function CompromissoModal({ open, onClose, onSaved, compromisso, inicioSu
         fim: fim.toISOString(),
         tipo,
         responsavelId: responsavelId || null,
+        valorCentavos: valorCentavos && valorCentavos > 0 ? valorCentavos : null,
       };
       const salvo = editando && compromisso
         ? await agenda.atualizar(compromisso.id, { ...comum, contactId: contato?.id ?? null, local: local.trim() || null, notas: notas.trim() || null })
@@ -229,6 +235,20 @@ export function CompromissoModal({ open, onClose, onSaved, compromisso, inicioSu
             <BuscaContato id="cm-contato" valor={contato} onChange={setContato} />
           </Campo>
         </div>
+
+        <Campo id="cm-valor" label="Valor do atendimento (opcional)" erro={erros.valor}>
+          <input
+            id="cm-valor"
+            className="input"
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
+            placeholder="Ex.: 120,00"
+            inputMode="decimal"
+            aria-invalid={!!erros.valor}
+            aria-describedby={erros.valor ? 'cm-valor-erro' : undefined}
+          />
+          <span className="mt-1 block text-xs text-muted">Ao concluir o atendimento, vira entrada no Financeiro e gera a comissão do responsável.</span>
+        </Campo>
 
         <Campo id="cm-local" label="Local ou link (opcional)">
           <input id="cm-local" className="input" value={local} onChange={(e) => setLocal(e.target.value)} placeholder="Endereço ou https://meet.google.com/..." maxLength={200} />

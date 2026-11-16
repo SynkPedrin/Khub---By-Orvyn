@@ -4,6 +4,7 @@ import { Public } from '../auth/decorators';
 import { PrismaService } from '../prisma/prisma.service';
 import { TriggersService } from './triggers.service';
 import { Prisma } from '@prisma/client';
+import { registrarNoOutbox } from '../common/outbox';
 
 /** Janela de dedupe quando o remetente não manda `Idempotency-Key` (W5). */
 export const JANELA_DEDUPE_MS = 10 * 60_000;
@@ -91,7 +92,7 @@ export class HooksController {
     const payload = { workflowId, body } as Prisma.InputJsonObject;
     if (chaveRemetente) {
       const dedupeKey = `hook:${workflowId}:${chaveRemetente}`;
-      await this.prisma.withTenant(tenantId, (tx) => tx.outboxEvent.upsert({ where: { tenantId_dedupeKey: { tenantId, dedupeKey } }, create: { tenantId, kind: 'workflow.hook', dedupeKey, payload }, update: {} }));
+      await this.prisma.withTenant(tenantId, (tx) => registrarNoOutbox(tx, { tenantId, kind: 'workflow.hook', dedupeKey, payload }));
       return { recebido: true };
     }
 
@@ -107,8 +108,8 @@ export class HooksController {
       if (atual) return true;
       const anterior = await tx.outboxEvent.findUnique({ where: { tenantId_dedupeKey: { tenantId, dedupeKey: chaveDe(balde - 1) } }, select: { createdAt: true } });
       if (anterior && agora - anterior.createdAt.getTime() < JANELA_DEDUPE_MS) return true;
-      await tx.outboxEvent.upsert({ where: { tenantId_dedupeKey: { tenantId, dedupeKey: chaveDe(balde) } }, create: { tenantId, kind: 'workflow.hook', dedupeKey: chaveDe(balde), payload }, update: {} });
-      return false;
+      // Atômico: dois envios iguais ao mesmo tempo → um grava, o outro é duplicado (nunca 500).
+      return !(await registrarNoOutbox(tx, { tenantId, kind: 'workflow.hook', dedupeKey: chaveDe(balde), payload })).novo;
     });
     return duplicado ? { recebido: true, duplicado: true } : { recebido: true };
   }

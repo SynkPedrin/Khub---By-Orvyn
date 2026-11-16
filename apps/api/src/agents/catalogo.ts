@@ -38,7 +38,8 @@ export const MODELOS = [
   },
 ] as const;
 export type ModeloAgente = (typeof MODELOS)[number]['id'];
-export const MODELO_PADRAO: ModeloAgente = 'claude-opus-5-5';
+/** Padrão de agente novo: Sonnet 5.5 (decisão do dono em 2026-11-13: qualidade de atendimento com custo de Sonnet). */
+export const MODELO_PADRAO: ModeloAgente = 'claude-sonnet-5-5';
 export const IDS_MODELOS: readonly string[] = MODELOS.map((m) => m.id);
 
 /** Tom de voz: vira uma instrução curta no system prompt. */
@@ -83,7 +84,7 @@ export interface FerramentaAgente {
   /** Sempre disponível: não aparece como opção na UI. */
   obrigatoria?: boolean;
   /** Grupo no CRM Tools Manager. */
-  grupo: 'conhecimento' | 'contato' | 'pipeline' | 'tarefas' | 'agenda' | 'atendimento' | 'automacao';
+  grupo: 'conhecimento' | 'contato' | 'pipeline' | 'tarefas' | 'agenda' | 'atendimento' | 'automacao' | 'financeiro';
   /** Operação crítica: a UI sugere exigir aprovação humana. */
   critica?: boolean;
   /** Tempo máximo de execução (ms). */
@@ -238,6 +239,55 @@ export const FERRAMENTAS: FerramentaAgente[] = [
     grupo: 'agenda',
     tipo: 'escrita',
     critica: true,
+  },
+  {
+    nome: 'remarcar_agendamento',
+    rotulo: 'Remarcar agendamento',
+    descricao: 'Muda o horário do próximo compromisso do contato, dentro da política da empresa.',
+    instrucaoModelo:
+      'Remarca o próximo compromisso do contato (ou o informado em `compromissoId`) para um horário que apareceu livre em ver_agendamentos. A política da empresa (antecedência mínima e limite de remarcações) é aplicada pela ferramenta: se recusar, NÃO insista — use notificar_equipe e explique que a equipe avalia a exceção.',
+    schema: z
+      .object({
+        inicio: z.string().datetime({ offset: true }),
+        duracaoMin: z.number().int().min(15).max(240).optional(),
+        compromissoId: z.string().uuid().optional(),
+      })
+      .strict(),
+    grupo: 'agenda',
+    tipo: 'escrita',
+    critica: true,
+  },
+  {
+    nome: 'cancelar_agendamento',
+    rotulo: 'Cancelar agendamento',
+    descricao: 'Cancela o próximo compromisso do contato, registrando o motivo.',
+    instrucaoModelo:
+      'Cancela o próximo compromisso do contato (ou o informado em `compromissoId`). Use só quando o contato pedir cancelamento explicitamente. Regras financeiras de cancelamento (reembolso de sinal etc.) NÃO são decididas por você: se o contato perguntar, diga que a equipe confirma a política e use notificar_equipe.',
+    schema: z.object({ compromissoId: z.string().uuid().optional(), motivo: z.string().min(3).max(300) }).strict(),
+    grupo: 'agenda',
+    tipo: 'escrita',
+    critica: true,
+  },
+  {
+    nome: 'registrar_sinal_pix',
+    rotulo: 'Registrar sinal de agendamento',
+    descricao: 'Abre a cobrança do sinal (Pix) e devolve os dados oficiais de pagamento.',
+    instrucaoModelo:
+      'Registra a cobrança do sinal de agendamento para o contato (valor e dados Pix vêm das configurações da empresa, nunca de você). Use DEPOIS de o contato escolher o horário. Se a resposta disser que o Pix não está configurado, NÃO invente chave: use notificar_equipe e diga que a equipe envia os dados. O horário só é agendado depois de verificar_sinal confirmar o pagamento.',
+    schema: z.object({}).strict(),
+    grupo: 'financeiro',
+    tipo: 'escrita',
+    critica: true,
+  },
+  {
+    nome: 'verificar_sinal',
+    rotulo: 'Verificar pagamento do sinal',
+    descricao: 'Consulta o status real da cobrança do sinal do contato.',
+    instrucaoModelo:
+      'Consulta o status REAL da cobrança do sinal do contato. Um comprovante/print enviado pelo contato NÃO é confirmação: só prossiga para solicitar_agendamento quando o status for "paga" (confirmado pela equipe ou pelo provedor de pagamento). Se estiver aguardando, informe que a confirmação sai assim que o pagamento for identificado.',
+    schema: z.object({}).strict(),
+    grupo: 'financeiro',
+    tipo: 'leitura',
   },
   {
     nome: 'encerrar_atendimento',

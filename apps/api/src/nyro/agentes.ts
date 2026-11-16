@@ -105,6 +105,7 @@ COMO VOCÊ FALA (isto é o mais importante)
 
 COMO VOCÊ TRABALHA
 - Você age no sistema SOMENTE por tools. Nunca diga que fez algo que não passou por uma tool.
+- Pergunta de "quantos" ou "quem" sobre leads, conversas, negócios ou agenda tem ferramenta própria: leads_sem_resposta (sem resposta há X horas, por etapa), listar_negocios (parados há X dias, por etapa e valor), agenda_periodo (ocupação, faltas, faturamento) e metricas_atendimento (volume e tempo de resposta). Use-as antes de dizer que não consegue; "só tenho a contagem por etapa" não é resposta.
 - Número vem de tool, nunca de memória ou chute: analisar_campanhas, resumo_do_funil, resumo_financeiro,
   listar_cobrancas, diagnosticar_automacoes etc. Se os dados forem poucos, diga isso. Para visão completa da
   operação, cruze várias tools (ex.: verba gasta x leads x receita recebida) e explique a ligação entre elas.
@@ -145,7 +146,7 @@ SEU PAPEL: você é uma só: estrategista, arquiteta do CRM, atendente e consult
     id: 'configuracao',
     nome: 'Arquiteta',
     quando: 'configurar o CRM: criar/ajustar funil, campos, automações, contatos e oportunidades em lote.',
-    tools: ['buscar_conhecimento', 'guia_do_sistema', 'resumo_financeiro', 'listar_cobrancas', 'resumo_do_funil', 'listar_automacoes', 'diagnosticar_automacoes', 'analisar_prompt_agentes', 'gerar_relatorio', 'buscar_contatos', 'ver_contato', 'criar_contato', 'atualizar_contato', 'criar_oportunidade', 'criar_funil', 'criar_etapa', 'aplicar_blueprint', 'instalar_automacao', 'mudar_status_automacao', 'lembrar'],
+    tools: ['buscar_conhecimento', 'guia_do_sistema', 'resumo_financeiro', 'listar_cobrancas', 'resumo_do_funil', 'listar_automacoes', 'leads_sem_resposta', 'listar_negocios', 'agenda_periodo', 'metricas_atendimento', 'diagnosticar_automacoes', 'analisar_prompt_agentes', 'gerar_relatorio', 'buscar_contatos', 'ver_contato', 'criar_contato', 'atualizar_contato', 'criar_oportunidade', 'criar_funil', 'criar_etapa', 'aplicar_blueprint', 'instalar_automacao', 'mudar_status_automacao', 'lembrar'],
     prompt: `${BASE}
 
 SEU PAPEL: Arquiteta do CRM: você MONTA o CRM do cliente, não só opera.
@@ -177,7 +178,7 @@ Você conversa como gente: frases curtas, sem jargão, sem parecer robô.
     id: 'growth',
     nome: 'Estrategista',
     quando: 'analisar números, funil, campanhas, CPL/ROAS; sugerir o que fazer para crescer.',
-    tools: ['buscar_conhecimento', 'guia_do_sistema', 'resumo_financeiro', 'listar_cobrancas', 'resumo_do_funil', 'analisar_campanhas', 'benchmark_biblioteca_anuncios', 'diagnosticar_automacoes', 'analisar_prompt_agentes', 'listar_automacoes', 'buscar_contatos', 'criar_tarefa', 'gerar_relatorio', 'agendar_rotina', 'listar_rotinas', 'pausar_rotina', 'lembrar'],
+    tools: ['buscar_conhecimento', 'guia_do_sistema', 'resumo_financeiro', 'listar_cobrancas', 'resumo_do_funil', 'analisar_campanhas', 'leads_sem_resposta', 'listar_negocios', 'agenda_periodo', 'metricas_atendimento', 'benchmark_biblioteca_anuncios', 'diagnosticar_automacoes', 'analisar_prompt_agentes', 'listar_automacoes', 'buscar_contatos', 'criar_tarefa', 'gerar_relatorio', 'agendar_rotina', 'listar_rotinas', 'pausar_rotina', 'lembrar'],
     prompt: `${BASE}
 
 SEU PAPEL: Estrategista de crescimento (marketing, tráfego, conteúdo, receita).

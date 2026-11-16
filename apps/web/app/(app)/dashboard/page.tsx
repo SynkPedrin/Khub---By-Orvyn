@@ -22,7 +22,7 @@ import {
   VALOR_PIPELINE,
 } from '@/lib/demo/dataset';
 import { EmptyState, ErrorState } from '@/components/revenue/States';
-import { crm, type Overview, type Tarefa } from '@/lib/crm';
+import { crm, type ContagemOrigem, type Overview, type Tarefa } from '@/lib/crm';
 import { conversaoHonesta } from '@/lib/revenue/conversao';
 
 /**
@@ -129,6 +129,13 @@ function DashboardReal() {
         <KpiCard label="Valor em Pipeline" value={moeda(overview.kpis.valorFunil)} icon="dollar" tom="success" />
         <KpiCard label="Taxa de Conversão" icon="chart" {...conversaoHonesta(overview.kpis)} />
       </KpiGrid>
+
+      {overview.leadsPorOrigem && (
+        <div className="mb-6 grid gap-4 sm:grid-cols-2">
+          <CardOrigem logo="/logos/meta.webp" nome="Meta Ads" detalhe="Facebook e Instagram" c={overview.leadsPorOrigem.meta} />
+          <CardOrigem logo="/logos/google-ads.webp" nome="Google Ads" detalhe="Pesquisa e YouTube" c={overview.leadsPorOrigem.google} />
+        </div>
+      )}
 
       <div className="mb-6 grid gap-4 xl:grid-cols-2">
         <Section
@@ -543,4 +550,29 @@ function toneDaAtividade(tipo: string): string {
     etapa: 'icon-tile-success',
   };
   return mapa[tipo] ?? 'icon-tile-neutral';
+}
+
+/**
+ * Leads que vieram de anúncio, por plataforma: o número grande é o mês
+ * corrente; embaixo, os últimos 7 dias e o total. A origem é gravada na
+ * entrada do lead (atribuição); contato antigo usa o texto de origem.
+ */
+function CardOrigem({ logo, nome, detalhe, c }: { logo: string; nome: string; detalhe: string; c: ContagemOrigem }) {
+  return (
+    <div className="card-crystal flex min-w-0 items-center gap-4 p-5">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={logo} alt="" className="h-11 w-11 shrink-0 rounded-xl object-contain" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[13px] font-medium text-muted">
+          Leads do {nome} <span className="text-faint">· {detalhe}</span>
+        </p>
+        <p className="t-kpi mt-1 text-fg">
+          {numero(c.mes)} <span className="text-sm font-medium text-muted">este mês</span>
+        </p>
+        <p className="mt-1.5 text-xs text-muted">
+          {numero(c.semana)} nos últimos 7 dias · {numero(c.total)} no total
+        </p>
+      </div>
+    </div>
+  );
 }

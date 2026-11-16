@@ -98,7 +98,7 @@ export function NyroMensagens({ status, bolhas, passos, pensando, erro, sugestoe
                   ))}
                 </p>
               )}
-              <p className="whitespace-pre-wrap rounded-2xl rounded-br-md bg-brand px-3.5 py-2 text-sm text-white">{b.texto}</p>
+              <p className="whitespace-pre-wrap rounded-2xl rounded-br-md bg-brand px-3.5 py-2 text-sm font-medium text-[#0b0b0b]">{b.texto}</p>
             </div>
           ) : (
             <div className="max-w-[96%]">

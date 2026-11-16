@@ -58,6 +58,8 @@ export const TIPOS_NO = [
   // Q3.1 (+ W4)
   'acao.remover_de_fluxo',
   'acao.atribuir_usuario',
+  'acao.ativar_ia',
+  'acao.passar_humano',
   'acao.nao_perturbe',
   'acao.atualizar_negocio',
 ] as const;
@@ -198,8 +200,11 @@ const esperarAteSchema = z.discriminatedUnion('modo', [
 ]);
 
 const gatilhoAgendadoSchema = z.object({
-  frequencia: z.enum(['diario', 'semanal', 'mensal']).default('diario'),
+  /** `uma_vez`: dispara uma única vez em `data` + `hora` (ex.: lançamento, evento, Black Friday). */
+  frequencia: z.enum(['uma_vez', 'diario', 'semanal', 'mensal']).default('diario'),
   hora: z.string().regex(HORA_RE, 'hora no formato HH:MM').default('09:00'),
+  /** Só na `uma_vez`: dia do disparo (AAAA-MM-DD) no fuso do fluxo. */
+  data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'data no formato AAAA-MM-DD').optional(),
   /** 0 = domingo ... 6 = sábado (só no semanal). */
   diasSemana: z.array(z.number().int().min(0).max(6)).max(7).default([1]),
   /** Dia do mês (só no mensal). 31 em mês curto = último dia. */
@@ -212,6 +217,7 @@ const gatilhoAgendadoSchema = z.object({
   stageId: z.string().uuid().optional(),
 }).superRefine((c, ctx) => {
   if (c.frequencia === 'semanal' && !c.diasSemana.length) ctx.addIssue({ code: 'custom', path: ['diasSemana'], message: 'escolha ao menos um dia da semana' });
+  if (c.frequencia === 'uma_vez' && !c.data) ctx.addIssue({ code: 'custom', path: ['data'], message: 'escolha o dia do disparo' });
   if (c.alvo === 'segmento' && !c.tags.length && !c.stageId) ctx.addIssue({ code: 'custom', path: ['alvo'], message: 'segmento precisa de tag ou etapa (sem filtro dispararia para a base inteira)' });
 });
 
@@ -450,6 +456,10 @@ const configs: Record<TipoNo, z.ZodTypeAny> = {
     if (c.modo === 'rodizio' && !c.usuarios.length) ctx.addIssue({ code: 'custom', path: ['usuarios'], message: 'escolha ao menos um usuário para o rodízio' });
     if (new Set(c.usuarios).size !== c.usuarios.length) ctx.addIssue({ code: 'custom', path: ['usuarios'], message: 'usuário repetido no rodízio' });
   }),
+  /** Liga um agente de IA na conversa do contato (vazio = o agente padrão do canal). */
+  'acao.ativar_ia': z.object({ agentId: z.string().uuid().optional() }),
+  /** Tira a conversa da IA e entrega para a equipe (distribui para quem tem menos conversas). */
+  'acao.passar_humano': z.object({ motivo: z.string().max(300).optional() }),
   /** Liga/desliga o "não perturbe" (`contacts.opted_out_at`): bloqueia SMS/WhatsApp e e-mail ao contato. */
   'acao.nao_perturbe': z.object({ ativar: z.boolean().default(true) }),
   /** Atualiza o negócio do contexto. Ao menos uma mudança. */
@@ -586,7 +596,7 @@ export const CATALOGO: MetaNo[] = [
   { tipo: 'gatilho.faltou', categoria: 'gatilho', grupo: 'Agenda', nome: 'Contato faltou', descricao: 'O compromisso foi marcado como falta. Ideal para recuperar e reagendar.', busca: ['agenda', 'falta', 'faltou', 'no-show', 'não compareceu', 'reagendar', 'recuperação'] },
   { tipo: 'gatilho.agendamento_cancelado', categoria: 'gatilho', grupo: 'Agenda', nome: 'Agendamento cancelado', descricao: 'O compromisso foi cancelado.', busca: ['agenda', 'cancelou', 'cancelamento', 'desmarcou'] },
   { tipo: 'gatilho.lembrete_agendamento', categoria: 'gatilho', grupo: 'Agenda', nome: 'Lembrete do agendamento (D-1)', descricao: 'Faltam até 24 horas para um compromisso ainda não confirmado. Se o contato responder "sim", a agenda confirma sozinha.', busca: ['agenda', 'lembrete', 'd-1', 'véspera', 'confirmar', 'reminder'] },
-  { tipo: 'gatilho.agendado', categoria: 'gatilho', grupo: 'Tempo', nome: 'Agendado (recorrente)', descricao: 'Roda todo dia, toda semana ou todo mês num horário. Sem contato ou para cada contato de um segmento (tag ou etapa).', busca: ['cron', 'scheduler', 'agendar', 'recorrente', 'diário', 'semanal', 'mensal', 'horário', 'rotina'] },
+  { tipo: 'gatilho.agendado', categoria: 'gatilho', grupo: 'Tempo', nome: 'Data e hora (agendado)', descricao: 'Roda uma vez numa data e hora, ou todo dia, toda semana ou todo mês num horário. Sem contato ou para cada contato de um segmento (tag ou etapa).', busca: ['cron', 'scheduler', 'agendar', 'recorrente', 'diário', 'semanal', 'mensal', 'horário', 'rotina', 'data', 'momento', 'uma vez', 'específico', 'lançamento'] },
   { tipo: 'gatilho.data_contato', categoria: 'gatilho', grupo: 'Tempo', nome: 'Data do contato (aniversário)', descricao: 'Dias antes, no dia ou depois de uma data do contato: aniversário, renovação, data de cadastro. Varredura diária, uma vez por data. Para repetir todo ano, deixe a reentrada em "sempre".', busca: ['aniversário', 'aniversario', 'birthday', 'data', 'lembrete', 'renovação', 'vencimento', 'custom date'] },
   { tipo: 'gatilho.formulario_enviado', categoria: 'gatilho', grupo: 'Captação', nome: 'Formulário enviado', descricao: 'O contato enviou um formulário. Use {{formulario.<campo>}} com as respostas.', busca: ['form', 'formulário', 'cadastro', 'inscrição', 'landing'] },
   { tipo: 'gatilho.pagamento_recebido', categoria: 'gatilho', grupo: 'Financeiro', nome: 'Pagamento recebido', descricao: 'Uma cobrança foi paga. Filtro opcional por valor mínimo. Use {{pagamento.valor}} e {{pagamento.descricao}}.', busca: ['pagamento', 'pago', 'cobrança', 'stripe', 'pix', 'boleto', 'payment', 'recebido', 'venda'] },
@@ -616,6 +626,8 @@ export const CATALOGO: MetaNo[] = [
   { tipo: 'acao.remover_tag', categoria: 'acao', grupo: 'Contato', nome: 'Remover tag', descricao: 'Tira a tag do contato.', busca: ['etiqueta', 'desmarcar'] },
   { tipo: 'acao.atualizar_contato', categoria: 'acao', grupo: 'Contato', nome: 'Atualizar contato', descricao: 'Grava um valor num campo do contato.', busca: ['campo', 'editar', 'campo customizado'] },
   { tipo: 'acao.atribuir_usuario', categoria: 'acao', grupo: 'Contato', nome: 'Atribuir responsável', descricao: 'Define o dono do contato: um usuário fixo ou rodízio entre membros da equipe. Opcional: só se ainda não tiver dono.', busca: ['dono', 'owner', 'responsável', 'round robin', 'rodízio', 'distribuir', 'atribuir', 'vendedor'] },
+  { tipo: 'acao.ativar_ia', categoria: 'acao', grupo: 'Contato', nome: 'Ativar IA na conversa', descricao: 'Liga um agente de IA na conversa do contato (vazio = o agente padrão do canal). A partir daí a IA responde as mensagens dele.', busca: ['ia', 'agente', 'ativar', 'ligar', 'robô', 'robo', 'assistente', 'inteligência'] },
+  { tipo: 'acao.passar_humano', categoria: 'acao', grupo: 'Contato', nome: 'Passar para humano', descricao: 'Tira a conversa da IA e entrega para a equipe, distribuindo para quem tem menos conversas abertas.', busca: ['humano', 'pessoa', 'equipe', 'transferir', 'desligar ia', 'atendente'] },
   { tipo: 'acao.nao_perturbe', categoria: 'acao', grupo: 'Contato', nome: 'Não perturbe', descricao: 'Liga ou desliga o "não perturbe": com ele ligado, nenhum SMS, WhatsApp ou e-mail sai para o contato.', busca: ['dnd', 'opt-out', 'descadastrar', 'bloquear', 'silenciar', 'lgpd'] },
   { tipo: 'acao.remover_de_fluxo', categoria: 'acao', grupo: 'Ferramentas internas', nome: 'Remover de fluxo', descricao: 'Tira o contato deste fluxo ou de outros: cancela as execuções ativas dele.', busca: ['remove', 'sair', 'cancelar', 'parar', 'workflow', 'tirar'] },
   { tipo: 'acao.atualizar_negocio', categoria: 'acao', grupo: 'Negócios', nome: 'Atualizar negócio', descricao: 'Muda valor, status (ganho, perdido), etapa, dono ou campos personalizados do negócio do contexto.', busca: ['deal', 'oportunidade', 'valor', 'ganho', 'perdido', 'status', 'dono'] },

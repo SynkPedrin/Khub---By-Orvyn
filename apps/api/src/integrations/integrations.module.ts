@@ -11,6 +11,7 @@ import { AdsService } from './ads.service';
 import { AdsSimulatorService } from './ads-simulator.service';
 import { AdsSyncService } from './ads-sync.service';
 import { AdsSyncProcessor } from './ads-sync.processor';
+import { AdsSyncScheduler } from './ads-sync.scheduler';
 import { AdsController, AdsSimuladorController, IntegrationsController } from './integrations.controller';
 import { MetaWebhookController } from './meta-webhook.controller';
 
@@ -40,6 +41,7 @@ import { queueConnection, isWorker } from '../common/queue-connection';
     AdsService,
     AdsSimulatorService,
     AdsSyncService,
+    AdsSyncScheduler,
     ...(isWorker() ? [AdsSyncProcessor] : []),
   ],
   exports: [AdsSyncService, CryptoService, MetaLeadsService],

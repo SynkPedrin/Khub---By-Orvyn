@@ -1,4 +1,5 @@
 import { UnauthorizedException } from '@nestjs/common';
+import { outboxFake } from '../../common/outbox.fake';
 import { assinarStevo, verificarAssinaturaStevo } from './stevo-assinatura';
 import { StevoApiWebhookController } from './stevo-api-webhook.controller';
 import { StevoApiEventosService, numeroDoJid } from './stevo-api-eventos.service';
@@ -54,10 +55,22 @@ describe('StevoApiWebhookController', () => {
 
   function montar(o: { tenant?: string | null; falhaImediata?: boolean; jaProcessado?: boolean } = {}) {
     process.env.STEVO_WEBHOOK_SECRET = SEGREDO;
+    const fake = outboxFake();
+    // reentrega: o evento já estava no outbox (processado ou não)
+    if (o.jaProcessado) fake.semear({ id: 'ob1', tenantId: TENANT, kind: 'stevo_api.event', dedupeKey: 'stevo_api-evt_01JABCDEF', payload: {}, status: 'processed' });
     const gravados: Record<string, unknown>[] = [];
     const tx = {
+      $queryRaw: jest.fn(async (strings: TemplateStringsArray, ...v: unknown[]) => {
+        const r = await fake.queryRaw(strings, ...v);
+        if (/INSERT/.test(strings.join('')) && r.length) {
+          const l = [...fake.linhas.values()].at(-1)!;
+          l.id = 'ob1';
+          gravados.push({ tenantId: l.tenantId, kind: l.kind, dedupeKey: l.dedupeKey, payload: l.payload });
+          return [{ id: 'ob1', status: 'pending' }];
+        }
+        return r;
+      }),
       outboxEvent: {
-        upsert: jest.fn(async ({ create }: { create: Record<string, unknown> }) => { gravados.push(create); return { ...create, id: 'ob1', status: o.jaProcessado ? 'processed' : 'pending' }; }),
         updateMany: jest.fn(async () => ({ count: 1 })),
       },
     };
@@ -120,8 +133,9 @@ describe('StevoApiWebhookController', () => {
 
   it('reentrega de evento já processado não processa de novo', async () => {
     const m = montar({ jaProcessado: true });
-    await m.ctrl.receber(m.req(envelope()));
+    await expect(m.ctrl.receber(m.req(envelope()))).resolves.toEqual({ ok: true }); // 2xx, nunca 500
     expect(m.eventos.processar).not.toHaveBeenCalled();
+    expect(m.gravados).toHaveLength(0);
   });
 
   it('figurinha: guarda o tipo e a URL da mídia, não o conteúdo cru', async () => {

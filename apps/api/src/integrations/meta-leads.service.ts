@@ -109,19 +109,24 @@ export class MetaLeadsService {
 
   /** true = evento novo; false = reentrega. */
   private async registrarEvento(tenantId: string, ev: LeadgenChange): Promise<boolean> {
+    // A unique de webhook_events é (provider, event_id), global: a chave leva o
+    // tenant (convenção das outras entradas) para a mesma página/lead em duas
+    // subcontas não colidir; a chave antiga (só o leadgenId) segue reconhecida.
+    // Inserção atômica: duas entregas simultâneas nunca estouram a unique (500).
+    const chave = chaveMeta(tenantId, ev.leadgenId);
     return this.prisma.withTenant(tenantId, async (tx) => {
-      const existe = await tx.webhookEvent.findFirst({ where: { provider: 'meta', eventId: ev.leadgenId }, select: { id: true, processedAt: true } });
+      const existe = await tx.webhookEvent.findFirst({ where: { provider: 'meta', eventId: { in: [chave, ev.leadgenId] } }, select: { id: true, processedAt: true } });
       if (existe) return !existe.processedAt;
-      await tx.webhookEvent.create({
-        data: { tenantId, provider: 'meta', eventId: ev.leadgenId, payload: { pageId: ev.pageId, formId: ev.formId ?? null } },
-      });
-      return true;
+      const payload = JSON.stringify({ pageId: ev.pageId, formId: ev.formId ?? null });
+      const nova = await tx.$executeRaw`INSERT INTO webhook_events (tenant_id, provider, event_id, payload)
+        VALUES (${tenantId}::uuid, 'meta', ${chave}, ${payload}::jsonb) ON CONFLICT (provider, event_id) DO NOTHING`;
+      return nova > 0;
     });
   }
 
   private async marcarProcessado(tenantId: string, leadgenId: string): Promise<void> {
     await this.prisma.withTenant(tenantId, (tx) =>
-      tx.webhookEvent.updateMany({ where: { provider: 'meta', eventId: leadgenId }, data: { processedAt: new Date() } }),
+      tx.webhookEvent.updateMany({ where: { provider: 'meta', eventId: { in: [chaveMeta(tenantId, leadgenId), leadgenId] } }, data: { processedAt: new Date() } }),
     );
   }
 
@@ -157,3 +162,6 @@ export class MetaLeadsService {
     };
   }
 }
+
+/** Chave de dedupe do lead da Meta em `webhook_events` (escopo do tenant). */
+export const chaveMeta = (tenantId: string, leadgenId: string) => `${tenantId}:${leadgenId}`;

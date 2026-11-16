@@ -129,10 +129,24 @@ export function alvoComDeslocamento(
 }
 
 export interface Recorrencia {
-  frequencia: 'diario' | 'semanal' | 'mensal';
+  frequencia: 'uma_vez' | 'diario' | 'semanal' | 'mensal';
   hora: string;
   diasSemana: number[];
   diaMes: number;
+  /** AAAA-MM-DD, só em `uma_vez`. */
+  data?: string;
+}
+
+/**
+ * Instante único de `uma_vez` (data + hora no fuso), ou null se já passou de
+ * `depois` (ou sem data): não há próxima janela e a agenda do nó sai.
+ */
+export function janelaUnica(r: Recorrencia, fuso: string, depois: Date): Date | null {
+  if (!r.data) return null;
+  const [ano, mes, dia] = r.data.split('-').map(Number);
+  const { hora, minuto } = hhmm(r.hora);
+  const t = instanteNoFuso(ano, mes, dia, hora, minuto, fuso);
+  return t.getTime() > depois.getTime() ? t : null;
 }
 
 /**
@@ -140,6 +154,7 @@ export interface Recorrencia {
  * Mensal com dia 31 em mês curto dispara no último dia do mês.
  */
 export function proximaJanela(r: Recorrencia, fuso: string, depois: Date): Date {
+  if (r.frequencia === 'uma_vez') throw new Error('uma_vez não recorre: use janelaUnica');
   const { hora, minuto } = hhmm(r.hora);
   const hoje = partesNoFuso(depois, fuso);
   // 400 dias cobre qualquer combinação (mensal + mês curto, semanal com 1 dia)

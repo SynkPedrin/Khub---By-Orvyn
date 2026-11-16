@@ -77,4 +77,25 @@ describe('ProblemDetailsFilter (RFC 7807)', () => {
     expect(enviado.body.status).toBe(501);
     expect(typeof enviado.body.status).toBe('number');
   });
+
+  it('erro de provedor externo (Stevo 502) vira 502 com code/retryable, nunca 500 "erro interno"', () => {
+    const { h, enviado } = host('/v1/integrations/whatsapp/connect');
+    const e = Object.assign(new Error('stevo_api_502_upstream_error'), { name: 'StevoApiError', status: 502, codigo: 'upstream_error', retryable: true });
+    filtro.catch(e, h);
+    expect(enviado.status).toBe(502);
+    expect(enviado.body).toMatchObject({ status: 502, code: 'stevo_upstream_error', provider: 'stevo_api', retryable: true });
+    expect(enviado.body.title).toContain('instável');
+    expect(enviado.header!['Retry-After']).toBe('30');
+  });
+
+  it('limite do provedor (429) vira 503; erro comum continua 500', () => {
+    const lim = host();
+    filtro.catch(Object.assign(new Error('x'), { name: 'StevoApiError', status: 429, codigo: 'rate_limited', retryable: true }), lim.h);
+    expect(lim.enviado.status).toBe(503);
+    const comum = host();
+    filtro.catch(new Error('boom'), comum.h);
+    expect(comum.enviado.status).toBe(500);
+    expect(comum.enviado.body.title).toBe('Erro interno');
+  });
 });
+

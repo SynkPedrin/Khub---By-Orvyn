@@ -26,6 +26,9 @@ const schema = z.object({
 
   // URL pública do front (redirect pós-OAuth)
   WEB_URL: z.string().url().default('http://localhost:3210'),
+  /** URL pública desta API (sem /v1). Emissor do OAuth do conector MCP (ADR-0049).
+   *  Ausente = deduzida do próprio request (Host + X-Forwarded-Proto). */
+  API_PUBLIC_URL: z.string().url().optional(),
 
   // Meta Ads (app do operador; token do cliente vem do OAuth)
   META_APP_ID: z.string().optional(),

@@ -4,6 +4,19 @@
 
 ---
 
+## ✅ SPRINT CAROL — Agente comercial do Instituto Bárbara Lopes *(ENTREGUE EM DEV — 2026-11-16; go-live aguarda homologação)*
+> Prompt master "CAROL AI". Escopo autorizado: auditar, configurar em rascunho na subconta correta, implementar/testar o que faltar — **sem** publicar produção, sem tocar a Studio da Beleza, sem mensagens reais.
+
+- **Subconta:** Dra. Bárbara Lopes `c5b82d42-cd59-443e-bb3d-c0c8cbdad2a3` (confirmada por nome; a "subconta retornada pelo MCP" mencionada no prompt era a Studio da Beleza — **não utilizada**).
+- **Reuso, não duplicação:** runtime de agentes, follow-up engine, memória 3 níveis, RAG, agenda com lock, financeiro e custom fields já existiam e foram usados. A spec pedia "Custom Values" — o equivalente real é `settings.operacao` (parâmetros centralizados) + base de conhecimento RAG.
+- **Código novo:** 4 tools da agente (remarcar/cancelar agendamento, registrar/verificar sinal Pix) com falha fechada e auditoria `nyro`; `passoMin` no motor de slots (bug real: grade por duração escondia o último horário); `agents/config/operacao.ts`; módulo de agentes passa a importar `FinanceiroModule`.
+- **Config dev aplicada e verificada:** prompt final (7496 chars, `docs/carol/01_PROMPT_CAROL.md`), 31 custom fields, pipeline de 10 etapas, 5 docs de conhecimento (20 chunks, published), 5 follow-ups ativos, guardrail CFM ligado (nicho), agendamento da IA com aprovação humana até homologação.
+- **Gates:** jest API **1535 verdes** (14 novos) · E2E banco real **14/14** · RAG 4/4 · instalador idempotente (4 rodadas).
+- **Pendências (go-live):** chave Pix oficial, `ANTHROPIC_API_KEY` p/ testes conversacionais com modelo real, homologação da Dra. (durações, reembolso do sinal), aplicar migrations 070–072 + deploy + `carol-configurar.mjs --aplicar` em produção — **só com aprovação**.
+- Artefatos: `docs/carol/` (01 prompt · 02 config exportada · 03 implantação/testes/rollback) · `scripts/operar/carol-*.mjs`.
+
+---
+
 ## ✅ SPRINT CAL-PESSOAL — Calendário individual por colaborador  *(CONCLUÍDA — 2026-11-13)*
 > Pedido do product owner: gerenciar o calendário individual de cada pessoa da equipe; cada colaborador cria e configura o próprio calendário (horários) e compartilha o link individual com clientes; as reservas de todos formam a visão completa da empresa. Benefício do sistema, para todos os tenants.
 > Aprovação estrutural (2026-11-13): reusar `booking_pages` com `owner_id`; 1 link pessoal por colaborador; escopo full-stack nesta sessão. Tasks: [[Tasks|CAL-01…04]] (todas `[x]`).
@@ -379,7 +392,7 @@ Base já entregue: `.env.example` (contrato completo) e RegrasNegocio §6.1/§6.
 - [x] `db/005_integrations_schema.sql`: 7 tabelas (`integrations`, `ad_accounts`, `ad_campaigns`, `ad_sets`, `ad_creatives`, `ad_insights` particionada, `ad_sync_runs`) — RLS + isolamento (`002` verde).
 - [x] `CryptoService` AES-256-GCM (`INTEGRATIONS_ENCRYPTION_KEY`); env opcionais (só `JWT_SECRET` fatal).
 - [x] Módulo `integrations`: contrato `AdsConnector` + `MetaAdsConnector` (OAuth/sync/insights/health) sobre `GraphClient` mockável; `ADS_CONNECTORS`.
-- [x] **BullMQ** fila `ads-sync` (job pós-conexão + on-demand) idempotente; `ads-sync.processor`; `ad_sync_runs`.
+- [x] **BullMQ** fila `ads-sync` (job pós-conexão + on-demand) idempotente; `ads-sync.processor`; `ad_sync_runs`. **Periódico (16/11):** `ads-sync.scheduler` registra `sync-todos` a cada 6h no worker (`upsertJobScheduler`) — varre integrações de ads conectadas e roda o sync de cada uma.
 - [x] Webhook `GET/POST /v1/webhooks/meta` (verify + ack idempotente).
 - [x] Rotas: `GET /v1/integrations`, `GET /v1/integrations/:provider/auth-url`, `POST /v1/integrations/:provider/callback` (público), `POST /v1/integrations/:id/sync`, `GET /v1/ads/{overview,campaigns,creatives}`. Proxy Next `/api/v1/*` + callback `/api/integrations/meta/callback`.
 - [x] Front `/marketing/ads`: KPIs (spend/leads/CPL/ROAS), campanhas ordenáveis, galeria de criativos com "★ Melhor performando", health das conexões, empty state com CTA.
@@ -413,3 +426,18 @@ Conectar uma conta **real** exige `META_APP_ID/SECRET` + permissões `ads_read`/
 2. **Integração R1** (RAG): `VOYAGE_API_KEY` → `node apps/api/scripts/seed-rag.mjs` popula o RAG e liga a busca à Nyro.
 3. Evoluir F1: perfil 360 do contato, edição de deal, envio real no inbox (Evolution API).
 2. **R2**: `ContextualizerService` (Haiku + prompt caching), `RerankerService` (cross-encoder calibrado → liga o corte `RAG_MIN_SCORE`), cache Redis, `GuardrailsService` (CFM/OAB). Consultar skill `claude-api` para o model id do Haiku ao implementar R2.1.
+
+---
+
+## 🚧 SPRINT IA-VIVO — IA respondendo ao vivo + nó "Ativar IA" nas automações  *(EM ANDAMENTO — 2026-11-13)*
+> Pedido do product owner: a IA não respondia; não havia nó de automação para ativá-la; teste ao vivo com o número dele (gatilho de tag). Decisões: rebuild + restart da stack local aprovado; contato NÃO apagado (teste com o contato real).
+
+**Diagnóstico (dev, tenant Studio da Beleza `1cc7e839`):** Ritinha ativa e padrão, conversa em `atendimento=ia` — configuração certa; o que quebrava era o `dist/` desatualizado (erros Prisma `agentDelivery`/`agentExtraction` em 11/11) e o **worker parado** (fila `agent-replies` sem consumidor). Base de conhecimento do tenant: 0 documentos e `conhecimento_ativo=false` (importação GHL não virou documentos RAG — sprint futura). Automação "Novo Lead 🚀" estava **pausada**.
+
+**Entregue:**
+- Nós novos `acao.ativar_ia` (agente escolhido ou padrão do canal) e `acao.passar_humano` (motivo opcional, distribui para a equipe) — catálogo, executor, sandbox de teste, painel web com seletor de agente, ícones no canvas. `AtendimentoService.ativarIaSistema` (ator `sistema`, agente precisa atender o canal). Agente inexistente/inativo → `UnrecoverableError` (DLQ direta, erro de config, não transitório).
+- Stack: `pnpm build` da API + restart da API (:3333) e **worker subido** (não havia processo worker rodando).
+- **Teste ao vivo E2E verde:** workflow "TESTE · tag → ativar IA" (gatilho.tag_adicionada `teste-ia` → ativar_ia → SMS de confirmação) criado no tenant; tag aplicada no contato do Pedro → trigger db/022 → outbox → run **concluído** → conversa com `atendimento=ia`/Ritinha → mensagem de confirmação enviada no WhatsApp.
+- Gates: executor 39 testes (6 novos), automations+crm 579, web 179; tsc API/web ok.
+
+**Pendente:** o Pedro mandar mensagem no WhatsApp para validar a resposta da Ritinha ao vivo; decidir sobre a automação "Novo Lead 🚀" (pausada — plugar nó Ativar IA e reativar?); remover o workflow de teste depois; sprint seguinte: base de conhecimento (reimportar trechos GHL) e ícones/auto-layout do editor.

@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, HttpException, Logger, Param, ParseUUI
 import type { Response } from 'express';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsBoolean, IsOptional, IsString, IsUUID, MaxLength, MinLength, ValidateNested } from 'class-validator';
+import { ErroProvedorIA } from '../ai/provider.contract';
 import { NyroService } from './nyro.service';
 import { NicoInsightsService } from './insights.service';
 import { NicoAnalisesService } from './analises.service';
@@ -9,6 +10,14 @@ import { CurrentUser, TenantId, type AuthUser } from '../auth/decorators';
 import { CATALOGO_PUBLICO } from './tools-publicas';
 import { MAX_ANEXOS } from './anexos';
 
+/** O que dizer ao usuário quando o provedor de IA falha (o detalhe técnico vai só para o log). */
+const MENSAGEM_PROVEDOR: Record<ErroProvedorIA['causa'], string> = {
+  credencial: 'A chave da IA foi recusada pelo provedor. Quem administra precisa conferir a ANTHROPIC_API_KEY no servidor.',
+  limite: 'A IA está com limite de uso no momento. Tente de novo em instantes.',
+  indisponivel: 'A IA está fora do ar agora. Tente de novo em instantes.',
+  requisicao: 'A IA recusou o pedido (erro de configuração do servidor). O detalhe está no log da API.',
+  desconhecida: 'Não consegui falar com a NICO agora.',
+};
 class AnexoDto {
   @IsString() @MinLength(1) @MaxLength(160) nome!: string;
   /** Arquivo em base64 (até 10 MB binários ≈ 14 MB de texto). */
@@ -64,10 +73,16 @@ export class NyroController {
     try {
       await this.nyro.conversar({ tenantId: t, identityId: u.identityId }, dto.texto, dto.conversationId, dto.anexos, { emitir: enviar });
     } catch (e) {
-      // 4xx (ex.: anexo inválido) tem mensagem própria para o usuário; o resto não vaza detalhe interno
-      const status = e instanceof HttpException ? e.getStatus() : 500;
+      // 4xx (ex.: anexo inválido) tem mensagem própria; erro do provedor de IA diz a causa de forma útil;
+      // o resto não vaza detalhe interno. O detalhe técnico completo vai para o log.
+      let status = e instanceof HttpException ? e.getStatus() : 500;
+      let mensagem = status < 500 && e instanceof HttpException ? e.message : 'Não consegui falar com a NICO agora.';
+      if (e instanceof ErroProvedorIA) {
+        status = 502;
+        mensagem = MENSAGEM_PROVEDOR[e.causa];
+      }
       if (status >= 500) this.log.error(`chat/stream falhou: ${(e as Error).message}`);
-      enviar({ tipo: 'erro', status, mensagem: status < 500 && e instanceof HttpException ? e.message : 'Não consegui falar com a NICO agora.' });
+      enviar({ tipo: 'erro', status, mensagem });
     } finally {
       clearInterval(batida);
       res.end();

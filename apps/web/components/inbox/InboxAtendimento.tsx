@@ -14,7 +14,7 @@ import { ApiError } from '@/lib/api-error';
 import { useRealtime } from '@/lib/realtime';
 import { Drawer, Menu, useToast, type MenuEntry } from '@/components/kit';
 import { corpoDaMidia, inbox, lerBase64, tipoDoArquivo, type ContagensConversas, type ContextoConversa, type ItemThread } from '@/lib/inbox';
-import { FILTRO_INICIAL, STATUS_LISTA, filtrarBusca, mesmoFiltro, queryDaLista, type FiltroLista } from '@/lib/conversas-filtro';
+import { FILTRO_INICIAL, ORDEM_CANAIS, STATUS_LISTA, filtrarBusca, mesmoFiltro, queryDaLista, type FiltroLista } from '@/lib/conversas-filtro';
 import { Composer } from './Composer';
 import { AnexoBolha } from './AnexoBolha';
 import { PainelContexto } from './PainelContexto';
@@ -23,6 +23,8 @@ import { ColunaCanais } from './ColunaCanais';
 import { CanaisConectados } from './CanaisConectados';
 import { SugestoesIA } from './SugestoesIA';
 import { CanalIcone, SeloCanal, canalInfo } from './CanalIcone';
+import { horaLista, horaMensagem } from '@/lib/hora-conversa';
+import { agentesApi } from '@/lib/agents';
 
 /**
  * Inbox de atendimento REAL (ADR-0039) — substitui a tela que só existia no
@@ -264,9 +266,17 @@ export function InboxAtendimento() {
     [descer],
   );
 
-  // Carga inicial; `?c=` (deep link da busca ⌘K) abre a conversa pedida.
+  // Carga inicial; `?c=` (deep link da busca ⌘K) abre a conversa pedida;
+  // `?canal=Instagram` (vindo de Redes › Direct) já abre filtrado no canal.
   useEffect(() => {
-    const alvo = new URLSearchParams(window.location.search).get('c');
+    const q = new URLSearchParams(window.location.search);
+    const alvo = q.get('c');
+    const canal = q.get('canal');
+    if (canal && (ORDEM_CANAIS as readonly string[]).includes(canal)) {
+      const f: FiltroLista = { ...FILTRO_INICIAL, canal };
+      filtroRef.current = f;
+      setFiltroLista(f);
+    }
     void carregarLista().then((cs) => {
       if (!cs) return;
       for (const c of cs) versaoRef.current[c.id] = c.atualizadaEm;
@@ -338,6 +348,16 @@ export function InboxAtendimento() {
     },
   });
 
+  // Agentes de IA: nome no selo "IA ativa" e se existe padrão para o canal.
+  // Sem o módulo IA (ADR-0045) a API recusa: o selo aparece sem o nome.
+  const [agentes, setAgentes] = useState<AgenteDaConversa[]>([]);
+  useEffect(() => {
+    agentesApi
+      .listar()
+      .then((l) => setAgentes(l.map((a) => ({ id: a.id, nome: a.nome, status: a.status, padrao: a.padrao, canais: a.canais, modo: (a.config as { modo?: string } | undefined)?.modo === 'sugestivo' ? 'sugestivo' : 'automatico' }))))
+      .catch(() => setAgentes([]));
+  }, []);
+
   // Atendentes (atribuir e @menção) e preferência do painel lateral.
   useEffect(() => {
     crm.atendentes().then(setAtendentes).catch(() => setAtendentes([]));
@@ -405,7 +425,7 @@ export function InboxAtendimento() {
     const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     const tmp = `tmp-${Date.now()}`;
     setThread((p) => [...(p ?? []), { id: tmp, de: 'humano', texto: t, hora, criadaEm: new Date().toISOString(), local: 'enviando', enviadoPorNome: user?.name ?? null }]);
-    setConvs((cs) => cs?.map((c) => (c.id === conversa.id ? { ...c, ultimaPrevia: t, ultimaHora: hora } : c)) ?? cs);
+    setConvs((cs) => cs?.map((c) => (c.id === conversa.id ? { ...c, ultimaPrevia: t, ultimaHora: hora, ultimaMensagemEm: new Date().toISOString() } : c)) ?? cs);
     descer();
     try {
       const r = await crm.sendMessage(conversa.id, t);
@@ -642,7 +662,7 @@ export function InboxAtendimento() {
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline justify-between gap-2">
                       <span className={cx('truncate text-[14px] text-fg', c.naoLidas ? 'font-semibold' : 'font-medium')}>{c.nome}</span>
-                      <span className={cx('shrink-0 text-[11.5px] tabular', c.naoLidas ? 'font-semibold text-brand' : 'text-muted')}>{c.ultimaHora ?? ''}</span>
+                      <span className={cx('shrink-0 text-[11.5px] tabular', c.naoLidas ? 'font-semibold text-brand' : 'text-muted')}>{horaLista(c.ultimaMensagemEm ?? c.atualizadaEm, c.ultimaHora)}</span>
                     </span>
                     {c.contato?.empresa && <span className="block truncate text-[12px] text-brand">{c.contato.empresa}</span>}
                     <span className="mt-0.5 flex items-center gap-2">
@@ -693,22 +713,13 @@ export function InboxAtendimento() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                {conversa.atendimento === 'ia' ? (
-                  <>
-                    <span className="pill pill-brand">
-                      <Icon name="sparkles" size={12} /> IA respondendo
-                    </span>
-                    <button type="button" className="btn btn-sm" disabled={trocando} onClick={() => void trocarAtendimento('assumir')}>
-                      Assumir conversa
-                    </button>
-                  </>
-                ) : (
-                  conversa.agentId && (
-                    <button type="button" className="btn btn-soft btn-sm" disabled={trocando} onClick={() => void trocarAtendimento('devolver_ia')}>
-                      <Icon name="sparkles" size={14} /> Devolver para a IA
-                    </button>
-                  )
-                )}
+                <EstadoIa
+                  conversa={conversa}
+                  agentes={agentes}
+                  trocando={trocando}
+                  onAssumir={() => void trocarAtendimento('assumir')}
+                  onIa={() => void trocarAtendimento('devolver_ia')}
+                />
                 <Menu
                   label="Atribuir conversa"
                   disabled={trocando || atendentes.length === 0}
@@ -808,7 +819,7 @@ export function InboxAtendimento() {
                               <Icon name="lock" size={11} /> Nota interna{m.enviadoPorNome ? ` de ${m.enviadoPorNome}` : ''}
                             </p>
                             <span className="block whitespace-pre-wrap break-words">{m.texto}</span>
-                            <p className="mt-1 text-right text-xs text-muted tabular">{m.hora ?? ''}</p>
+                            <p className="mt-1 text-right text-xs text-muted tabular">{horaMensagem(m.criadaEm, m.hora)}</p>
                           </div>
                         </div>
                       );
@@ -855,7 +866,7 @@ export function InboxAtendimento() {
                             <CorpoMensagem texto={m.texto} />
                           )}
                           <p className={cx('mt-1 text-right text-[10.5px] tabular', minha && !ia && !automacao ? (conversa.canal === 'Instagram' ? 'text-white/75' : 'text-[#667781] dark:text-[#e9edef]/70') : 'text-muted')}>
-                            {m.hora ?? ''}
+                            {horaMensagem(m.criadaEm, m.hora)}
                           </p>
                         </div>
                         {st && minha && <span className={cx('sr-only')}>{st.rotulo}</span>}
@@ -942,5 +953,62 @@ export function InboxAtendimento() {
       {drawerCanais}
       {modalNova}
     </div>
+  );
+}
+
+
+/**
+ * Quem responde esta conversa, sempre visível (o usuário ligou a IA, mandou
+ * mensagem e não sabia por que nada acontecia). A IA só responde quando a
+ * conversa está com ela: o estado nasce com a conversa (agente padrão do
+ * canal) e muda quando alguém assume ou devolve.
+ */
+type AgenteDaConversa = { id: string; nome: string; status: string; padrao: boolean; canais: string[]; modo: 'automatico' | 'sugestivo' };
+
+function EstadoIa({ conversa, agentes, trocando, onAssumir, onIa }: {
+  conversa: Conversa;
+  agentes: AgenteDaConversa[];
+  trocando: boolean;
+  onAssumir: () => void;
+  onIa: () => void;
+}) {
+  const agente = agentes.find((a) => a.id === conversa.agentId);
+  const padrao = agentes.find((a) => a.padrao && a.status === 'ativo' && a.canais.includes(conversa.canal));
+  if (conversa.atendimento === 'ia') {
+    const parado = agente && agente.status !== 'ativo';
+    return (
+      <>
+        <span
+          className={cx('pill', parado ? 'pill-warning' : 'pill-brand')}
+          title={parado ? `O agente ${agente.nome} está ${agente.status}: ele não responde até ser ativado.` : 'A IA responde as próximas mensagens do contato.'}
+        >
+          <span className={cx('h-1.5 w-1.5 rounded-full', parado ? 'bg-warning' : 'animate-pulse bg-brand')} aria-hidden />
+          {parado ? `IA pausada · ${agente.nome}` : `IA ativa${agente ? ` · ${agente.nome}` : ''}`}
+        </span>
+        <button type="button" className="btn btn-sm" disabled={trocando} onClick={onAssumir}>
+          Assumir conversa
+        </button>
+      </>
+    );
+  }
+  const alvo = agente ?? padrao;
+  return (
+    <>
+      <span
+        className="pill"
+        title={padrao?.modo === 'sugestivo' ? `A ${padrao.nome} está em modo sugestivo: só responde onde for ativada (aqui ou pelo nó "Ativar IA" da automação).` : 'Com humano: a IA não responde nesta conversa até você ativar.'}
+      >
+        <Icon name="user" size={12} /> {padrao?.modo === 'sugestivo' ? 'Humano · IA sugestiva' : 'Humano · IA não responde'}
+      </span>
+      <button
+        type="button"
+        className="btn btn-soft btn-sm"
+        disabled={trocando}
+        onClick={onIa}
+        title={alvo ? `A IA (${alvo.nome}) passa a responder esta conversa.` : 'Precisa de um agente padrão ativo para este canal (Agentes de IA).'}
+      >
+        <Icon name="sparkles" size={14} /> {conversa.agentId ? 'Devolver para a IA' : 'Ativar IA'}
+      </button>
+    </>
   );
 }

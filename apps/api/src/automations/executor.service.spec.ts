@@ -346,3 +346,71 @@ describe('ExecutorService — resposta que chegou ANTES da espera marcar (corrid
     expect(r.esperarMs).toBe(7_200_000);
   });
 });
+
+// ------------------------------------------------------------------ Ativar IA / Passar para humano
+
+import { BadRequestException } from '@nestjs/common';
+import type { AtendimentoService } from '../crm/messaging/atendimento.service';
+
+function montarAtendimento(atendimento: Record<string, jest.Mock>, semConversa = false) {
+  const prisma = {
+    withTenant: jest.fn(async (_t: string, work: (tx: unknown) => Promise<unknown>) =>
+      work({ conversation: { findFirst: jest.fn(async () => (semConversa ? null : { id: 'conv1' })) } }),
+    ),
+  } as unknown as PrismaService;
+  const svc = new ExecutorService(prisma, new ConfigService(), {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, undefined, atendimento as unknown as AtendimentoService);
+  return { svc, atendimento };
+}
+
+const NO_ATIVAR: No = { id: 'n1', tipo: 'acao.ativar_ia', posicao: { x: 0, y: 0 }, config: {} };
+const NO_HUMANO: No = { id: 'n2', tipo: 'acao.passar_humano', posicao: { x: 0, y: 0 }, config: {} };
+
+describe('nó Ativar IA na conversa', () => {
+  it('liga o agente padrão na conversa mais recente do contato', async () => {
+    const at = { ativarIaSistema: jest.fn(async () => ({ id: 'conv1', atendimento: 'ia', agentId: 'ag1', assigneeId: null, handoffMotivo: null })) };
+    const { svc } = montarAtendimento(at);
+    const r = await svc.executar(TENANT, NO_ATIVAR, CTX, GRAFO);
+    expect(at.ativarIaSistema).toHaveBeenCalledWith(TENANT, 'conv1', undefined);
+    expect(r.saida).toMatchObject({ atendimento: 'ia', agentId: 'ag1', conversationId: 'conv1' });
+  });
+
+  it('respeita o agente escolhido na config', async () => {
+    const AG = '99999999-9999-4999-8999-999999999999';
+    const at = { ativarIaSistema: jest.fn(async () => ({ id: 'conv1', atendimento: 'ia', agentId: AG, assigneeId: null, handoffMotivo: null })) };
+    const { svc } = montarAtendimento(at);
+    await svc.executar(TENANT, { ...NO_ATIVAR, config: { agentId: AG } }, CTX, GRAFO);
+    expect(at.ativarIaSistema).toHaveBeenCalledWith(TENANT, 'conv1', AG);
+  });
+
+  it('contato sem conversa é erro de configuração (DLQ direta, sem retentar)', async () => {
+    const at = { ativarIaSistema: jest.fn() };
+    const { svc } = montarAtendimento(at, true);
+    await expect(svc.executar(TENANT, NO_ATIVAR, CTX, GRAFO)).rejects.toThrow(UnrecoverableError);
+    expect(at.ativarIaSistema).not.toHaveBeenCalled();
+  });
+
+  it('agente inexistente/inativo é erro de configuração (não transitório)', async () => {
+    const at = { ativarIaSistema: jest.fn(async () => { throw new BadRequestException('não há agente padrão ativo para este canal'); }) };
+    const { svc } = montarAtendimento(at);
+    await expect(svc.executar(TENANT, NO_ATIVAR, CTX, GRAFO)).rejects.toThrow(UnrecoverableError);
+  });
+
+  it('passar para humano tira a IA com o motivo e o ator sistema', async () => {
+    const at = { transferirParaHumano: jest.fn(async () => ({ id: 'conv1', atendimento: 'humano', agentId: null, assigneeId: 'u1', handoffMotivo: 'automação passou para a equipe' })) };
+    const { svc } = montarAtendimento(at);
+    const r = await svc.executar(TENANT, NO_HUMANO, CTX, GRAFO);
+    expect(at.transferirParaHumano).toHaveBeenCalledWith(TENANT, 'conv1', 'automação passou para a equipe', { tipo: 'sistema' });
+    expect(r.saida).toMatchObject({ atendimento: 'humano', assigneeId: 'u1' });
+  });
+
+  it('no modo teste é só simulado (não muda o atendimento de verdade)', async () => {
+    const at = { ativarIaSistema: jest.fn(), transferirParaHumano: jest.fn() };
+    const { svc } = montarAtendimento(at);
+    const r1 = await svc.executar(TENANT, NO_ATIVAR, { ...CTX, teste: true }, GRAFO);
+    const r2 = await svc.executar(TENANT, NO_HUMANO, { ...CTX, teste: true }, GRAFO);
+    expect(r1.saida).toMatchObject({ simulado: true });
+    expect(r2.saida).toMatchObject({ simulado: true });
+    expect(at.ativarIaSistema).not.toHaveBeenCalled();
+    expect(at.transferirParaHumano).not.toHaveBeenCalled();
+  });
+});

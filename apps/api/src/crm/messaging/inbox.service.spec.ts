@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, UnprocessableEntityException } from '@nestjs/common';
-import { InboxService } from './inbox.service';
+import { InboxService, LIMITE_LEITURA_TELA, type AnexoMensagem } from './inbox.service';
 import { ConfigRequiredException } from '../../config/config.service';
 import { NotificationsService } from '../../common/notifications.service';
 import type { PrismaService } from '../../prisma/prisma.service';
@@ -158,6 +158,109 @@ describe('InboxService — iniciar conversa', () => {
   it('sem contato nem telefone: 400', async () => {
     const a = ambiente();
     await expect(a.svc.iniciarConversa(T, {}, EU)).rejects.toBeInstanceOf(BadRequestException);
+  });
+});
+
+describe('InboxService — thread: leitura da mídia e selo "pelo celular"', () => {
+  const M_AUDIO = 'd0000000-0000-4000-8000-000000000001';
+  const M_VIDEO = 'd0000000-0000-4000-8000-000000000002';
+  const M_CELULAR = 'd0000000-0000-4000-8000-000000000003';
+  const M_KHUB = 'd0000000-0000-4000-8000-000000000004';
+  const M_PDF = 'd0000000-0000-4000-8000-000000000005';
+
+  /** Thread com as mensagens dadas; `anexos` = o Json gravado em `message.anexo`; `doCelular` = ids que o banco devolve no filtro do prefixo. */
+  function ambienteThread(anexos: Record<string, unknown>, doCelular: string[] = []) {
+    const base = [M_AUDIO, M_VIDEO, M_CELULAR, M_KHUB, M_PDF].map((id, i) => ({
+      id,
+      de: id === M_CELULAR || id === M_KHUB ? 'humano' : 'contato',
+      texto: 'mensagem',
+      hora: '10:00',
+      status: 'legacy',
+      agentId: null,
+      criadaEm: new Date(Date.UTC(2026, 0, 1, 10, i)).toISOString(),
+      agentNome: null,
+      workflowId: null,
+      workflowNome: null,
+      enviadoPorId: id === M_KHUB ? EU : null,
+      enviadoPorNome: id === M_KHUB ? 'Pedro' : null,
+    }));
+    const consultas: Record<string, unknown>[] = [];
+    const tx = {
+      message: {
+        findMany: jest.fn(async (args: { where: Record<string, unknown> }) => {
+          consultas.push(args);
+          if ('idempotencyKey' in args.where) return doCelular.map((id) => ({ id }));
+          return Object.entries(anexos).map(([id, anexo]) => ({ id, anexo }));
+        }),
+      },
+      conversationNote: { findMany: jest.fn(async () => []) },
+      user: { findMany: jest.fn(async () => []) },
+    };
+    const prisma = { withTenant: jest.fn(async (_t: string, w: (t: unknown) => Promise<unknown>) => w(tx)) } as unknown as PrismaService;
+    const crm = { mensagensDaConversa: jest.fn(async () => ({ id: CONV, total: base.length, mensagens: base })) } as unknown as CrmService;
+    const storage = { urlLeitura: jest.fn((chave: string) => `https://s3/${chave}?assinada`) } as unknown as StorageService;
+    const svc = new InboxService(prisma, crm, {} as MessagesService, storage, new NotificationsService(), {} as DomainEventsService);
+    /** Anexo da mensagem na resposta da thread (nota interna não tem anexo). */
+    const anexoDe = async (id: string): Promise<AnexoMensagem | null> => {
+      const m = (await svc.thread(T, CONV)).mensagens.find((x) => x.id === id);
+      return m && 'anexo' in m ? m.anexo : null;
+    };
+    return { svc, consultas, anexoDe };
+  }
+
+  it('entrega anexo.leitura pronta (transcrição) e marca o vídeo para a tela rotular como transcrição', async () => {
+    const a = ambienteThread({
+      [M_AUDIO]: { tipo: 'audio', mime: 'audio/ogg', nome: 'audio.ogg', tamanho: 10, dataUrl: 'data:audio/ogg;base64,AAAA', leitura: { status: 'pronta', texto: '  Quero marcar um horário.  ', por: 'groq-whisper', em: '2026-01-01T10:00:05.000Z' } },
+      [M_VIDEO]: { tipo: 'video', mime: 'video/mp4', nome: 'video.mp4', tamanho: 99, leitura: { status: 'pendente', desde: '2026-01-01T10:01:00.000Z' } },
+    });
+    const r = await a.svc.thread(T, CONV);
+    const audio = r.mensagens.find((m) => m.id === M_AUDIO);
+    const video = r.mensagens.find((m) => m.id === M_VIDEO);
+    expect(audio).toMatchObject({ anexo: { tipo: 'audio', url: 'data:audio/ogg;base64,AAAA', leitura: { status: 'pronta', texto: 'Quero marcar um horário.', por: 'groq-whisper' } } });
+    expect(video).toMatchObject({ anexo: { tipo: 'documento', video: true, url: null, leitura: { status: 'pendente', desde: '2026-01-01T10:01:00.000Z' } } });
+  });
+
+  it('nunca devolve o dataUrl nem a chave do storage fora de `url`, e não repassa campos desconhecidos da leitura', async () => {
+    const a = ambienteThread({
+      [M_PDF]: { tipo: 'documento', mime: 'application/pdf', nome: 'exame.pdf', tamanho: 5, storageKey: `inbox/${T}/x`, dataUrl: 'data:application/pdf;base64,AAAA', leitura: { status: 'falhou', motivo: 'download', texto: 'não deveria sair', interno: 'x', faltando: ['A'] } },
+    });
+    const pdf = await a.anexoDe(M_PDF);
+    expect(pdf?.url).toBe(`https://s3/inbox/${T}/x?assinada`);
+    expect(pdf).not.toHaveProperty('dataUrl');
+    expect(pdf).not.toHaveProperty('storageKey');
+    expect(pdf?.leitura).toEqual({ status: 'falhou', motivo: 'download' });
+  });
+
+  it('texto de leitura gigante é cortado no DTO e sinalizado; status desconhecido vira "sem leitura"', async () => {
+    const a = ambienteThread({
+      [M_PDF]: { tipo: 'documento', mime: 'application/pdf', nome: 'contrato.pdf', tamanho: 5, leitura: { status: 'pronta', texto: 'a'.repeat(LIMITE_LEITURA_TELA + 50) } },
+      [M_AUDIO]: { tipo: 'audio', mime: 'audio/ogg', nome: 'a.ogg', tamanho: 1, leitura: { status: 'inventado', texto: 'x' } },
+    });
+    const pdf = await a.anexoDe(M_PDF);
+    expect(pdf?.leitura?.texto).toHaveLength(LIMITE_LEITURA_TELA);
+    expect(pdf?.leitura?.truncado).toBe(true);
+    const audio = await a.anexoDe(M_AUDIO);
+    expect(audio).toMatchObject({ tipo: 'audio' });
+    expect(audio).not.toHaveProperty('leitura');
+  });
+
+  it('config_required expõe só nomes de variáveis válidos', async () => {
+    const a = ambienteThread({
+      [M_AUDIO]: { tipo: 'audio', mime: 'audio/ogg', nome: 'a.ogg', tamanho: 1, leitura: { status: 'config_required', faltando: ['GROQ_API_KEY', 'valor com espaço', 7] } },
+    });
+    expect((await a.anexoDe(M_AUDIO))?.leitura).toEqual({ status: 'config_required', faltando: ['GROQ_API_KEY'] });
+  });
+
+  it('peloCelular vem do filtro no banco (humano, sem autor, prefixo `celular:`) e a chave de idempotência nunca sai', async () => {
+    const a = ambienteThread({}, [M_CELULAR]);
+    const r = await a.svc.thread(T, CONV);
+    const filtro = a.consultas.find((c) => 'idempotencyKey' in (c.where as Record<string, unknown>)) as { where: Record<string, unknown>; select: Record<string, unknown> };
+    expect(filtro.where).toMatchObject({ autorTipo: 'humano', enviadoPorId: null, idempotencyKey: { startsWith: 'celular:' } });
+    expect(filtro.select).toEqual({ id: true });
+    expect(r.mensagens.find((m) => m.id === M_CELULAR)).toMatchObject({ peloCelular: true, anexo: null });
+    expect(r.mensagens.find((m) => m.id === M_KHUB)).toMatchObject({ peloCelular: false });
+    expect(r.mensagens.find((m) => m.id === M_AUDIO)).toMatchObject({ peloCelular: false });
+    expect(JSON.stringify(r)).not.toMatch(/idempotency|celular:/i);
   });
 });
 

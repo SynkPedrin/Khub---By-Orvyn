@@ -82,6 +82,31 @@ describe('Visão financeira e guia do sistema', () => {
   });
 });
 
+describe('Ferramentas de consulta da operação', () => {
+  it('são só leitura e entram no agente único e na Estrategista', () => {
+    for (const n of ['leads_sem_resposta', 'listar_negocios', 'agenda_periodo', 'metricas_atendimento']) {
+      expect(TOOLS_POR_NOME.get(n)?.sensibilidade).toBe('leitura');
+      expect(toolsDoAgente('nico').map((t) => t.nome)).toContain(n);
+      expect(toolsDoAgente('growth').map((t) => t.nome)).toContain(n);
+    }
+  });
+  it('o schema valida limites e datas antes de qualquer consulta', () => {
+    const horas = TOOLS_POR_NOME.get('leads_sem_resposta')!.schema;
+    expect(horas.safeParse({ horas: 24 }).success).toBe(true);
+    expect(horas.safeParse({}).success).toBe(true); // padrão 24
+    expect(horas.safeParse({ horas: 0 }).success).toBe(false);
+    expect(horas.safeParse({ horas: 100000 }).success).toBe(false);
+    const agenda = TOOLS_POR_NOME.get('agenda_periodo')!.schema;
+    expect(agenda.safeParse({ de: '2026-11-09', ate: '2026-11-15' }).success).toBe(true);
+    expect(agenda.safeParse({ de: '09/11/2026', ate: '2026-11-15' }).success).toBe(false);
+    expect(TOOLS_POR_NOME.get('listar_negocios')!.schema.safeParse({ status: 'qualquer' }).success).toBe(false);
+  });
+  it('o prompt manda usar a ferramenta antes de dizer que só tem contagem por etapa', () => {
+    expect(AGENTES.nico.prompt).toContain('leads_sem_resposta');
+    expect(AGENTES.nico.prompt).toMatch(/não é resposta/);
+  });
+});
+
 describe('Agentes (PRD §5.1 — orquestrador multi-agente)', () => {
   it('cada agente enxerga só as tools do papel dele', () => {
     const consultoria = toolsDoAgente('consultoria').map((t) => t.nome);

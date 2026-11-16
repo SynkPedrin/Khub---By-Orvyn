@@ -29,6 +29,7 @@ import { TestarAutomacao } from '@/components/automations/TestarAutomacao';
 import { ModoSimples } from '@/components/automations/ModoSimples';
 import { ArestaInserir } from '@/components/automations/editor/ArestaInserir';
 import { NoNota, type DadosNota } from '@/components/automations/editor/NoNota';
+import { NoAdicionarGatilho, TIPO_ADICIONAR_GATILHO } from '@/components/automations/editor/NoAdicionarGatilho';
 import { PaletaNos, MIME_NO, MIME_NOTA } from '@/components/automations/editor/PaletaNos';
 import { ConfigFluxo } from '@/components/automations/editor/ConfigFluxo';
 import { HistoricoVersoes } from '@/components/automations/editor/HistoricoVersoes';
@@ -41,12 +42,12 @@ import {
   type Problema, type Ramo, type VersaoDetalhe, type VersaoResumo, type WorkflowResumo,
 } from '@/lib/automations';
 import {
-  ESPACO_Y, LARGURA_NO, colar, comandoDaTecla, desfazer, excluir, inserirEntre, novoHistorico,
-  organizarVertical, recortar, refazer, registrar, type Comando, type Recorte,
+  ALTURA_LINHA, PASSO_COLUNA, colar, comandoDaTecla, desfazer, excluir, inserirEntre, novoHistorico,
+  organizarHorizontal, pareceVertical, primeiroPasso, recortar, refazer, registrar, type Comando, type Recorte,
 } from '@/lib/automations-editor';
 import { ApiError } from '@/lib/api-error';
 
-const tiposNo = { khub: NoCanvas, nota: NoNota };
+const tiposNo = { khub: NoCanvas, nota: NoNota, [TIPO_ADICIONAR_GATILHO]: NoAdicionarGatilho };
 const tiposAresta = { khub: ArestaInserir };
 const ehGatilhoTipo = (tipo: string) => tipo.startsWith('gatilho.');
 const rid = () => Math.random().toString(36).slice(2, 9);
@@ -127,7 +128,20 @@ function configPadrao(tipo: string): Record<string, unknown> {
 type CfgNo = { config: Record<string, unknown>; rotulo?: string; aoFalhar?: 'parar' | 'seguir' };
 type NoRF = Node<DadosNo | DadosNota>;
 const ehNota = (n: Node): n is Node<DadosNota> => n.type === 'nota';
-const ehPasso = (n: Node): n is Node<DadosNo> => n.type !== 'nota';
+/** Só nós `khub` são passos do fluxo ("+ Adicionar gatilho" é interface e nunca vai para o grafo). */
+const ehPasso = (n: Node): n is Node<DadosNo> => n.type === 'khub';
+
+/** Organiza na horizontal (estilo GHL) usando a ordem de saídas declarada por cada nó. */
+function organizarComCatalogo(g: Grafo, cat: MetaNo[]): Grafo {
+  return organizarHorizontal(g, {
+    ordemRamos: (noId) => {
+      const n = g.nos.find((x) => x.id === noId);
+      return n ? (ramosDoNo(n.tipo, n.config, cat.find((c) => c.tipo === n.tipo)) ?? []).map((r) => r.id) : [];
+    },
+  });
+}
+/** Fluxo salvo no layout antigo (de cima para baixo) abre já na horizontal; só grava quando a pessoa mexer. */
+const naHorizontal = (g: Grafo, cat: MetaNo[]): Grafo => (pareceVertical(g) ? organizarComCatalogo(g, cat) : g);
 
 /** Área de transferência do editor: vive no módulo, então cola também em OUTRO fluxo da mesma aba. */
 let areaTransferencia: Recorte | null = null;
@@ -266,7 +280,7 @@ function EditorInterno() {
         setWebhookUrl(wf.webhookUrl);
         setWebhookAssinado(!!wf.webhookAssinado);
         ultimoSalvo.current = null;
-        aplicarGrafo(wf.grafo, cat);
+        aplicarGrafo(naHorizontal(wf.grafo, cat), cat);
         setPronto(true);
       })
       .catch(() => setErroCarga(true));
@@ -279,7 +293,7 @@ function EditorInterno() {
   useEffect(() => {
     if (!pronto || !rf || enquadrado.current) return;
     enquadrado.current = true;
-    setTimeout(() => rf.fitView({ padding: 0.2, maxZoom: 1.1 }), 50);
+    setTimeout(() => rf.fitView({ padding: 0.1, maxZoom: 1 }), 50);
   }, [pronto, rf]);
 
   // paleta: aberta em tela larga, recolhida em tela estreita; a preferência fica no navegador
@@ -383,33 +397,49 @@ function EditorInterno() {
     const { no, ramos } = criado;
     const gerarId = () => `e${rid()}`;
     mudarGrafo((g) => {
-      if (opts.arestaId) return inserirEntre(g, opts.arestaId, no, { gerarId, ramosDoNovo: ramos });
-      const ancora = opts.ligarDe ? g.nos.find((n) => n.id === opts.ligarDe) : undefined;
-      if (!ancora || ehGatilhoTipo(tipo)) {
-        if (opts.posicao) return { ...g, nos: [...g.nos, no] };
-        // sem posição: gatilho novo entra ao lado dos gatilhos; o resto, abaixo de tudo
+      if (opts.arestaId) return inserirEntre(g, opts.arestaId, no, { gerarId, ramosDoNovo: ramos, eixo: 'x' });
+      if (ehGatilhoTipo(tipo)) {
+        // Gatilho novo (estilo GHL): entra na coluna de gatilhos, embaixo do
+        // último, e já leva ao MESMO primeiro passo dos outros gatilhos.
         const gatilhos = g.nos.filter((n) => ehGatilhoTipo(n.tipo));
-        const posicao = ehGatilhoTipo(tipo) && gatilhos.length
-          ? { x: Math.max(...gatilhos.map((n) => n.posicao.x)) + LARGURA_NO + 40, y: Math.min(...gatilhos.map((n) => n.posicao.y)) }
-          : g.nos.length
-            ? { x: g.nos[0].posicao.x, y: Math.max(...g.nos.map((n) => n.posicao.y)) + ESPACO_Y }
-            : { x: 0, y: 0 };
+        const alvo = primeiroPasso(g);
+        const alvoNo = alvo ? g.nos.find((n) => n.id === alvo) : undefined;
+        const posicao = opts.posicao ?? (gatilhos.length
+          ? { x: Math.min(...gatilhos.map((n) => n.posicao.x)), y: Math.max(...gatilhos.map((n) => n.posicao.y)) + ALTURA_LINHA }
+          : alvoNo
+            ? { x: alvoNo.posicao.x - PASSO_COLUNA, y: alvoNo.posicao.y }
+            : { x: 0, y: 0 });
+        return {
+          ...g,
+          nos: [...g.nos, { ...no, posicao }],
+          arestas: alvo ? [...g.arestas, { id: gerarId(), de: no.id, para: alvo }] : g.arestas,
+        };
+      }
+      const ancora = opts.ligarDe ? g.nos.find((n) => n.id === opts.ligarDe) : undefined;
+      if (!ancora) {
+        if (opts.posicao) return { ...g, nos: [...g.nos, no] };
+        // sem âncora: à direita de tudo, na altura do primeiro nó
+        const posicao = g.nos.length
+          ? { x: Math.max(...g.nos.map((n) => n.posicao.x)) + PASSO_COLUNA, y: g.nos[0].posicao.y }
+          : { x: 0, y: 0 };
         return { ...g, nos: [...g.nos, { ...no, posicao }] };
       }
       const saidasAncora = ramosDoNo(ancora.tipo, ancora.config, meta(ancora.tipo))?.map((r) => r.id);
       const livres = saidasAncora ? saidasAncora.filter((r) => !g.arestas.some((a) => a.de === ancora.id && a.ramo === r)) : g.arestas.some((a) => a.de === ancora.id && !a.ramo) ? [] : [null];
-      const posAbaixo = { x: ancora.posicao.x, y: ancora.posicao.y + ESPACO_Y };
+      // Na horizontal o próximo passo vai à direita; cada ramo livre numa linha própria.
+      const indiceRamo = livres[0] && saidasAncora ? Math.max(0, saidasAncora.indexOf(livres[0])) : 0;
+      const posDireita = { x: ancora.posicao.x + PASSO_COLUNA, y: ancora.posicao.y + indiceRamo * ALTURA_LINHA };
       if (livres.length) {
         const ramo = livres[0];
         return {
           ...g,
-          nos: [...g.nos, { ...no, posicao: opts.posicao ?? posAbaixo }],
+          nos: [...g.nos, { ...no, posicao: opts.posicao ?? posDireita }],
           arestas: [...g.arestas, { id: gerarId(), de: ancora.id, para: no.id, ...(ramo ? { ramo } : {}) }],
         };
       }
       const seguinte = g.arestas.find((a) => a.de === ancora.id && !a.ramo);
-      if (seguinte && !saidasAncora) return inserirEntre(g, seguinte.id, no, { gerarId, ramosDoNovo: ramos });
-      return { ...g, nos: [...g.nos, { ...no, posicao: opts.posicao ?? { x: posAbaixo.x + LARGURA_NO + 40, y: posAbaixo.y } }] };
+      if (seguinte && !saidasAncora) return inserirEntre(g, seguinte.id, no, { gerarId, ramosDoNovo: ramos, eixo: 'x' });
+      return { ...g, nos: [...g.nos, { ...no, posicao: opts.posicao ?? { x: posDireita.x, y: posDireita.y + ALTURA_LINHA } }] };
     }, [no.id]);
     setSelecionado(no.id);
     setAdicionar(null);
@@ -435,6 +465,7 @@ function EditorInterno() {
     somenteLeitura,
     inserirNaAresta: (arestaId: string) => setAdicionar({ modo: 'passo', arestaId }),
     mudarNota,
+    adicionarGatilho: () => setAdicionar({ modo: 'gatilho' }),
   }), [somenteLeitura, mudarNota]);
 
   // ---- drag & drop da paleta ----
@@ -499,11 +530,8 @@ function EditorInterno() {
   };
 
   const organizar = () => {
-    mudarGrafo((g) => organizarVertical(g, { ordemRamos: (noId) => {
-      const n = g.nos.find((x) => x.id === noId);
-      return n ? (ramosDoNo(n.tipo, n.config, meta(n.tipo)) ?? []).map((r) => r.id) : [];
-    } }));
-    setTimeout(() => rf?.fitView({ padding: 0.2, duration: 400 }), 60);
+    mudarGrafo((g) => organizarComCatalogo(g, catalogo));
+    setTimeout(() => rf?.fitView({ padding: 0.1, duration: 400, maxZoom: 1 }), 60);
   };
 
   // ---- painel do nó ----
@@ -711,9 +739,9 @@ function EditorInterno() {
       setSelecionado(null);
       setAdicionar(null);
       setLeitura(d);
-      aplicarGrafo(d.grafo, catalogo);
+      aplicarGrafo(naHorizontal(d.grafo, catalogo), catalogo);
       setPainel(null);
-      setTimeout(() => rf?.fitView({ padding: 0.2, duration: 300 }), 60);
+      setTimeout(() => rf?.fitView({ padding: 0.1, duration: 300, maxZoom: 1 }), 60);
     } catch {
       toast.error('Não consegui abrir essa versão.');
     }
@@ -766,13 +794,36 @@ function EditorInterno() {
 
   // O canvas mostra os nós decorados (problema da validação + contagem do
   // período) sem gravar a decoração no estado que vai para o autosave.
-  const nodesVisiveis = useMemo(() => nodes.map((n) => {
-    if (!ehPasso(n)) return n;
-    const problema = problemas.find((p) => p.noId === n.id)?.problema;
-    const s = stats ? (stats.nos[n.id] ?? { concluidos: 0, esperando: 0, erros: 0 }) : undefined;
-    if (!problema && !s && !n.data.problema && !n.data.stats) return n;
-    return { ...n, data: { ...n.data, problema, stats: s } };
-  }), [nodes, problemas, stats]);
+  const nodesVisiveis = useMemo(() => {
+    const decorados = nodes.map((n) => {
+      if (!ehPasso(n)) return n;
+      const problema = problemas.find((p) => p.noId === n.id)?.problema;
+      const s = stats ? (stats.nos[n.id] ?? { concluidos: 0, esperando: 0, erros: 0 }) : undefined;
+      if (!problema && !s && !n.data.problema && !n.data.stats) return n;
+      return { ...n, data: { ...n.data, problema, stats: s } };
+    });
+    // "+ Adicionar gatilho" no pé da coluna de gatilhos (estilo GHL). É só
+    // interface: fica fora de `nodes`, então nunca vai para o autosave.
+    const gatilhos = nodes.filter((n) => ehPasso(n) && ehGatilhoTipo(n.data.tipo));
+    if (somenteLeitura || !gatilhos.length) return decorados;
+    const altura = (n: NoRF) => n.height ?? 90;
+    const base = gatilhos.reduce((a, b) => (b.position.y + altura(b) > a.position.y + altura(a) ? b : a));
+    const extra: NoRF = {
+      id: '__adicionar_gatilho',
+      type: TIPO_ADICIONAR_GATILHO,
+      position: { x: Math.min(...gatilhos.map((n) => n.position.x)), y: base.position.y + altura(base) + 24 },
+      data: {} as DadosNota,
+      // Tamanho fixo: o nó vive fora de `nodes`, então a medição do React Flow
+      // (onNodesChange 'dimensions') nunca volta para ele e ele ficava
+      // `visibility: hidden` para sempre.
+      width: 240,
+      height: 46,
+      draggable: false,
+      selectable: false,
+      connectable: false,
+    };
+    return [...decorados, extra];
+  }, [nodes, problemas, stats, somenteLeitura]);
 
   const passos = nodes.filter(ehPasso);
   const temGatilho = passos.some((n) => n.data.categoria === 'gatilho');
@@ -925,7 +976,7 @@ function EditorInterno() {
               <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label="Refazer" onClick={refazerAcao} disabled={somenteLeitura || !historico.futuro.length}><Icon name="redo" size={16} /></button>
             </Tooltip>
             <span className="mx-0.5 h-5 w-px bg-line" aria-hidden />
-            <Tooltip content="Organizar de cima para baixo (Ctrl+Shift+L)" side="bottom">
+            <Tooltip content="Organizar da esquerda para a direita (Ctrl+Shift+L)" side="bottom">
               <button type="button" className="btn btn-ghost btn-icon btn-sm" aria-label="Organizar o fluxo" onClick={organizar} disabled={somenteLeitura || !passos.length}><Icon name="layout" size={16} /></button>
             </Tooltip>
             <Tooltip content="Nota de texto (N)" side="bottom">
@@ -960,9 +1011,16 @@ function EditorInterno() {
           </div>
 
           {!somenteLeitura && (
-            <Button size="sm" variant="primary" icon="plus" className="absolute right-3 top-3 z-10" onClick={() => setAdicionar({ modo: temGatilho ? 'passo' : 'gatilho' })}>
-              Adicionar
-            </Button>
+            <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5">
+              {temGatilho && (
+                <Button size="sm" variant="ghost" icon="zap" className="border border-line bg-surface" onClick={() => setAdicionar({ modo: 'gatilho' })}>
+                  <span className="hidden sm:inline">Gatilho</span>
+                </Button>
+              )}
+              <Button size="sm" variant="primary" icon="plus" onClick={() => setAdicionar({ modo: temGatilho ? 'passo' : 'gatilho' })}>
+                {temGatilho ? 'Ação' : 'Gatilho'}
+              </Button>
+            </div>
           )}
 
           <EditorProvider value={ctxEditor}>
@@ -975,7 +1033,7 @@ function EditorInterno() {
               onInit={setRf}
               nodeTypes={tiposNo}
               edgeTypes={tiposAresta}
-              onNodeClick={(_, n) => setSelecionado(n.id)}
+              onNodeClick={(_, n) => (n.type === TIPO_ADICIONAR_GATILHO ? setAdicionar({ modo: 'gatilho' }) : setSelecionado(n.id))}
               onPaneClick={() => setSelecionado(null)}
               onNodeDragStart={() => registrarAntes()}
               onSelectionDragStart={() => registrarAntes()}
@@ -985,14 +1043,24 @@ function EditorInterno() {
               selectionKeyCode="Shift"
               multiSelectionKeyCode={['Meta', 'Control']}
               fitView
+              fitViewOptions={{ padding: 0.1, maxZoom: 1 }}
               minZoom={0.2}
               proOptions={{ hideAttribution: false }}
               defaultEdgeOptions={{ type: 'khub' }}
               connectionLineStyle={{ stroke: 'var(--brand)', strokeWidth: 2 }}
             >
               <Background gap={18} size={1.4} color="color-mix(in srgb, var(--brand) 22%, transparent)" />
-              <Controls showInteractive={false} position="bottom-left" />
-              <MiniMap pannable zoomable className="!bg-surface2 max-md:!hidden" nodeColor={(n) => (n.type === 'nota' ? 'var(--border-strong)' : 'var(--brand)')} />
+              <Controls showInteractive={false} position="bottom-left" className="overflow-hidden !rounded-xl !border !border-line !shadow-sm" />
+              <MiniMap
+                pannable
+                zoomable
+                position="bottom-right"
+                style={{ width: 168, height: 104 }}
+                className="overflow-hidden !rounded-xl !border !border-line !bg-surface2 !shadow-sm max-lg:!hidden"
+                maskColor="color-mix(in srgb, var(--base-0) 55%, transparent)"
+                nodeBorderRadius={6}
+                nodeColor={(n) => (n.type === 'nota' ? 'var(--border-strong)' : n.type === TIPO_ADICIONAR_GATILHO ? 'transparent' : (n.data as DadosNo)?.categoria === 'gatilho' ? 'var(--success)' : 'var(--brand)')}
+              />
             </ReactFlow>
           </EditorProvider>
 
@@ -1007,12 +1075,12 @@ function EditorInterno() {
             <div className="pointer-events-none absolute inset-0 grid place-items-center">
               <div className="pointer-events-auto max-w-sm text-center">
                 <span className="icon-tile mx-auto h-11 w-11 rounded-lg"><Icon name="zap" size={21} /></span>
-                <p className="mt-3 font-semibold text-fg">Todo fluxo começa com um gatilho</p>
+                <p className="mt-3 font-semibold text-fg">Comece escolhendo o que dispara a automação</p>
                 <p className="mx-auto mt-1 text-sm text-muted">
-                  O gatilho é o quando: contato novo, mensagem no WhatsApp, negócio mudando de etapa.
-                  Depois você encaixa as ações.
+                  O gatilho é o quando: tag adicionada, contato novo, mensagem no WhatsApp, uma data e hora.
+                  Pode ter vários, um embaixo do outro; as ações seguem para a direita.
                 </p>
-                <Button className="mt-4" variant="primary" icon="plus" onClick={() => setAdicionar({ modo: 'gatilho' })}>Escolher um gatilho</Button>
+                <Button className="mt-4" variant="primary" icon="plus" onClick={() => setAdicionar({ modo: 'gatilho' })}>Escolher o primeiro gatilho</Button>
                 <p className="mt-2 text-xs text-muted">ou arraste um da paleta à esquerda</p>
               </div>
             </div>

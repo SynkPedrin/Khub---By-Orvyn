@@ -9,6 +9,7 @@ import type { AutorEnvio } from '../messages.service';
 import { CanaisIngestaoService } from './canais-ingestao.service';
 import { ErroCanal, MetaCanaisHttp, YoutubeHttp } from './canais.http';
 import { CANAL_POR_REDE, DOC, ESCOPOS_META_CONVERSAS, ESCOPO_YOUTUBE, type CredencialCanal, type ProvedorCanal, type Rede } from './canais.tipos';
+import { horaCurta } from '../../../common/hora';
 
 /* ------------------------------------------------------------------ */
 /* Tipos públicos                                                      */
@@ -465,7 +466,7 @@ export class CanaisService {
    */
   async enviar(tenantId: string, conversationId: string, texto: string, idempotencyKey: string = randomUUID(), autor: AutorEnvio = { tipo: 'humano' }, comMidia = false) {
     let assumiu: EstadoAtendimento | null = null;
-    const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const hora = horaCurta();
     const ctx = await this.prisma.withTenant(tenantId, async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${tenantId + ':' + idempotencyKey}, 0))`;
       const conv = await tx.conversation.findUnique({ where: { id: conversationId } });

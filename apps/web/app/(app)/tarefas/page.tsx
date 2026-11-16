@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Button, Card, Field, Input } from '@/components/ui';
+import { Paginacao, usePaginacao } from '@/components/kit';
 import { useDialogFocus } from '@/lib/use-dialog-focus';
 import { Icon } from '@/components/icons';
 import { crm, type Contato, type Tarefa } from '@/lib/crm';
@@ -21,6 +22,7 @@ const COR_PRIORIDADE: Record<string, string> = { alta: 'text-red-500', media: 't
 export default function TarefasPage() {
   const [filtro, setFiltro] = useState<Filtro>('abertas');
   const [rows, setRows] = useState<Tarefa[] | null>(null);
+  const pg = usePaginacao(rows, 25);
   const [contatos, setContatos] = useState<Contato[]>([]);
   const [modal, setModal] = useState(false);
   const dialogRef = useDialogFocus(modal, () => setModal(false));
@@ -93,7 +95,7 @@ export default function TarefasPage() {
             {filtro === 'atrasadas' ? 'Nada atrasado. ' : filtro === 'concluidas' ? 'Nada concluído ainda.' : 'Nada pendente aqui.'}
           </p>
         )}
-        {rows?.map((t) => (
+        {pg.fatia?.map((t) => (
           <div key={t.id} className="group flex items-start gap-3 rounded-xl px-3 py-2.5 hover:bg-surface2">
             <button aria-label={`${t.status === 'concluida' ? 'Reabrir' : 'Concluir'} tarefa ${t.titulo}`} onClick={() => toggle(t.id)} className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded border ${t.status === 'concluida' ? 'border-brand bg-brand text-white' : 'border-line hover:border-brand'}`}>
               {t.status === 'concluida' && <Icon name="check" size={12} />}
@@ -116,6 +118,7 @@ export default function TarefasPage() {
             </button>
           </div>
         ))}
+        {rows && <Paginacao pagina={pg.pagina} totalPaginas={pg.totalPaginas} total={pg.total} tamanho={pg.tamanho} onPagina={pg.setPagina} onTamanho={pg.setTamanho} rotulo="tarefas" />}
       </Card>
 
       {modal && (

@@ -3,6 +3,11 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigRequiredException, ConfigService } from '../config/config.service';
 import { ehRespostaAfirmativa } from './confirmacao';
+import { CaixaService } from '../financeiro/caixa.service';
+import { acharContatoPorTelefone } from '../crm/telefone';
+import { MAX_LINHAS_POR_LOTE } from '../crm/importacao.service';
+import { acharMembroPorNomeOuEmail, dataPlanilha, horaPlanilha, statusAgendamento, valorEmCentavos, type MembroImportacao } from '../financeiro/importacao-fin';
+import { instanteLocal } from '../booking/booking.schema';
 
 async function audit(tx: Prisma.TransactionClient, tenantId: string, actorId: string, acao: string, entidadeId?: string, actorType: 'humano' | 'nyro' | 'sistema' = 'humano') {
   await tx.$executeRaw`INSERT INTO audit_logs (tenant_id, actor_type, actor_id, acao, entidade, entidade_id)
@@ -10,6 +15,75 @@ async function audit(tx: Prisma.TransactionClient, tenantId: string, actorId: st
 }
 
 const ATIVOS = ['agendado', 'confirmado'];
+
+/** Fuso das planilhas importadas (horário de parede do salão/clínica). */
+const FUSO_IMPORTACAO = 'America/Sao_Paulo';
+
+/** Linha da importação de agendamentos, já mapeada pelo front (tudo texto). */
+export interface LinhaAgenda {
+  titulo?: string;
+  /** Data e hora juntas ("13/11/2026 14:30") ou só a data. */
+  inicio?: string;
+  data?: string;
+  hora?: string;
+  /** Data e hora do fim, ou só a hora do fim ("15:30"). */
+  fim?: string;
+  duracaoMin?: string;
+  contatoTelefone?: string;
+  /** Profissional: nome ou e-mail. `responsavelEmail` = nome antigo do campo. */
+  responsavel?: string;
+  responsavelEmail?: string;
+  valor?: string;
+  status?: string;
+  /** Serviço (catálogo, db/071): nome; cria no catálogo se não existir. Vira o título quando `titulo` vem vazio. */
+  servico?: string;
+  /** Profissional que atende (db/071, não precisa ser usuário): nome; cria se não existir. */
+  profissional?: string;
+  /** Cliente sem telefone: nome + referência estável no sistema de origem (ex.: "avec:4338"). Cria o contato uma vez e reaproveita pela referência. */
+  contatoNome?: string;
+  contatoRef?: string;
+}
+
+export interface ResultadoImportacaoAgenda {
+  total: number;
+  criados: number;
+  ignorados: number;
+  erros: { linha: number; motivo: string }[];
+  avisos: { linha: number; motivo: string }[];
+}
+
+/**
+ * Início/fim de uma linha importada, no fuso local. `inicio` pode trazer data
+ * e hora juntas; senão `data` + `hora`. Sem hora → 09:00 (aviso). Fim: `fim`
+ * (data e hora, ou só hora no mesmo dia) ou `duracaoMin` (padrão 60).
+ */
+export function horarioDaLinha(l: LinhaAgenda, fuso = FUSO_IMPORTACAO): { inicio: Date; fim: Date; semHora: boolean } {
+  const bruto = String(l.inicio ?? '').trim() || String(l.data ?? '').trim();
+  const dia = dataPlanilha(bruto);
+  if (!dia) throw new Error(`data inválida: "${bruto.slice(0, 40)}" (use dd/mm/aaaa)`);
+  const horaTexto = String(l.hora ?? '').trim();
+  let minutos = horaPlanilha(horaTexto || bruto);
+  if (horaTexto && minutos === null) throw new Error(`hora inválida: "${horaTexto.slice(0, 20)}" (use hh:mm)`);
+  const semHora = minutos === null;
+  if (minutos === null) minutos = 9 * 60;
+  const inicio = new Date(instanteLocal(dia, minutos, fuso));
+  let fim: Date | null = null;
+  const fimTexto = String(l.fim ?? '').trim();
+  if (fimTexto) {
+    const diaFim = dataPlanilha(fimTexto) ?? dia;
+    const minFim = horaPlanilha(fimTexto);
+    if (minFim === null) throw new Error(`fim inválido: "${fimTexto.slice(0, 40)}"`);
+    fim = new Date(instanteLocal(diaFim, minFim, fuso));
+  } else {
+    const durTexto = String(l.duracaoMin ?? '').trim();
+    const dur = durTexto ? Number(durTexto.replace(',', '.')) : 60;
+    if (!Number.isFinite(dur) || dur <= 0 || dur > 24 * 60) throw new Error(`duração inválida: "${durTexto.slice(0, 20)}" (minutos)`);
+    fim = new Date(+inicio + Math.round(dur) * 60_000);
+  }
+  if (fim <= inicio) throw new Error('o fim deve ser depois do início');
+  if (+fim - +inicio > 24 * 3_600_000) throw new Error('o atendimento pode durar no máximo 24 horas');
+  return { inicio, fim, semHora };
+}
 
 /** Status do compromisso (migration 054: `nao_compareceu` virou `faltou`). */
 export const STATUS_AGENDA = ['agendado', 'confirmado', 'concluido', 'cancelado', 'faltou'] as const;
@@ -36,6 +110,8 @@ export interface CompromissoInput {
   responsavelId?: string | null;
   /** Status inicial: `confirmado` quando a página pública confirma automaticamente (Q4.2). */
   status?: 'agendado' | 'confirmado';
+  /** Valor do atendimento em centavos: ao concluir, vira entrada no financeiro (db/070). */
+  valorCentavos?: number | null;
 }
 
 /** Edição parcial (arrastar, redimensionar, reagendar, editar campos). */
@@ -48,7 +124,16 @@ export interface FiltroAgenda {
   de?: string;
   ate?: string;
   responsavelId?: string;
+  profissionalId?: string;
   status?: StatusAgenda[];
+}
+
+/** Compromisso da lista com o que a tela mostra sem N+1 (cliente, profissional, serviço). */
+export interface CompromissoLista {
+  contatoNome: string | null;
+  contatoTelefone: string | null;
+  profissionalNome: string | null;
+  servicoNome: string | null;
 }
 
 /**
@@ -59,7 +144,11 @@ export interface FiltroAgenda {
 export class AgendaService {
   private readonly log = new Logger('Agenda');
 
-  constructor(private readonly prisma: PrismaService, private readonly config: ConfigService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+    private readonly caixa: CaixaService,
+  ) {}
 
   listar(tenantId: string, filtro: FiltroAgenda = {}) {
     const where: Prisma.AgendaCompromissoWhereInput = {};
@@ -71,8 +160,34 @@ export class AgendaService {
     if (ate) where.inicio = { lte: ate };
     if (de) where.fim = { gte: de };
     if (filtro.responsavelId) where.responsavelId = filtro.responsavelId;
+    if (filtro.profissionalId) where.profissionalId = filtro.profissionalId;
     if (filtro.status?.length) where.status = { in: filtro.status };
-    return this.prisma.withTenant(tenantId, (tx) => tx.agendaCompromisso.findMany({ where, orderBy: { inicio: 'asc' } }));
+    return this.prisma.withTenant(tenantId, async (tx) => {
+      const itens = await tx.agendaCompromisso.findMany({ where, orderBy: { inicio: 'asc' } });
+      const ids = <K extends 'contactId' | 'profissionalId' | 'servicoId'>(k: K) => [...new Set(itens.map((c) => c[k]).filter((x): x is string => !!x))];
+      const [contatos, profissionais, servicos] = await Promise.all([
+        ids('contactId').length ? tx.contact.findMany({ where: { id: { in: ids('contactId') } }, select: { id: true, nome: true, telefone: true } }) : [],
+        ids('profissionalId').length ? tx.profissional.findMany({ where: { id: { in: ids('profissionalId') } }, select: { id: true, nome: true } }) : [],
+        ids('servicoId').length ? tx.servico.findMany({ where: { id: { in: ids('servicoId') } }, select: { id: true, nome: true } }) : [],
+      ]);
+      const ct = new Map(contatos.map((c) => [c.id, c]));
+      const pr = new Map(profissionais.map((p) => [p.id, p.nome]));
+      const sv = new Map(servicos.map((x) => [x.id, x.nome]));
+      return itens.map((c) => ({
+        ...c,
+        contatoNome: c.contactId ? ct.get(c.contactId)?.nome ?? null : null,
+        contatoTelefone: c.contactId ? ct.get(c.contactId)?.telefone ?? null : null,
+        profissionalNome: c.profissionalId ? pr.get(c.profissionalId) ?? null : null,
+        servicoNome: c.servicoId ? sv.get(c.servicoId) ?? null : null,
+      }));
+    });
+  }
+
+  /** Profissionais do catálogo (db/071) para a agenda por profissional. */
+  profissionais(tenantId: string) {
+    return this.prisma.withTenant(tenantId, (tx) =>
+      tx.profissional.findMany({ where: { ativo: true }, orderBy: { nome: 'asc' }, select: { id: true, nome: true, especialidade: true } }),
+    );
   }
 
   /** Um compromisso pelo id (página pública de gerenciamento da reserva, Q4.2). */
@@ -148,6 +263,7 @@ export class AgendaService {
           tenantId, titulo, inicio, fim, contactId: dto.contactId ?? null, local: dto.local ?? null, notas: dto.notas ?? null,
           tipo: dto.tipo ?? 'reuniao', responsavelId, createdBy: actorType === 'humano' ? identityId : null,
           ...(dto.status ? { status: dto.status } : {}),
+          ...(dto.valorCentavos != null ? { valorCentavos: dto.valorCentavos } : {}),
         },
       });
       await audit(tx, tenantId, identityId, 'compromisso.criado', c.id, actorType);
@@ -182,8 +298,11 @@ export class AgendaService {
           ...(patch.contactId !== undefined ? { contactId: patch.contactId } : {}),
           ...(patch.local !== undefined ? { local: patch.local } : {}),
           ...(patch.notas !== undefined ? { notas: patch.notas } : {}),
+          ...(patch.valorCentavos !== undefined ? { valorCentavos: patch.valorCentavos } : {}),
         },
       });
+      // Atendimento já concluído: valor/responsável/título editados acompanham no caixa.
+      if (c.status === 'concluido') await this.caixa.sincronizarCompromisso(tx, tenantId, c);
       await audit(tx, tenantId, identityId, +inicio !== +atual.inicio ? 'compromisso.reagendado' : 'compromisso.editado', id, actorType);
       return c;
     });
@@ -202,9 +321,137 @@ export class AgendaService {
       // Timestamps (confirmado_em, faltou_em...) e o evento de outbox saem dos
       // triggers da migration 054, para valer em qualquer caminho de escrita.
       const c = await tx.agendaCompromisso.update({ where: { id }, data: { status } });
+      // Concluído com valor → entrada no caixa + comissão do responsável;
+      // saiu de concluído → a entrada automática sai (comissão paga trava: 409).
+      // Mesma transação; idempotente (concluir duas vezes não duplica).
+      await this.caixa.sincronizarCompromisso(tx, tenantId, c);
       await audit(tx, tenantId, identityId, `compromisso.${status}`, id, actorType);
       return c;
     });
+  }
+
+  /**
+   * Importação de agendamentos em lote (CSV/XLSX do Avec ou planilha, já
+   * mapeado pelo front). Cada linha roda num SAVEPOINT: erro de uma não aborta
+   * as demais. Regras:
+   * - data/hora no formato brasileiro, no fuso local (horarioDaLinha);
+   * - contato casa por telefone; profissional por e-mail ou nome (aviso se
+   *   não achar: entra na agenda geral);
+   * - reimportar não duplica: mesmo início + título + contato + profissional
+   *   é ignorado;
+   * - sem checagem de choque de horário: é o histórico/agenda do sistema de
+   *   origem, que já resolveu encaixes (o salão atende em paralelo);
+   * - concluído com valor gera a entrada no caixa (comissão só com
+   *   `gerarComissoes`: o histórico costuma já estar pago);
+   * - NÃO dispara automações: os eventos de outbox desta transação são
+   *   neutralizados (mesmo padrão da importação de contatos).
+   */
+  async importar(
+    tenantId: string,
+    identityId: string,
+    linhas: LinhaAgenda[],
+    opcoes: { gerarComissoes?: boolean } = {},
+    linhaInicial = 1,
+  ): Promise<ResultadoImportacaoAgenda> {
+    if (!Array.isArray(linhas) || linhas.length === 0) throw new BadRequestException('nenhuma linha para importar');
+    if (linhas.length > MAX_LINHAS_POR_LOTE) throw new BadRequestException(`lote máximo de ${MAX_LINHAS_POR_LOTE} linhas`);
+    const res: ResultadoImportacaoAgenda = { total: linhas.length, criados: 0, ignorados: 0, erros: [], avisos: [] };
+    await this.prisma.withTenant(tenantId, async (tx) => {
+      const membros = await tx.$queryRaw<MembroImportacao[]>`
+        SELECT m.identity_id AS "identityId", u.nome, i.email
+        FROM memberships m JOIN identities i ON i.id = m.identity_id
+        LEFT JOIN users u ON u.identity_id = m.identity_id AND u.tenant_id = m.tenant_id
+        WHERE m.tenant_id = ${tenantId}::uuid`;
+      // Catálogo (db/071): id por nome normalizado. Só entra no cache depois que
+      // a linha confirma (RELEASE): uma linha desfeita não deixa id fantasma.
+      const cacheServico = new Map<string, string>();
+      const cacheProfissional = new Map<string, string>();
+      const chaveNome = (n: string) => n.replace(/\s+/g, ' ').trim().toLowerCase();
+      const catalogo = async (tabela: 'servicos' | 'profissionais', nome: string, cache: Map<string, string>, pendentes: [Map<string, string>, string, string][]) => {
+        const k = chaveNome(nome);
+        const ja = cache.get(k);
+        if (ja) return ja;
+        const limpo = nome.replace(/\s+/g, ' ').trim().slice(0, tabela === 'servicos' ? 160 : 120);
+        const r = tabela === 'servicos'
+          ? await tx.$queryRaw<{ id: string }[]>`INSERT INTO servicos (tenant_id, nome) VALUES (${tenantId}::uuid, ${limpo})
+              ON CONFLICT (tenant_id, (lower(btrim(nome)))) DO UPDATE SET updated_at = servicos.updated_at RETURNING id`
+          : await tx.$queryRaw<{ id: string }[]>`INSERT INTO profissionais (tenant_id, nome) VALUES (${tenantId}::uuid, ${limpo})
+              ON CONFLICT (tenant_id, (lower(btrim(nome)))) DO UPDATE SET updated_at = profissionais.updated_at RETURNING id`;
+        pendentes.push([cache, k, r[0].id]);
+        return r[0].id;
+      };
+      for (let i = 0; i < linhas.length; i++) {
+        const nLinha = linhaInicial + i;
+        const l = (linhas[i] ?? {}) as LinhaAgenda;
+        await tx.$executeRawUnsafe('SAVEPOINT agenda_linha');
+        try {
+          const { inicio, fim, semHora } = horarioDaLinha(l);
+          const status = statusAgendamento(l.status);
+          if (!status) throw new Error(`status não reconhecido: "${String(l.status).slice(0, 40)}"`);
+          let valorCentavos: number | null = null;
+          if (String(l.valor ?? '').trim()) {
+            valorCentavos = valorEmCentavos(l.valor);
+            if (valorCentavos === null || valorCentavos < 0) throw new Error(`valor inválido: "${String(l.valor).slice(0, 40)}"`);
+            if (valorCentavos === 0) valorCentavos = null;
+          }
+          const pendentes: [Map<string, string>, string, string][] = [];
+          const nomeServico = String(l.servico ?? '').replace(/\s+/g, ' ').trim();
+          const nomeProfissional = String(l.profissional ?? '').replace(/\s+/g, ' ').trim();
+          const servicoId = nomeServico ? await catalogo('servicos', nomeServico, cacheServico, pendentes) : null;
+          const profissionalId = nomeProfissional ? await catalogo('profissionais', nomeProfissional, cacheProfissional, pendentes) : null;
+          const titulo = String(l.titulo ?? '').replace(/\s+/g, ' ').trim().slice(0, 200) || nomeServico.slice(0, 200) || 'Atendimento';
+          let contactId: string | null = null;
+          if (String(l.contatoTelefone ?? '').trim()) {
+            contactId = await acharContatoPorTelefone(tx, l.contatoTelefone);
+            if (!contactId && !String(l.contatoRef ?? '').trim()) res.avisos.push({ linha: nLinha, motivo: `cliente com telefone "${String(l.contatoTelefone).slice(0, 30)}" não encontrado: importe os clientes antes para vincular` });
+          }
+          // Cliente sem telefone: reaproveita pela referência do sistema de origem; cria uma única vez.
+          const ref = String(l.contatoRef ?? '').trim().slice(0, 120);
+          const nomeCliente = String(l.contatoNome ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+          if (!contactId && ref) {
+            contactId = (await tx.contact.findFirst({ where: { camposCustom: { path: ['ref_externa'], equals: ref } }, select: { id: true } }))?.id ?? null;
+            if (!contactId && nomeCliente) {
+              contactId = (await tx.contact.create({ data: { tenantId, nome: nomeCliente, tag: 'Lead', tags: ['importado'], origem: 'importacao', camposCustom: { ref_externa: ref } }, select: { id: true } })).id;
+            }
+          }
+          let responsavelId: string | null = null;
+          const prof = String(l.responsavel ?? l.responsavelEmail ?? '').trim();
+          if (prof) {
+            responsavelId = acharMembroPorNomeOuEmail(membros, prof);
+            if (!responsavelId) res.avisos.push({ linha: nLinha, motivo: `profissional "${prof.slice(0, 60)}" não encontrado na equipe: entrou na agenda geral` });
+          }
+          if (semHora) res.avisos.push({ linha: nLinha, motivo: 'sem hora: marcado às 09:00' });
+          const igual = await tx.agendaCompromisso.findFirst({
+            where: { inicio, titulo: { equals: titulo, mode: 'insensitive' }, contactId, responsavelId, profissionalId },
+            select: { id: true },
+          });
+          if (igual) {
+            res.ignorados++;
+            await tx.$executeRawUnsafe('RELEASE SAVEPOINT agenda_linha');
+            for (const [cache, k, id] of pendentes) cache.set(k, id);
+            continue;
+          }
+          const c = await tx.agendaCompromisso.create({
+            data: { tenantId, titulo, inicio, fim, contactId, responsavelId, servicoId, profissionalId, tipo: 'outro', status, valorCentavos, createdBy: identityId },
+          });
+          if (status === 'concluido') await this.caixa.sincronizarCompromisso(tx, tenantId, c, { gerarComissao: !!opcoes.gerarComissoes });
+          await tx.$executeRawUnsafe('RELEASE SAVEPOINT agenda_linha');
+          for (const [cache, k, id] of pendentes) cache.set(k, id);
+          res.criados++;
+        } catch (e) {
+          await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT agenda_linha');
+          const msg = e instanceof Error ? e.message : 'erro desconhecido';
+          res.erros.push({ linha: nLinha, motivo: (msg.split('\n').pop() ?? msg).slice(0, 200) });
+        }
+      }
+      // Importação não dispara automação (lembrete, confirmação, pós-atendimento).
+      await tx.$executeRaw`UPDATE outbox_events SET status = 'processed', processed_at = now(), last_error = 'importacao_agenda: não dispara automação'
+        WHERE tenant_id = ${tenantId}::uuid AND status = 'pending' AND created_at = now() AND (kind LIKE 'appointment.%' OR kind LIKE 'contact.%')`;
+      await tx.$executeRaw`INSERT INTO audit_logs (tenant_id, actor_type, actor_id, acao, entidade, entidade_id, payload)
+        VALUES (${tenantId}::uuid, 'humano', ${identityId}, 'compromisso.importacao', 'agenda_compromisso', NULL,
+                ${JSON.stringify({ total: res.total, criados: res.criados, ignorados: res.ignorados, erros: res.erros.length, linhaInicial, gerarComissoes: !!opcoes.gerarComissoes })}::jsonb)`;
+    }, { timeout: 120_000, maxWait: 10_000 });
+    return res;
   }
 
   /**

@@ -6,7 +6,8 @@ import { chaveDia, inicioDaGradeMes, inicioDaSemana, somarDias } from './agenda-
  * busca por visão. Testado em `calendario-layout.test.ts`.
  */
 
-export type Visao = 'dia' | 'semana' | 'mes' | 'lista';
+/** `equipe`: o dia em colunas, uma por profissional (salão/clínica). */
+export type Visao = 'equipe' | 'dia' | 'semana' | 'mes' | 'lista';
 
 /** Altura de 1 hora na grade (px). 48px = 12px por 15 min, alvo de toque ok. */
 export const ALTURA_HORA = 48;
@@ -146,7 +147,7 @@ export function redimensionarEvento(e: EventoTempo, deltaMin: number): { inicio:
 
 /** Dias visíveis da visão (Dia: 1; Semana: 7; Mês: 42 da grade; Lista: 30). */
 export function diasDaVisao(visao: Visao, ref: Date): Date[] {
-  if (visao === 'dia') return [inicioDoDia(ref)];
+  if (visao === 'dia' || visao === 'equipe') return [inicioDoDia(ref)];
   if (visao === 'semana') return Array.from({ length: 7 }, (_, i) => somarDias(inicioDaSemana(ref), i));
   if (visao === 'mes') return Array.from({ length: 42 }, (_, i) => somarDias(inicioDaGradeMes(ref), i));
   return Array.from({ length: DIAS_LISTA }, (_, i) => somarDias(inicioDoDia(ref), i));
@@ -160,7 +161,7 @@ export function janelaDaVisao(visao: Visao, ref: Date): { de: Date; ate: Date } 
 
 /** Anterior/próximo: um dia, uma semana, um mês ou uma página da lista. */
 export function navegar(visao: Visao, ref: Date, direcao: 1 | -1): Date {
-  if (visao === 'dia') return somarDias(ref, direcao);
+  if (visao === 'dia' || visao === 'equipe') return somarDias(ref, direcao);
   if (visao === 'semana') return somarDias(ref, 7 * direcao);
   if (visao === 'lista') return somarDias(ref, DIAS_LISTA * direcao);
   const r = new Date(ref.getFullYear(), ref.getMonth() + direcao, 1);

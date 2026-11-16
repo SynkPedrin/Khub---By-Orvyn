@@ -1,5 +1,5 @@
 -- =====================================================================
--- Redes sociais (db/068) — teste de isolamento cross-tenant
+-- Redes sociais (db/068): teste de isolamento cross-tenant
 -- BLOQUEANTE: qualquer vazamento faz RAISE EXCEPTION → exit != 0.
 --
 -- Rodar:  psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/068_redes_sociais_isolation_test.sql
@@ -119,5 +119,5 @@ END $$;
 RESET ROLE;
 ROLLBACK;
 \echo '============================================'
-\echo ' 068 OK — publicações e fotos das redes isoladas.'
+\echo ' 068 OK: publicações e fotos das redes isoladas.'
 \echo '============================================'

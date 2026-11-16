@@ -1,3 +1,4 @@
+import { MODELO_PADRAO } from './catalogo';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { AgentsService } from './agents.service';
 import { AgentToolsService, type ContextoAgente } from './agent-tools.service';
@@ -8,6 +9,7 @@ import type { AiProviderRegistry } from '../ai/provider.registry';
 import type { EvaluationService } from './evaluation/evaluation.service';
 import type { AgendaService } from '../agenda/agenda.service';
 import type { WorkflowsService } from '../automations/workflows.service';
+import type { FinanceiroService } from '../financeiro/financeiro.service';
 import type { CrmService } from '../crm/crm.service';
 import type { NotesService } from '../crm/notes.service';
 import type { TasksService } from '../crm/tasks.service';
@@ -63,10 +65,11 @@ describe('AgentsService — allowlist e permissões', () => {
     await expect(svc.criar(TENANT, { identityId: 'id-bia', role: 'member' }, { nome: 'Lia' })).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('agente nasce como rascunho com o modelo padrão (Opus 5.5)', async () => {
+  it('agente nasce como rascunho com o modelo padrão (Sonnet 5.5, decisão de 2026-11-13)', async () => {
     const { svc, tx } = servico();
     const a = await svc.criar(TENANT, ADMIN, { nome: 'Lia' });
-    expect(a).toMatchObject({ status: 'rascunho', modelo: 'claude-opus-5-5' });
+    expect(a).toMatchObject({ status: 'rascunho', modelo: MODELO_PADRAO });
+    expect(MODELO_PADRAO).toBe('claude-sonnet-5-5');
     expect(tx.$executeRaw).toHaveBeenCalled(); // auditoria
   });
 
@@ -116,21 +119,30 @@ describe('AgentsService — allowlist e permissões', () => {
 function ferramentas(contato: Record<string, unknown> | null = { nome: 'Marina', email: null, empresa: null, tag: 'Lead', tags: ['vip'], camposCustom: {} }) {
   const tx = {
     contact: { findUnique: jest.fn(async () => contato) },
+    tenant: { findUnique: jest.fn(async () => ({ settings: {} })) },
     task: { findFirst: jest.fn(async ({ where }: { where: { id: string; contactId: string } }) => (where.id === '00000000-0000-4000-8000-000000000001' ? { id: where.id } : null)) },
     stage: { findMany: jest.fn(async () => [{ id: '00000000-0000-4000-8000-0000000000aa', nome: 'Qualificado' }, { id: '00000000-0000-4000-8000-0000000000bb', nome: 'Proposta' }]) },
     deal: { findFirst: jest.fn(async () => ({ id: 'd1' })) },
     agentToolExecution: { create: jest.fn(async () => ({ id: 'ex1' })), updateMany: jest.fn(async () => ({ count: 1 })) },
-    agendaCompromisso: { findMany: jest.fn(async () => []) },
+    agendaCompromisso: { findMany: jest.fn(async () => []), findFirst: jest.fn(async () => null) },
+    financeiroCobranca: { findFirst: jest.fn(async () => null), create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'cb1', ...data })) },
     $executeRaw: jest.fn(async () => 1),
   };
   const prisma = { withTenant: jest.fn(async (_t: string, work: (t: unknown) => Promise<unknown>) => work(tx)) } as unknown as PrismaService;
   const crm = { updateContact: jest.fn(async () => ({ ok: true })), moveDeal: jest.fn(async () => ({ ok: true })), createDeal: jest.fn(async () => ({ id: 'd2' })) } as unknown as CrmService;
   const notas = { create: jest.fn(async () => ({ id: 'n1' })) } as unknown as NotesService;
   const tarefas = { create: jest.fn(async () => ({ id: 't1' })), update: jest.fn(async () => ({ ok: true })) } as unknown as TasksService;
-  const agenda = { criar: jest.fn(async () => ({ id: 'cp1', inicio: new Date() })), sugerirHorarios: jest.fn(async () => []), listar: jest.fn(async () => []) } as unknown as AgendaService;
+  const agenda = {
+    criar: jest.fn(async (_t: string, _i: string, dto: { inicio: string }) => ({ id: 'cp1', inicio: new Date(dto.inicio) })),
+    sugerirHorarios: jest.fn(async () => []),
+    listar: jest.fn(async () => []),
+    atualizar: jest.fn(async (_t: string, _i: string, _id: string, dto: { inicio: string }) => ({ id: 'cp1', inicio: new Date(dto.inicio), status: 'agendado' })),
+    atualizarStatus: jest.fn(async () => ({ id: 'cp1', status: 'cancelado' })),
+  } as unknown as AgendaService;
   const workflows = { dispararPorAgente: jest.fn(async () => ({ runId: 'r1' })) } as unknown as WorkflowsService;
   const rag = { searchAgente: jest.fn(async () => []) } as unknown as RetrievalService;
-  return { svc: new AgentToolsService(prisma, crm, notas, tarefas, agenda, workflows, rag), tx, crm, notas, tarefas, workflows, rag, agenda };
+  const financeiro = { criar: jest.fn(async (_t: string, _i: string, dto: Record<string, unknown>) => ({ id: 'cb1', ...dto })) } as unknown as FinanceiroService;
+  return { svc: new AgentToolsService(prisma, crm, notas, tarefas, agenda, workflows, rag, financeiro), tx, crm, notas, tarefas, workflows, rag, agenda, financeiro };
 }
 
 const CTX: ContextoAgente = {
@@ -332,5 +344,175 @@ describe('ferramentas de agenda respeitam o horário do agente', () => {
     const r = await f.svc.executar('ver_agendamentos', { data: '2026-11-20', duracaoMin: 60 }, CTX, TODAS);
     expect(f.agenda.sugerirHorarios).toHaveBeenCalledWith(TENANT, '2026-11-20', 60);
     expect((r.dados as { horariosLivres: unknown[] }).horariosLivres).toHaveLength(1);
+  });
+
+  it('grade fina (20 min) expõe o último horário que cabe no dia — regra da clínica', async () => {
+    // Faixas do Instituto Bárbara Lopes: 07:40–11:00 e 14:00–19:00, seg–sex.
+    const horarioClinica = horarioSchema.parse({
+      ativo: true,
+      dias: {
+        dom: [], sab: [],
+        seg: [{ inicio: '07:40', fim: '11:00' }, { inicio: '14:00', fim: '19:00' }],
+        ter: [{ inicio: '07:40', fim: '11:00' }, { inicio: '14:00', fim: '19:00' }],
+        qua: [{ inicio: '07:40', fim: '11:00' }, { inicio: '14:00', fim: '19:00' }],
+        qui: [{ inicio: '07:40', fim: '11:00' }, { inicio: '14:00', fim: '19:00' }],
+        sex: [{ inicio: '07:40', fim: '11:00' }, { inicio: '14:00', fim: '19:00' }],
+      },
+    });
+    const f = ferramentas();
+    const data = proximoDiaDaSemana(1, 10);
+    const solicita = async (hhmm: string, dur: number) => {
+      const [h, m] = hhmm.split(':').map(Number);
+      const inicio = new Date(instanteLocal(data, h * 60 + m, SP)).toISOString();
+      return f.svc.executar('solicitar_agendamento', { inicio, duracaoMin: dur }, { ...CTX, horario: horarioClinica }, TODAS);
+    };
+
+    // Primeiro horário do dia aparece na listagem.
+    const lista = (await f.svc.executar('ver_agendamentos', { data, duracaoMin: 100 }, { ...CTX, horario: horarioClinica }, TODAS)).dados as { horariosLivres: { inicio: string }[] };
+    expect(horaLocalSP(lista.horariosLivres[0].inicio)).toBe('07:40');
+
+    // Limites do fechamento às 19:00 (spec §12): aceita o último que cabe, recusa o seguinte.
+    expect((await solicita('17:20', 100)).ok).toBe(true);  // 17:20 + 1h40 = 19:00
+    expect((await solicita('17:40', 100)).ok).toBe(false); // terminaria 19:20
+    expect((await solicita('17:40', 80)).ok).toBe(true);   // 17:40 + 1h20 = 19:00
+    expect((await solicita('18:00', 80)).ok).toBe(false);  // terminaria 19:20
+    expect((await solicita('18:20', 40)).ok).toBe(true);   // 18:20 + 40min = 19:00
+    expect((await solicita('18:40', 40)).ok).toBe(false);  // terminaria 19:20
+
+    // Almoço (11:00–14:00) e fora do expediente nunca são aceitos.
+    expect((await solicita('10:20', 80)).ok).toBe(false);  // cruzaria o almoço
+    expect((await solicita('13:00', 40)).ok).toBe(false);
+    expect((await solicita('07:20', 40)).ok).toBe(false);  // antes de abrir
+  });
+
+  it('solicitar_agendamento grava os campos operacionais do contato', async () => {
+    const f = ferramentas();
+    const data = proximoDiaDaSemana(1);
+    const inicio = new Date(instanteLocal(data, 9 * 60, SP)).toISOString();
+    const r = await f.svc.executar('solicitar_agendamento', { inicio, duracaoMin: 80 }, { ...CTX, horario: horarioPadrao() }, TODAS);
+    expect(r.ok).toBe(true);
+    expect(f.crm.updateContact).toHaveBeenCalledWith(
+      TENANT,
+      'c1',
+      expect.objectContaining({ camposCustom: expect.objectContaining({ carol_agendamento_id: 'cp1', carol_agendamento_status: 'agendado' }) }),
+    );
+  });
+});
+
+// ------------------------------------------------------------------ remarcar / cancelar
+
+describe('remarcar_agendamento / cancelar_agendamento — política da empresa', () => {
+  const compromissoFuturo = (dias = 5) => ({ id: 'cp1', inicio: new Date(Date.now() + dias * 86_400_000), fim: new Date(Date.now() + dias * 86_400_000 + 80 * 60_000), status: 'agendado' });
+
+  it('segunda remarcação é recusada e direciona para a equipe', async () => {
+    const f = ferramentas({ nome: 'Marina', camposCustom: { carol_quantidade_remarcacoes: '1' } });
+    (f.tx.agendaCompromisso.findFirst as jest.Mock).mockResolvedValue(compromissoFuturo());
+    const data = proximoDiaDaSemana(1, 10);
+    const inicio = new Date(instanteLocal(data, 9 * 60, SP)).toISOString();
+    const r = await f.svc.executar('remarcar_agendamento', { inicio }, { ...CTX, horario: horarioPadrao() }, TODAS);
+    expect(r.ok).toBe(false);
+    expect(r.erro).toContain('limite');
+    expect((f.agenda.atualizar as jest.Mock)).not.toHaveBeenCalled();
+  });
+
+  it('remarcar sem antecedência mínima é recusado', async () => {
+    const f = ferramentas({ nome: 'Marina', camposCustom: {} });
+    (f.tx.agendaCompromisso.findFirst as jest.Mock).mockResolvedValue(compromissoFuturo(0.5)); // daqui a 12h
+    const data = proximoDiaDaSemana(1, 10);
+    const inicio = new Date(instanteLocal(data, 9 * 60, SP)).toISOString();
+    const r = await f.svc.executar('remarcar_agendamento', { inicio }, { ...CTX, horario: horarioPadrao() }, TODAS);
+    expect(r.ok).toBe(false);
+    expect(r.erro).toContain('antecedência');
+    expect((f.agenda.atualizar as jest.Mock)).not.toHaveBeenCalled();
+  });
+
+  it('remarcação válida passa pela AgendaService como IA e conta a remarcação', async () => {
+    const f = ferramentas({ nome: 'Marina', camposCustom: {} });
+    (f.tx.agendaCompromisso.findFirst as jest.Mock).mockResolvedValue(compromissoFuturo(5));
+    const data = proximoDiaDaSemana(1, 10);
+    const inicio = new Date(instanteLocal(data, 9 * 60, SP)).toISOString();
+    const r = await f.svc.executar('remarcar_agendamento', { inicio }, { ...CTX, horario: horarioPadrao() }, TODAS);
+    expect(r.ok).toBe(true);
+    expect(f.agenda.atualizar).toHaveBeenCalledWith(TENANT, 'ag1', 'cp1', expect.objectContaining({ inicio }), 'nyro');
+    expect(f.crm.updateContact).toHaveBeenCalledWith(TENANT, 'c1', expect.objectContaining({ camposCustom: expect.objectContaining({ carol_quantidade_remarcacoes: 1 }) }));
+  });
+
+  it('remarcar para horário fora da disponibilidade é recusado', async () => {
+    const f = ferramentas({ nome: 'Marina', camposCustom: {} });
+    (f.tx.agendaCompromisso.findFirst as jest.Mock).mockResolvedValue(compromissoFuturo(5));
+    const data = proximoDiaDaSemana(1, 10);
+    const inicio = new Date(instanteLocal(data, 7 * 60, SP)).toISOString(); // 07:00, antes de abrir
+    const r = await f.svc.executar('remarcar_agendamento', { inicio }, { ...CTX, horario: horarioPadrao() }, TODAS);
+    expect(r.ok).toBe(false);
+    expect(r.erro).toContain('disponibilidade');
+  });
+
+  it('cancelar exige compromisso DO contato e registra o motivo', async () => {
+    const f = ferramentas();
+    (f.tx.agendaCompromisso.findFirst as jest.Mock).mockResolvedValue(null);
+    expect(await f.svc.executar('cancelar_agendamento', { motivo: 'não poderei ir' }, CTX, TODAS)).toMatchObject({ ok: false });
+
+    (f.tx.agendaCompromisso.findFirst as jest.Mock).mockResolvedValue(compromissoFuturo(3));
+    const r = await f.svc.executar('cancelar_agendamento', { motivo: 'não poderei ir' }, CTX, TODAS);
+    expect(r.ok).toBe(true);
+    expect(f.agenda.atualizarStatus).toHaveBeenCalledWith(TENANT, 'ag1', 'cp1', 'cancelado', 'nyro');
+  });
+});
+
+// ------------------------------------------------------------------ sinal Pix
+
+describe('sinal Pix — registrar e verificar (sem gateway: conciliação autorizada)', () => {
+  const tenantComPix = { settings: { operacao: { sinalCentavos: 10000, consultaParticularCentavos: 40000, consultaConvenioCentavos: 30000, pix: { chave: 'pix@clinica.com', recebedor: 'Instituto Bárbara Lopes', instrucoes: 'Envie o comprovante aqui.' } } } };
+
+  it('registra a cobrança enviada e devolve os dados oficiais da conta', async () => {
+    const f = ferramentas();
+    (f.tx.tenant.findUnique as jest.Mock).mockResolvedValue(tenantComPix);
+    const r = await f.svc.executar('registrar_sinal_pix', {}, CTX, TODAS);
+    expect(r.ok).toBe(true);
+    expect(f.financeiro.criar).toHaveBeenCalledWith(TENANT, 'ag1', expect.objectContaining({ valorCentavos: 10000, contactId: 'c1', enviar: true }), 'nyro');
+    const d = r.dados as { pix: { chave: string } | null; cobrancaId: string };
+    expect(d.pix?.chave).toBe('pix@clinica.com');
+    expect(f.crm.updateContact).toHaveBeenCalledWith(TENANT, 'c1', expect.objectContaining({ camposCustom: expect.objectContaining({ carol_sinal_status: 'aguardando', carol_sinal_transacao_id: 'cb1' }) }));
+  });
+
+  it('sem chave Pix configurada, a cobrança existe mas NENHUMA chave é inventada', async () => {
+    const f = ferramentas();
+    (f.tx.tenant.findUnique as jest.Mock).mockResolvedValue({ settings: { operacao: { sinalCentavos: 10000 } } });
+    const r = await f.svc.executar('registrar_sinal_pix', {}, CTX, TODAS);
+    expect(r.ok).toBe(true);
+    const d = r.dados as { pix: null; aviso: string };
+    expect(d.pix).toBeNull();
+    expect(d.aviso).toContain('NÃO configurados');
+  });
+
+  it('sem valor de sinal configurado, recusa em vez de inventar valor', async () => {
+    const f = ferramentas();
+    const r = await f.svc.executar('registrar_sinal_pix', {}, CTX, TODAS);
+    expect(r.ok).toBe(false);
+    expect(r.erro).toContain('não configurado');
+    expect(f.financeiro.criar).not.toHaveBeenCalled();
+  });
+
+  it('verificar_sinal sem cobrança responde nao_iniciado', async () => {
+    const f = ferramentas();
+    const r = await f.svc.executar('verificar_sinal', {}, CTX, TODAS);
+    expect(r.dados).toMatchObject({ status: 'nao_iniciado' });
+  });
+
+  it('sinal aguardando NÃO confirma: comprovante do contato não vale', async () => {
+    const f = ferramentas({ nome: 'Marina', camposCustom: { carol_sinal_transacao_id: 'cb1' } });
+    (f.tx.financeiroCobranca.findFirst as jest.Mock).mockResolvedValue({ id: 'cb1', status: 'enviada', pagoEm: null });
+    const r = await f.svc.executar('verificar_sinal', {}, CTX, TODAS);
+    expect(r.dados).toMatchObject({ status: 'aguardando' });
+    expect((r.dados as { aviso: string }).aviso).toContain('NÃO identificado');
+  });
+
+  it('sinal pago libera o agendamento e informa o saldo do dia', async () => {
+    const f = ferramentas({ nome: 'Marina', camposCustom: { carol_sinal_transacao_id: 'cb1', carol_tem_plano_saude: 'true' } });
+    (f.tx.tenant.findUnique as jest.Mock).mockResolvedValue(tenantComPix);
+    (f.tx.financeiroCobranca.findFirst as jest.Mock).mockResolvedValue({ id: 'cb1', status: 'paga', pagoEm: new Date() });
+    const r = await f.svc.executar('verificar_sinal', {}, CTX, TODAS);
+    expect(r.dados).toMatchObject({ status: 'paga', saldoNoDiaCentavos: 20000 }); // convênio 300,00 − 100,00
+    expect(f.crm.updateContact).toHaveBeenCalledWith(TENANT, 'c1', expect.objectContaining({ camposCustom: expect.objectContaining({ carol_sinal_status: 'confirmado' }) }));
   });
 });

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { Public } from '../../auth/decorators';
 import { ConfigService } from '../../config/config.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { registrarNoOutbox } from '../../common/outbox';
 
 /**
  * Formato do evento Evolution v2 (`{event, instance, data}`) — verificado
@@ -120,11 +121,7 @@ export class EvolutionWebhookController {
 
     const payload = { tenantId, fromNumber: msg.from.replace(/@.*$/, ''), fromName: msg.name, text: msg.text, providerMessageId: msg.id };
     await this.prisma.withTenant(tenantId, (tx) =>
-      tx.outboxEvent.upsert({
-        where: { tenantId_dedupeKey: { tenantId, dedupeKey: `evolution:${msg!.instance}:${msg!.id}` } },
-        create: { tenantId, kind: 'evolution.inbound', dedupeKey: `evolution:${msg!.instance}:${msg!.id}`, payload },
-        update: {},
-      }),
+      registrarNoOutbox(tx, { tenantId, kind: 'evolution.inbound', dedupeKey: `evolution:${msg!.instance}:${msg!.id}`, payload }),
     );
     return { ok: true };
   }

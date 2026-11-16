@@ -3,24 +3,25 @@ import { createHmac } from 'node:crypto';
 import { HooksController, JANELA_DEDUPE_MS, assinaturaValida, jsonCanonico } from './hooks.controller';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { TriggersService } from './triggers.service';
+import { outboxFake } from '../common/outbox.fake';
 
 const TENANT = '11111111-1111-1111-1111-111111111111';
 const WF = '33333333-3333-4333-8333-333333333333';
 
 /** Outbox em memória com o unique (tenant, dedupe_key) do banco. */
 function ambiente(segredo: string | null = null) {
-  const outbox = new Map<string, { dedupeKey: string; payload: unknown; createdAt: Date }>();
+  const fake = outboxFake();
+  // visão por dedupe_key (o que os testes inspecionam)
+  const outbox = {
+    get size() { return fake.linhas.size; },
+    keys: () => [...fake.linhas.values()].map((l) => l.dedupeKey)[Symbol.iterator](),
+    get: (k: string) => [...fake.linhas.values()].find((l) => l.dedupeKey === k),
+  };
   const tx = {
     workflow: { findUnique: jest.fn(async () => ({ webhookSegredo: segredo })) },
+    $queryRaw: jest.fn(fake.queryRaw),
     outboxEvent: {
       findUnique: jest.fn(async ({ where }: { where: { tenantId_dedupeKey: { dedupeKey: string } } }) => outbox.get(where.tenantId_dedupeKey.dedupeKey) ?? null),
-      upsert: jest.fn(async ({ create }: { create: { dedupeKey: string; payload: unknown } }) => {
-        const atual = outbox.get(create.dedupeKey);
-        if (atual) return atual;
-        const row = { dedupeKey: create.dedupeKey, payload: create.payload, createdAt: new Date(Date.now()) };
-        outbox.set(create.dedupeKey, row);
-        return row;
-      }),
     },
   };
   const prisma = {
@@ -76,7 +77,7 @@ describe('HooksController — W5 (Idempotency-Key opcional + assinatura)', () =>
     await expect(a.ctl.receber('chave', body, cru(body))).rejects.toBeInstanceOf(UnauthorizedException);
     await expect(a.ctl.receber('chave', body, cru(body), undefined, assinar('outro-segredo', body))).rejects.toBeInstanceOf(UnauthorizedException);
     expect(a.outbox.size).toBe(0);
-    expect(a.tx.outboxEvent.upsert).not.toHaveBeenCalled();
+    expect(a.tx.$queryRaw).not.toHaveBeenCalled();
   });
 
   it('fluxo com segredo + assinatura válida → aceita', async () => {

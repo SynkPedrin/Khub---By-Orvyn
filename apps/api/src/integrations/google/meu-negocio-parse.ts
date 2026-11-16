@@ -38,9 +38,10 @@ export interface LocalGbp {
 }
 
 function hora(v: unknown): string | null {
+  if (!v || typeof v !== 'object') return null;
   const t = obj(v);
-  if (!Object.keys(t).length) return null;
-  // TimeOfDay (google.type): hours/minutes; ausente = 0.
+  // TimeOfDay: hours/minutes. A doc avisa que no JSON proto3 os zeros são
+  // omitidos, então `{}` é 00:00 (meia-noite), não "sem horário".
   const h = num(t.hours);
   const m = num(t.minutes);
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;

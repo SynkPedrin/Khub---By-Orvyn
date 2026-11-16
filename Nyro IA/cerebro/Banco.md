@@ -88,12 +88,26 @@ Ambas com `tenant_id NOT NULL` + RLS + FORCE + policy `tenant_rw` + grants `khub
 `tenant_id NOT NULL` + RLS + FORCE + policy `tenant_rw` + grants; isolamento no `scripts/test-isolation-api-keys.mjs`. ✅
 - `financeiro_cobrancas(id, tenant_id, contact_id→SET NULL, deal_id→SET NULL, descricao, valor_centavos CHECK>=0, moeda, status CHECK(rascunho|enviada|paga|vencida|cancelada), vencimento, pago_em, stripe_payment_intent, stripe_checkout_url, created_by, created_at, updated_at)`. Valores sempre em **centavos** (inteiro). Índices: `(tenant_id, created_at DESC)`, `(tenant_id, contact_id)`, parcial de vencidas. "vencida" é derivada em app (não persistida).
 
+## 2.6.1 Financeiro: gestão do caixa e comissões (FIN-GESTAO · `db/070`)
+- `financeiro_categorias(id, tenant_id, nome 1..60, tipo entrada|saida, cor)`; único `(tenant_id, lower(nome), tipo)`. Kit padrão criado no 1º acesso (Serviços, Produtos, Aluguel, Comissões...).
+- `financeiro_transacoes(id, tenant_id, tipo, categoria_id→SET NULL, descricao, valor_centavos INTEGER >0, data_competencia DATE, status pago|pendente, contact_id, cobranca_id, compromisso_id, responsavel_id→identities, origem manual|agenda|cobranca|importacao|comissao, chave_importacao, observacao, created_by)`. Únicos: `cobranca_id`, `compromisso_id` (uma entrada por cobrança paga / atendimento concluído) e `(tenant_id, chave_importacao)` (reimportar não duplica).
+- `equipe_comissoes(tenant_id, identity_id, cargo, comissao_percent NUMERIC(5,2) 0..100)`: extensão do membership (FK composta para `memberships(identity_id, tenant_id)` ON DELETE CASCADE).
+- `financeiro_comissoes(id, tenant_id, identity_id, transacao_id→CASCADE, base_centavos, percent, valor_centavos <= base, competencia = dia 1, status prevista|paga, pago_em, pagamento_transacao_id→SET NULL)`. Únicos: `transacao_id` (uma comissão por entrada) e `pagamento_transacao_id`. Arredondamento: meio para cima no centavo, aritmética inteira em pontos-base (`calcularComissaoCentavos`).
+- `agenda_compromissos.valor_centavos` (nullable): concluído com valor vira entrada (origem agenda) + comissão do responsável; sair de concluído estorna; comissão já paga trava (409).
+- Isolamento: RLS FORCE + `tenant_rw` nas 4 tabelas; `tenant_reference` (categoria, contato, cobrança, compromisso, transação) e `khub_fin_check_membro` (responsável/comissionado é membro). Teste: `db/070_financeiro_gestao_isolation_test.sql`. **Aplicada só no QA (orvyn_qa) em 2026-11-13**; dev e Neon pendentes.
+
 ## 2.7 Agenda — compromissos ([[Arquitetura|ADR-0026]] · `db/021`)
 `tenant_id NOT NULL` + RLS + FORCE + policy `tenant_rw` + grants; isolamento no `scripts/test-isolation-api-keys.mjs`. ✅
 - `agenda_compromissos(id, tenant_id, contact_id→SET NULL, titulo, inicio, fim, status CHECK(agendado|confirmado|concluido|cancelado|nao_compareceu), local, notas, google_event_id, created_by, created_at, updated_at, CHECK(fim>inicio))`. Índices `(tenant_id, inicio)` e `(tenant_id, contact_id)`. Choque de horário barrado em app (409); horários livres calculados sem API externa.
 
 ## 2.9 Agent Intelligence ([[Arquitetura|ADR-0038]] · `db/034_agent_intelligence.sql`)
 Tabelas (todas `tenant_id NOT NULL`, RLS FORCE `tenant_rw`, gatilho `tenant_reference`): `agent_versions`, `agent_intent_categories`, `agent_knowledge_sources`, `agent_customer_profiles`, `agent_profile_facts`, `agent_extractions`, `agent_memories`, `agent_delivery_queue`, `agent_followup_rules`, `agent_followups`, `agent_tool_executions`, `agent_learning_events`, `agent_improvement_proposals`, `agent_eval_scenarios`, `agent_evaluations`, `agent_simulations`. Colunas novas: `agents.config` (JSONB), `agents.versao_publicada_id`, `agent_runs.{version_id,intencao,sentimento,urgencia,confianca,trace,blocos}`, `rag_documents.texto_fonte`. Funções: `agent_rag_search_hybrid/lexical` (filtro por documentos dentro do WHERE), `agent_tsquery_or`. Anti-duplicidade no banco: um follow-up agendado por contato e agente; uma linha por bloco de entrega (`idempotency_key`). Rollback no cabeçalho da migração. Teste: `db/034_agent_intelligence_isolation_test.sql`.
+
+## 2.10 Conector MCP ([[Arquitetura|ADR-0049]] · `db/072_mcp_conector.sql`)
+- `mcp_clientes` (sem tenant: registro da plataforma, só nome do app, redirect_uris e hash do segredo). GRANT só SELECT/INSERT para a app.
+- `mcp_conexoes` (tenant_id, identity_id que autorizou, cliente, revogada_em) e `mcp_tokens` (tipo codigo/acesso/renovacao, hash sha256, code_challenge, expira_em, usado_em) com RLS `tenant_rw` + gatilho que exige token e conexão do mesmo tenant.
+- `mcp_resolver_token(hash, tipo)` SECURITY DEFINER (dona `khub_service`): consome código/renovação de forma atômica, lê acesso; nunca devolve conexão revogada ou token vencido. `mcp_limpar_tokens()` apaga vencidos há +1 dia.
+- Isolamento: `db/072_mcp_conector_isolation_test.sql`.
 
 ## 3. Escopo de F0 — schema inicial
 

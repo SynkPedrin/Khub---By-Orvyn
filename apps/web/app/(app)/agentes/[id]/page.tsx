@@ -1,56 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ComponentType } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Icon, type IconName } from '@/components/icons';
+import { Icon } from '@/components/icons';
 import { Avatar, cx } from '@/components/ui';
 import { agentesApi, type Agente, type CatalogoAgentes } from '@/lib/agents';
 import { Confirmar, Erro, Esqueleto, Modal, StatusAgentePill, mensagemDeErro, useAcao, useToast } from '@/components/agents/kit';
 import type { SecaoProps } from '@/components/agents/editor';
-import { VisaoGeral } from '@/components/agents/secoes/VisaoGeral';
-import { Identidade } from '@/components/agents/secoes/Identidade';
-import { Personalidade } from '@/components/agents/secoes/Personalidade';
-import { Comportamento } from '@/components/agents/secoes/Comportamento';
-import { Inteligencia } from '@/components/agents/secoes/Inteligencia';
-import { Comunicacao } from '@/components/agents/secoes/Comunicacao';
 import { Conhecimento } from '@/components/agents/secoes/Conhecimento';
-import { Memoria } from '@/components/agents/secoes/Memoria';
-import { Ferramentas } from '@/components/agents/secoes/Ferramentas';
-import { Followup } from '@/components/agents/secoes/Followup';
-import { Automacoes } from '@/components/agents/secoes/Automacoes';
-import { Aprendizado } from '@/components/agents/secoes/Aprendizado';
-import { Simulador } from '@/components/agents/secoes/Simulador';
-import { Analytics } from '@/components/agents/secoes/Analytics';
-import { Logs } from '@/components/agents/secoes/Logs';
-import { Versoes } from '@/components/agents/secoes/Versoes';
-import { Permissoes } from '@/components/agents/secoes/Permissoes';
-import { AoVivo } from '@/components/agents/secoes/AoVivo';
-
-type Aba = { id: string; rotulo: string; icone: IconName; grupo: string; C: ComponentType<SecaoProps> };
-
-const ABAS: Aba[] = [
-  // Ao vivo em primeiro: é a aba padrão — abrir o agente é ver ele trabalhando.
-  { id: 'aovivo', rotulo: 'Ao vivo', icone: 'play', grupo: 'Agente', C: AoVivo },
-  { id: 'visao', rotulo: 'Visão geral', icone: 'grid', grupo: 'Agente', C: VisaoGeral },
-  { id: 'identidade', rotulo: 'Identidade', icone: 'user', grupo: 'Configuração', C: Identidade },
-  { id: 'personalidade', rotulo: 'Personalidade', icone: 'sparkles', grupo: 'Configuração', C: Personalidade },
-  { id: 'comportamento', rotulo: 'Comportamento', icone: 'target', grupo: 'Configuração', C: Comportamento },
-  { id: 'inteligencia', rotulo: 'Inteligência', icone: 'ai', grupo: 'Configuração', C: Inteligencia },
-  { id: 'comunicacao', rotulo: 'Comunicação', icone: 'whatsapp', grupo: 'Configuração', C: Comunicacao },
-  { id: 'conhecimento', rotulo: 'Base de conhecimento', icone: 'knowledge', grupo: 'Dados', C: Conhecimento },
-  { id: 'memoria', rotulo: 'Memória e perfis', icone: 'users', grupo: 'Dados', C: Memoria },
-  { id: 'ferramentas', rotulo: 'Ferramentas do CRM', icone: 'bolt', grupo: 'Ações', C: Ferramentas },
-  { id: 'followup', rotulo: 'Follow-up', icone: 'clock', grupo: 'Ações', C: Followup },
-  { id: 'automacoes', rotulo: 'Automações', icone: 'zap', grupo: 'Ações', C: Automacoes },
-  { id: 'permissoes', rotulo: 'Permissões', icone: 'shield', grupo: 'Ações', C: Permissoes },
-  { id: 'simulador', rotulo: 'Simulador', icone: 'chat', grupo: 'Qualidade', C: Simulador },
-  { id: 'aprendizado', rotulo: 'Aprendizado e testes', icone: 'trophy', grupo: 'Qualidade', C: Aprendizado },
-  { id: 'versoes', rotulo: 'Versões', icone: 'refresh', grupo: 'Qualidade', C: Versoes },
-  { id: 'analytics', rotulo: 'Analytics', icone: 'trend', grupo: 'Operação', C: Analytics },
-  { id: 'logs', rotulo: 'Logs de execução', icone: 'list', grupo: 'Operação', C: Logs },
-];
-const GRUPOS = [...new Set(ABAS.map((a) => a.grupo))];
+import { Construtor, ROTULO_MODO, modoDoAgente, GAVETA_IDS, type GavetaId } from '@/components/agents/construtor/Construtor';
 
 export default function AgenteWorkspace() {
   const { id } = useParams<{ id: string }>();
@@ -64,7 +23,12 @@ export default function AgenteWorkspace() {
   const [publicar, setPublicar] = useState(false);
   const [notas, setNotas] = useState('');
   const [arquivar, setArquivar] = useState(false);
-  const aba = ABAS.find((a) => a.id === busca.get('aba')) ?? ABAS[0];
+  // Sem `?aba=` abre o CONSTRUTOR (prompt + configurações + testar, estilo GHL);
+  // as áreas detalhadas continuam em `?aba=<id>` (menu "Avançado").
+  const abaParam = busca.get('aba');
+  const tela: 'visao' | 'conhecimento' = abaParam === 'conhecimento' ? 'conhecimento' : 'visao';
+  // Links antigos (?aba=logs, ?aba=simulador…) abrem a gaveta correspondente na Visão geral.
+  const gavetaInicial = (abaParam && GAVETA_IDS.includes(abaParam) && abaParam !== 'conhecimento' ? abaParam : null) as GavetaId | null;
 
   const carregar = useCallback(async () => {
     setErro(null);
@@ -84,7 +48,7 @@ export default function AgenteWorkspace() {
     void agentesApi.obter(a.id).then(setAgente).catch(() => undefined);
   }, []);
 
-  const irPara = (abaId: string) => router.replace(`/agentes/${id}?aba=${abaId}`, { scroll: false });
+  const irPara = (abaId: string | null) => router.replace(abaId ? `/agentes/${id}?aba=${abaId}` : `/agentes/${id}`, { scroll: false });
 
   const mudarStatus = async (status: 'ativo' | 'pausado' | 'arquivado') => {
     const a = await executar(`status:${status}`, () => agentesApi.status(id, status), status === 'ativo' ? 'Agente ativado: já atende conversas novas' : status === 'pausado' ? 'Agente pausado: conversas vão para a equipe' : 'Agente arquivado');
@@ -111,7 +75,7 @@ export default function AgenteWorkspace() {
   if (erro) return <div className="mx-auto max-w-3xl p-6"><Erro texto={erro} tentar={carregar} /></div>;
   if (!agente || !catalogo) return <div className="mx-auto max-w-[1680px] p-6"><Esqueleto linhas={8} /></div>;
 
-  const Secao = aba.C;
+  const modo = modoDoAgente(agente);
   const naoPublicado = agente.alteracoesNaoPublicadas === true || !agente.versaoPublicada;
 
   return (
@@ -125,7 +89,8 @@ export default function AgenteWorkspace() {
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="t-display truncate">{agente.nome}</h1>
               <StatusAgentePill status={agente.status} />
-              {agente.padrao && <span className="pill pill-brand">Padrão do WhatsApp</span>}
+              {modo !== 'desativado' && <span className={cx('pill', modo === 'automatico' ? 'pill-brand' : 'pill-info')}>{ROTULO_MODO[modo]}</span>}
+              {agente.padrao && <span className="pill pill-brand">Agente principal</span>}
             </div>
             <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted">
               <span>{agente.config.identidade.cargo || 'Agente de atendimento'}</span>
@@ -142,7 +107,6 @@ export default function AgenteWorkspace() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button className="btn btn-ghost btn-sm" onClick={() => irPara('simulador')}><Icon name="chat" size={14} /> Testar</button>
           {agente.status === 'ativo' ? (
             <button className="btn btn-soft btn-sm" disabled={!!ocupado} onClick={() => mudarStatus('pausado')}><Icon name="pause" size={14} /> Pausar</button>
           ) : (
@@ -163,34 +127,23 @@ export default function AgenteWorkspace() {
         </div>
       )}
 
-      <div className="grid gap-5 lg:grid-cols-[232px_minmax(0,1fr)]">
-        {/* Navegação das áreas */}
-        <nav aria-label="Áreas do agente" className="card h-max p-2.5 max-lg:scroll-fade-x max-lg:flex max-lg:gap-1 max-lg:overflow-x-auto lg:sticky lg:top-4">
-          {GRUPOS.map((g) => (
-            <div key={g} className="max-lg:contents">
-              <p className="nav-grupo px-2.5 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-faint max-lg:hidden">{g}</p>
-              {ABAS.filter((a) => a.grupo === g).map((a) => (
-                <button
-                  key={a.id}
-                  onClick={() => irPara(a.id)}
-                  aria-current={a.id === aba.id ? 'page' : undefined}
-                  className={cx(
-                    'flex w-full shrink-0 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13.5px] font-medium transition-colors max-lg:w-auto max-lg:whitespace-nowrap',
-                    a.id === aba.id ? 'bg-brand-soft text-brand' : 'text-muted hover:bg-surface2 hover:text-fg',
-                  )}
-                >
-                  <Icon name={a.icone} size={15} />
-                  {a.rotulo}
-                </button>
-              ))}
-            </div>
-          ))}
-        </nav>
-
-        <main className="min-w-0">
-          <Secao key={aba.id} agente={agente} catalogo={catalogo} onAtualizado={onAtualizado} />
-        </main>
+      {/* Duas telas: Visão geral (configuração completa) e Base de conhecimento */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="segbar" role="tablist" aria-label="Telas do agente">
+          <button type="button" role="tab" aria-selected={tela === 'visao'} className="seg px-4" onClick={() => irPara(null)}>
+            <Icon name="grid" size={13} /> Visão geral
+          </button>
+          <button type="button" role="tab" aria-selected={tela === 'conhecimento'} className="seg px-4" onClick={() => irPara('conhecimento')}>
+            <Icon name="knowledge" size={13} /> Base de conhecimento
+          </button>
+        </div>
       </div>
+
+      {tela === 'conhecimento' ? (
+        <Conhecimento agente={agente} catalogo={catalogo} onAtualizado={onAtualizado} />
+      ) : (
+        <Construtor agente={agente} catalogo={catalogo} onAtualizado={onAtualizado} gavetaInicial={gavetaInicial} />
+      )}
 
       <Modal
         aberto={publicar}

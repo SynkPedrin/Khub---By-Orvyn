@@ -87,6 +87,12 @@ export function descendentes(arestas: ArestaGrafo[], inicio: string, ignorar?: S
 export const ESPACO_Y = 170;
 export const LARGURA_NO = 240;
 export const ESPACO_X = 60;
+/** Layout horizontal (estilo GHL avançado): distância entre colunas (cabe a aresta e o "+"). */
+export const ESPACO_COLUNA = 110;
+/** Layout horizontal: distância entre linhas (ramos e gatilhos empilhados). */
+export const ALTURA_LINHA = 150;
+/** Passo de uma coluna para a próxima no layout horizontal. */
+export const PASSO_COLUNA = LARGURA_NO + ESPACO_COLUNA;
 
 /**
  * Insere `novo` no meio da aresta `arestaId` (o "+" do canvas).
@@ -96,23 +102,26 @@ export const ESPACO_X = 60;
  *   `novo → para`.
  * - Se o nó novo tem saídas nomeadas (condição, split, esperar resposta), o
  *   resto do fluxo sai pela PRIMEIRA delas; as outras ficam para o usuário ligar.
- * - O nó novo ocupa o lugar de `para`, e `para` desce junto com tudo que vem
+ * - O nó novo ocupa o lugar de `para`, e `para` desce (ou, no layout
+ *   horizontal, `eixo: 'x'`, vai para a direita) junto com tudo que vem
  *   depois dele, abrindo espaço sem sobrepor cards.
  */
 export function inserirEntre(
   g: Grafo,
   arestaId: string,
   novo: NoGrafo,
-  opts: { gerarId: () => string; ramosDoNovo?: string[]; espacoY?: number },
+  opts: { gerarId: () => string; ramosDoNovo?: string[]; espacoY?: number; eixo?: 'x' | 'y'; espacoX?: number },
 ): Grafo {
   const a = g.arestas.find((x) => x.id === arestaId);
   if (!a) return g;
   const destino = g.nos.find((n) => n.id === a.para);
-  const dy = opts.espacoY ?? ESPACO_Y;
+  const horizontal = opts.eixo === 'x';
+  const dx = horizontal ? opts.espacoX ?? PASSO_COLUNA : 0;
+  const dy = horizontal ? 0 : opts.espacoY ?? ESPACO_Y;
   const posNovo = destino ? { ...destino.posicao } : novo.posicao;
 
   const empurrar = descendentes(g.arestas, a.para, new Set([novo.id]));
-  const nos = g.nos.map((n) => (empurrar.has(n.id) ? { ...n, posicao: { x: n.posicao.x, y: n.posicao.y + dy } } : n));
+  const nos = g.nos.map((n) => (empurrar.has(n.id) ? { ...n, posicao: { x: n.posicao.x + dx, y: n.posicao.y + dy } } : n));
 
   const entrada: ArestaGrafo = { id: opts.gerarId(), de: a.de, para: novo.id, ...(a.ramo ? { ramo: a.ramo } : {}) };
   const ramoSaida = opts.ramosDoNovo?.[0];
@@ -333,3 +342,139 @@ export const ATALHOS: { teclas: string[]; descricao: string }[] = [
   { teclas: ['Shift', 'arrastar'], descricao: 'Selecionar vários nós com uma caixa' },
   { teclas: ['?'], descricao: 'Mostrar estes atalhos' },
 ];
+
+/**
+ * Auto-layout HORIZONTAL (da esquerda para a direita), como o construtor
+ * avançado do GHL: os gatilhos ficam empilhados numa coluna à esquerda, o
+ * fluxo segue para a direita (uma coluna por passo) e os ramos de uma
+ * condição se abrem para cima e para baixo, na ordem declarada (Sim antes
+ * de Não). Vários gatilhos que levam ao mesmo passo compartilham a mesma
+ * continuação: o fluxo fica centrado na coluna de gatilhos.
+ * Laços (Ir para) não puxam a árvore de novo; notas não se mexem.
+ */
+export function organizarHorizontal(
+  g: Grafo,
+  opts: { ordemRamos?: (noId: string) => string[]; passoColuna?: number; alturaLinha?: number; origem?: { x: number; y: number } } = {},
+): Grafo {
+  if (!g.nos.length) return g;
+  const passoX = opts.passoColuna ?? PASSO_COLUNA;
+  const passoY = opts.alturaLinha ?? ALTURA_LINHA;
+  const origem = opts.origem ?? { x: 0, y: 0 };
+  const ids = new Set(g.nos.map((n) => n.id));
+  const ehGat = (tipo: string) => tipo.startsWith('gatilho.');
+  const temEntrada = new Set(g.arestas.filter((a) => ids.has(a.de)).map((a) => a.para));
+  const ordem = (noId: string, ramo?: string) => {
+    if (!ramo) return Number.MAX_SAFE_INTEGER;
+    const i = opts.ordemRamos?.(noId).indexOf(ramo) ?? -1;
+    return i < 0 ? Number.MAX_SAFE_INTEGER - 1 : i;
+  };
+
+  // gatilhos na ordem em que aparecem (de cima para baixo, depois da esquerda)
+  const porY = [...g.nos].sort((a, b) => a.posicao.y - b.posicao.y || a.posicao.x - b.posicao.x);
+  const gatilhos = porY.filter((n) => ehGat(n.tipo));
+
+  // Raiz virtual = todos os gatilhos. Os primeiros passos (saídas dos
+  // gatilhos e passos sem entrada) ficam na coluna 1; o resto, por largura.
+  const coluna = new Map<string, number>();
+  const filhos = new Map<string, string[]>();
+  for (const t of gatilhos) coluna.set(t.id, 0);
+  const primeiros: string[] = [];
+  const marcar = (id: string, col: number) => {
+    if (coluna.has(id)) return false;
+    coluna.set(id, col);
+    return true;
+  };
+  for (const t of gatilhos) {
+    const saidas = g.arestas.filter((a) => a.de === t.id && ids.has(a.para)).sort((x, y) => ordem(t.id, x.ramo) - ordem(t.id, y.ramo));
+    for (const s of saidas) if (!ehGat(g.nos.find((n) => n.id === s.para)!.tipo) && marcar(s.para, 1)) primeiros.push(s.para);
+  }
+  for (const n of porY) if (!ehGat(n.tipo) && !temEntrada.has(n.id) && marcar(n.id, gatilhos.length ? 1 : 0)) primeiros.push(n.id);
+  const fila = [...primeiros];
+  while (fila.length) {
+    const atual = fila.shift()!;
+    const saidas = g.arestas
+      .filter((a) => a.de === atual && ids.has(a.para))
+      .sort((x, y) => ordem(atual, x.ramo) - ordem(atual, y.ramo));
+    const lista: string[] = [];
+    for (const s of saidas) {
+      if (!marcar(s.para, coluna.get(atual)! + 1)) continue;
+      lista.push(s.para);
+      fila.push(s.para);
+    }
+    filhos.set(atual, lista);
+  }
+  // ciclos sem raiz: cada um vira um bloco a mais embaixo
+  for (const n of porY) {
+    if (coluna.has(n.id)) continue;
+    marcar(n.id, gatilhos.length ? 1 : 0);
+    primeiros.push(n.id);
+    const f = [n.id];
+    while (f.length) {
+      const atual = f.shift()!;
+      const lista: string[] = [];
+      for (const s of g.arestas.filter((a) => a.de === atual && ids.has(a.para))) {
+        if (!marcar(s.para, coluna.get(atual)! + 1)) continue;
+        lista.push(s.para);
+        f.push(s.para);
+      }
+      filhos.set(atual, lista);
+    }
+  }
+
+  // altura (em linhas) de cada subárvore; o pai fica no meio dos filhos
+  const altura = new Map<string, number>();
+  const medir = (id: string): number => {
+    const f = filhos.get(id) ?? [];
+    const h = f.length ? f.reduce((s, c) => s + medir(c), 0) : 1;
+    altura.set(id, h);
+    return h;
+  };
+  const linha = new Map<string, number>();
+  const posicionar = (id: string, inicio: number) => {
+    const h = altura.get(id) ?? 1;
+    linha.set(id, inicio + h / 2 - 0.5);
+    let cursor = inicio;
+    for (const c of filhos.get(id) ?? []) {
+      posicionar(c, cursor);
+      cursor += altura.get(c) ?? 1;
+    }
+  };
+  let cursor = 0;
+  for (const r of primeiros) {
+    medir(r);
+    posicionar(r, cursor);
+    cursor += altura.get(r) ?? 1;
+  }
+  const linhasFluxo = cursor;
+
+  // coluna de gatilhos centrada na altura do fluxo (e vice-versa)
+  const total = Math.max(linhasFluxo, gatilhos.length);
+  const offFluxo = (total - linhasFluxo) / 2;
+  const offGat = (total - gatilhos.length) / 2;
+  gatilhos.forEach((t, i) => linha.set(t.id, offGat + i));
+  for (const id of linha.keys()) if (!gatilhos.some((t) => t.id === id)) linha.set(id, linha.get(id)! + offFluxo);
+
+  const pos = (id: string) => ({ x: Math.round(origem.x + (coluna.get(id) ?? 0) * passoX), y: Math.round(origem.y + (linha.get(id) ?? 0) * passoY) });
+  return { ...g, nos: g.nos.map((n) => (coluna.has(n.id) ? { ...n, posicao: pos(n.id) } : n)) };
+}
+
+/**
+ * Fluxo salvo no layout antigo (de cima para baixo)? Mais de 2 nós e
+ * espalhados mais na vertical que na horizontal. O editor reorganiza na
+ * horizontal ao abrir (sem gravar até a pessoa mexer).
+ */
+export function pareceVertical(g: Grafo): boolean {
+  if (g.nos.length <= 2) return false;
+  const xs = g.nos.map((n) => n.posicao.x);
+  const ys = g.nos.map((n) => n.posicao.y);
+  return Math.max(...ys) - Math.min(...ys) > Math.max(...xs) - Math.min(...xs);
+}
+
+/** Primeiro passo do fluxo: para onde os gatilhos levam (ou o passo sem entrada). */
+export function primeiroPasso(g: Grafo): string | null {
+  const ehGat = (id: string) => g.nos.find((n) => n.id === id)?.tipo.startsWith('gatilho.') ?? false;
+  const daGatilho = g.arestas.find((a) => ehGat(a.de) && !ehGat(a.para));
+  if (daGatilho) return daGatilho.para;
+  const comEntrada = new Set(g.arestas.map((a) => a.para));
+  return g.nos.find((n) => !n.tipo.startsWith('gatilho.') && !comEntrada.has(n.id))?.id ?? null;
+}

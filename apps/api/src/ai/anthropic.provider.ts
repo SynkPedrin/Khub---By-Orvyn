@@ -19,18 +19,18 @@ import {
  * Trocar aqui é mudar custo e qualidade do produto inteiro: sempre com número.
  */
 export const MODELO_ROTEADOR = 'claude-haiku-4-5-20251001';
-export const MODELO_AGENTE = 'claude-sonnet-5';
+export const MODELO_AGENTE = 'claude-sonnet-5-5';
 
 /**
  * USD por 1M tokens. Fonte: tabela pública da Anthropic, via skill `claude-api`
- * (cache de 2026-10-06). `cache: null` = preço de leitura de cache não
+ * (cache de 2026-11-03). `cache: null` = preço de leitura de cache não
  * publicado na fonte: cobra como entrada (superestima, nunca subestima).
  */
 const PRECO: Record<string, { entrada: number; saida: number; cache: number | null }> = {
   'claude-haiku-4-5-20251001': { entrada: 1, saida: 5, cache: 0.1 },
-  'claude-sonnet-5': { entrada: 3, saida: 15, cache: 0.3 },
+  'claude-sonnet-5': { entrada: 2, saida: 10, cache: null },
   'claude-opus-5-5': { entrada: 4, saida: 20, cache: 0.2 },
-  'claude-sonnet-5-5': { entrada: 2, saida: 10, cache: 0.2 },
+  'claude-sonnet-5-5': { entrada: 2, saida: 10, cache: 0.1 },
   // Haiku 5.5: preço até 100K tokens de prompt ($0.50/$2.50 acima — não se
   // aplica a conversa de atendimento).
   'claude-haiku-5-5': { entrada: 0.1, saida: 0.5, cache: null },
@@ -108,6 +108,41 @@ export interface RespostaLLM {
   blocos: unknown[];
 }
 
+export interface EntradaConversar {
+    modelo: string;
+    system: string;
+    /**
+     * Parte do system que muda a cada turno (data, memória). Vai DEPOIS do bloco
+     * estável: o prefixo `system`+tools fica no cache de prompt da Anthropic.
+     */
+    systemDinamico?: string;
+    /** Recebe cada trecho de texto assim que o modelo o produz (streaming real). */
+    onTexto?: (delta: string) => void;
+    mensagens: MensagemLLM[];
+    tools?: ToolDef[];
+    maxTokens?: number;
+    temperatura?: number;
+    /** Profundidade de raciocínio nos modelos que aceitam (`low` para chat). */
+    effort?: 'low' | 'medium' | 'high';
+    /** Liga o fallback de recusa no servidor quando o modelo suporta. */
+    fallbackRecusa?: boolean;
+    /**
+     * Structured outputs (`output_config.format`, skill claude-api): a resposta
+     * de texto obedece a este JSON Schema. Substitui o `tool_choice` forçado,
+     * que Opus 5.5/Sonnet 5.5 recusam com 400. Compatível com thinking.
+     */
+    jsonSchema?: Record<string, unknown>;
+    /** Timeout da chamada HTTP (ms). Sem valor = sem limite próprio. */
+    timeoutMs?: number;
+    /**
+     * 'anthropic' ignora AI_PROVIDER e vai direto à API da Anthropic (sem
+     * ANTHROPIC_API_KEY, degrada como sempre: `exigirCredencial`). Usado por
+     * quem precisa do Claude mesmo com o backend local ligado (ex.: NICO via
+     * NICO_PROVEDOR). Omitido/'padrao' = segue AI_PROVIDER.
+     */
+    provedor?: 'anthropic' | 'padrao';
+}
+
 /**
  * Cliente da API da Anthropic (Brief §2 — gating por credencial).
  * Sem `ANTHROPIC_API_KEY`, `configured()` é false e o módulo inteiro da Nyro
@@ -141,40 +176,28 @@ export class AnthropicProvider implements AIProvider {
     this.config.require('anthropic');
   }
 
-  async conversar(input: {
-    modelo: string;
-    system: string;
-    /**
-     * Parte do system que muda a cada turno (data, memória). Vai DEPOIS do bloco
-     * estável: o prefixo `system`+tools fica no cache de prompt da Anthropic.
-     */
-    systemDinamico?: string;
-    /** Recebe cada trecho de texto assim que o modelo o produz (streaming real). */
-    onTexto?: (delta: string) => void;
-    mensagens: MensagemLLM[];
-    tools?: ToolDef[];
-    maxTokens?: number;
-    temperatura?: number;
-    /** Profundidade de raciocínio nos modelos que aceitam (`low` para chat). */
-    effort?: 'low' | 'medium' | 'high';
-    /** Liga o fallback de recusa no servidor quando o modelo suporta. */
-    fallbackRecusa?: boolean;
-    /**
-     * Structured outputs (`output_config.format`, skill claude-api): a resposta
-     * de texto obedece a este JSON Schema. Substitui o `tool_choice` forçado,
-     * que Opus 5.5/Sonnet 5.5 recusam com 400. Compatível com thinking.
-     */
-    jsonSchema?: Record<string, unknown>;
-    /** Timeout da chamada HTTP (ms). Sem valor = sem limite próprio. */
-    timeoutMs?: number;
-    /**
-     * 'anthropic' ignora AI_PROVIDER e vai direto à API da Anthropic (sem
-     * ANTHROPIC_API_KEY, degrada como sempre: `exigirCredencial`). Usado por
-     * quem precisa do Claude mesmo com o backend local ligado (ex.: NICO via
-     * NICO_PROVEDOR). Omitido/'padrao' = segue AI_PROVIDER.
-     */
-    provedor?: 'anthropic' | 'padrao';
-  }): Promise<RespostaLLM> {
+  /**
+   * Ponto de entrada. Erro 400 da Anthropic costuma ser incompatibilidade do modo
+   * avançado (streaming, cache de prompt, beta de fallback): nesse caso repete UMA
+   * vez no modo simples, em vez de derrubar a resposta do usuário.
+   */
+  async conversar(input: EntradaConversar): Promise<RespostaLLM> {
+    try {
+      return await this.conversarUmaVez(input);
+    } catch (e) {
+      const avancado = !!(input.onTexto || input.systemDinamico || input.fallbackRecusa);
+      if (e instanceof ErroProvedorIA && e.provedor === 'anthropic' && e.status === 400 && avancado) {
+        this.log.warn(`Anthropic recusou o modo avançado (${e.message.slice(0, 240)}); repetindo em modo simples`);
+        return this.conversarUmaVez(
+          { ...input, onTexto: undefined, fallbackRecusa: false, system: input.systemDinamico ? `${input.system}\n\n${input.systemDinamico}` : input.system, systemDinamico: undefined },
+          true,
+        );
+      }
+      throw e;
+    }
+  }
+
+  private async conversarUmaVez(input: EntradaConversar, simples = false): Promise<RespostaLLM> {
     // Backend Ollama (local hoje, servidor remoto amanhã): AI_PROVIDER=ollama
     // (ou o alias legado "openai") desvia TUDO que consome `conversar` (Nyro +
     // agentes) para OLLAMA_BASE_URL, sem mudar uma linha dos consumidores. O
@@ -206,7 +229,7 @@ export class AnthropicProvider implements AIProvider {
     if (input.effort && aceitaEffort(input.modelo)) outputConfig.effort = input.effort;
     if (input.jsonSchema) outputConfig.format = { type: 'json_schema', schema: input.jsonSchema };
     if (Object.keys(outputConfig).length) corpo.output_config = outputConfig;
-    if (input.tools?.length) corpo.tools = input.tools.map((t, i, todas) => (i === todas.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t));
+    if (input.tools?.length) corpo.tools = simples ? input.tools : input.tools.map((t, i, todas) => (i === todas.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t));
 
     const headers: Record<string, string> = {
       'content-type': 'application/json',
@@ -321,7 +344,7 @@ export class AnthropicProvider implements AIProvider {
    * Custo registra 0: modelo local/próprio não tem preço por token (nunca
    * inventar preço).
    */
-  async conversarOllama(input: Parameters<AnthropicProvider['conversar']>[0]): Promise<RespostaLLM> {
+  async conversarOllama(input: EntradaConversar): Promise<RespostaLLM> {
     const base = (process.env.OLLAMA_BASE_URL || 'http://localhost:11434').replace(/\/+$/, '');
     const modelo = input.modelo === MODELO_ROTEADOR || input.modelo === process.env.OLLAMA_MODEL_ROTEADOR || input.modelo === process.env.OPENAI_MODEL_ROTEADOR
       ? process.env.OLLAMA_MODEL_ROTEADOR || process.env.OPENAI_MODEL_ROTEADOR || 'qwen3.5:4b'

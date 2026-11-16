@@ -6,7 +6,22 @@
  * criar, configurar, salvar rascunho e a MESMA validação da publicação.
  *
  *   cd apps/api && pnpm build
- *   node --env-file=.env scripts/operar/ghl-automacoes.mjs --tenant UUID [--location ID] [--publicar]
+ *   node --env-file=.env scripts/operar/ghl-automacoes.mjs --tenant UUID [--location ID] [--agente NOME] [--atualizar] [--publicar]
+ *
+ * IA (o "Update conversation AI bot" do GHL): o histórico real mostra a IA
+ * respondendo ~15 s depois que a lead responde "qual procedimento". Por isso o
+ * nó "Ativar IA" fica logo depois dessa pergunta. Até ali a conversa é do
+ * fluxo (botões de origem + boas-vindas); a IA não atropela a pergunta de
+ * origem. Para isso o agente NÃO pode ser "padrão" do WhatsApp (o padrão
+ * assume a conversa no 1º "oi"); o script avisa se for.
+ *
+ * Gatilho só para contato criado por mensagem RECEBIDA no WhatsApp (origem
+ * "WhatsApp"): no GHL o fluxo mandava boas-vindas para cliente antigo criado
+ * por confirmação de agendamento; aqui cadastro manual/importação/conversa
+ * iniciada pela equipe não disparam.
+ *
+ * `--atualizar`: fluxo já existente recebe o grafo novo como RASCUNHO (a versão
+ * publicada continua rodando até alguém publicar no editor).
  *
  * Padrão: cria como RASCUNHO (não dispara nada). Enquanto o GHL estiver ativo
  * para o mesmo cliente, ativar aqui faria cada cliente receber em dobro — o
@@ -25,8 +40,10 @@ const arg = (n) => {
   return i > 0 ? process.argv[i + 1] : undefined;
 };
 const TENANT = arg('--tenant');
-const LOC = arg('--location') ?? process.env.GHL_MIGRATION_LOCATION_ID ?? '4UVfJ6m5F0B7eCDAsKVY';
+const LOC = arg('--location') || process.env.GHL_MIGRATION_LOCATION_ID || '4UVfJ6m5F0B7eCDAsKVY';
 const PUBLICAR = process.argv.includes('--publicar');
+const ATUALIZAR = process.argv.includes('--atualizar');
+const AGENTE = arg('--agente'); // nome (ou parte) do agente que assume depois da pergunta
 const FONE_EQUIPE = arg('--telefone-equipe'); // opcional: senão vem do histórico do GHL
 if (!TENANT) {
   console.error('uso: --tenant UUID [--location ID] [--telefone-equipe 55...] [--publicar]');
@@ -73,9 +90,9 @@ function grafo() {
 }
 const regra = (valor) => ({ campo: 'mensagem.texto', operador: 'contem', valor });
 
-function novoLead(st, foneEquipe) {
+function novoLead(st, foneEquipe, agentId) {
   const g = grafo();
-  g.no('gatilho', 'gatilho.contato_criado', 'Contato criado', 0, 2);
+  g.no('gatilho', 'gatilho.contato_criado', 'Contato criado (chegou pelo WhatsApp)', 0, 2, { origem: 'WhatsApp' });
   g.no('espera1', 'controle.esperar', 'Espera inicial (conferir tempo)', 1, 2, { duracao: 1, unidade: 'minutos' });
   g.no('identificar', 'acao.enviar_sms', 'SMS · identificar origem', 2, 2, { texto: T.identificar });
   g.no('aguarda_origem', 'controle.esperar_resposta', 'Aguarda resposta (conferir tempo)', 3, 2, { duracao: 1, unidade: 'dias' });
@@ -95,15 +112,16 @@ function novoLead(st, foneEquipe) {
   g.no('boas_vindas', 'acao.enviar_sms', 'Boas-vindas', 7, 1, { texto: T.boasVindas });
   g.no('espera2s', 'controle.esperar', 'Espera 2s', 8, 1, { duracao: 2, unidade: 'segundos' });
   g.no('procedimento', 'acao.enviar_sms', 'SMS · qual procedimento', 9, 1, { texto: T.procedimento });
-  g.no('aguarda_2h', 'controle.esperar_resposta', 'Aguarda resposta · 2h', 10, 1, { duracao: 2, unidade: 'horas' });
-  g.no('em_atendimento', 'acao.mover_etapa', 'Respondeu · Em Atendimento', 11, 0, { stageId: st['Em Atendimento'] });
-  g.no('fl1', 'acao.enviar_sms', 'FL-1', 11, 2, { texto: T.fl1 });
-  g.no('aguarda_1d', 'controle.esperar_resposta', 'Aguarda resposta · 1 dia', 12, 2, { duracao: 1, unidade: 'dias' });
-  g.no('fl2', 'acao.enviar_sms', 'FL-2', 13, 3, { texto: T.fl2 });
-  g.no('aguarda_3d', 'controle.esperar_resposta', 'Aguarda resposta · 3 dias', 14, 3, { duracao: 3, unidade: 'dias' });
-  g.no('sem_resposta', 'acao.mover_etapa', 'Sem resposta · etapa', 15, 4, { stageId: st['Sem Resposta'] });
-  g.no('volta_atendimento_1', 'controle.ir_para', 'Respondeu → Em Atendimento', 13, 1, { alvoNoId: 'em_atendimento' });
-  g.no('volta_atendimento_2', 'controle.ir_para', 'Respondeu → Em Atendimento', 15, 2, { alvoNoId: 'em_atendimento' });
+  g.no('ativar_ia', 'acao.ativar_ia', 'Ativar IA na conversa', 10, 1, agentId ? { agentId } : {});
+  g.no('aguarda_2h', 'controle.esperar_resposta', 'Aguarda resposta · 2h', 11, 1, { duracao: 2, unidade: 'horas' });
+  g.no('em_atendimento', 'acao.mover_etapa', 'Respondeu · Em Atendimento', 12, 0, { stageId: st['Em Atendimento'] });
+  g.no('fl1', 'acao.enviar_sms', 'FL-1', 12, 2, { texto: T.fl1 });
+  g.no('aguarda_1d', 'controle.esperar_resposta', 'Aguarda resposta · 1 dia', 13, 2, { duracao: 1, unidade: 'dias' });
+  g.no('fl2', 'acao.enviar_sms', 'FL-2', 14, 3, { texto: T.fl2 });
+  g.no('aguarda_3d', 'controle.esperar_resposta', 'Aguarda resposta · 3 dias', 15, 3, { duracao: 3, unidade: 'dias' });
+  g.no('sem_resposta', 'acao.mover_etapa', 'Sem resposta · etapa', 16, 4, { stageId: st['Sem Resposta'] });
+  g.no('volta_atendimento_1', 'controle.ir_para', 'Respondeu → Em Atendimento', 14, 1, { alvoNoId: 'em_atendimento' });
+  g.no('volta_atendimento_2', 'controle.ir_para', 'Respondeu → Em Atendimento', 16, 2, { alvoNoId: 'em_atendimento' });
 
   g.liga('gatilho', 'espera1');
   g.liga('espera1', 'identificar');
@@ -120,7 +138,8 @@ function novoLead(st, foneEquipe) {
   g.liga('oportunidade', 'boas_vindas');
   g.liga('boas_vindas', 'espera2s');
   g.liga('espera2s', 'procedimento');
-  g.liga('procedimento', 'aguarda_2h');
+  g.liga('procedimento', 'ativar_ia');
+  g.liga('ativar_ia', 'aguarda_2h');
   g.liga('aguarda_2h', 'em_atendimento', 'resposta');
   g.liga('aguarda_2h', 'fl1', 'timeout');
   g.liga('fl1', 'aguarda_1d');
@@ -174,13 +193,22 @@ try {
   if (!st) throw new Error('funil com as etapas "Novo Lead", "Em Atendimento" e "Sem Resposta" não encontrado (importe o funil do GHL antes)');
   const fone = telefoneEquipe();
 
+  // Agente que assume a conversa depois da pergunta "qual procedimento".
+  const agentes = await prisma.withTenant(TENANT, (tx) => tx.agent.findMany({ where: { status: 'ativo', canais: { has: 'WhatsApp' } }, select: { id: true, nome: true, padrao: true } }));
+  const agente = AGENTE ? agentes.find((a) => a.nome.toLowerCase().includes(AGENTE.toLowerCase())) : agentes.length === 1 ? agentes[0] : undefined;
+  if (AGENTE && !agente) throw new Error(`agente "${AGENTE}" não encontrado entre os ativos no WhatsApp: ${agentes.map((a) => a.nome).join(', ') || 'nenhum'}`);
+  if (!agente) console.log(`! nenhum agente escolhido (${agentes.length} ativos no WhatsApp): o nó usa o agente PADRÃO do canal; passe --agente NOME`);
+  else console.log(`· IA depois da pergunta de procedimento: ${agente.nome}`);
+  const padroes = agentes.filter((a) => a.padrao);
+  if (padroes.length) console.log(`! ATENÇÃO: ${padroes.map((a) => a.nome).join(', ')} está como PADRÃO do WhatsApp: a IA responde a 1ª mensagem antes das boas-vindas do fluxo. Para o comportamento do GHL, desmarque "padrão" no agente.`);
+
   const definicoes = [
     {
       nome: 'Novo Lead 🚀 (importado do GHL v14)',
       descricao:
-        'Recriado do GHL. Diferenças: a pergunta de origem tinha botões (Stevo não envia botões pelo motor; virou "Responda com: Google, Instagram ou Já sou cliente"); tempos da espera inicial (1 min) e da resposta de origem (1 dia) não aparecem no print, confira; FL-3 nunca foi enviado no GHL (sem texto), então quem não responde ao FL-2 vai para "Sem Resposta"; "Update conversation AI bot" não tem equivalente.',
+        'Recriado do GHL. Dispara só para contato que chegou mandando mensagem no WhatsApp. A IA é ativada logo depois da pergunta "qual procedimento" (no GHL: "Update conversation AI bot"; o histórico mostra a IA respondendo a resposta dessa pergunta). Diferenças: a pergunta de origem tinha botões (virou "Responda com: Google, Instagram ou Já sou cliente"); FL-3 nunca foi enviado no GHL (sem texto), então quem não responde ao FL-2 vai para "Sem Resposta"; "Já sou cliente" avisa a equipe e NÃO liga a IA.',
       tags: ['importado-ghl'],
-      grafo: novoLead(st, fone),
+      grafo: novoLead(st, fone, agente?.id),
     },
     {
       nome: 'Notificação Interna 🔔 (importado do GHL)',
@@ -192,8 +220,18 @@ try {
 
   const existentes = await prisma.withTenant(TENANT, (tx) => tx.workflow.findMany({ select: { id: true, nome: true } }));
   for (const d of definicoes) {
-    if (existentes.some((e) => e.nome === d.nome)) {
-      console.log(`= já existe, pulado: ${d.nome}`);
+    const existente = existentes.find((e) => e.nome === d.nome);
+    if (existente && !ATUALIZAR) {
+      console.log(`= já existe, pulado: ${d.nome} (use --atualizar para gravar o grafo novo como rascunho)`);
+      continue;
+    }
+    if (existente) {
+      const problemas = wf.validar(d.grafo);
+      await wf.salvarRascunho(TENANT, existente.id, d.grafo);
+      await wf.renomear(TENANT, existente.id, { descricao: d.descricao });
+      if (problemas.length) console.log(`! ${d.nome}: rascunho atualizado, mas a validação acusou: ${JSON.stringify(problemas)}`);
+      else if (PUBLICAR) { await wf.publicar(TENANT, existente.id, dono.identityId); console.log(`+ atualizado e publicado: ${d.nome}`); }
+      else console.log(`~ rascunho atualizado: ${d.nome} · ${d.grafo.nos.length} nós (publique no editor)`);
       continue;
     }
     const criado = await wf.criar(TENANT, dono.identityId, { nome: d.nome, descricao: d.descricao });

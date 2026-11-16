@@ -36,9 +36,7 @@ const BARBARA = 'c5b82d42-cd59-443e-bb3d-c0c8cbdad2a3';
 const PUBLICAR_STUDIO = [
   'Novo Lead 🚀 (importado do GHL v14)',
   'Notificação Interna 🔔 (importado do GHL)',
-  'Agendamento Confirmado 📅',
-  'Disparo de Mensagem📨',
-  'Resposta na Dm',
+  // Fora da virada (auditoria 2026-11-16): 'Agendamento Confirmado 📅', 'Disparo de Mensagem📨', 'Resposta na Dm'.
 ];
 const PAUSAR_STUDIO = ['Novo Lead 🚀', 'Notificação Interna 🔔'];
 
@@ -87,7 +85,8 @@ try {
     if (a.status !== 'ativo') await agents.mudarStatus(tenantId, ator, a.id, 'ativo');
     await agents.atualizar(tenantId, ator, a.id, { padrao: true });
   };
-  await ligar(STUDIO, 'Ritinha');
+  // Ritinha NÃO vira agente padrão: a IA entra pelo nó "Ativar IA" do Novo Lead (depois do "qual procedimento"),
+  // como no GHL. Padrão faria a IA responder desde a 1ª mensagem, por cima do fluxo de boas-vindas.
   await ligar(BARBARA, 'Carol');
 
   console.log(APLICAR ? '== virada concluída ==' : '== dry-run ok. GHL desligado? Rode com --aplicar ==');

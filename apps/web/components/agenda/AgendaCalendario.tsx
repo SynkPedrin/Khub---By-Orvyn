@@ -5,7 +5,7 @@ import { Button, Select, Tabs, useToast } from '@/components/kit';
 import { Icon } from '@/components/icons';
 import { cx } from '@/components/ui';
 import { EmptyState, ErrorState } from '@/components/revenue/States';
-import { agenda, type Compromisso, type StatusAgenda } from '@/lib/agenda';
+import { agenda, type Compromisso, type ProfissionalAgenda, type StatusAgenda } from '@/lib/agenda';
 import { ApiError } from '@/lib/api-error';
 import { useAuth } from '@/lib/auth';
 import { crm } from '@/lib/crm';
@@ -44,10 +44,12 @@ import {
   redimensionarEvento,
   type Visao,
 } from './calendario-layout';
+import { AgendaEquipe, nomeCliente, nomeServico } from './AgendaEquipe';
 import { CompromissoModal } from './CompromissoModal';
 import { DetalheCompromisso } from './DetalheCompromisso';
 
 const VISOES: { value: Visao; label: string }[] = [
+  { value: 'equipe', label: 'Equipe' },
   { value: 'dia', label: 'Dia' },
   { value: 'semana', label: 'Semana' },
   { value: 'mes', label: 'Mês' },
@@ -92,6 +94,9 @@ export function AgendaCalendario() {
   const agora = useAgora();
 
   const [visao, setVisao] = useState<Visao>('semana');
+  const escolheuVisao = useRef(false);
+  const [profissionais, setProfissionais] = useState<ProfissionalAgenda[]>([]);
+  const [profissional, setProfissional] = useState('');
   const [ref, setRef] = useState(() => new Date());
   const [itens, setItens] = useState<Compromisso[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -106,8 +111,19 @@ export function AgendaCalendario() {
 
   // No celular só Dia e Lista cabem com qualidade.
   useEffect(() => {
-    if (celular && !VISOES_MOBILE.includes(visao)) setVisao('dia');
-  }, [celular, visao]);
+    if (celular && !VISOES_MOBILE.includes(visao)) setVisao(profissionais.length ? 'lista' : 'dia');
+  }, [celular, visao, profissionais.length]);
+
+  // Salão/clínica (há profissionais no catálogo): abre na visão Equipe.
+  useEffect(() => {
+    agenda
+      .profissionais()
+      .then((ps) => {
+        setProfissionais(ps);
+        if (ps.length && !escolheuVisao.current) setVisao(window.matchMedia('(max-width: 639px)').matches ? 'lista' : 'equipe');
+      })
+      .catch(() => setProfissionais([]));
+  }, []);
 
   useEffect(() => {
     settingsApi
@@ -142,6 +158,7 @@ export function AgendaCalendario() {
           de: janela.de.toISOString(),
           ate: janela.ate.toISOString(),
           ...(responsavel ? { responsavelId: responsavel } : {}),
+          ...(profissional ? { profissionalId: profissional } : {}),
         });
         if (id !== pedido.current) return;
         setItens(lista);
@@ -152,7 +169,7 @@ export function AgendaCalendario() {
         setItens(null);
       }
     },
-    [janela, responsavel],
+    [janela, responsavel, profissional],
   );
 
   useEffect(() => {
@@ -162,7 +179,7 @@ export function AgendaCalendario() {
   // Nome do contato: o payload traz só o id; busca uma vez por contato.
   useEffect(() => {
     if (!itens) return;
-    const faltando = [...new Set(itens.map((c) => c.contactId).filter((x): x is string => !!x))].filter((cid) => !contatosPedidos.current.has(cid));
+    const faltando = [...new Set(itens.filter((c) => !c.contatoNome).map((c) => c.contactId).filter((x): x is string => !!x))].filter((cid) => !contatosPedidos.current.has(cid));
     if (!faltando.length) return;
     faltando.forEach((cid) => contatosPedidos.current.add(cid));
     void Promise.allSettled(faltando.map((cid) => crm.contact(cid))).then((res) =>
@@ -264,7 +281,7 @@ export function AgendaCalendario() {
 
   // ---------------------------------------------------------------- título
   const titulo = useMemo(() => {
-    if (visao === 'dia') return rotuloDia(ref);
+    if (visao === 'dia' || visao === 'equipe') return rotuloDia(ref);
     if (visao === 'semana') return rotuloSemana(inicioDaSemana(ref));
     if (visao === 'mes') return rotuloMes(ref).replace(/^./, (l) => l.toUpperCase());
     const fim = somarDias(ref, DIAS_LISTA - 1);
@@ -311,6 +328,7 @@ export function AgendaCalendario() {
             variant="segmented"
             value={visao}
             onChange={(v) => {
+              escolheuVisao.current = true;
               setVisao(v);
               setAberto(null);
             }}
@@ -324,7 +342,22 @@ export function AgendaCalendario() {
 
       {/* Filtros */}
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="flex items-center gap-2">
+        {profissionais.length > 0 && (
+          <div className="flex items-center gap-2">
+            <label htmlFor="agenda-profissional" className="text-sm text-muted">
+              Profissional
+            </label>
+            <Select
+              id="agenda-profissional"
+              size="sm"
+              className="w-auto min-w-[180px]"
+              value={profissional}
+              onChange={setProfissional}
+              options={[{ value: '', label: 'Todos' }, ...profissionais.map((p) => ({ value: p.id, label: p.nome }))]}
+            />
+          </div>
+        )}
+        <div className={cx('flex items-center gap-2', profissionais.length > 0 && membros.length <= 1 && 'hidden')}>
           <label htmlFor="agenda-responsavel" className="text-sm text-muted">
             Responsável
           </label>
@@ -371,6 +404,8 @@ export function AgendaCalendario() {
           <div className="skeleton h-8 w-full rounded-md" />
           <div className="skeleton h-[420px] w-full rounded-md" />
         </div>
+      ) : visao === 'equipe' ? (
+        <AgendaEquipe dia={ref} eventos={visiveis} profissionais={profissionais} nomes={nomes} agora={agora} onAbrir={abrir} onCriar={criarEm} />
       ) : visao === 'mes' ? (
         <GradeMes
           dias={dias}
@@ -406,8 +441,8 @@ export function AgendaCalendario() {
         <DetalheCompromisso
           c={selecionado}
           ancora={aberto.ancora}
-          nomeContato={selecionado.contactId ? nomes[selecionado.contactId] : undefined}
-          nomeResponsavel={nomeMembro(selecionado.responsavelId)}
+          nomeContato={nomeCliente(selecionado, nomes) ?? undefined}
+          nomeResponsavel={selecionado.profissionalNome ?? nomeMembro(selecionado.responsavelId)}
           onFechar={() => setAberto(null)}
           acoes={{
             onStatus: mudarStatus,
@@ -618,7 +653,7 @@ function GradeHorarios({
                           }}
                           role="button"
                           tabIndex={0}
-                          aria-label={`${c.titulo}, ${hora(c.inicio)} às ${hora(c.fim)}, ${STATUS_LABEL[c.status]}`}
+                          aria-label={`${nomeCliente(c, nomes) ? `${nomeCliente(c, nomes)}, ${nomeServico(c)}` : c.titulo}, ${hora(c.inicio)} às ${hora(c.fim)}, ${STATUS_LABEL[c.status]}`}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
                               e.preventDefault();
@@ -636,12 +671,13 @@ function GradeHorarios({
                         >
                           <span className="flex items-center gap-1">
                             <Icon name={tom.icone} size={11} className="shrink-0 opacity-70" />
-                            <span className="truncate text-xs font-semibold leading-tight">{c.titulo}</span>
+                            <span className="truncate text-xs font-semibold leading-tight">{nomeCliente(c, nomes) ?? c.titulo}</span>
                           </span>
                           {alturaPx >= 36 && (
                             <span className="block truncate text-2xs tabular leading-tight opacity-80">
                               {hora(c.inicio)} às {hora(c.fim)}
-                              {c.contactId && nomes[c.contactId] ? ` · ${nomes[c.contactId]}` : ''}
+                              {nomeCliente(c, nomes) ? ` · ${nomeServico(c)}` : ''}
+                              {c.profissionalNome ? ` · ${c.profissionalNome}` : ''}
                             </span>
                           )}
                           {arrastavel && (
@@ -738,7 +774,7 @@ function GradeMes({
                     >
                       <span className={cx('h-1.5 w-1.5 shrink-0 rounded-full', (TIPO_TOM[c.tipo] ?? TIPO_TOM.outro).ponto)} aria-hidden />
                       <span className="tabular text-muted">{hora(c.inicio)}</span>
-                      <span className="truncate text-fg">{c.titulo}</span>
+                      <span className="truncate text-fg">{c.contatoNome ? `${c.contatoNome} · ${nomeServico(c)}` : c.titulo}</span>
                     </button>
                   </li>
                 ))}
@@ -808,15 +844,22 @@ function Lista({
                     onClick={(e) => onAbrir(c.id, e.currentTarget.getBoundingClientRect())}
                     className={cx('flex w-full items-start gap-3 rounded-md border border-l-[3px] border-line px-3 py-2 text-left hover:bg-surface2', tom.barra)}
                   >
-                    <span className="w-[92px] shrink-0 text-sm tabular text-muted">
-                      {hora(c.inicio)} às {hora(c.fim)}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className={cx('block truncate text-sm font-medium', c.status === 'cancelado' ? 'text-muted line-through' : 'text-fg')}>{c.titulo}</span>
-                      <span className="block truncate text-xs text-muted">
-                        {[TIPO_LABEL[c.tipo], c.contactId ? nomes[c.contactId] : null, nomeMembro(c.responsavelId)].filter(Boolean).join(' · ')}
+                    <span className="w-[64px] shrink-0 pt-0.5 text-base font-bold tabular text-fg">{hora(c.inicio)}</span>
+                    {nomeCliente(c, nomes) || c.profissionalNome ? (
+                      // Atendimento (salão/clínica): cliente em destaque, serviço e profissional ao lado.
+                      <span className="grid min-w-0 flex-1 gap-x-4 gap-y-0.5 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,0.8fr)] sm:items-center">
+                        <span className={cx('truncate text-sm font-semibold', c.status === 'cancelado' ? 'text-muted line-through' : 'text-fg')}>{nomeCliente(c, nomes) ?? 'Sem cliente'}</span>
+                        <span className="truncate text-sm text-fg">{nomeServico(c)}</span>
+                        <span className="truncate text-sm text-muted">{c.profissionalNome ?? nomeMembro(c.responsavelId) ?? '—'}</span>
                       </span>
-                    </span>
+                    ) : (
+                      <span className="min-w-0 flex-1">
+                        <span className={cx('block truncate text-sm font-medium', c.status === 'cancelado' ? 'text-muted line-through' : 'text-fg')}>{c.titulo}</span>
+                        <span className="block truncate text-xs text-muted">
+                          {[TIPO_LABEL[c.tipo], nomeMembro(c.responsavelId)].filter(Boolean).join(' · ')}
+                        </span>
+                      </span>
+                    )}
                     <span className={cx(STATUS_PILL[c.status], 'shrink-0')}>{STATUS_LABEL[c.status]}</span>
                   </button>
                 </li>

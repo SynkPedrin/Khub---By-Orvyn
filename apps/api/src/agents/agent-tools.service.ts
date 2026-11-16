@@ -12,6 +12,8 @@ import { calcularSlots, dataNoFuso, instanteLocal, somarDias, DATA_RE, type Conf
 import { FERRAMENTAS_POR_NOME } from './catalogo';
 import { resolverConfig, type AcaoRegra } from './config/agent-config';
 import { DIAS_SEMANA, type ConfigHorario } from './config/horario';
+import { brl, lerOperacao, pixConfigurado, saldoConsultaCentavos } from './config/operacao';
+import { FinanceiroService } from '../financeiro/financeiro.service';
 
 /**
  * Contexto da execução. `contactId` e `tenantId` vêm da CONVERSA e da sessão
@@ -109,6 +111,7 @@ export class AgentToolsService {
     private readonly agenda: AgendaService,
     private readonly workflows: WorkflowsService,
     private readonly rag: RetrievalService,
+    private readonly financeiro: FinanceiroService,
   ) {}
 
   async executar(
@@ -368,7 +371,133 @@ export class AgentToolsService {
           contactId: id,
           notas: `Solicitado pelo agente ${ctx.agentNome} durante a conversa.`,
         }, 'nyro');
+        await this.gravarCampos(ctx, id, {
+          carol_agendamento_id: c.id,
+          carol_agendamento_inicio: c.inicio.toISOString(),
+          carol_agendamento_status: 'agendado',
+        });
         return { ok: true, dados: { compromissoId: c.id, inicio: c.inicio } };
+      }
+      case 'remarcar_agendamento': {
+        const id = this.exigirContato(ctx);
+        const inicio = new Date(String(a.inicio));
+        if (isNaN(+inicio)) throw new Error('horário inválido');
+        if (inicio.getTime() < Date.now()) throw new Error('horário no passado');
+        const { compromisso, operacao, remarcacoes } = await this.prisma.withTenant(ctx.tenantId, async (tx) => {
+          const c = await this.acharCompromisso(tx, id, a.compromissoId as string | undefined);
+          const t = await tx.tenant.findUnique({ where: { id: ctx.tenantId }, select: { settings: true } });
+          const contato = await tx.contact.findUnique({ where: { id }, select: { camposCustom: true } });
+          const n = Number((contato?.camposCustom as Record<string, unknown> | null)?.carol_quantidade_remarcacoes ?? 0) || 0;
+          return { compromisso: c, operacao: lerOperacao(t?.settings), remarcacoes: n };
+        });
+        if (!compromisso) throw new Error('o contato não tem compromisso futuro para remarcar');
+        if (remarcacoes >= operacao.limiteRemarcacoes) {
+          throw new Error(`limite de ${operacao.limiteRemarcacoes} remarcação(ões) atingido: use notificar_equipe para a equipe avaliar a exceção`);
+        }
+        const antecedenciaMs = operacao.antecedenciaRemarcacaoH * 3_600_000;
+        if (compromisso.inicio.getTime() - Date.now() < antecedenciaMs) {
+          throw new Error(`remarcação exige ${operacao.antecedenciaRemarcacaoH}h de antecedência: este horário está perto demais — use notificar_equipe`);
+        }
+        const dur = typeof a.duracaoMin === 'number' ? a.duracaoMin : Math.round((+compromisso.fim - +compromisso.inicio) / 60_000);
+        // Mesma regra do agendamento: só aceita horário que a disponibilidade real oferece.
+        if (ctx.horario) {
+          const data = dataNoFuso(+inicio, ctx.horario.fuso);
+          const slots = await this.slotsDoDia(ctx, data, dur);
+          if (!slots.some((s) => +new Date(s.inicio) === +inicio)) {
+            throw new Error('horário fora da disponibilidade: escolha um dos horários livres oferecidos');
+          }
+        }
+        const c = await this.agenda.atualizar(ctx.tenantId, ctx.agentId ?? '', compromisso.id, {
+          inicio: inicio.toISOString(),
+          fim: new Date(inicio.getTime() + dur * 60_000).toISOString(),
+        }, 'nyro');
+        await this.gravarCampos(ctx, id, {
+          carol_quantidade_remarcacoes: remarcacoes + 1,
+          carol_agendamento_inicio: c.inicio.toISOString(),
+          carol_agendamento_status: 'agendado',
+        });
+        return { ok: true, dados: { compromissoId: c.id, inicio: c.inicio, remarcacaoNumero: remarcacoes + 1, limite: operacao.limiteRemarcacoes } };
+      }
+      case 'cancelar_agendamento': {
+        const id = this.exigirContato(ctx);
+        const compromisso = await this.prisma.withTenant(ctx.tenantId, (tx) => this.acharCompromisso(tx, id, a.compromissoId as string | undefined));
+        if (!compromisso) throw new Error('o contato não tem compromisso futuro para cancelar');
+        const c = await this.agenda.atualizarStatus(ctx.tenantId, ctx.agentId ?? '', compromisso.id, 'cancelado', 'nyro');
+        await this.gravarCampos(ctx, id, { carol_agendamento_status: 'cancelado' });
+        return { ok: true, dados: { compromissoId: c.id, status: c.status, motivo: String(a.motivo) } };
+      }
+      case 'registrar_sinal_pix': {
+        const id = this.exigirContato(ctx);
+        const { operacao, negocio } = await this.prisma.withTenant(ctx.tenantId, async (tx) => ({
+          operacao: lerOperacao((await tx.tenant.findUnique({ where: { id: ctx.tenantId }, select: { settings: true } }))?.settings),
+          negocio: await tx.deal.findFirst({ where: { contactId: id, status: 'aberto' }, orderBy: { updatedAt: 'desc' }, select: { id: true } }),
+        }));
+        if (operacao.sinalCentavos == null) throw new Error('valor do sinal não configurado na conta: use notificar_equipe');
+        const cob = await this.financeiro.criar(
+          ctx.tenantId,
+          ctx.agentId ?? '',
+          { descricao: 'Sinal de agendamento (Pix) — consulta de avaliação', valorCentavos: operacao.sinalCentavos, contactId: id, dealId: negocio?.id ?? null, enviar: true },
+          'nyro',
+        );
+        await this.gravarCampos(ctx, id, {
+          carol_sinal_status: 'aguardando',
+          carol_sinal_valor_centavos: operacao.sinalCentavos,
+          carol_sinal_transacao_id: cob.id,
+        });
+        const pixOk = pixConfigurado(operacao);
+        return {
+          ok: true,
+          dados: {
+            cobrancaId: cob.id,
+            valorCentavos: operacao.sinalCentavos,
+            valor: brl(operacao.sinalCentavos),
+            // Chave/titular oficiais da CONTA — nunca montados pelo modelo.
+            pix: pixOk ? { chave: operacao.pix.chave, recebedor: operacao.pix.recebedor, instrucoes: operacao.pix.instrucoes } : null,
+            aviso: pixOk
+              ? 'Informe a chave Pix e o titular exatamente como nestes dados. O agendamento só é confirmado depois do pagamento identificado (verificar_sinal).'
+              : 'Dados de Pix NÃO configurados na conta. NÃO informe chave nenhuma ao contato: diga que a equipe envia os dados de pagamento e use notificar_equipe.',
+          },
+        };
+      }
+      case 'verificar_sinal': {
+        const id = this.exigirContato(ctx);
+        const { cob, operacao, contato } = await this.prisma.withTenant(ctx.tenantId, async (tx) => {
+          const contato = await tx.contact.findUnique({ where: { id }, select: { camposCustom: true } });
+          const campos = (contato?.camposCustom ?? {}) as Record<string, unknown>;
+          const sinalId = typeof campos.carol_sinal_transacao_id === 'string' ? campos.carol_sinal_transacao_id : null;
+          const cob = sinalId
+            ? await tx.financeiroCobranca.findFirst({ where: { id: sinalId } })
+            : await tx.financeiroCobranca.findFirst({ where: { contactId: id, descricao: { contains: 'Sinal de agendamento' } }, orderBy: { createdAt: 'desc' } });
+          const t = await tx.tenant.findUnique({ where: { id: ctx.tenantId }, select: { settings: true } });
+          return { cob, operacao: lerOperacao(t?.settings), contato: { campos } };
+        });
+        if (!cob) return { ok: true, dados: { status: 'nao_iniciado', aviso: 'Ainda não há cobrança de sinal para este contato.' } };
+        const mapa: Record<string, string> = { paga: 'paga', enviada: 'aguardando', rascunho: 'aguardando', vencida: 'vencida', cancelada: 'cancelada' };
+        const status = mapa[cob.status] ?? cob.status;
+        if (status === 'paga') {
+          const temPlano = String(contato.campos.carol_tem_plano_saude ?? '').toLowerCase();
+          const saldo = saldoConsultaCentavos(operacao, temPlano === 'true' || temPlano === 'sim' ? true : temPlano === 'false' || temPlano === 'nao' || temPlano === 'não' ? false : null);
+          await this.gravarCampos(ctx, id, { carol_sinal_status: 'confirmado' });
+          return {
+            ok: true,
+            dados: {
+              status: 'paga',
+              pagoEm: cob.pagoEm,
+              ...(saldo != null ? { saldoNoDia: brl(saldo), saldoNoDiaCentavos: saldo } : {}),
+              aviso: 'Pagamento confirmado (conciliado pela equipe/provedor). Pode prosseguir para solicitar_agendamento no horário escolhido pelo contato.',
+            },
+          };
+        }
+        return {
+          ok: true,
+          dados: {
+            status,
+            aviso:
+              status === 'aguardando'
+                ? 'Pagamento ainda NÃO identificado. Comprovante/print do contato não confirma: a confirmação sai quando a equipe ou o provedor conciliar. Não agende antes disso.'
+                : `Cobrança ${status}. Use notificar_equipe para a equipe resolver com o contato.`,
+          },
+        };
       }
       case 'encerrar_atendimento': {
         if (!ctx.conversationId) throw new Error('sem conversa');
@@ -412,12 +541,41 @@ export class AgentToolsService {
       const faixas = h.dias[dia];
       if (faixas.length) horarios[String(i) as keyof Horarios] = faixas.map((f) => ({ de: f.inicio, ate: f.fim }));
     });
-    const cfg: ConfigSlots = { duracaoMin, intervaloMin: 0, antecedenciaMinHoras: 0, janelaDias: 180, horarios, fuso: h.fuso, responsaveis: [] };
+    const cfg: ConfigSlots = { duracaoMin, intervaloMin: 0, antecedenciaMinHoras: 0, janelaDias: 180, horarios, fuso: h.fuso, responsaveis: [], passoMin: 20 };
     const de = new Date(instanteLocal(somarDias(data, -1), 0, h.fuso)).toISOString();
     const ate = new Date(instanteLocal(somarDias(data, 2), 0, h.fuso)).toISOString();
     const compromissos = await this.agenda.listar(ctx.tenantId, { de, ate, status: ['agendado', 'confirmado'] });
     const ocupados: Ocupado[] = compromissos.map((c) => ({ id: c.id, inicio: +c.inicio, fim: +c.fim, responsavelId: c.responsavelId }));
     return calcularSlots(cfg, data, ocupados, Date.now());
+  }
+
+  /** Próximo compromisso ativo do contato (ou um específico, conferindo o dono). */
+  private async acharCompromisso(tx: Prisma.TransactionClient, contactId: string, compromissoId?: string) {
+    if (compromissoId) {
+      const c = await tx.agendaCompromisso.findFirst({ where: { id: compromissoId, contactId }, select: { id: true, inicio: true, fim: true, status: true } });
+      if (!c) throw new Error('compromisso não pertence a este contato');
+      return c;
+    }
+    return tx.agendaCompromisso.findFirst({
+      where: { contactId, inicio: { gte: new Date() }, status: { in: ['agendado', 'confirmado'] } },
+      orderBy: { inicio: 'asc' },
+      select: { id: true, inicio: true, fim: true, status: true },
+    });
+  }
+
+  /**
+   * Grava campos operacionais do atendimento no `campos_custom` do contato
+   * (merge — nunca sobrescreve o que já existe). Valores sempre string: o
+   * campo `money`/`number` da definição formata na UI.
+   */
+  private async gravarCampos(ctx: ContextoAgente, contactId: string, parcial: Record<string, unknown>): Promise<void> {
+    try {
+      const atual = await this.prisma.withTenant(ctx.tenantId, (tx) => tx.contact.findUnique({ where: { id: contactId }, select: { camposCustom: true } }));
+      const campos = { ...((atual?.camposCustom ?? {}) as Record<string, unknown>), ...parcial };
+      await this.crm.updateContact(ctx.tenantId, contactId, { camposCustom: campos });
+    } catch (e) {
+      this.log.warn(`falha ao gravar campos operacionais do contato: ${(e as Error).message.slice(0, 200)}`);
+    }
   }
 
   private async acharEtapa(ctx: ContextoAgente, nomeOuId?: string): Promise<{ id: string; nome: string }> {

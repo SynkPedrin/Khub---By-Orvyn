@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { Public } from '../../auth/decorators';
 import { ConfigService } from '../../config/config.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { registrarNoOutbox } from '../../common/outbox';
 
 export function parseStevo(body:unknown) {
  const b=z.record(z.unknown()).parse(body);
@@ -34,7 +35,7 @@ export class StevoWebhookController {
    const tenantId=rows[0]?.tenant_id ?? (process.env.NODE_ENV!=='production'?this.config.get('STEVO_FALLBACK_TENANT_ID'):undefined);
    if(!tenantId) throw new BadRequestException('instância não conectada');
    const payload={tenantId,fromNumber:ev.from.replace(/@.*$/,''),fromName:ev.name,text:ev.text,providerMessageId:ev.id};
-   await this.prisma.withTenant(tenantId,tx=>tx.outboxEvent.upsert({where:{tenantId_dedupeKey:{tenantId,dedupeKey:`stevo:${ev!.instance}:${ev!.id}`}},create:{tenantId,kind:'stevo.inbound',dedupeKey:`stevo:${ev!.instance}:${ev!.id}`,payload},update:{}}));
+   await this.prisma.withTenant(tenantId,tx=>registrarNoOutbox(tx,{tenantId,kind:'stevo.inbound',dedupeKey:`stevo:${ev!.instance}:${ev!.id}`,payload}));
    return {ok:true};
  }
 }

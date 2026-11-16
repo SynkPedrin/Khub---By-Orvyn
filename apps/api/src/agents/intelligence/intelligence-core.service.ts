@@ -13,7 +13,7 @@ import { analiseJsonSchema, analiseSchema, analisarHeuristica, intencoesValidas,
 import { fragmentarMensagem, type ResultadoFragmentacao } from '../engines/message-chunker';
 import { confirmou, contextoAgenda, contextoAgendado, detectarPedidoAgenda, escolheuHorario, horaEscolhida, isoLocal, quandoPorExtenso, servicosCitados, slotNaHora } from '../engines/agenda-intent';
 import { avaliarRegras, separarAcoes } from '../engines/rules-engine';
-import { afirmaAgendamento, semAgendamentoInventado, validarNaturalidade } from '../engines/response-validator';
+import { afirmaAgendamento, semAgendamentoInventado, semDisponibilidadeInventada, validarNaturalidade } from '../engines/response-validator';
 import { KnowledgeService, type ConfiancaBusca } from '../knowledge/knowledge.service';
 import { fatosComoTexto, ProfileService, type DecisaoExtracao, type PerfilContexto } from './profile.service';
 import type { ContextoMemoria } from './memory.service';
@@ -307,7 +307,7 @@ export class IntelligenceCoreService {
     let blocoAgenda = '';
     if (permitidas.has('ver_agendamentos') && e.contactId && this.llm.configured()) {
       const agora = new Date();
-      // "sim" para a proposta da Ritinha ("…sexta (13/11) às 9h, confirma?"):
+      // "sim" para a proposta da agente ("…sexta (13/11) às 9h, confirma?"):
       // dia e hora vêm da última fala da empresa.
       const falaEmpresa = ultimaFalaDaEmpresa(e.historico);
       const aceitouProposta = confirmou(ultima) && !afirmaAgendamento(falaEmpresa) && !!horaEscolhida(falaEmpresa) && !!detectarPedidoAgenda(falaEmpresa, agora, cfg.horario.fuso, 'agendamento');
@@ -461,6 +461,16 @@ export class IntelligenceCoreService {
       if (v.removeu) {
         texto = v.texto;
         validacao.push('afirmação de agendamento sem agendamento removida');
+      }
+    }
+
+    // Vaga (ou falta de vaga) afirmada sem olhar a agenda neste turno: sai a
+    // frase e entra o pedido de preferência (auditoria 16/11, P0 de agenda).
+    if (texto && !ferramentas.some((f) => f.nome === 'ver_agendamentos' && f.ok)) {
+      const v = semDisponibilidadeInventada(texto);
+      if (v.removeu) {
+        texto = v.texto;
+        validacao.push('afirmação de disponibilidade sem consultar a agenda removida');
       }
     }
 

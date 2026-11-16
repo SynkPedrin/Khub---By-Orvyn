@@ -3,10 +3,11 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
 import { CircuitBreaker } from '../common/circuit-breaker';
+import { CaixaService } from './caixa.service';
 
-async function audit(tx: Prisma.TransactionClient, tenantId: string, actorId: string, acao: string, entidadeId?: string) {
+async function audit(tx: Prisma.TransactionClient, tenantId: string, actorId: string, acao: string, entidadeId?: string, actorType: 'humano' | 'nyro' | 'sistema' = 'humano') {
   await tx.$executeRaw`INSERT INTO audit_logs (tenant_id, actor_type, actor_id, acao, entidade, entidade_id)
-    VALUES (${tenantId}::uuid, 'humano', ${actorId}, ${acao}, 'financeiro_cobranca', ${entidadeId ?? null})`;
+    VALUES (${tenantId}::uuid, ${actorType}, ${actorId}, ${acao}, 'financeiro_cobranca', ${entidadeId ?? null})`;
 }
 
 export interface CobrancaInput {
@@ -27,7 +28,11 @@ export interface CobrancaInput {
 export class FinanceiroService {
   private readonly stripeCircuito = new CircuitBreaker({ nome: 'Stripe', limiteFalhas: 4, cooldownMs: 20_000 });
 
-  constructor(private readonly prisma: PrismaService, private readonly config: ConfigService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+    private readonly caixa: CaixaService,
+  ) {}
 
   async listar(tenantId: string, filtro?: { status?: string }) {
     const cobrancas = await this.prisma.withTenant(tenantId, (tx) =>
@@ -58,7 +63,7 @@ export class FinanceiroService {
     };
   }
 
-  async criar(tenantId: string, identityId: string, dto: CobrancaInput) {
+  async criar(tenantId: string, identityId: string, dto: CobrancaInput, actorType: 'humano' | 'nyro' | 'sistema' = 'humano') {
     if (!Number.isInteger(dto.valorCentavos) || dto.valorCentavos < 0) throw new BadRequestException('valor inválido (centavos, inteiro >= 0)');
     return this.prisma.withTenant(tenantId, async (tx) => {
       const cob = await tx.financeiroCobranca.create({
@@ -74,19 +79,24 @@ export class FinanceiroService {
           createdBy: identityId,
         },
       });
-      await audit(tx, tenantId, identityId, 'cobranca.criada', cob.id);
+      await audit(tx, tenantId, identityId, 'cobranca.criada', cob.id, actorType);
       return cob;
     });
   }
 
   async atualizarStatus(tenantId: string, identityId: string, id: string, status: 'enviada' | 'paga' | 'cancelada') {
     return this.prisma.withTenant(tenantId, async (tx) => {
-      const existe = await tx.financeiroCobranca.findFirst({ where: { id }, select: { id: true } });
+      const existe = await tx.financeiroCobranca.findFirst({ where: { id }, select: { id: true, status: true, pagoEm: true } });
       if (!existe) throw new NotFoundException('cobrança inexistente');
+      // Marcar "paga" de novo não muda a data do pagamento já registrado.
+      const pagoEm = status === 'paga' ? (existe.status === 'paga' && existe.pagoEm ? existe.pagoEm : new Date()) : null;
       const cob = await tx.financeiroCobranca.update({
         where: { id },
-        data: { status, pagoEm: status === 'paga' ? new Date() : null, updatedAt: new Date() },
+        data: { status, pagoEm, updatedAt: new Date() },
       });
+      // Paga → entrada no fluxo de caixa; saiu de paga → a entrada automática
+      // sai. Idempotente (marcar paga duas vezes não duplica a entrada).
+      await this.caixa.sincronizarCobranca(tx, tenantId, cob);
       await audit(tx, tenantId, identityId, `cobranca.${status}`, id);
       return cob;
     });
@@ -102,7 +112,8 @@ export class FinanceiroService {
     await this.prisma.withTenant(tenantId, async (tx) => {
       const cob = await tx.financeiroCobranca.findFirst({ where: { id: cobrancaId } });
       if (!cob || cob.status === 'paga') return;
-      await tx.financeiroCobranca.update({ where: { id: cobrancaId }, data: { status: 'paga', pagoEm: new Date(), updatedAt: new Date() } });
+      const paga = await tx.financeiroCobranca.update({ where: { id: cobrancaId }, data: { status: 'paga', pagoEm: new Date(), updatedAt: new Date() } });
+      await this.caixa.sincronizarCobranca(tx, tenantId, paga);
       await tx.$executeRaw`INSERT INTO audit_logs (tenant_id, actor_type, actor_id, acao, entidade, entidade_id)
         VALUES (${tenantId}::uuid, 'sistema', 'stripe_webhook', 'cobranca.paga', 'financeiro_cobranca', ${cobrancaId}::uuid)`;
     });

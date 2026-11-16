@@ -323,3 +323,48 @@ describe('Avaliação', () => {
     expect(compararAvaliacoes([mk(96, true)], null).delta).toBeNull();
   });
 });
+
+describe('semDisponibilidadeInventada (P0 agenda — auditoria 16/11)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { semDisponibilidadeInventada, PEDIR_PREFERENCIA_AGENDA } = require('./response-validator') as typeof import('./response-validator');
+
+  it.each([
+    'Infelizmente não temos horário disponível amanhã.',
+    'Nossa agenda está lotada essa semana 😕',
+    'Os horários estão todos ocupados.',
+    'Não consigo te encaixar na sexta.',
+    'Sem vagas para sábado!',
+  ])('remove negativa de vaga sem consulta: %s', (frase) => {
+    const r = semDisponibilidadeInventada(`Oi, Ana!\n\n${frase}`);
+    expect(r.removeu).toBe(true);
+    expect(r.texto).not.toContain(frase.slice(0, 15));
+    expect(r.texto).toContain(PEDIR_PREFERENCIA_AGENDA);
+    expect(r.texto).toContain('Oi, Ana!');
+  });
+
+  it.each([
+    'Temos horário amanhã às 14h.',
+    'Tenho vaga na sexta de manhã.',
+    'Os horários livres são 9h, 10h e 15h.',
+    'Consigo te encaixar hoje às 16h!',
+  ])('remove oferta de vaga sem consulta: %s', (frase) => {
+    const r = semDisponibilidadeInventada(frase);
+    expect(r.removeu).toBe(true);
+    expect(r.texto).toBe(PEDIR_PREFERENCIA_AGENDA);
+  });
+
+  it.each([
+    'Qual horário fica melhor pra você?',
+    'Funcionamos de segunda a sábado, das 9h às 18h.',
+    'O design de sobrancelha leva cerca de 40 minutos.',
+    'Vou verificar a agenda pra você!',
+    'Temos horário de funcionamento estendido às quintas.',
+  ])('não mexe no que não afirma vaga: %s', (frase) => {
+    expect(semDisponibilidadeInventada(frase)).toEqual({ texto: frase, removeu: false });
+  });
+
+  it('se sobrou uma pergunta, não acrescenta outra', () => {
+    const r = semDisponibilidadeInventada('Não temos vaga amanhã. Prefere de manhã ou à tarde?');
+    expect(r.texto).toBe('Prefere de manhã ou à tarde?');
+  });
+});

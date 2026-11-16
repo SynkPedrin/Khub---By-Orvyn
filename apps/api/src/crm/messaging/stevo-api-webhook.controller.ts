@@ -10,6 +10,7 @@ import { SkipAudit } from '../../common/audit.interceptor';
 import { ConfigService } from '../../config/config.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { verificarAssinaturaStevo } from './stevo-assinatura';
+import { registrarNoOutbox } from '../../common/outbox';
 
 /** Envelope oficial (tipos do `stevo-sdk`: `StevoWebhookEnvelope`). */
 const envelopeSchema = z.object({
@@ -141,13 +142,9 @@ export class StevoApiWebhookController {
       this.log.log(`mídia recebida (${payload.conteudoTipo}) ${chavesDaMidia(ev.data ?? null)}`);
     }
     const linha = await this.prisma.withTenant(tenantId, (tx) =>
-      tx.outboxEvent.upsert({
-        where: { tenantId_dedupeKey: { tenantId, dedupeKey } },
-        create: { tenantId, kind: 'stevo_api.event', dedupeKey, payload: payload as unknown as Prisma.InputJsonValue },
-        update: {},
-        select: { id: true, status: true },
-      }),
+      registrarNoOutbox(tx, { tenantId, kind: 'stevo_api.event', dedupeKey, payload }),
     );
+    if (!linha.novo) this.log.log(`reentrega reconhecida (${ev.type}): já estava no outbox`);
     // TEMPO REAL: processa já, na própria requisição (a API publica no socket
     // na hora). O outbox continua sendo a garantia: se falhar aqui, o worker
     // reprocessa; se der certo, marca processado para o worker não repetir

@@ -80,7 +80,7 @@ describe('Q3.2 · agenda dos gatilhos por tempo', () => {
 
   it('data do contato: varredura diária na hora; alvo antes/depois; 29/02 cai em 28/02 fora do bissexto', () => {
     const agora = new Date('2026-11-11T13:00:00Z');
-    expect(proximoDoNo('gatilho.data_contato', { campo: 'contato.criadoEm', quando: 'no_dia', dias: 0, hora: '08:00', anual: true }, SP, agora).toISOString()).toBe('2026-11-12T11:00:00.000Z');
+    expect(proximoDoNo('gatilho.data_contato', { campo: 'contato.criadoEm', quando: 'no_dia', dias: 0, hora: '08:00', anual: true }, SP, agora)?.toISOString()).toBe('2026-11-12T11:00:00.000Z');
     expect(dataAlvo({ quando: 'antes', dias: 3 }, agora, SP)).toEqual({ ano: 2026, mes: 11, dia: 14 });
     expect(dataAlvo({ quando: 'depois', dias: 11 }, agora, SP)).toEqual({ ano: 2026, mes: 10, dia: 31 });
     expect(diasMesQueCasam({ ano: 2027, mes: 2, dia: 28 })).toEqual(['02-28', '02-29']);

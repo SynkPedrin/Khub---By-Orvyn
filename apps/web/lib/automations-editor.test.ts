@@ -6,7 +6,10 @@ import {
   excluir,
   inserirEntre,
   novoHistorico,
+  organizarHorizontal,
   organizarVertical,
+  pareceVertical,
+  primeiroPasso,
   recortar,
   refazer,
   registrar,
@@ -197,6 +200,78 @@ describe('organizarVertical', () => {
   it('não move notas', () => {
     const g: Grafo = { nos: [no('g', 'gatilho.webhook', 500, 500)], arestas: [], notas: [{ id: 'n', texto: 'x', posicao: { x: 9, y: 9 } }] };
     expect(organizarVertical(g).notas).toEqual(g.notas);
+  });
+});
+
+describe('organizarHorizontal (estilo GHL)', () => {
+  const p = (g: Grafo, id: string) => g.nos.find((n) => n.id === id)!.posicao;
+
+  it('gatilho à esquerda, passos para a direita, ramos se abrem no eixo Y na ordem declarada', () => {
+    const g: Grafo = {
+      nos: [no('nao', 'controle.encerrar', 9, 900), no('sim', 'acao.adicionar_tag', 5, 5), no('c', 'controle.condicao', 50, 50), no('g', 'gatilho.contato_criado', 300, 300)],
+      arestas: [{ id: '1', de: 'g', para: 'c' }, { id: '2', de: 'c', para: 'nao', ramo: 'r-nao' }, { id: '3', de: 'c', para: 'sim', ramo: 'r-sim' }],
+    };
+    const r = organizarHorizontal(g, { ordemRamos: (id) => (id === 'c' ? ['r-sim', 'r-nao'] : []), passoColuna: 300, alturaLinha: 100 });
+    expect(p(r, 'g').x).toBe(0);
+    expect(p(r, 'c').x).toBe(300);
+    expect(p(r, 'sim').x).toBe(600);
+    expect(p(r, 'nao').x).toBe(600);
+    expect(p(r, 'sim').y).toBeLessThan(p(r, 'nao').y); // "Sim" em cima
+    expect(p(r, 'c').y).toBe((p(r, 'sim').y + p(r, 'nao').y) / 2);
+    expect(p(r, 'g').y).toBe(p(r, 'c').y);
+  });
+
+  it('vários gatilhos empilhados numa coluna, todos levando ao mesmo primeiro passo', () => {
+    const g: Grafo = {
+      nos: [no('t1', 'gatilho.tag_adicionada', 0, 0), no('t2', 'gatilho.contato_criado', 400, 0), no('t3', 'gatilho.agendado', 800, 0), no('a', 'acao.enviar_sms', 0, 200), no('b', 'controle.encerrar', 0, 400)],
+      arestas: [{ id: '1', de: 't1', para: 'a' }, { id: '2', de: 't2', para: 'a' }, { id: '3', de: 't3', para: 'a' }, { id: '4', de: 'a', para: 'b' }],
+    };
+    const r = organizarHorizontal(g, { passoColuna: 300, alturaLinha: 100 });
+    expect([p(r, 't1').x, p(r, 't2').x, p(r, 't3').x]).toEqual([0, 0, 0]);
+    expect(new Set([p(r, 't1').y, p(r, 't2').y, p(r, 't3').y]).size).toBe(3);
+    expect(p(r, 'a').x).toBe(300);
+    expect(p(r, 'b').x).toBe(600);
+    // fluxo centrado na coluna de gatilhos
+    expect(p(r, 'a').y).toBe(p(r, 't2').y);
+    expect(pareceVertical(r)).toBe(false);
+  });
+
+  it('laço não trava; passo solto vira outro bloco; notas não se mexem', () => {
+    const g: Grafo = {
+      nos: [no('g', 'gatilho.webhook'), no('a', 'acao.adicionar_tag'), no('b', 'controle.ir_para'), no('solto', 'acao.criar_nota')],
+      arestas: [{ id: '1', de: 'g', para: 'a' }, { id: '2', de: 'a', para: 'b' }, { id: '3', de: 'b', para: 'a' }],
+      notas: [{ id: 'n', texto: 'x', posicao: { x: 9, y: 9 } }],
+    };
+    const r = organizarHorizontal(g, { passoColuna: 300, alturaLinha: 100 });
+    expect([p(r, 'g').x, p(r, 'a').x, p(r, 'b').x]).toEqual([0, 300, 600]);
+    expect(p(r, 'solto').x).toBe(300);
+    expect(p(r, 'solto').y).not.toBe(p(r, 'a').y);
+    expect(r.notas).toEqual(g.notas);
+  });
+});
+
+describe('pareceVertical / primeiroPasso', () => {
+  it('detecta o layout antigo de cima para baixo', () => {
+    const g: Grafo = { nos: [no('g', 'gatilho.webhook', 0, 0), no('a', 'acao.adicionar_tag', 0, 170), no('b', 'controle.encerrar', 0, 340)], arestas: [] };
+    expect(pareceVertical(g)).toBe(true);
+    expect(pareceVertical({ nos: g.nos.slice(0, 2), arestas: [] })).toBe(false);
+  });
+
+  it('primeiro passo é o destino do gatilho, ou o passo sem entrada', () => {
+    const g: Grafo = { nos: [no('g', 'gatilho.webhook'), no('a', 'acao.adicionar_tag'), no('b', 'controle.encerrar')], arestas: [{ id: '1', de: 'g', para: 'a' }, { id: '2', de: 'a', para: 'b' }] };
+    expect(primeiroPasso(g)).toBe('a');
+    expect(primeiroPasso({ ...g, arestas: [{ id: '2', de: 'a', para: 'b' }] })).toBe('a');
+  });
+});
+
+describe('inserirEntre no eixo X', () => {
+  it('o destino e o que vem depois vão para a direita, não para baixo', () => {
+    const g: Grafo = { nos: [no('g', 'gatilho.webhook', 0, 0), no('a', 'acao.adicionar_tag', 350, 0), no('b', 'controle.encerrar', 700, 0)], arestas: [{ id: 'x', de: 'g', para: 'a' }, { id: 'y', de: 'a', para: 'b' }] };
+    const r = inserirEntre(g, 'x', no('novo', 'controle.esperar'), { gerarId: seq(), eixo: 'x', espacoX: 350 });
+    const pos = (id: string) => r.nos.find((n) => n.id === id)!.posicao;
+    expect(pos('novo')).toEqual({ x: 350, y: 0 });
+    expect(pos('a')).toEqual({ x: 700, y: 0 });
+    expect(pos('b')).toEqual({ x: 1050, y: 0 });
   });
 });
 

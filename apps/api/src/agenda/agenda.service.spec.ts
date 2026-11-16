@@ -3,6 +3,7 @@ import { AgendaService } from './agenda.service';
 import { ehRespostaAfirmativa } from './confirmacao';
 import { ConfigRequiredException, ConfigService } from '../config/config.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { CaixaService } from '../financeiro/caixa.service';
 
 describe('ehRespostaAfirmativa (RV-07.1)', () => {
   it.each(['sim', 'Sim!', 'SIM', 'simmm', 'confirmo', 'Confirmado.', 'ok', 'Ok, obrigado', 'pode confirmar', 'sim, estarei lá', '👍', '👍🏽', 'sim 👍', '✅', 'tá bom', 'beleza, até amanhã', 'Bom dia! Confirmo'])(
@@ -35,7 +36,8 @@ function montar(tx: Partial<Tx>, env: Record<string, string> = {}) {
   const prisma = { withTenant: jest.fn(async (_t: string, work: (t: unknown) => Promise<unknown>) => work(base)) } as unknown as PrismaService;
   const config = new ConfigService();
   jest.spyOn(config, 'get').mockImplementation((k: string) => env[k]);
-  return { svc: new AgendaService(prisma, config), tx: base };
+  const caixa = { sincronizarCompromisso: jest.fn() } as unknown as CaixaService;
+  return { svc: new AgendaService(prisma, config, caixa), tx: base };
 }
 
 const T = '11111111-1111-4111-8111-111111111111';

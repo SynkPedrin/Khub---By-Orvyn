@@ -37,8 +37,9 @@ function ambiente(opts: { eventoJaExiste?: boolean; pendente?: boolean; semPageT
         webhookEvent: {
           findFirst: jest.fn(async () => (opts.eventoJaExiste ? { id: 'e1', processedAt: opts.pendente ? null : new Date() } : null)),
           create: jest.fn(async () => ({ id: 'e1' })),
-          updateMany: jest.fn(async ({ where }: any) => { marcados.push(where.eventId); return { count: 1 }; }),
+          updateMany: jest.fn(async ({ where }: any) => { marcados.push(...(where.eventId?.in ?? [where.eventId])); return { count: 1 }; }),
         },
+        $executeRaw: jest.fn(async () => 1),
         integration: { findFirst: jest.fn(async () => (opts.comIntegracao === false ? null : { credentialsEncrypted: cred })) },
       }),
     ),
@@ -98,7 +99,8 @@ describe('MetaLeadsService (D1 — Lead Ads → contato)', () => {
     });
     // campos livres do formulário viajam junto
     expect(upserts[0].l.campos).toMatchObject({ qual_seu_orcamento: 'R$ 5.000' });
-    expect(marcados).toEqual(['LEAD_1']); // processed_at carimbado
+    expect(marcados).toContain('LEAD_1'); // processed_at carimbado (chave antiga e a do tenant)
+    expect(marcados).toContain(`${TENANT}:LEAD_1`);
   });
 
   it('reentrega do mesmo leadgen NÃO chama o Graph nem o CRM (idempotência)', async () => {

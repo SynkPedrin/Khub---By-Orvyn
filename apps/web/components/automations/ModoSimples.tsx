@@ -37,7 +37,9 @@ export function ModoSimples({ workflowId, passosNoCanvas, onMontado }: {
   const [resumo, setResumo] = useState('');
   const fim = useRef<HTMLDivElement>(null);
 
-  useEffect(() => fim.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }), [conversa, pensando]);
+  useEffect(() => {
+    fim.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [conversa, pensando]);
 
   const enviar = async (msg: string) => {
     const t = msg.trim();

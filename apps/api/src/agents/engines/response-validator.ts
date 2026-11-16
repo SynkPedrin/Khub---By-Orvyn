@@ -149,3 +149,36 @@ export function semAgendamentoInventado(texto: string): { texto: string; removeu
     .join('\n\n');
   return { texto: out.trim() ? out : texto, removeu: removeu && !!out.trim() };
 }
+
+// Disponibilidade dita sem consultar a agenda (auditoria 16/11: a agente disse
+// "não temos horário" sem ter olhado nada). Pegam as duas mentiras possíveis:
+// "não tem vaga/agenda lotada" e "temos horário amanhã às 14h/horários livres".
+// "Qual horário fica melhor?" e "funcionamos das 9 às 18" não casam.
+const RE_SEM_VAGA = /\b(nao (temos|tem|ha|teremos|tenho|existe|existem)( mais| nenhum| nenhuma)? (horario|horarios|vaga|vagas|disponibilidade|agenda|encaixe)|sem (horario|horarios|vaga|vagas|disponibilidade|agenda livre)|agenda (esta |ta |ja esta |ja ta )?(lotada|cheia|fechada|bloqueada|toda ocupada)|(horarios?|vagas?) (esgotad|preenchid|ocupad|indisponive)|nao (consigo|da pra|da para|tem como) (te )?encaixar|(esta|estao|ta|tao) ((todo|toda|todos|todas) )?(ocupad|lotad|cheio|cheia))/;
+const RE_TEM_VAGA = /\b((temos|tenho|tem|ha|existe) (um |uma )?(horario|horarios|vaga|vagas|disponibilidade|encaixe)( livre| livres| disponive\w*)? (livre|livres|disponive\w*|para|pra|na|no|nas|nos|as|a partir|amanha|hoje|segunda|terca|quarta|quinta|sexta|sabado|domingo|de manha|a tarde|a noite)|(horarios?|vagas?) (livres?|disponive\w*|abert\w*) (sao|e|para|pra|na|no|amanha|hoje|as)|consigo (te )?encaixar|(esta|ta) livre (as|a|amanha|hoje|na|no))/;
+
+/** Pede a preferência em vez de afirmar vaga que ninguém consultou. */
+export const PEDIR_PREFERENCIA_AGENDA = 'Me conta qual dia e período ficam melhores pra você que eu confirmo o horário certinho na agenda.';
+
+/**
+ * Tira a frase que AFIRMA haver (ou não haver) horário quando a agenda não foi
+ * consultada neste turno (`ver_agendamentos`). Se não sobrar nada, pede a
+ * preferência do contato — nunca inventa vaga nem nega vaga que existe.
+ */
+export function semDisponibilidadeInventada(texto: string): { texto: string; removeu: boolean } {
+  let removeu = false;
+  const out = texto
+    .split(/\n\s*\n/)
+    .map((par) => segmentarFrases(par).filter((f) => {
+      const n = norm(f);
+      if (RE_SEM_VAGA.test(n) || RE_TEM_VAGA.test(n)) { removeu = true; return false; }
+      return true;
+    }).join(' '))
+    .filter((x) => x.trim())
+    .join('\n\n')
+    .trim();
+  if (!removeu) return { texto, removeu: false };
+  const pergunta = /\?\s*$/.test(out);
+  return { texto: out ? (pergunta ? out : `${out}\n\n${PEDIR_PREFERENCIA_AGENDA}`) : PEDIR_PREFERENCIA_AGENDA, removeu: true };
+}
+

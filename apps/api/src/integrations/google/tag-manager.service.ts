@@ -134,7 +134,7 @@ export class TagManagerService {
     };
   }
 
-  /** versions:live — 404 significa que o contêiner nunca foi publicado. */
+  /** versions:live: 404 significa que o contêiner nunca foi publicado. */
   private async publicado(token: string, container: string): Promise<boolean | null> {
     try {
       const v = await this.http.get('tag_manager', `${BASE}${container}/versions:live`, token);

@@ -1,15 +1,13 @@
 import { createHmac } from 'node:crypto';
 import { MetaWebhookController } from './meta-webhook.controller';
+import { outboxFake } from '../common/outbox.fake';
 
 // Unit tests: these doubles verify the HTTP boundary, not PostgreSQL isolation.
 function setup(mapped = true) {
-  const rows = new Map<string, unknown>();
-  const upsert = jest.fn(async ({where,create}: any) => {
-    const key = JSON.stringify(where);
-    if (!rows.has(key)) rows.set(key,create);
-    return rows.get(key);
-  });
-  const prisma = {$queryRaw:jest.fn(async()=>mapped?[{tenant_id:'tenant-a'}]:[]),withTenant:jest.fn(async(_t:string,fn:any)=>fn({outboxEvent:{upsert}}))};
+  const fake = outboxFake();
+  const rows = fake.linhas;
+  const upsert = jest.fn(fake.queryRaw); // grava no outbox (INSERT … ON CONFLICT)
+  const prisma = {$queryRaw:jest.fn(async()=>mapped?[{tenant_id:'tenant-a'}]:[]),withTenant:jest.fn(async(_t:string,fn:any)=>fn({$queryRaw:upsert}))};
   const parse = jest.fn(()=>[{pageId:'page-a',leadgenId:'lead-a'}]);
   const controller = new MetaWebhookController({get:(key:string)=>key==='META_APP_SECRET'?'test-secret':'verify-token'} as any,prisma as any,{parse} as any);
   const response:any={status:jest.fn().mockReturnThis(),send:jest.fn().mockReturnThis(),type:jest.fn().mockReturnThis()};
@@ -40,7 +38,7 @@ describe('Meta webhook HTTP boundary',()=>{
   it('uses identical tenant dedupe key on redelivery',async()=>{
     const s=setup();await s.controller.receive(s.request(body),s.response);await s.controller.receive(s.request(body),s.response);
     expect(s.rows.size).toBe(1);
-    expect(s.upsert).toHaveBeenCalledWith(expect.objectContaining({where:{tenantId_dedupeKey:{tenantId:'tenant-a',dedupeKey:'meta:page-a:lead-a'}}}));
+    expect([...s.rows.values()][0]).toMatchObject({tenantId:'tenant-a',dedupeKey:'meta:page-a:lead-a',kind:'meta.lead'});
   });
   it('does not acknowledge a database failure',async()=>{
     const s=setup();s.upsert.mockRejectedValueOnce(new Error('db unavailable'));

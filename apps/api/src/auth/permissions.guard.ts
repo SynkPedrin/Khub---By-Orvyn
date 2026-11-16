@@ -12,12 +12,22 @@ export function permissionFor(controller: string, route: string, method: string)
     if (/^(members|invites)/.test(route)) return 'users.manage';
     if (/^(business|api-keys|integrations|audit|email-status)/.test(route)) return 'organization.manage';
   }
+  // Presença Google (GTM, Search Console, Meu Negócio): ler é de manager+; conectar e escrever no Google é de owner/admin.
+  if (controller === 'google') return read && route !== 'auth-url' ? 'google.view' : 'integrations.manage';
   if (controller.includes('integration') || controller.includes('ads')) return 'integrations.manage';
   if (controller === 'operations') return 'organization.manage';
   // Marcar/remarcar compromisso é operação de atendente, não configuração da
   // conta (ADR-0045). Antes caía no padrão `organization.manage` e o member
   // não conseguia agendar. Páginas de agendamento (booking-pages) seguem admin.
-  if (controller === 'agenda') return read ? 'contacts.read' : 'agenda.write';
+  // Importar agendamentos em lote (histórico do Avec) mexe na agenda inteira: manager+.
+  if (controller === 'agenda') return read ? 'contacts.read' : route.startsWith('importar') ? 'contacts.import' : 'agenda.write';
+  // Financeiro (FIN-GESTAO): cobranças seguem como antes; caixa, categorias e
+  // comissões da equipe são dado sensível da empresa: ler é manager+ (e
+  // viewer, papel de leitura), escrever é owner/admin.
+  if (controller === 'financeiro') {
+    if (read && (route.startsWith('cobrancas') || route === 'resumo')) return 'contacts.read';
+    return read ? 'financeiro.read' : 'organization.manage';
+  }
   // Página pessoal (CAL-PESSOAL): cada colaborador configura o próprio link —
   // o serviço impõe responsáveis = ele mesmo. As páginas da equipe seguem admin.
   if (controller === 'booking-pages' && route.startsWith('minha')) return read ? 'contacts.read' : 'agenda.write';
@@ -40,6 +50,8 @@ export function permissionFor(controller: string, route: string, method: string)
   if (controller === 'disparos') return read ? 'contacts.read' : /(^|\/)(aprovar|rejeitar)$/.test(route) ? 'organization.manage' : 'automations.write';
   // Avaliações (Q4.4): pedir avaliação é ação no contato; configurar é da conta.
   if (controller === 'avaliacoes') return read ? 'contacts.read' : route.startsWith('pedidos') ? 'contacts.write' : 'organization.manage';
+  // Redes sociais (db/068): ver é leitura; publicar/cancelar é de manager+. Conectar conta fica em `integrations/redes` (integrations.manage).
+  if (controller === 'redes' || controller === 'redes/instagram') return read ? 'contacts.read' : 'automations.write';
   return read ? 'contacts.read' : 'organization.manage';
 }
 
@@ -47,7 +59,7 @@ const member = new Set(['profile.read', 'contacts.read', 'contacts.write', 'pipe
 export function hasPermission(user: AuthUser, permission: string): boolean {
   if (user.role === 'api') return !['users.manage', 'organization.manage'].includes(permission) && !!user.scopes?.some(s => s === '*' || s === permission);
   if (['owner', 'admin'].includes(user.role)) return true;
-  if (user.role === 'manager') return member.has(permission) || ['automations.write', 'pipeline.configure', 'contacts.import'].includes(permission);
+  if (user.role === 'manager') return member.has(permission) || ['automations.write', 'pipeline.configure', 'contacts.import', 'google.view', 'financeiro.read'].includes(permission);
   if (user.role === 'member') return member.has(permission);
   if (user.role === 'viewer') return permission.endsWith('.read');
   return false;

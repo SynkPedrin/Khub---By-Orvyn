@@ -122,11 +122,13 @@ export class AgentStudioService {
             select: { id: true, contact: { select: { nome: true } } },
           })
         : [];
-      const nomePorConversa = new Map(conversas.map((c) => [c.id, c.contact?.nome ?? 'Contato']));
+      const nomePorConversa = new Map(conversas.map((c) => [c.id, c.contact?.nome ?? null]));
       return runs.map((r) => ({
         id: r.id,
         conversaId: r.conversationId,
         contatoNome: nomePorConversa.get(r.conversationId) ?? 'Contato',
+        // false = conversa de teste/simulação cujo contato não existe mais (o painel esconde).
+        temContato: !!nomePorConversa.get(r.conversationId),
         status: r.status,
         motivo: r.motivo,
         intencao: r.intencao,

@@ -138,7 +138,8 @@ export function DetalheCompromisso({
             ) : (
               <p className="text-sm text-muted">Sem contato vinculado</p>
             )}
-            <p className="text-xs text-muted">Responsável: {nomeResponsavel ?? 'agenda geral'}</p>
+            {c.contatoTelefone && <p className="text-xs tabular-nums text-muted">{c.contatoTelefone}</p>}
+            <p className="text-xs text-muted">{c.profissionalNome ? 'Profissional' : 'Responsável'}: {nomeResponsavel ?? 'agenda geral'}</p>
           </Linha>
 
           {(c.lembreteEnviadoEm || c.confirmadoEm || c.faltouEm) && (

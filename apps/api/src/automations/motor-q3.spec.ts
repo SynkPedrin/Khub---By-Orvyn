@@ -442,6 +442,17 @@ describe('job adiantado (pendência da Q1): reagenda, nunca descarta', () => {
     expect(r.adiantadoMs).toBeGreaterThan(50_000);
   });
 
+  it('claim recusado pelo lease do passo anterior (corrida do enfileirar antes do finally) → reagenda em ~1 s, não descarta', async () => {
+    const a = ambienteRuns([], { claim: true, noAtual: 'meta', generation: 1, status: 'rodando', scheduledAt: new Date(Date.now() - 50), leaseUntil: new Date(Date.now() + 120_000) });
+    const r = await a.svc.processarPasso(job, 1);
+    expect(r.adiantadoMs).toBe(1_000);
+  });
+
+  it('claim recusado sem lease ativo e já na hora → descartado (outro worker já executou)', async () => {
+    const a = ambienteRuns([], { claim: true, noAtual: 'meta', generation: 1, status: 'rodando', scheduledAt: new Date(Date.now() - 50), leaseUntil: new Date(Date.now() - 1_000) });
+    expect(await a.svc.processarPasso(job, 1)).toEqual({});
+  });
+
   it('job velho (outra geração ou run encerrado) continua descartado', async () => {
     const velho = ambienteRuns([], { claim: true, noAtual: 'meta', generation: 2, status: 'esperando', scheduledAt: new Date(Date.now() + 60_000) });
     expect(await velho.svc.processarPasso(job, 1)).toEqual({});

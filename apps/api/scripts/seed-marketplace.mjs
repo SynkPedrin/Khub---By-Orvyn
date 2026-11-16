@@ -180,6 +180,32 @@ const TEMPLATES = [
       ],
     },
   },
+  {
+    // Vários gatilhos no mesmo fluxo (estilo GHL): qualquer um deles inicia.
+    slug: 'atendimento-varios-gatilhos', name: 'Atendimento por vários caminhos (tag, formulário ou mensagem)',
+    description: 'Começa quando o lead ganha uma tag, envia um formulário ou manda uma palavra-chave no WhatsApp: responde na hora, marca em atendimento e cria a tarefa para a equipe.',
+    category: 'Entrada de Leads', icon: 'zap', difficulty: 'facil', estimatedMin: 3,
+    tags: ['vários gatilhos', 'tag', 'formulário', 'whatsapp'], featured: true, requirements: ['stevo'],
+    variables: [
+      { chave: 'tag_entrada', label: 'Tag que dispara o atendimento', tipo: 'tag', obrigatorio: true, default: 'quero-atendimento' },
+      { chave: 'palavra', label: 'Palavra-chave no WhatsApp', tipo: 'texto', obrigatorio: true, default: 'orçamento' },
+      { chave: 'resposta', label: 'Primeira resposta', tipo: 'texto', obrigatorio: true, default: 'Oi {{contato.nome}}! Recebi seu pedido e já vou te atender por aqui. 😊' },
+    ],
+    workflow: {
+      nos: [
+        { id: 'g1', tipo: 'gatilho.tag_adicionada', posicao: pos(0, 0), config: { tag: '{{var.tag_entrada}}' } },
+        { id: 'g2', tipo: 'gatilho.formulario_enviado', posicao: pos(0, 140), config: {} },
+        { id: 'g3', tipo: 'gatilho.mensagem_recebida', posicao: pos(0, 280), config: { canal: 'WhatsApp', contem: '{{var.palavra}}' } },
+        { id: 's', tipo: 'acao.enviar_sms', posicao: pos(320, 140), config: { texto: '{{var.resposta}}' } },
+        { id: 't', tipo: 'acao.adicionar_tag', posicao: pos(620, 140), config: { tag: 'em-atendimento' } },
+        { id: 'k', tipo: 'acao.criar_tarefa', posicao: pos(920, 140), config: { titulo: 'Atender {{contato.nome}}', prioridade: 'alta', emDias: 0 } },
+      ],
+      arestas: [
+        { id: 'e1', de: 'g1', para: 's' }, { id: 'e2', de: 'g2', para: 's' }, { id: 'e3', de: 'g3', para: 's' },
+        { id: 'e4', de: 's', para: 't' }, { id: 'e5', de: 't', para: 'k' },
+      ],
+    },
+  },
 ];
 
 const dry = process.argv.includes('--dry-run');

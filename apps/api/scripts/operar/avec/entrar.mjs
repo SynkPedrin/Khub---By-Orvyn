@@ -1,0 +1,36 @@
+// Login no Avec (headless, perfil separado). Credenciais só de ~/.khub/avec.env; nunca impressas.
+import { createRequire } from 'node:module';
+import { readFileSync, mkdirSync } from 'node:fs';
+import { homedir } from 'node:os';
+const require = createRequire('/Users/pedro/Downloads/DESENVOLVIMENTO/Nyro IA/KHUB-OS/apps/api/package.json');
+const { chromium } = require('/Users/pedro/.npm/_npx/dea9475797100b20/node_modules/playwright-core');
+const env = Object.fromEntries(readFileSync(`${homedir()}/.khub/avec.env`, 'utf8').split('\n').filter(Boolean).map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]));
+const DIR = process.env.AVEC_SESSAO_DIR ?? `${(await import('node:os')).homedir()}/.khub/avec-sessao/`;
+const OUT = `${DIR}shots`; mkdirSync(OUT, { recursive: true });
+const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'pt-BR', timezoneId: 'America/Sao_Paulo', acceptDownloads: true });
+const page = await ctx.newPage();
+await page.goto(env.AVEC_URL, { waitUntil: 'networkidle', timeout: 90000 }).catch(() => {});
+await page.waitForTimeout(1500);
+await page.screenshot({ path: `${OUT}/01-login.png` });
+const campos = await page.$$eval('input', (els) => els.map((e) => ({ type: e.type, name: e.name, id: e.id, ph: e.placeholder, vis: !!(e.offsetWidth || e.offsetHeight) })));
+console.log('url:', page.url());
+console.log('inputs:', JSON.stringify(campos));
+const user = page.locator('input[type=email]:visible, input[name*=mail i]:visible, input[name*=user i]:visible, input[name*=login i]:visible, input[type=text]:visible').first();
+const pass = page.locator('input[type=password]:visible').first();
+if ((await user.count()) && (await pass.count())) {
+  await user.click();
+  await user.pressSequentially(env.AVEC_USUARIO, { delay: 40 });
+  await pass.click();
+  await pass.pressSequentially(env.AVEC_SENHA, { delay: 40 });
+  await page.waitForTimeout(400);
+  await Promise.all([page.waitForLoadState('networkidle', { timeout: 60000 }).catch(() => {}), page.locator('button:has-text("Acessar conta"), input[type=submit]').first().click()]);
+  await page.waitForTimeout(4000);
+  await page.screenshot({ path: `${OUT}/02-depois-login.png` });
+  console.log('depois do login:', page.url());
+  console.log('titulo:', await page.title());
+  const textos = (await page.locator('body').innerText()).replace(/\s+/g, ' ').slice(0, 700);
+  console.log('texto:', textos);
+  await ctx.storageState({ path: `${DIR}sessao.json` });
+} else console.log('não achei o formulário de login');
+await browser.close();

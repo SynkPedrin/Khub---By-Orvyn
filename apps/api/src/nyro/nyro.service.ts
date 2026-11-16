@@ -460,7 +460,9 @@ export class NyroService {
         select: { papel: true, conteudo: true },
       }),
     );
+    // a API exige que a conversa comece por mensagem do usuário: a janela pode cortar no meio de um par
     const ordenadas = msgs.reverse();
+    while (ordenadas.length > 1 && ordenadas[0].papel !== 'user') ordenadas.shift();
     const ultimaDoUsuario = ordenadas.map((m) => m.papel).lastIndexOf('user');
     return ordenadas.map((m, i) => ({ role: m.papel as 'user' | 'assistant', content: m.papel === 'user' && i !== ultimaDoUsuario ? encolherAnexos(m.conteudo, 1200) : m.conteudo }));
   }

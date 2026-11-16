@@ -9,6 +9,85 @@ Status: `aberto` · `em correção` · `corrigido` · `não reproduz`.
 
 ## Abertos
 
+### BUG-041 — Webhook do WhatsApp (Stevo) com HTTP 500 em reentrega simultânea (S1) — corrigido na árvore 2026-11-16, aguarda deploy
+- **Como apareceu:** auditoria dos logs do Render. Em 15/11, às 17:45 UTC, `POST /v1/webhooks/stevo-api` respondeu 500 com `Unique constraint failed` em `outboxEvent.upsert`.
+- **Causa raiz:** o `upsert` do Prisma faz SELECT e depois INSERT, sem atomicidade. Duas entregas do mesmo evento ao mesmo tempo (a Stevo reenvia quando a primeira demora) passam pelo SELECT, e a segunda estoura a unique `(tenant_id, dedupe_key)`. Reproduzido no QA com 20 entregas simultâneas: **19 falhas de 20**.
+- **Existe em outros pontos?** Sim, em todos os pontos de entrada que gravam no outbox: Evolution, Stevo legado, Meta Lead Ads e webhooks de automação (com e sem Idempotency-Key).
+- **Correção:**
+  - `common/outbox.ts` (`registrarNoOutbox`) faz `INSERT … ON CONFLICT (tenant_id, dedupe_key) DO NOTHING RETURNING` e relê a linha. A reentrega é reconhecida, responde 2xx e não processa de novo.
+  - Aplicado nos 6 pontos de entrada.
+  - Teste de concorrência no Postgres do QA: **0 falhas de 20, 1 inserção, mesmo id para todas**.
+  - Specs atualizados (`outbox.fake.ts`).
+
+### BUG-042 — Conectar WhatsApp: erro 502 da Stevo virava HTTP 500 "erro interno" (S2) — corrigido na árvore 2026-11-16
+- **Como apareceu:** em 16/11, às 11:43 UTC, `POST /v1/integrations/whatsapp/connect` deu duas vezes `stevo_api_502_upstream_error` (QR code) e a API respondeu 500.
+- **Correção:**
+  - O `ProblemDetailsFilter` reconhece `StevoApiError` e responde **502** (falha ou recusa do provedor) ou **503** (limite atingido), com `code` `stevo_<código>`, `provider`, `retryable` e `Retry-After`.
+  - O título explica: "O provedor do WhatsApp (Stevo) está instável agora. Tente de novo em alguns segundos." O canal não é marcado como desconectado.
+  - 2 testes novos no spec do filtro.
+
+### BUG-043 — Varredura de lembretes: falha sem causa no log (S3) — corrigido na árvore 2026-11-16
+- **Como apareceu:** em 15/11, às 14:39 UTC, o log registrou "varredura de lembretes falhou (tenant Studio)".
+- **Causa raiz:** o `.catch(() => …)` descartava o erro, então a causa não pode ser recuperada.
+- **Impacto verificado no Neon:**
+  - **0 lembretes perdidos.** A varredura é um UPDATE atômico: na falha nada é marcado, e ela roda de novo 1 minuto depois.
+  - 5 lembretes foram marcados desde 15/11, e todos os `reminder_due` estão `processed`.
+  - 0 lembretes pendentes na janela.
+- **Correção:** o log passa a trazer a mensagem do erro.
+
+### BUG-044 — Lead da Meta: dedupe sem tenant e corrida no registro (S3) — corrigido na árvore 2026-11-16
+- **Contexto:** `webhook_events` tem a unique global `(provider, event_id)`. Todas as entradas já prefixam o `event_id` com o tenant (`<tenant>:<id>`), exceto o Meta Lead Ads, que usava o `leadgenId` puro e fazia `findFirst` seguido de `create`, com a mesma corrida do BUG-041.
+- **Correção:**
+  - A chave passa a ser `<tenant>:<leadgenId>`, e a chave antiga continua reconhecida.
+  - O INSERT passa a ser atômico com `ON CONFLICT DO NOTHING`.
+  - Sem migração: a unique composta `(tenant_id, provider, event_id)` deixa de ser necessária enquanto a convenção do prefixo valer.
+
+### BUG-045 — Agente afirmava haver (ou não haver) horário sem consultar a agenda (S1 para o atendimento) — guarda no código 2026-11-16 (complementa o BUG-039)
+- **Correção:** o validador pós-resposta `semDisponibilidadeInventada` remove a frase que afirma vaga ("temos horário amanhã às 14h") ou falta de vaga ("agenda lotada", "não temos horário") quando `ver_agendamentos` não rodou com sucesso no turno. No lugar, pede a preferência do contato.
+- Vale para qualquer agente, inclusive os que nem têm a ferramenta (a Ritinha v2).
+- 15 testes novos em `engines.spec.ts`.
+
+### BUG-046 — "Resumo financeiro" da NICO/MCP dizia recebido = 0 com 45 mil lançamentos no caixa (S2) — corrigido na árvore 2026-11-16
+- **Causa raiz:** a ferramenta somava só `financeiro_cobrancas` (cobranças emitidas pelo KHUB). O histórico importado do Avec mora em `financeiro_transacoes` (livro-caixa).
+- **Correção:** `resumo_financeiro` devolve as duas fontes separadas e rotuladas:
+  - `caixa`: mês atual e anterior, a receber e a pagar, categorias, e a contagem de lançamentos com data futura.
+  - `cobrancas`
+  - Teste E2E com MCP (40/40).
+- **Nota (não é bug):** o status `cancelled` em "Enviar mensagem" de automação é proposital. O contato respondeu depois do início do fluxo (ou optou por sair), e o follow-up não é enviado. Agora o motivo fica gravado (`contato_respondeu_depois_do_inicio` ou `contato_optou_por_sair`) na mensagem e na saída do passo.
+
+### BUG-040 — Passo de automação descartado quando o passo anterior ainda segurava o lease (S2) — corrigido na árvore 2026-11-16, aguarda deploy
+- **Como apareceu:** teste E2E em produção (16/11). O teste do rascunho "Novo Lead 🚀 (importado do GHL v14)" parou duas vezes em `identificar`, logo depois do "Esperar" pulado (`attempts=0`, sem lease, sem passo registrado). Um terceiro teste, de 13/11, estava parado do mesmo jeito em `aguarda_origem`. No fluxo ativo, cada passo encadeado saía cerca de 5–7 s atrasado: no teste real, a oportunidade foi criada 7 s depois das boas-vindas.
+- **Causa raiz:** `RunsService.executarPasso` enfileira o próximo passo ANTES do `finally` de `processarPasso` soltar o lease. Com `concurrency: 8`, o worker pega o job novo nesse intervalo, e o claim é recusado pelo lease alheio. `jobAdiantado` só reagendava quando `scheduledAt` estava no futuro; caso contrário, devolvia `{}` e o job sumia. O fluxo ativo só andava quando o `reconcile` (a cada 5 s) reenfileirava. O teste de rascunho não entra no reconcile (`workflow.status='ativo'`), então parava para sempre.
+- **Correção:**
+  - `jobAdiantado` reagenda em `LEASE_OCUPADO_RETRY_MS` (1 s) quando o lease está ocupado.
+  - O `reconcile` também recupera run de teste iniciado na última hora (`TESTE_RECONCILE_MS`).
+  - Specs: 2 novos casos em `motor-q3.spec.ts`. A suíte completa passa (1475 testes).
+- **Pendente:** deploy da API e repetir o teste do v14 em modo teste.
+
+### BUG-039 — Ritinha dizia "não tenho horário livre" com a agenda do salão livre (S1 para o atendimento) — mitigado 2026-11-16
+- **Como apareceu:** teste E2E em produção ("Tem horário na terça à tarde?" → "infelizmente na terça não tenho nenhum horário livre").
+- **Causa raiz:** a agenda do Studio tem 20.890 compromissos importados (até 14/11), todos com `responsavel_id` nulo. `slotsDoDia` calcula como se o salão fosse um único recurso (`responsaveis: []`), então qualquer compromisso bloqueia o horário para todas as profissionais. A agenda também não sincroniza com o sistema do salão depois da importação.
+- **Mitigação (sem código):** a Ritinha v2 perdeu `ver_agendamentos` e `solicitar_agendamento`. Ela agenda como a IA do GHL fazia: tag "serviço escolhido" + "nossa equipe vai verificar os horários…" + `transferir_para_humano`. A tag dispara a Notificação Interna para a equipe. A versão anterior está guardada em `apps/api/scripts/operar/ritinha-instrucoes-antes-2026-11-16.txt`.
+- **Aberto:** para a IA voltar a agendar sozinha, a agenda precisa de profissional por compromisso e de sincronização com o sistema do salão.
+
+### BUG-038 — Produção (Neon) sem 7 CHECKs do financeiro: lançamento de valor zero aceito (S2) — corrigido 2026-11-14
+- **Como apareceu:** no deploy de 14/11, o teste de isolamento da 070 falhou no Neon ("FALHA[valor]: lançamento de valor zero aceito"); no QA passava.
+- **Causa raiz:** as tabelas do financeiro nasceram no Neon de uma versão ANTERIOR da 070. A 070 atual usa `CREATE TABLE IF NOT EXISTS`; reaplicada, não recria os CHECKs inline. Diff Neon × QA: `valor_centavos >= 0` (devia ser `> 0`) e faltavam 6 CHECKs (descrição, nome da categoria, cargo, competência no dia 1, comissão paga ⇔ pago_em, valor ≤ base, percentual 0–100). Colunas idênticas.
+- **Correção:** `db/070b_financeiro_checks.sql` (aditiva, idempotente, no-op onde já está certo). Aplicada no Neon (tabelas vazias: nada recusado) e no QA; testes de isolamento 070 e 071 OK no Neon.
+- **Lição:** migração reaplicável com `CREATE TABLE IF NOT EXISTS` não corrige CHECK inline: mudança de regra em tabela existente precisa de `ALTER TABLE` próprio (ou arquivo `0NNb`). Antes de deploy, comparar `pg_constraint` do Neon com o QA.
+
+### BUG-036 — Horários das conversas errados (lista e mensagens) (S2) — corrigido na árvore 2026-11-13, aguarda deploy
+- **Reprodução (produção, Studio da Beleza):** em Conversas, a hora da lista e das bolhas não batia com a hora real da mensagem; conversas antigas mostravam "HH:MM" em vez de "Ontem"/data.
+- **Causa raiz:** a tela exibia o TEXTO `hora`/`ultimaHora`, gravado pelo servidor no fuso do processo (UTC no Render: 3 h adiantado) e congelado; a lista nunca usava a data. Segunda causa: a ingestão de Instagram/Messenger/YouTube gravava `created_at` = hora em que o KHUB recebeu, ignorando a hora real que a rede informa (`recebidoEm`): comentário antigo do YouTube aparecia com a hora da sincronização.
+- **Correção:** `lib/hora-conversa.ts` (lista e bolhas a partir do instante ISO, no fuso do navegador; lista no padrão WhatsApp: hora/Ontem/dia da semana/data) + API devolvendo `criadaEm`/`ultimaMensagemEm` + `horaCurta` com fuso de São Paulo (feito por outra sessão, 2026-11-13). Nesta sessão: `canais-ingestao.service.ts` grava `createdAt = recebidoEm` (futuro cai para agora); `?canal=` em Conversas.
+- **Teste:** `hora-conversa.test.ts` (3), regressão em `canais.spec.ts` ("hora REAL da rede"), QA visual: mensagem de 35 min atrás = "13:16" e de ontem = "Ontem" no fuso America/Sao_Paulo.
+- **Pendente:** o print do usuário é da produção, que roda o snapshot anterior. Corrige ao publicar a árvore atual.
+
+### BUG-037 — QA: `INTEGRATIONS_ENCRYPTION_KEY` do `.env.qa` em hex (64 chars), o serviço exige base64 de 32 bytes (S3) — aberto
+- **Efeito:** no QA, qualquer integração que cifra credencial (canais, redes, Meta Ads) quebra ao conectar/ler ("deve ter 32 bytes (base64)").
+- **Contorno usado em 2026-11-13:** chave base64 nova só no processo da API de QA (arquivo no scratchpad da sessão).
+- **Correção sugerida:** gerar `openssl rand -base64 32` e trocar no `.env.qa` (dado de QA cifrado com a chave antiga deixa de abrir; é QA).
+
 ### BUG-035 — Rotas de origem/foto 404: controller importado mas não registrado no módulo (S2) — corrigido 2026-11-13
 - **Reprodução:** com a 066 no ar, `GET /v1/crm/contacts/:id/origem`, `/foto` e `/crm/atribuicao/*` respondiam 404 em runtime, com tsc e jest verdes.
 - **Causa raiz:** `OrigemFotoController` estava importado no `crm.module.ts` mas fora do array `controllers` — o Nest só registra o que está no array; o typecheck não reclama porque o import era "usado".

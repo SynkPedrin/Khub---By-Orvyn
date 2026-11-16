@@ -11,7 +11,10 @@ export async function GET(req: NextRequest) {
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
   const err = url.searchParams.get('error_description') || url.searchParams.get('error');
-  const web = process.env.WEB_URL ?? 'http://localhost:3210';
+  // Volta para o MESMO domínio em que a pessoa está (o que o provedor
+  // chamou). WEB_URL apontava para um domínio ainda sem DNS e a conexão
+  // terminava numa página que não abria (2026-11-15).
+  const web = url.origin;
 
   if (err || !code || !state) {
     return NextResponse.redirect(`${web}/marketing/ads?error=${encodeURIComponent(err || 'callback inválido')}`);

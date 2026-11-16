@@ -8,5 +8,6 @@ import { ApiKeysService } from './api-keys.service';
 @Module({
   controllers: [SettingsController, AdvancedSettingsController],
   providers: [SettingsService, TagsService, ApiKeysService],
+  exports: [SettingsService],
 })
 export class SettingsModule {}

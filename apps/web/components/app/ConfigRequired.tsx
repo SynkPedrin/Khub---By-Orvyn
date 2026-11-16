@@ -14,14 +14,14 @@ export function ConfigRequired({ provider, missing, compact }: { provider: strin
         Configurar {label}
       </p>
       <p className={`mt-1 text-amber-700/90 dark:text-amber-200/80 ${compact ? 'text-[11px]' : 'text-xs'}`}>
-        Tudo já está implementado, falta a credencial. Defina no <code className="font-mono">.env</code> da API:
+        A integração está pronta, só falta ligar a credencial do {label} no servidor do KHUB. Quem administra o
+        servidor cadastra estas variáveis nas configurações da API (no Render: Environment) e salva:
       </p>
       <ul className="mt-1.5 flex flex-wrap gap-1.5">
         {missing.map((v) => (
           <li key={v} className="rounded-md bg-amber-400/20 px-1.5 py-0.5 font-mono text-[11px] text-amber-800 dark:text-amber-200">{v}</li>
         ))}
       </ul>
-      <p className="mt-2 text-[11px] text-amber-700/70 dark:text-amber-200/60">Referência completa: docs/ENV.md</p>
     </div>
   );
 }

@@ -153,6 +153,14 @@ export interface ConfigSlots {
   fuso: string;
   /** Vazio = agenda geral (sem responsável). */
   responsaveis: string[];
+  /**
+   * Passo da grade em minutos. Padrão (ausente): duracaoMin + intervaloMin
+   * (comportamento das páginas públicas). O agente de IA usa uma grade mais
+   * fina (ex.: 20 min) para não esconder o último horário que cabe no dia —
+   * uma consulta de 80 min pode começar 17:40 e terminar 19:00, e com passo
+   * de 80 min esse horário nunca apareceria.
+   */
+  passoMin?: number;
 }
 
 export interface Ocupado {
@@ -199,7 +207,7 @@ export function calcularSlots(cfg: ConfigSlots, data: string, ocupados: readonly
   const { primeiro, ultimo } = janelaReservavel(cfg, agora);
   if (data < primeiro || data > ultimo) return [];
   const faixas = cfg.horarios[String(diaDaSemana(data)) as keyof Horarios] ?? [];
-  const passo = cfg.duracaoMin + cfg.intervaloMin;
+  const passo = Math.max(5, cfg.passoMin ?? cfg.duracaoMin + cfg.intervaloMin);
   const limiteInicio = agora + cfg.antecedenciaMinHoras * 3_600_000;
   const folga = cfg.intervaloMin * 60_000;
   const out: Slot[] = [];

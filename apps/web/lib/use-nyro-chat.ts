@@ -4,6 +4,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/lib/api-error';
 import { ANEXO_EXTENSOES, ANEXO_MAX_BYTES, ANEXO_MAX_QTD, nyro, type AnexoEnvio, type Aprovacao, type EventoNyro, type PassoNyro, type PlanoNyro, type StatusNyro } from '@/lib/nyro';
 
+/** Mensagem do usuário como foi gravada (texto + blocos <anexo>) → o que a tela mostra: texto e chips dos arquivos. */
+export function bolhaDoUsuario(conteudo: string): Bolha {
+  const anexos = [...conteudo.matchAll(/<anexo nome="([^"]*)"/g)].map((m) => m[1]);
+  const texto = conteudo.split('\n\n[O usuário anexou')[0].trim();
+  return { papel: 'user', texto, ...(anexos.length ? { anexos } : {}) };
+}
+
 const PEDIDO_PADRAO_ANEXO = 'Leia o arquivo anexado, me diga o que achou e o que eu faço com isso.';
 
 function lerBase64(f: File): Promise<string> {
@@ -93,7 +100,7 @@ export function useNyroChat(ativo = true) {
       if (e instanceof DOMException && e.name === 'AbortError') return; // o usuário parou
       const cr = e instanceof ApiError ? e.configRequired : null;
       if (cr) setStatus((s) => ({ configurada: false, missing: cr.missing, capacidades: s?.capacidades ?? [] }));
-      else setErro(e instanceof ApiError && e.status >= 400 && e.status < 500 ? e.message : 'Não consegui falar com a NICO agora.');
+      else setErro(e instanceof ApiError ? e.message : 'Não consegui falar com a NICO agora.');
     } finally {
       setPensando(false);
       setAoVivo('');
@@ -103,6 +110,37 @@ export function useNyroChat(ativo = true) {
   }, [texto, pensando, conversationId, anexos]);
 
   const parar = useCallback(() => abortRef.current?.abort(), []);
+
+  /** Abre uma conversa antiga (histórico) e continua de onde parou. */
+  const carregarConversa = useCallback(async (id: string) => {
+    if (pensando) return;
+    setErro('');
+    try {
+      const c = await nyro.conversa(id);
+      const mensagens: Bolha[] = c.mensagens
+        .filter((m) => m.papel !== 'tool')
+        .map((m) => (m.papel === 'user' ? bolhaDoUsuario(m.conteudo) : { papel: 'assistant' as const, texto: m.conteudo, agente: m.agente, guardrail: m.guardrail, fontes: m.fontes }));
+      // ações que ainda esperam aprovação voltam para a última resposta
+      if (c.aprovacoes.length) {
+        const i = mensagens.map((b) => b.papel).lastIndexOf('assistant');
+        if (i >= 0) mensagens[i] = { ...mensagens[i], aprovacoes: c.aprovacoes };
+      }
+      setConversationId(c.id);
+      setBolhas(mensagens);
+      setPassos([]);
+    } catch {
+      setErro('Não consegui abrir essa conversa.');
+    }
+  }, [pensando]);
+
+  const novaConversa = useCallback(() => {
+    if (pensando) return;
+    setConversationId(undefined);
+    setBolhas([]);
+    setPassos([]);
+    setErro('');
+    setAnexos([]);
+  }, [pensando]);
 
   const decidir = useCallback(async (a: Aprovacao, aprovar: boolean) => {
     try {
@@ -116,5 +154,5 @@ export function useNyroChat(ativo = true) {
     }
   }, []);
 
-  return { status, bolhas, passos, texto, setTexto, pensando, erro, enviar, decidir, anexos, anexar, removerAnexo, aoVivo, plano, parar };
+  return { status, bolhas, passos, texto, setTexto, pensando, erro, enviar, decidir, anexos, anexar, removerAnexo, aoVivo, plano, parar, conversationId, carregarConversa, novaConversa };
 }

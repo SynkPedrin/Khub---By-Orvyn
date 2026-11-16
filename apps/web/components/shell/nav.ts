@@ -43,6 +43,10 @@ export const PRIMARY_NAV: NavItem[] = [
   { href: '/tarefas', label: 'Tarefas', icon: 'check2', grupo: 'Operação' },
   { href: '/automacoes', label: 'Automações', icon: 'zap', grupo: 'Crescimento' },
   { href: '/campanhas', label: 'Campanhas', icon: 'send', grupo: 'Crescimento' },
+  // Instagram, TikTok e YouTube da subconta (db/068).
+  { href: '/redes', label: 'Redes sociais', icon: 'instagram', grupo: 'Crescimento' },
+  // Presença Google da subconta: Tag Manager, Search Console e Meu Negócio.
+  { href: '/marketing/google', label: 'Google', icon: 'google', grupo: 'Crescimento' },
   // Captura de leads por link/embed (Q4.1).
   { href: '/formularios', label: 'Formulários', icon: 'file', grupo: 'Crescimento' },
   { href: '/analytics', label: 'Analytics', icon: 'trend', grupo: 'Crescimento' },

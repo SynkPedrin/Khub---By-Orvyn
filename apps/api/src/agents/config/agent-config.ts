@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { horarioSchema } from './horario';
+import { MODOS_AGENTE } from '../../common/modo-agente';
 
 /**
  * CONFIGURAÇÃO ESTENDIDA DO AGENTE (db/034 · docs/AI_AGENT_ARCHITECTURE.md §4)
@@ -307,6 +308,8 @@ export const permissoesSchema = z
 
 export const agentConfigSchema = z
   .object({
+    /** Piloto automático ou sugestivo (ADR-0048, common/modo-agente.ts). */
+    modo: z.enum(MODOS_AGENTE).default('automatico'),
     identidade: identidadeSchema.default({}),
     personalidade: personalidadeSchema.default({}),
     comportamento: comportamentoSchema.default({}),

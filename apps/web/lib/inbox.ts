@@ -23,6 +23,26 @@ export interface AnexoMensagem {
   url: string | null;
   /** Figurinha recebida pelo WhatsApp: exibida pequena e sem recorte. */
   figurinha?: boolean;
+  /** Vídeo recebido: chega como arquivo para baixar; a leitura dele é uma transcrição. */
+  video?: boolean;
+  /** Leitura da mídia pela IA (transcrição, descrição da imagem, texto do documento). */
+  leitura?: LeituraMidia;
+}
+
+export type StatusLeitura = 'pendente' | 'pronta' | 'falhou' | 'nao_suportado' | 'config_required';
+
+/** O que a IA leu da mídia — é este texto que a agente de atendimento enxerga no lugar do arquivo. */
+export interface LeituraMidia {
+  status: StatusLeitura;
+  texto?: string;
+  /** O servidor cortou o texto para a tela (a IA recebeu o conteúdo original). */
+  truncado?: boolean;
+  por?: string;
+  motivo?: string;
+  /** Variáveis de ambiente que faltam no servidor (config_required). */
+  faltando?: string[];
+  /** ISO 8601: quando a leitura começou. */
+  desde?: string;
 }
 
 /** Item da thread: mensagem (com anexo opcional) ou nota interna (`de: 'nota'`). */
@@ -30,6 +50,8 @@ export type ItemThread = MensagemConversa & {
   anexo?: AnexoMensagem | null;
   interna?: boolean;
   mencoes?: string[];
+  /** Escrita pela equipe no WhatsApp do celular, fora do KHUB (por isso sem nome de atendente). */
+  peloCelular?: boolean;
 };
 
 export interface ResultadoMidia {
@@ -136,6 +158,119 @@ export function tamanhoLegivel(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / 1024 / 1024).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Leitura da mídia pela IA                                             */
+/* ------------------------------------------------------------------ */
+
+/** Acima disto a leitura aparece recolhida (com "Ver tudo"). */
+export const LIMITE_LEITURA_RECOLHIDA = 280;
+const LINHAS_LEITURA_RECOLHIDA = 4;
+
+/**
+ * Depois deste tempo um "lendo…" não é mais crível: quem lia caiu no caminho
+ * (o servidor reinicia) e a agente já seguiu sem a leitura (ela espera 90 s).
+ * A tela para de consultar e mostra a falha discreta.
+ */
+export const LIMITE_LEITURA_PENDENTE_MS = 3 * 60_000;
+
+export type EstadoLeitura = 'lendo' | 'pronta' | 'falhou' | 'nao_lida' | 'sem_configuracao';
+
+export interface VisaoLeitura {
+  estado: EstadoLeitura;
+  /** Áudio e vídeo são transcritos; imagem e documento são lidos. */
+  transcricao: boolean;
+  /** Título do bloco quando há texto: "Transcrição" ou "Lido pela IA". */
+  rotulo: string;
+  /** Frase curta do estado (vazia em `pronta`). */
+  aviso: string;
+  texto: string;
+  /** Detalhe para o `title` (motivo da falha, variável que falta). */
+  detalhe?: string;
+  truncado: boolean;
+}
+
+/**
+ * O que a bolha mostra abaixo da mídia. `null` = nada a mostrar: sem leitura,
+ * leitura pronta vazia, ou figurinha que a IA não lê (não merece aviso).
+ */
+export function visaoDaLeitura(anexo: AnexoMensagem | null | undefined, criadaEm: string | undefined, agora: number): VisaoLeitura | null {
+  const l = anexo?.leitura;
+  if (!anexo || !l) return null;
+  const transcricao = anexo.tipo === 'audio' || !!anexo.video;
+  const base = { transcricao, rotulo: transcricao ? 'Transcrição' : 'Lido pela IA', texto: '', truncado: false };
+  const falha = { ...base, estado: 'falhou' as const, aviso: transcricao ? 'Não foi possível transcrever' : 'Não foi possível ler' };
+  switch (l.status) {
+    case 'pronta': {
+      const texto = (l.texto ?? '').trim();
+      return texto ? { ...base, estado: 'pronta', aviso: '', texto, truncado: !!l.truncado } : null;
+    }
+    case 'pendente': {
+      const inicio = Date.parse(l.desde ?? criadaEm ?? '');
+      if (!Number.isNaN(inicio) && agora - inicio > LIMITE_LEITURA_PENDENTE_MS) return falha;
+      return { ...base, estado: 'lendo', aviso: transcricao ? 'Transcrevendo…' : 'Lendo…' };
+    }
+    case 'falhou':
+      return { ...falha, detalhe: l.motivo };
+    case 'nao_suportado':
+      if (anexo.figurinha) return null;
+      return { ...base, estado: 'nao_lida', aviso: 'A IA não lê este tipo de arquivo', detalhe: l.motivo };
+    case 'config_required':
+      return { ...base, estado: 'sem_configuracao', aviso: 'Leitura pela IA não configurada', detalhe: l.faltando?.length ? `Falta configurar no servidor: ${l.faltando.join(', ')}` : undefined };
+    default:
+      return null;
+  }
+}
+
+/** Leitura longa (muitos caracteres ou muitas linhas) nasce recolhida. */
+export function leituraLonga(texto: string): boolean {
+  return texto.length > LIMITE_LEITURA_RECOLHIDA || texto.split('\n').length > LINHAS_LEITURA_RECOLHIDA;
+}
+
+/** Começo da leitura para o estado recolhido: corta em palavra inteira e termina em "…". */
+export function resumoDaLeitura(texto: string): string {
+  if (!leituraLonga(texto)) return texto;
+  let corte = texto.split('\n').slice(0, LINHAS_LEITURA_RECOLHIDA).join('\n');
+  if (corte.length > LIMITE_LEITURA_RECOLHIDA) {
+    corte = corte.slice(0, LIMITE_LEITURA_RECOLHIDA);
+    const espaco = corte.search(/\s\S*$/);
+    if (espaco > LIMITE_LEITURA_RECOLHIDA * 0.6) corte = corte.slice(0, espaco);
+  }
+  return `${corte.replace(/[\s.,;:!?…-]+$/, '')}…`;
+}
+
+/** Há mídia sendo lida agora nesta thread? (liga a consulta periódica) */
+export function temLeituraPendente(itens: readonly ItemThread[], agora: number): boolean {
+  return itens.some((m) => visaoDaLeitura(m.anexo, m.criadaEm, agora)?.estado === 'lendo');
+}
+
+/** Espera entre consultas enquanto há "lendo…": começa em 4 s e alarga até 20 s. */
+export function esperaDaLeitura(volta: number): number {
+  return Math.min(20_000, Math.round(4000 * 1.5 ** Math.max(0, volta)));
+}
+
+/** O que muda na bolha quando o anexo muda (a URL assinada troca a cada resposta e não conta). */
+function assinaturaDoAnexo(a: AnexoMensagem | null | undefined): string {
+  if (!a) return '';
+  return [a.tipo, a.url ? 'com-arquivo' : 'sem-arquivo', a.leitura?.status ?? '', a.leitura?.texto ?? ''].join('\u0001');
+}
+
+/**
+ * Atualiza, nas mensagens já na tela, o anexo que mudou no servidor: a mídia
+ * é anexada e lida DEPOIS que a mensagem aparece. Nada mais é tocado (envios
+ * otimistas e a ordem ficam como estão). Sem mudança, devolve a mesma lista.
+ */
+export function mesclarAnexos<T extends ItemThread>(atual: T[], servidor: readonly ItemThread[]): T[] {
+  const novos = new Map(servidor.map((m) => [m.id, m]));
+  let mudou = false;
+  const lista = atual.map((m) => {
+    const s = novos.get(m.id);
+    if (!s || assinaturaDoAnexo(s.anexo) === assinaturaDoAnexo(m.anexo)) return m;
+    mudou = true;
+    return { ...m, anexo: s.anexo ?? null };
+  });
+  return mudou ? lista : atual;
 }
 
 export interface DadosVariaveis {

@@ -9,7 +9,7 @@ import { KpiCard } from '@/components/revenue/Kpi';
 import { KpiGrid } from '@/components/revenue/Page';
 import { agentesApi, dataHora, inteiro, ROTULO_INTENCAO, ROTULO_STATUS_RUN, usd, type AgenteResumo, type StatusAgente } from '@/lib/agents';
 import { Abas, Confirmar, Erro, Esqueleto, Modal, Painel, StatusAgentePill, Vazio, useAcao, useCarga } from '@/components/agents/kit';
-import { AgenteShowcase } from '@/components/agents/AgenteShowcase';
+import { AgentesAoVivo } from '@/components/agents/AgentesAoVivo';
 
 type Filtro = 'todos' | StatusAgente;
 
@@ -85,7 +85,7 @@ export default function AgentesPage() {
 
       {painel.erro ? <Erro texto={painel.erro} tentar={painel.recarregar} /> : (
         <>
-          <AgenteShowcase />
+          {d && <AgentesAoVivo atividades={d.ultimasAtividades} />}
           <KpiGrid cols={6}>
             <KpiCard compacto loading={!d} label="Agentes" value={d ? inteiro(d.agentes.total) : ''} icon="ai" comparacao={d ? `${d.agentes.ativos} ativos · ${d.agentes.pausados} pausados` : undefined} />
             <KpiCard compacto loading={!d} label="Conversas atendidas" value={d ? inteiro(d.conversasAtendidas) : ''} icon="chat" />
@@ -106,7 +106,7 @@ export default function AgentesPage() {
           {lista.erro ? <Erro texto={lista.erro} tentar={lista.recarregar} /> : !lista.dados ? <Esqueleto linhas={4} /> : filtrados.length === 0 ? (
             <Vazio icone="ai" titulo={lista.dados.length ? 'Nenhum agente neste filtro' : 'Nenhum agente ainda'} descricao={lista.dados.length ? undefined : 'Crie um especialista com identidade, personalidade, base de conhecimento e regras próprias.'} acao={!lista.dados.length && <Link href="/agentes/novo" className="btn btn-primary btn-sm"><Icon name="plus" size={14} /> Criar o primeiro agente</Link>} />
           ) : (
-            <ul className="divide-y divide-line p-2">
+            <ul className="max-h-[560px] divide-y divide-line overflow-y-auto scrollbar-thin p-2">
               {filtrados.map((a) => (
                 <li key={a.id} className="flex flex-wrap items-center gap-3 rounded-xl px-3 py-3.5 transition-colors hover:bg-surface2/60">
                   <Link href={`/agentes/${a.id}`} className="flex min-w-0 flex-1 items-center gap-3">
@@ -146,7 +146,7 @@ export default function AgentesPage() {
           )}
         </section>
 
-        <div className="space-y-5">
+        <div className="space-y-5 xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto xl:pr-1 scrollbar-thin">
           <Painel titulo="Aprovações pendentes" descricao="Ações críticas pedidas pelos agentes. Só executam depois de aprovadas." corpo="px-5 pb-5 pt-3">
             {!extras.dados ? <Esqueleto linhas={2} /> : extras.dados.aprovacoes.length === 0 ? <p className="text-[13px] text-muted">Nada aguardando.</p> : (
               <ul className="space-y-2.5">

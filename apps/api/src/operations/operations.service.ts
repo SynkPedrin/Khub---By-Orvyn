@@ -17,6 +17,8 @@ import { DisparosService } from '../disparos/disparos.service';
 
 /** Varredura do lembrete D-1 da agenda: no máximo 1x por minuto por tenant. */
 const INTERVALO_LEMBRETES_MS = 60_000;
+/** Teste de rascunho só é recuperado pelo reconcile na primeira hora. */
+const TESTE_RECONCILE_MS = 60 * 60_000;
 
 @Injectable()
 export class OperationsService implements OnModuleInit {
@@ -48,13 +50,16 @@ export class OperationsService implements OnModuleInit {
        const ultima=this.ultimaVarreduraLembretes.get(t.id) ?? 0;
        if (Date.now()-ultima >= INTERVALO_LEMBRETES_MS) {
          this.ultimaVarreduraLembretes.set(t.id,Date.now());
-         await this.agenda.dispararLembretes(t.id).catch(()=>this.log.error(`varredura de lembretes falhou (tenant ${t.id})`));
+         // Atômica: se falhar, nada é marcado e a próxima varredura tenta de novo (sem perda). A causa vai no log.
+         await this.agenda.dispararLembretes(t.id).catch((e)=>this.log.error(`varredura de lembretes falhou (tenant ${t.id}): ${(e as Error).message?.slice(0,300)}`));
          // Gatilhos por tempo (Q3.2): agendado e data do contato (db/057). Idempotente por lease + dedupe.
          await this.agendador.varrer(t.id).catch((e)=>this.log.error(`varredura de agendas de automação falhou (tenant ${t.id}): ${(e as Error).message}`));
        }
        const data = await this.db.withTenant(t.id, async tx => ({
          events: await tx.outboxEvent.findMany({where:{status:'pending'},orderBy:{createdAt:'asc'},take:100}),
-         runs: await tx.workflowRun.findMany({where:{status:{in:['rodando','esperando']}, scheduledAt:{lte:new Date(Date.now()+60_000)}, OR:[{leaseUntil:null},{leaseUntil:{lt:new Date()}}], workflow:{status:'ativo'}},orderBy:{scheduledAt:'asc'},take:100}),
+         // Fluxo ativo, ou teste de rascunho recente (o teste não tem outro jeito de se recuperar
+         // de um job perdido; teste antigo esquecido não volta a falar com o número de teste).
+         runs: await tx.workflowRun.findMany({where:{status:{in:['rodando','esperando']}, scheduledAt:{lte:new Date(Date.now()+60_000)}, AND:[{OR:[{leaseUntil:null},{leaseUntil:{lt:new Date()}}]},{OR:[{workflow:{status:'ativo'}},{teste:true,startedAt:{gte:new Date(Date.now()-TESTE_RECONCILE_MS)}}]}]},orderBy:{scheduledAt:'asc'},take:100}),
        }));
        for (const e of data.events) await this.queue.add('event',{tenantId:t.id,id:e.id},{jobId:e.id,attempts:5,backoff:{type:'exponential',delay:2000},removeOnComplete:100,removeOnFail:false});
        for (const run of data.runs) {

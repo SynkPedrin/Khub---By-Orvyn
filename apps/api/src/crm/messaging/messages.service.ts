@@ -11,6 +11,7 @@ import { AtendimentoService, type EstadoAtendimento } from './atendimento.servic
 import { StevoApiProvider } from './stevo-api.provider';
 import type { MidiaSaida } from './provider.contract';
 import { CanaisService } from './canais/canais.service';
+import { horaCurta } from '../../common/hora';
 
 /**
  * Autoria do envio. `humano` com `identityId` = alguém digitou no Inbox (e por
@@ -75,7 +76,7 @@ export class MessagesService {
   }
 
   private hora(): string {
-    return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    return horaCurta();
   }
 
   /**
@@ -146,7 +147,10 @@ export class MessagesService {
       if (!this.impl(providerNome).configured() || (process.env.NODE_ENV==='production' && !integration?.externalBusinessId)) status='config_required';
       // Instância Stevo vinculada mas desconectada: não tenta (a Stevo responderia not_ready).
       if (status==='sending' && stevoApi && stevoApi.status!=='connected') status='canal_desconectado';
-      if (contact?.optedOutAt || (runStartedAt && contact?.lastInboundAt && contact.lastInboundAt >= new Date(runStartedAt))) status='cancelled';
+      // Cancelado de propósito: o contato pediu para sair, ou RESPONDEU depois que a automação começou
+      // (follow-up não vai para quem acabou de falar). O motivo fica gravado (auditoria 16/11).
+      const motivoCancelado=contact?.optedOutAt ? 'contato_optou_por_sair' : (runStartedAt && contact?.lastInboundAt && contact.lastInboundAt >= new Date(runStartedAt)) ? 'contato_respondeu_depois_do_inicio' : null;
+      if (motivoCancelado) status='cancelled';
       // TRAVA DE DEV (doc 18, B-3): fora de produção nada sai para o telefone real
       // do contato. Só para STEVO_TEST_NUMBER; sem ele, a mensagem é gravada e bloqueada.
       if (status==='sending' && !this.emProducao() && !this.config.get('STEVO_TEST_NUMBER')) status='bloqueado_dev';
@@ -160,7 +164,7 @@ export class MessagesService {
         else if (!midia.url && !(midia.base64 && impl.aceitaBase64)) { status='config_required'; gateStorage=true; }
       }
       const hora=this.hora();
-      const data={deliveryStatus:status,deliveryError:status==='bloqueado_dev'?'envio externo bloqueado fora de produção: defina STEVO_TEST_NUMBER':null};
+      const data={deliveryStatus:status,deliveryError:status==='bloqueado_dev'?'envio externo bloqueado fora de produção: defina STEVO_TEST_NUMBER':status==='cancelled'?motivoCancelado:null};
       const autoria = autor.tipo==='ia' ? {autorTipo:'ia',agentId:autor.agentId}
         : autor.tipo==='automacao' ? {autorTipo:'automacao',workflowId:autor.workflowId}
         : {autorTipo:'humano',enviadoPorId:autor.identityId};

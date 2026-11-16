@@ -70,7 +70,7 @@ export const TOOLS: Tool[] = [
 
   t(
     'resumo_financeiro',
-    'Visão financeira da conta: recebido, a receber, vencido (valores em centavos), número de cobranças pagas/vencidas e, junto, o valor no funil. Use para qualquer pergunta de caixa, inadimplência, receita ou previsão.',
+    'Visão financeira da conta, em centavos e com a fonte separada: "caixa" = livro-caixa (entradas, saídas e saldo do mês atual e do anterior, a receber/a pagar, principais categorias, inclusive o histórico importado) e "cobrancas" = só as cobranças emitidas pelo KHUB (pagas, a receber, vencidas); junto, o valor no funil. Use para caixa, receita, inadimplência ou previsão, dizendo de qual fonte é cada número.',
     z.object({}),
     'leitura',
     () => 'ler o resumo financeiro',
@@ -120,6 +120,34 @@ export const TOOLS: Tool[] = [
     z.object({ dias: z.number().int().min(1).max(90).default(30), termo: z.string().max(60).optional() }),
     'leitura',
     (a) => `ler o que os leads falaram nos últimos ${a.dias} dias`,
+  ),
+  t(
+    'leads_sem_resposta',
+    'Conversas em que a ÚLTIMA mensagem é do lead e ele está sem resposta há mais de N horas, com o número exato, a contagem por etapa do funil e os mais antigos (nome, canal, etapa, valor). Use para "quantos leads estão sem resposta há mais de 24h", gargalo de atendimento e priorização de follow-up.',
+    z.object({ horas: z.number().int().min(1).max(720).default(24), etapa: z.string().max(60).optional() }),
+    'leitura',
+    (a) => `ver quem está sem resposta há mais de ${a.horas}h`,
+  ),
+  t(
+    'listar_negocios',
+    'Lista negócios do funil com valor, etapa, origem e HÁ QUANTOS DIAS estão parados, mais o total e o valor somado da seleção. Filtre por etapa (nome), status e "parados há X dias". Use para pipeline parado, negócios de maior valor em risco e previsão.',
+    z.object({ etapa: z.string().max(60).optional(), status: z.enum(['aberto', 'ganho', 'perdido']).default('aberto'), paradosHaDias: z.number().int().min(1).max(3650).optional(), limite: z.number().int().min(1).max(100).default(30) }),
+    'leitura',
+    (a) => `listar negócios${a.etapa ? ` em "${a.etapa}"` : ''}${a.paradosHaDias ? ` parados há ${a.paradosHaDias}+ dias` : ''}`,
+  ),
+  t(
+    'agenda_periodo',
+    'Agenda de um período (datas AAAA-MM-DD, horário de Brasília): total, contagem por status, % de faltas, faturamento previsto/realizado e a lista de compromissos. Use para ocupação, no-show, "como foi a semana" e "o que tenho amanhã".',
+    z.object({ de: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), ate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }),
+    'leitura',
+    (a) => `ver a agenda de ${a.de} a ${a.ate}`,
+  ),
+  t(
+    'metricas_atendimento',
+    'Volume e velocidade do atendimento nos últimos N dias: conversas recebidas, quantas ficaram sem nenhuma resposta, mediana do tempo até a primeira resposta e mensagens por canal.',
+    z.object({ dias: z.number().int().min(1).max(180).default(30) }),
+    'leitura',
+    (a) => `medir o atendimento dos últimos ${a.dias} dias`,
   ),
   t(
     'esquecer',

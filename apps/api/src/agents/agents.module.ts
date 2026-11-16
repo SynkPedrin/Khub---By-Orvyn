@@ -4,6 +4,7 @@ import { CrmModule } from '../crm/crm.module';
 import { RagModule } from '../rag/rag.module';
 import { AgendaModule } from '../agenda/agenda.module';
 import { AutomationsModule } from '../automations/automations.module';
+import { FinanceiroModule } from '../financeiro/financeiro.module';
 import { AiModule } from '../ai/ai.module';
 import { isWorker } from '../common/queue-connection';
 import { AgentKnowledgeController, AgentLearningController, AgentOperationsController, AgentsController } from './agents.controller';
@@ -42,6 +43,7 @@ import { AvaliacoesProcessor, FILA_MANUTENCAO_AGENTES, ManutencaoAgentesProcesso
     RagModule,
     AgendaModule,
     AutomationsModule,
+    FinanceiroModule,
     AiModule,
     BullModule.registerQueue({ name: FILA_AGENTES }),
     BullModule.registerQueue({ name: FILA_ENTREGAS }),
@@ -70,6 +72,6 @@ import { AvaliacoesProcessor, FILA_MANUTENCAO_AGENTES, ManutencaoAgentesProcesso
     ManutencaoAgentesScheduler,
     ...(isWorker() ? [AgentesProcessor, DeliveryProcessor, AvaliacoesProcessor, ManutencaoAgentesProcessor] : []),
   ],
-  exports: [AgentsService],
+  exports: [AgentsService, AgentStudioService, SimulatorService, VersioningService],
 })
 export class AgentsModule {}

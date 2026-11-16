@@ -11,7 +11,10 @@ const PROVEDORES = new Set(['meta', 'youtube']);
 
 export async function GET(req: NextRequest, { params }: { params: { provedor: string } }) {
   const url = new URL(req.url);
-  const web = process.env.WEB_URL ?? 'http://localhost:3210';
+  // Volta para o MESMO domínio em que a pessoa está (o que o provedor
+  // chamou). WEB_URL apontava para um domínio ainda sem DNS e a conexão
+  // terminava numa página que não abria (2026-11-15).
+  const web = url.origin;
   const voltar = (q: Record<string, string>) => NextResponse.redirect(`${web}/conversas?${new URLSearchParams({ canais: '1', ...q }).toString()}`);
   const provedor = params.provedor;
   if (!PROVEDORES.has(provedor)) return voltar({ erro: 'rede desconhecida' });

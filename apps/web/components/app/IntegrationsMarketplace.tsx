@@ -6,18 +6,24 @@ import { Icon } from '@/components/icons';
 import { BrandLogo, type BrandKey } from '@/components/brand/BrandLogo';
 import { ConfigRequired } from '@/components/app/ConfigRequired';
 import { WhatsAppConnectModal } from '@/components/app/WhatsAppConnectModal';
+import { ConectorIaPainel } from '@/components/app/ConectorIaPainel';
 import { ApiError } from '@/lib/api-error';
 import { ads } from '@/lib/ads';
 import { settingsApi } from '@/lib/settings';
 import { whatsappApi, type ConexaoWhatsApp } from '@/lib/whatsapp';
+import { redesApi, type EstadoRede, type RedeSocial } from '@/lib/redes';
+import { googleApi } from '@/lib/google';
+import { canaisApi, type CartaoCanal } from '@/lib/canais';
 
-type Categoria = 'anuncios' | 'mensageria' | 'pagamentos' | 'produtividade' | 'ia';
+type Categoria = 'anuncios' | 'mensageria' | 'redes' | 'pagamentos' | 'produtividade' | 'ia';
 
 interface App {
   key: string;
   nome: string;
   brand: BrandKey;
   categoria: Categoria;
+  /** Aparece também nestes filtros (ex.: Instagram é mensageria E rede social). */
+  tambem?: Categoria[];
   desc: string;
   /** provider usado no fluxo real de conexão (integrations/:provider/auth-url). */
   provider: string;
@@ -39,6 +45,7 @@ const CATS: { key: Categoria; label: string; icon: Parameters<typeof Icon>[0]['n
   { key: 'pagamentos', label: 'Pagamentos', icon: 'finance' },
   { key: 'produtividade', label: 'Produtividade', icon: 'calendar' },
   { key: 'ia', label: 'Inteligência', icon: 'sparkles' },
+  { key: 'redes', label: 'Redes sociais', icon: 'instagram' },
 ];
 
 // Catálogo real: o que o KHUB integra. Conexão passa pelo fluxo do servidor
@@ -46,20 +53,26 @@ const CATS: { key: Categoria; label: string; icon: Parameters<typeof Icon>[0]['n
 const APPS: App[] = [
   // capability:'ads' — não pede leads_retrieval junto, então Ads conecta
   // mesmo se a conta ainda não tiver Lead Ads/Advanced Access aprovado.
-  { key: 'meta_ads', nome: 'Meta Ads', brand: 'meta_ads', categoria: 'anuncios', provider: 'meta', capability: 'ads', estado: 'oauth', desc: 'Campanhas do Facebook e Instagram, gasto, CPL, ROAS e melhor criativo.' },
+  { key: 'meta_ads', nome: 'Meta Ads (anúncios)', brand: 'meta_ads', categoria: 'anuncios', provider: 'meta', capability: 'ads', estado: 'oauth', desc: 'Só os anúncios: campanhas do Facebook e Instagram, gasto, CPL, ROAS e melhor criativo. Mensagens e posts conectam no card do Instagram e do Messenger.' },
   { key: 'google_ads', nome: 'Google Ads', brand: 'google_ads', categoria: 'anuncios', provider: 'google', estado: 'oauth', desc: 'Search e Performance Max no mesmo painel das outras contas.' },
   { key: 'tiktok_ads', nome: 'TikTok Ads', brand: 'tiktok', categoria: 'anuncios', provider: 'tiktok', estado: 'oauth', desc: 'Traga as campanhas do TikTok para a análise cross-plataforma.' },
-  // TODO(meta-capabilities): usa o pacote 'ads' por ora — instagram_basic/
-  // instagram_manage_messages ainda não têm capability própria. Conecta,
-  // mas sem os scopes de mensageria do Instagram até isso existir.
-  { key: 'instagram', nome: 'Instagram', brand: 'instagram', categoria: 'mensageria', provider: 'meta', estado: 'oauth', desc: 'Direct e comentários viram conversa no Inbox unificado.' },
   // Evolution API própria — CANAL_MVP (CLAUDE.md). Conexão por QR code, não
   // por OAuth: NÃO reaproveitar o fluxo `conectar()` genérico de redirect.
   { key: 'whatsapp', nome: 'WhatsApp Business', brand: 'whatsapp', categoria: 'mensageria', provider: 'evolution', estado: 'qr', desc: 'Atendimento e disparos via Evolution API, conexão por QR code.' },
-  { key: 'messenger', nome: 'Messenger', brand: 'messenger', categoria: 'mensageria', provider: 'meta', estado: 'oauth', desc: 'Mensagens do Facebook no mesmo Inbox.' },
+  // Redes sociais (db/068): OAuth próprio em /v1/integrations/redes; painel em /redes. Mesma conta de Conversas.
+  // Instagram é UMA conexão (2026-11-15): o fluxo de Redes já pede Direct,
+  // comentários, posts e métricas juntos e assina o webhook da página. Antes o
+  // card de "Instagram" de mensageria abria o fluxo de ANÚNCIOS (Meta Ads).
+  { key: 'redes_instagram', nome: 'Instagram', brand: 'instagram', categoria: 'mensageria', tambem: ['redes'], provider: 'redes_instagram', estado: 'oauth', desc: 'Direct e comentários no Inbox, mais posts, métricas e publicação da conta profissional. Uma conexão para tudo.' },
+  { key: 'redes_tiktok', nome: 'TikTok', brand: 'tiktok', categoria: 'redes', provider: 'redes_tiktok', estado: 'oauth', desc: 'Vídeos, métricas, seguidores e publicação pelo Login Kit do TikTok.' },
+  { key: 'redes_youtube', nome: 'YouTube', brand: 'youtube', categoria: 'redes', provider: 'redes_youtube', estado: 'oauth', desc: 'Vídeos, estatísticas, YouTube Analytics e envio de vídeos.' },
+  // Messenger: conexão de canais do Inbox (página do Facebook). Antes também abria o fluxo de anúncios.
+  { key: 'messenger', nome: 'Messenger (Facebook)', brand: 'messenger', categoria: 'mensageria', provider: 'canais_meta', estado: 'oauth', desc: 'Mensagens e comentários da página do Facebook no mesmo Inbox.' },
   { key: 'anthropic', nome: 'Claude (NICO)', brand: 'claude', categoria: 'ia', provider: 'anthropic', estado: 'nativa', desc: 'O motor da NICO. Ligado por credencial no servidor, sem OAuth.' },
   { key: 'webhook', nome: 'Webhook / API', brand: 'webhook', categoria: 'produtividade', provider: 'webhook', estado: 'nativa', desc: 'Dispare fluxos de qualquer sistema com uma URL de entrada.' },
   { key: 'stripe', nome: 'Stripe', brand: 'stripe', categoria: 'pagamentos', provider: 'stripe', estado: 'planejado', desc: 'Cobranças, assinaturas e receita ligadas ao contato do CRM.' },
+  // Presença Google (Tag Manager, Search Console, Meu Negócio): OAuth próprio em /v1/google, tela em /marketing/google.
+  { key: 'google_presenca', nome: 'Google (Tag Manager, Search Console e Meu Negócio)', brand: 'google', categoria: 'anuncios', provider: 'google_presenca', estado: 'oauth', desc: 'Diagnóstico do Tag Manager, SEO no Search Console e avaliações do Perfil da Empresa.' },
   { key: 'google_calendar', nome: 'Google Calendar', brand: 'google_calendar', categoria: 'produtividade', provider: 'google_calendar', estado: 'planejado', desc: 'Agendamentos da Agenda sincronizados nos dois sentidos.' },
   { key: 'gmail', nome: 'Gmail', brand: 'gmail', categoria: 'produtividade', provider: 'gmail', estado: 'planejado', desc: 'Envie e receba e-mail do contato sem sair do KHUB.' },
 ];
@@ -73,6 +86,8 @@ export function IntegrationsMarketplace() {
   const [whatsappAberto, setWhatsappAberto] = useState(false);
   const [erroCarregar, setErroCarregar] = useState(false);
   const [waStatus, setWaStatus] = useState<ConexaoWhatsApp | null>(null);
+  const [redes, setRedes] = useState<EstadoRede[]>([]);
+  const [canais, setCanais] = useState<CartaoCanal[]>([]);
 
   const recarregar = () => {
     setErroCarregar(false);
@@ -83,15 +98,30 @@ export function IntegrationsMarketplace() {
     // Evolution"). Sem perguntar aqui também, um número já conectado fora
     // desta tela aparece como desconectado até alguém abrir o modal.
     whatsappApi.status().then(setWaStatus).catch(() => setWaStatus(null));
+    redesApi.estado().then(setRedes).catch(() => setRedes([]));
+    canaisApi.cartoes().then(setCanais).catch(() => setCanais([]));
   };
   useEffect(() => { recarregar(); }, []);
 
-  const conectado = (provider: string) => rows?.find((r) => r.provider === provider) ?? null;
+  const conectado = (provider: string) => {
+    if (provider === 'canais_meta') {
+      const c = canais.find((x) => x.rede === 'messenger');
+      return c?.estado === 'conectado' ? { provider, status: 'connected', health: c.contas.some((x) => x.erro) ? 'degraded' : 'ok', lastSyncAt: c.contas[0]?.ultimaSyncAt ?? null } : null;
+    }
+    if (provider.startsWith('redes_')) {
+      const r = redes.find((x) => `redes_${x.rede}` === provider);
+      return r?.conectado ? { provider, status: 'connected', health: r.contas.some((c) => c.erro) ? 'degraded' : 'ok', lastSyncAt: null } : null;
+    }
+    return rows?.find((r) => r.provider === provider) ?? null;
+  };
 
   const conectar = async (app: App) => {
     setGated(null); setMsg(null); setBusy(app.key);
     try {
-      const { url } = await ads.authUrl(app.provider, app.capability);
+      const { url } = app.provider === 'google_presenca' ? await googleApi.urlConexao('leitura')
+        : app.provider === 'canais_meta' ? await canaisApi.urlConexao('meta')
+        : app.provider.startsWith('redes_') ? await redesApi.urlConexao(app.provider.slice(6) as RedeSocial)
+        : await ads.authUrl(app.provider, app.capability);
       window.location.href = url;
     } catch (e) {
       const cr = e instanceof ApiError ? e.configRequired : null;
@@ -102,7 +132,7 @@ export function IntegrationsMarketplace() {
     }
   };
 
-  const lista = useMemo(() => (cat === 'todas' ? APPS : APPS.filter((a) => a.categoria === cat)), [cat]);
+  const lista = useMemo(() => (cat === 'todas' ? APPS : APPS.filter((a) => a.categoria === cat || a.tambem?.includes(cat))), [cat]);
   const conectados = rows?.filter((r) => r.status === 'connected').length ?? 0;
 
   return (
@@ -128,6 +158,9 @@ export function IntegrationsMarketplace() {
           <button onClick={recarregar} className="ml-auto font-semibold underline">Tentar de novo</button>
         </p>
       )}
+
+      {/* Conector MCP: Claude e ChatGPT operando o KHUB (ADR-0049) */}
+      {(cat === 'todas' || cat === 'ia') && <ConectorIaPainel />}
 
       {/* Grade de apps */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
