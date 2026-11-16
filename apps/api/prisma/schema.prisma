@@ -285,6 +285,95 @@ model AgencyMemberClientAccess {
   @@map("agency_member_client_access")
 }
 
+/// Daily da agência (db/074, ADR-0050). Escopo = agency_id, sem RLS (como db/026):
+/// o AgencyDailyService resolve a agência pela identidade da sessão.
+model AgencyTask {
+  id              String                 @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  agencyId        String                 @map("agency_id") @db.Uuid
+  numero          BigInt                 @default(autoincrement())
+  titulo          String
+  descricao       String?
+  clientAccountId String?                @map("client_account_id") @db.Uuid
+  responsavelId   String?                @map("responsavel_id") @db.Uuid
+  criadorId       String?                @map("criador_id") @db.Uuid
+  parentId        String?                @map("parent_id") @db.Uuid
+  tipo            String                 @default("outro")
+  status          String                 @default("a_fazer")
+  prioridade      String                 @default("normal")
+  inicioEm        DateTime?              @map("inicio_em") @db.Timestamptz(6)
+  prazoEm         DateTime?              @map("prazo_em") @db.Timestamptz(6)
+  posicao         Float                  @default(0)
+  concluidaEm     DateTime?              @map("concluida_em") @db.Timestamptz(6)
+  arquivadaEm     DateTime?              @map("arquivada_em") @db.Timestamptz(6)
+  plataformas     String[]               @default([])
+  objetivo        String?
+  legenda         String?
+  hashtags        String?
+  cta             String?
+  exigeLegenda    Boolean                @default(true) @map("exige_legenda")
+  publicarEm      DateTime?              @map("publicar_em") @db.Timestamptz(6)
+  aprovacao       String?
+  publicadoEm     DateTime?              @map("publicado_em") @db.Timestamptz(6)
+  createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  parent          AgencyTask?            @relation("AgencyTaskSubtarefas", fields: [parentId], references: [id], onDelete: Cascade)
+  subtarefas      AgencyTask[]           @relation("AgencyTaskSubtarefas")
+  checklist       AgencyTaskChecklist[]
+  comentarios     AgencyTaskComentario[]
+
+  @@map("agency_tasks")
+}
+
+model AgencyTaskChecklist {
+  id        String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  taskId    String     @map("task_id") @db.Uuid
+  texto     String
+  feito     Boolean    @default(false)
+  posicao   Int        @default(0)
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  task      AgencyTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("agency_task_checklist")
+}
+
+model AgencyTaskComentario {
+  id        String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  taskId    String     @map("task_id") @db.Uuid
+  autorId   String?    @map("autor_id") @db.Uuid
+  corpo     String
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  task      AgencyTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("agency_task_comentarios")
+}
+
+model AgencyEvent {
+  id              String                    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  agencyId        String                    @map("agency_id") @db.Uuid
+  titulo          String
+  inicioEm        DateTime                  @map("inicio_em") @db.Timestamptz(6)
+  fimEm           DateTime?                 @map("fim_em") @db.Timestamptz(6)
+  diaInteiro      Boolean                   @default(false) @map("dia_inteiro")
+  local           String?
+  notas           String?
+  clientAccountId String?                   @map("client_account_id") @db.Uuid
+  criadorId       String?                   @map("criador_id") @db.Uuid
+  createdAt       DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime                  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  participantes   AgencyEventParticipante[]
+
+  @@map("agency_events")
+}
+
+model AgencyEventParticipante {
+  eventId  String      @map("event_id") @db.Uuid
+  memberId String      @map("member_id") @db.Uuid
+  event    AgencyEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, memberId])
+  @@map("agency_event_participantes")
+}
+
 model RefreshToken {
   id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   identityId String    @map("identity_id") @db.Uuid

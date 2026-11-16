@@ -109,6 +109,13 @@ Tabelas (todas `tenant_id NOT NULL`, RLS FORCE `tenant_rw`, gatilho `tenant_refe
 - `mcp_resolver_token(hash, tipo)` SECURITY DEFINER (dona `khub_service`): consome código/renovação de forma atômica, lê acesso; nunca devolve conexão revogada ou token vencido. `mcp_limpar_tokens()` apaga vencidos há +1 dia.
 - Isolamento: `db/072_mcp_conector_isolation_test.sql`.
 
+## 2.11 Daily da agência ([[Arquitetura|ADR-0050]] · `db/074_agency_daily.sql`)
+- Escopo `agency_id` (FK `agencies` ON DELETE CASCADE), **sem tenant_id/RLS** como `db/026`: o isolamento é do `AgencyDailyService` (agência resolvida pela identidade; subcontas visíveis do membro).
+- `agency_tasks(id, agency_id, numero identity, titulo, descricao, client_account_id→agency_client_accounts SET NULL, responsavel_id/criador_id→agency_members SET NULL, parent_id→self CASCADE, tipo CHECK, status CHECK, prioridade CHECK, inicio_em, prazo_em, posicao, concluida_em, arquivada_em, plataformas text[], objetivo, legenda, hashtags, cta, exige_legenda, publicar_em, aprovacao CHECK, publicado_em, created_at, updated_at)`; índices parciais por status/responsável/prazo/publicação (`arquivada_em IS NULL`).
+- `agency_task_checklist(task_id CASCADE, texto, feito, posicao)`, `agency_task_comentarios(task_id CASCADE, autor_id SET NULL, corpo)`.
+- `agency_events(agency_id, titulo, inicio_em, fim_em CHECK ≥ inicio, dia_inteiro, local, notas, client_account_id SET NULL, criador_id SET NULL)` + `agency_event_participantes(event_id, member_id)`.
+- Rollback no cabeçalho da migração (DROP das 5 tabelas). Aditiva.
+
 ## 3. Escopo de F0 — schema inicial
 
 F0 entrega **apenas** (ver [[Sprint]] / [[Tasks]] F0-08):

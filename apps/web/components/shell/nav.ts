@@ -20,7 +20,7 @@ export interface NavItem {
   grupo?: NavGrupo;
 }
 
-export type NavGrupo = 'Operação' | 'Crescimento' | 'Inteligência' | 'Agência' | 'Conta';
+export type NavGrupo = 'Operação' | 'Crescimento' | 'Inteligência' | 'Agência' | 'Daily' | 'Conta';
 
 /** Agrupa preservando a ordem de declaração (o primeiro item define a ordem do grupo). */
 export function agruparNav(items: NavItem[]): { grupo: NavGrupo | null; itens: NavItem[] }[] {
@@ -63,6 +63,11 @@ export const AGENCY_NAV: NavItem[] = [
   { href: '/agency', label: 'Visão geral', icon: 'grid', grupo: 'Agência' },
   { href: '/agency/clients', label: 'Clientes', icon: 'building', grupo: 'Agência' },
   { href: '/agency/equipe', label: 'Equipe', icon: 'users', grupo: 'Agência' },
+  // Daily da agência (ADR-0050): o dia a dia da equipe, acima das subcontas.
+  { href: '/agency/tarefas/minhas', label: 'Minhas tarefas', icon: 'check2', grupo: 'Daily' },
+  { href: '/agency/tarefas', label: 'Todas as tarefas', icon: 'list', grupo: 'Daily' },
+  { href: '/agency/studio', label: 'Studio', icon: 'sparkles', grupo: 'Daily' },
+  { href: '/agency/calendario', label: 'Calendário', icon: 'calendar', grupo: 'Daily' },
   { href: '/nyro', label: 'NICO', icon: 'sparkles', grupo: 'Inteligência' },
   { href: '/agency/configuracoes', label: 'Configurações', icon: 'settings', grupo: 'Conta' },
 ];

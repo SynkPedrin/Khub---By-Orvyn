@@ -196,6 +196,17 @@ export class AgencyService {
     return { agencyId: membro.agency.id, nome: membro.agency.name, slug: membro.agency.slug, role: membro.role, isDemo: membro.agency.isDemo };
   }
 
+  /**
+   * Membro + subcontas visíveis, para módulos da própria agência (Daily,
+   * ADR-0050) aplicarem a MESMA regra de visibilidade. `null` = a identidade
+   * não pertence a nenhuma agência.
+   */
+  async escopo(identityId: string) {
+    const membro = await this.membroDe(identityId);
+    if (!membro) return null;
+    return { membro, clientes: await this.clientesVisiveis(membro) };
+  }
+
   /** Clientes que este membro pode ver — global (owner/admin) ou restrito por `agency_member_client_access`. */
   private async clientesVisiveis(membro: NonNullable<Awaited<ReturnType<AgencyService['membroDe']>>>) {
     const todos = await this.prisma.agencyClientAccount.findMany({
