@@ -7,6 +7,7 @@ import type { Compromisso, ProfissionalAgenda, StatusAgenda } from '@/lib/agenda
 import { hora } from '@/lib/format';
 import { STATUS_LABEL } from './agenda-utils';
 import { mesmoDia, posicionarDia } from './calendario-layout';
+import { rotuloMinutos } from './resumo-dia';
 
 /** Altura de 1 hora nesta visão: maior que a da semana para o nome do cliente caber. */
 const PX_HORA = 72;
@@ -61,11 +62,13 @@ export function AgendaEquipe({
       const blocos = posicionarDia(evs, dia);
       // Quem atende em paralelo ganha coluna mais larga: ~130px por atendimento lado a lado.
       const paralelo = blocos.reduce((m, b) => Math.max(m, b.colunas), 1);
+      const ocupados = evs.reduce((t, e) => t + Math.max(0, (new Date(e.fim).getTime() - new Date(e.inicio).getTime()) / 60_000), 0);
       return {
         id,
         nome: id === SEM_PROFISSIONAL ? 'Sem profissional' : nomePorId.get(id) ?? evs[0]?.profissionalNome ?? 'Profissional',
         blocos,
         total: evs.length,
+        ocupados: Math.round(ocupados),
         largura: Math.max(LARGURA_MIN, paralelo * LARGURA_POR_ATENDIMENTO),
       };
     });
@@ -108,7 +111,9 @@ export function AgendaEquipe({
             {colunas.map((c) => (
               <div key={c.id} className="flex-1 border-l border-line px-3 py-2.5" style={{ minWidth: c.largura }}>
                 <p className={cx('truncate text-sm font-bold', c.id === SEM_PROFISSIONAL ? 'text-muted' : 'text-fg')}>{c.nome}</p>
-                <p className="text-2xs text-muted">{c.total === 1 ? '1 atendimento' : `${c.total} atendimentos`}</p>
+                <p className="text-2xs text-muted">
+                  {c.total === 1 ? '1 atendimento' : `${c.total} atendimentos`} · {rotuloMinutos(c.ocupados)}
+                </p>
               </div>
             ))}
           </div>

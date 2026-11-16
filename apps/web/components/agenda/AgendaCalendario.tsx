@@ -45,6 +45,7 @@ import {
   type Visao,
 } from './calendario-layout';
 import { AgendaEquipe, nomeCliente, nomeServico } from './AgendaEquipe';
+import { ResumoDia } from './ResumoDia';
 import { CompromissoModal } from './CompromissoModal';
 import { DetalheCompromisso } from './DetalheCompromisso';
 
@@ -405,7 +406,10 @@ export function AgendaCalendario() {
           <div className="skeleton h-[420px] w-full rounded-md" />
         </div>
       ) : visao === 'equipe' ? (
-        <AgendaEquipe dia={ref} eventos={visiveis} profissionais={profissionais} nomes={nomes} agora={agora} onAbrir={abrir} onCriar={criarEm} />
+        <>
+          <ResumoDia eventos={eventosDoDia(visiveis, ref)} profissionais={profissionais} agora={agora} ehHoje={mesmoDia(ref, agora)} />
+          <AgendaEquipe dia={ref} eventos={visiveis} profissionais={profissionais} nomes={nomes} agora={agora} onAbrir={abrir} onCriar={criarEm} />
+        </>
       ) : visao === 'mes' ? (
         <GradeMes
           dias={dias}
@@ -783,6 +787,15 @@ function GradeMes({
                 <button type="button" onClick={() => onDia(d)} className="mt-0.5 px-1 text-2xs font-medium text-brand hover:underline">
                   +{doDia.length - MAX} mais
                 </button>
+              )}
+              {/* Mapa de calor: quanto mais atendimentos, mais cheia a barra — a recepção sente o dia sem abrir. */}
+              {doDia.length > 0 && (
+                <span
+                  className={cx('mt-1 block h-1 rounded-full', doDia.length >= 10 ? 'bg-brand' : doDia.length >= 5 ? 'bg-brand/60' : 'bg-brand/30')}
+                  style={{ width: `${Math.min(100, (doDia.length / 15) * 100)}%` }}
+                  title={`${doDia.length === 1 ? '1 atendimento' : `${doDia.length} atendimentos`}`}
+                  aria-hidden
+                />
               )}
             </div>
           );

@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, ForbiddenException, Headers, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
-import { IsArray, IsIn, IsNumber, IsObject, IsOptional, IsString, IsUUID, MaxLength, Min, ArrayMaxSize, IsBoolean } from 'class-validator';
+import { IsArray, IsIn, IsNumber, IsObject, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ArrayMaxSize, IsBoolean } from 'class-validator';
 import { CrmService } from './crm.service';
 import { MessagesService } from './messaging/messages.service';
 import { CurrentUser, TenantId, type AuthUser } from '../auth/decorators';
@@ -9,6 +9,7 @@ import { filtroConversasDaQuery } from './messaging/conversas-filtro';
 import { SkipAudit } from '../common/audit.interceptor';
 import { filtroDaQuery, parseOrdem } from './contatos-filtro';
 import { filtroNegociosDaQuery } from './pipeline-filtro';
+import { periodoDashboard } from './dashboard';
 
 class CreateContactDto {
   @IsString() @MaxLength(160) nome!: string;
@@ -68,6 +69,10 @@ class UpdateDealDto {
 class SendMessageDto {
   @IsString() @MaxLength(4000) texto!: string;
 }
+class MetaReceitaDto {
+  /** Meta de receita do trimestre em R$ (card "Meta em foco" do Dashboard). */
+  @IsNumber() @Min(1) @Max(999_999_999) valor!: number;
+}
 class AtendimentoDto {
   @IsIn(['assumir', 'devolver_ia', 'atribuir']) acao!: 'assumir' | 'devolver_ia' | 'atribuir';
   @IsOptional() @IsUUID() agentId?: string;
@@ -80,8 +85,14 @@ export class CrmController {
   constructor(private readonly crm: CrmService, private readonly messages: MessagesService, private readonly atendimento: AtendimentoService, private readonly conversas: ConversasService) {}
 
   @Get('overview')
-  overview(@TenantId() tenantId: string) {
-    return this.crm.overview(tenantId);
+  overview(@TenantId() tenantId: string, @Query('periodo') periodo?: string) {
+    return this.crm.overview(tenantId, periodoDashboard(periodo));
+  }
+
+  /** Meta de receita do trimestre exibida no card "Meta em foco" do Dashboard. */
+  @Patch('overview/meta')
+  definirMeta(@TenantId() tenantId: string, @Body() dto: MetaReceitaDto) {
+    return this.crm.definirMetaReceita(tenantId, dto.valor);
   }
 
   /**

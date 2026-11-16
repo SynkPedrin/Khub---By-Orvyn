@@ -21,6 +21,32 @@ export function competenciaAtual(): string {
   return `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}`;
 }
 
+/** Primeiro e último dia do mês de `ref` (YYYY-MM-DD). */
+export function mesDe(ref: Date): { de: string; ate: string } {
+  const de = `${ref.getFullYear()}-${String(ref.getMonth() + 1).padStart(2, '0')}-01`;
+  const fim = new Date(ref.getFullYear(), ref.getMonth() + 1, 0);
+  const ate = `${fim.getFullYear()}-${String(fim.getMonth() + 1).padStart(2, '0')}-${String(fim.getDate()).padStart(2, '0')}`;
+  return { de, ate };
+}
+
+/** Anda `delta` meses a partir do mês do período atual. */
+export function navegarMes(periodo: { de: string; ate: string }, delta: number): { de: string; ate: string } {
+  const base = new Date(`${periodo.de}T12:00:00`);
+  base.setMonth(base.getMonth() + delta);
+  return mesDe(base);
+}
+
+/** "novembro de 2026" a partir do início do período. */
+export function rotuloMes(periodo: { de: string }): string {
+  return new Date(`${periodo.de}T12:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+}
+
+/** true quando o período é exatamente o mês corrente. */
+export function ehMesAtual(periodo: { de: string; ate: string }): boolean {
+  const m = mesAtual();
+  return periodo.de === m.de && periodo.ate === m.ate;
+}
+
 export const ORIGEM_LABEL: Record<string, string> = {
   manual: 'Manual',
   agenda: 'Agenda',

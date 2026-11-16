@@ -7,6 +7,7 @@ import { SkeletonRows } from '@/components/kit';
 import { financeiro, type FluxoCaixa } from '@/lib/financeiro';
 import { falhaDeCarga, money, type FalhaCarga } from './fin-utils';
 import { FinFalha } from './FinEstado';
+import { FinFluxoDiario } from './FinFluxoDiario';
 
 /**
  * Visão geral do período: quanto entrou, quanto saiu, saldo, o que ainda
@@ -60,6 +61,8 @@ export function FinVisaoGeral({ de, ate }: { de: string; ate: string }) {
       </div>
 
       {!fluxo && <Card><SkeletonRows rows={4} label="Carregando fluxo de caixa" /></Card>}
+
+      {fluxo && <FinFluxoDiario porDia={fluxo.porDia ?? []} de={de} ate={ate} />}
 
       {fluxo && (
         <div className="grid gap-4 lg:grid-cols-2">

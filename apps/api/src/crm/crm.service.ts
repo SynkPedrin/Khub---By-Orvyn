@@ -6,6 +6,18 @@ import { DomainEventsService } from '../events/domain-events.service';
 import { AvatarContatoService } from './messaging/avatar-contato.service';
 import { formatarListaGhl } from './messaging/formato-lista-ghl';
 import { ABERTO, escolherFunil, receitaMensal, resumirFunil, type NegocioRef } from './funil';
+import {
+  agruparFontes,
+  construirInsights,
+  deltaPct,
+  diaSP,
+  diasDoPeriodo,
+  dividirPeriodos,
+  inicioDoPeriodo,
+  serieDiaria,
+  somarDias,
+  type PeriodoDashboard,
+} from './dashboard';
 import { orderByDaOrdem, whereDoFiltro, type FiltroContatos, type OrdemContatos } from './contatos-filtro';
 import { idsPorTelefone } from './contatos-sql';
 import { camposDe, filtroCamposContato, validarCamposNaTransacao } from './custom-fields.service';
@@ -164,11 +176,47 @@ export class CrmService {
     return { funis, etapas, deals, negocios };
   }
 
-  async overview(tenantId: string) {
+  /**
+   * Overview do Dashboard (mockup "panorama da operação").
+   *
+   * Uma transação, duas fases: primeiro as contagens e séries brutas (todas
+   * independentes), depois o que depende do funil principal escolhido
+   * (novos por etapa) e da meta do tenant (realizado do trimestre).
+   *
+   * Janelas no fuso de São Paulo, mesma regra do `receitaMensal`. Cada KPI
+   * compara o período pedido (7/30/90 dias, terminando hoje) com a janela
+   * idêntica imediatamente anterior — por isso as séries são buscadas a
+   * partir de `inicioAnterior`.
+   */
+  async overview(tenantId: string, periodo: PeriodoDashboard = '30d') {
     return this.prisma.withTenant(tenantId, async (tx) => {
-      const [{ funis, etapas, negocios }, contactsCount, atividades, contatosRecentes, porOrigem] = await Promise.all([
+      const dias = diasDoPeriodo(periodo);
+      const hoje = diaSP(new Date());
+      const inicio = inicioDoPeriodo(hoje, dias);
+      const inicioAnterior = somarDias(inicio, -dias);
+
+      const [
+        { funis, etapas, negocios },
+        contactsCount,
+        conversasCount,
+        agendamentosCount,
+        atividades,
+        contatosRecentes,
+        porOrigem,
+        rowsLeads,
+        rowsConversas,
+        rowsAgendamentos,
+        rowsReceita,
+        rowsFontes,
+        rowsReceitaCanal,
+        rowsLeadsMes,
+        tarefasHoje,
+        tenant,
+      ] = await Promise.all([
         this.baseFunil(tx),
         tx.contact.count(),
+        tx.conversation.count(),
+        tx.agendaCompromisso.count(),
         tx.activity.findMany({ orderBy: { createdAt: 'desc' }, take: 6 }),
         tx.contact.findMany({ orderBy: { createdAt: 'desc' }, take: 5 }),
         // Leads por origem (cards Meta e Google do Dashboard). Fonte = atribuição
@@ -189,6 +237,55 @@ export class CrmService {
                  count(*) FILTER (WHERE created_at >= (date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo')) AS mes,
                  count(*) FILTER (WHERE created_at >= now() - interval '7 days') AS semana
           FROM f WHERE fonte IS NOT NULL GROUP BY fonte`,
+        // Séries diárias cobrindo período atual + anterior (o delta sai da mesma query).
+        tx.$queryRaw<{ dia: string; n: number }[]>`
+          SELECT to_char(created_at AT TIME ZONE 'America/Sao_Paulo','YYYY-MM-DD') AS dia, count(*)::int AS n
+          FROM contacts
+          WHERE created_at >= ((${inicioAnterior}::date)::timestamp AT TIME ZONE 'America/Sao_Paulo')
+          GROUP BY 1`,
+        tx.$queryRaw<{ dia: string; n: number }[]>`
+          SELECT to_char(created_at AT TIME ZONE 'America/Sao_Paulo','YYYY-MM-DD') AS dia, count(*)::int AS n
+          FROM conversations
+          WHERE created_at >= ((${inicioAnterior}::date)::timestamp AT TIME ZONE 'America/Sao_Paulo')
+          GROUP BY 1`,
+        tx.$queryRaw<{ dia: string; n: number }[]>`
+          SELECT to_char(created_at AT TIME ZONE 'America/Sao_Paulo','YYYY-MM-DD') AS dia, count(*)::int AS n
+          FROM agenda_compromissos
+          WHERE created_at >= ((${inicioAnterior}::date)::timestamp AT TIME ZONE 'America/Sao_Paulo')
+          GROUP BY 1`,
+        // Receita = negócios GANHOS por dia do fechamento (mesma aproximação do
+        // receitaMensal: `updated_at` é quando o status virou "ganho").
+        tx.$queryRaw<{ dia: string; v: number }[]>`
+          SELECT to_char(updated_at AT TIME ZONE 'America/Sao_Paulo','YYYY-MM-DD') AS dia, sum(valor)::float AS v
+          FROM deals
+          WHERE status = 'ganho'
+            AND updated_at >= ((${inicioAnterior}::date)::timestamp AT TIME ZONE 'America/Sao_Paulo')
+          GROUP BY 1`,
+        // Fontes de lead (rosca do mockup): o par (fonte, origem) vira grupo em JS.
+        tx.$queryRaw<{ fonte: string; origem: string; n: number }[]>`
+          SELECT coalesce(atribuicao->>'fonte','') AS fonte, coalesce(origem,'') AS origem, count(*)::int AS n
+          FROM contacts GROUP BY 1, 2`,
+        // Receita do período por canal: atribuição do CONTATO; sem contato
+        // vinculado, cai no texto de origem do próprio negócio.
+        tx.$queryRaw<{ fonte: string; origem: string; origemDeal: string; v: number }[]>`
+          SELECT coalesce(c.atribuicao->>'fonte','') AS fonte, coalesce(c.origem,'') AS origem,
+                 coalesce(d.origem,'') AS "origemDeal", sum(d.valor)::float AS v
+          FROM deals d LEFT JOIN contacts c ON c.id = d.contact_id
+          WHERE d.status = 'ganho'
+            AND d.updated_at >= ((${inicio}::date)::timestamp AT TIME ZONE 'America/Sao_Paulo')
+          GROUP BY 1, 2, 3`,
+        // Insight "novos leads este mês": mês corrente vs. mês anterior cheio.
+        tx.$queryRaw<{ mes: number; anterior: number }[]>`
+          SELECT count(*) FILTER (WHERE created_at >= (date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo'))::int AS mes,
+                 count(*) FILTER (WHERE created_at >= ((date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo') - interval '1 month') AT TIME ZONE 'America/Sao_Paulo')
+                                  AND created_at <  (date_trunc('month', now() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo'))::int AS anterior
+          FROM contacts`,
+        // Insight "tarefas de hoje": abertas vencendo até o fim do dia (SP).
+        tx.$queryRaw<{ n: number }[]>`
+          SELECT count(*)::int AS n FROM tasks
+          WHERE status <> 'concluida' AND due_at IS NOT NULL
+            AND due_at < (((now() AT TIME ZONE 'America/Sao_Paulo')::date + 1)::timestamp AT TIME ZONE 'America/Sao_Paulo')`,
+        tx.tenant.findUnique({ where: { id: tenantId }, select: { settings: true } }),
       ]);
       const origem = (fonte: string) => {
         const l = porOrigem.find((o) => o.fonte === fonte);
@@ -197,7 +294,54 @@ export class CrmService {
       const funil = escolherFunil(funis, negocios);
       const r = funil ? resumirFunil(funil.id, etapas, negocios) : null;
 
+      // Fase 2 — depende do funil principal e da meta gravada no tenant.
+      const metaValor = (() => {
+        const s = tenant?.settings;
+        if (!s || typeof s !== 'object' || Array.isArray(s)) return 0;
+        const v = (s as Record<string, unknown>).metaReceitaTrimestre;
+        return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0;
+      })();
+      const [rowsNovosEtapa, rowsMeta] = await Promise.all([
+        funil
+          ? tx.$queryRaw<{ stageId: string; novos: number; antes: number }[]>`
+            SELECT stage_id AS "stageId",
+                   count(*) FILTER (WHERE created_at >= ((${inicio}::date)::timestamp AT TIME ZONE 'America/Sao_Paulo'))::int AS novos,
+                   count(*) FILTER (WHERE created_at <  ((${inicio}::date)::timestamp AT TIME ZONE 'America/Sao_Paulo'))::int AS antes
+            FROM deals
+            WHERE pipeline_id = ${funil.id}::uuid
+              AND created_at >= ((${inicioAnterior}::date)::timestamp AT TIME ZONE 'America/Sao_Paulo')
+            GROUP BY stage_id`
+          : Promise.resolve([]),
+        metaValor > 0
+          ? tx.$queryRaw<{ v: number }[]>`
+            SELECT coalesce(sum(valor),0)::float AS v FROM deals
+            WHERE status = 'ganho'
+              AND updated_at >= (date_trunc('quarter', now() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo')`
+          : Promise.resolve([]),
+      ]);
+
+      const serieDe = (rows: { dia: string; n: number }[]) => rows.map((x) => ({ dia: x.dia, valor: x.n }));
+      const kpi = (rows: { dia: string; valor: number }[], total: number) => {
+        const { atual, anterior } = dividirPeriodos(rows, inicio);
+        return { total, noPeriodo: atual, delta: deltaPct(atual, anterior), serie: serieDiaria(rows, inicio, hoje) };
+      };
+      const leads = kpi(serieDe(rowsLeads), contactsCount);
+      const conversas = kpi(serieDe(rowsConversas), conversasCount);
+      const agendamentos = kpi(serieDe(rowsAgendamentos), agendamentosCount);
+      // Receita é KPI do PERÍODO (não acumulado histórico): "Receita gerada
+      // nos últimos 30 dias" — como no mockup e no gráfico de desempenho.
+      const receitaRows = rowsReceita.map((x) => ({ dia: x.dia, valor: x.v }));
+      const receitaDiv = dividirPeriodos(receitaRows, inicio);
+      const receita = { total: receitaDiv.atual, noPeriodo: receitaDiv.atual, delta: deltaPct(receitaDiv.atual, receitaDiv.anterior), serie: serieDiaria(receitaRows, inicio, hoje) };
+
+      const etapasFunil = (r?.etapas ?? []).map((e) => {
+        const sn = rowsNovosEtapa.find((s) => s.stageId === e.id);
+        return { ...e, novos: sn?.novos ?? 0, deltaNovos: sn ? deltaPct(sn.novos, sn.antes) : null };
+      });
+      const totalAbertos = etapasFunil.reduce((s, e) => s + e.total, 0);
+
       return {
+        periodo,
         kpis: {
           contatos: contactsCount,
           // Só ABERTOS do funil principal (antes: todos os negócios, inclusive ganhos e perdidos).
@@ -209,15 +353,45 @@ export class CrmService {
           // Base da conversão honesta na tela: com poucos fechados, "Poucos dados".
           ganhos: r?.ganhos ?? 0,
           perdidos: r?.perdidos ?? 0,
+          // KPIs do mockup: total histórico + delta vs. período anterior + série diária.
+          leads,
+          conversas,
+          agendamentos,
+          receita,
         },
         leadsPorOrigem: { meta: origem('meta_ads'), google: origem('google_ads') },
         funilNome: funil?.nome ?? null,
-        funil: r?.etapas ?? [],
+        funil: etapasFunil.map((e) => ({ ...e, pct: totalAbertos > 0 ? Math.round((e.total / totalAbertos) * 1000) / 10 : 0 })),
         // Receita fechada (todos os funis) por mês — base do gráfico de crescimento.
         receitaMensal: receitaMensal(negocios, new Date()),
+        /** Receita fechada por DIA no período — gráfico "Desempenho Geral". */
+        receitaSerie: receita.serie,
+        fontes: agruparFontes(rowsFontes.map((x) => ({ fonte: x.fonte, origem: x.origem, total: x.n }))),
+        receitaPorCanal: agruparFontes(
+          rowsReceitaCanal.map((x) => ({ fonte: x.fonte, origem: x.origem || x.origemDeal, total: x.v })),
+        ).map((f) => ({ canal: f.rotulo, valor: f.valor, pct: f.pct })),
+        insights: construirInsights({
+          receitaDelta: receita.delta,
+          receitaTotal: receita.total,
+          leadsMes: rowsLeadsMes[0]?.mes ?? 0,
+          leadsMesAnterior: rowsLeadsMes[0]?.anterior ?? 0,
+          conversao: r?.conversao ?? null,
+          conversaoBase: r?.conversaoBase ?? null,
+          tarefasHoje: tarefasHoje[0]?.n ?? 0,
+        }),
+        meta: metaValor > 0 ? { valor: metaValor, realizado: rowsMeta[0]?.v ?? 0 } : null,
         atividades: atividades.map((a) => ({ actor: a.actor, acao: a.acao, tone: a.tone, createdAt: a.createdAt.toISOString() })),
         contatosRecentes: contatosRecentes.map((c) => ({ id: c.id, nome: c.nome, tag: c.tag, valor: num(c.valorEstimado) })),
       };
+    });
+  }
+
+  /** Meta de receita do trimestre (card "Meta em foco" do Dashboard), no settings do tenant. */
+  async definirMetaReceita(tenantId: string, valor: number) {
+    return this.prisma.withTenant(tenantId, async (tx) => {
+      await tx.$executeRaw`UPDATE tenants SET settings = settings || ${JSON.stringify({ metaReceitaTrimestre: valor })}::jsonb, updated_at = now() WHERE id = ${tenantId}::uuid`;
+      await tx.activity.create({ data: { tenantId, actor: 'Você', acao: `definiu a meta de receita do trimestre em ${brl(valor)}`, tone: 'brand' } });
+      return { ok: true, valor };
     });
   }
 

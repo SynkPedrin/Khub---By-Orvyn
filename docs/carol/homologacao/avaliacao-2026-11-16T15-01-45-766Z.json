@@ -1,0 +1,56 @@
+{
+  "quando": "2026-11-16T15:01:45.768Z",
+  "resultados": [
+    {
+      "cenario": "A — Lead direto (preço)",
+      "nota": 0,
+      "violacoes": [],
+      "checagens": [
+        {
+          "nome": "contém /400/i",
+          "ok": false,
+          "critica": true
+        },
+        {
+          "nome": "contém /300/i",
+          "ok": false,
+          "critica": true
+        },
+        {
+          "nome": "contém um de /tricoscopia/i",
+          "ok": false,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /cura\\b/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /garanto/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /100%\\s*(de)?\\s*certeza/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "resposta ≤ ~900 chars",
+          "ok": true,
+          "critica": false
+        }
+      ],
+      "juiz": null,
+      "ferramentas": [],
+      "transcricao": [
+        {
+          "de": "contato",
+          "texto": "Oi, quanto custa a consulta?"
+        }
+      ],
+      "erro": "Cannot read properties of null (reading 'fatos')"
+    }
+  ]
+}

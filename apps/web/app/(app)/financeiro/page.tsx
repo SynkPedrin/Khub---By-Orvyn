@@ -9,7 +9,7 @@ import { FinLancamentos } from '@/components/financeiro/FinLancamentos';
 import { FinComissoes } from '@/components/financeiro/FinComissoes';
 import { FinCobrancas } from '@/components/financeiro/FinCobrancas';
 import { FinCategorias } from '@/components/financeiro/FinCategorias';
-import { mesAtual } from '@/components/financeiro/fin-utils';
+import { mesAtual, navegarMes, rotuloMes, ehMesAtual } from '@/components/financeiro/fin-utils';
 
 type Aba = 'visao' | 'lancamentos' | 'comissoes' | 'cobrancas' | 'categorias';
 
@@ -35,11 +35,30 @@ export default function FinanceiroPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {comPeriodo && (
-            <div className="flex items-center gap-1.5 text-sm text-muted">
-              <input type="date" value={periodo.de} onChange={(e) => setPeriodo({ ...periodo, de: e.target.value })} className="input" aria-label="Início do período" />
-              <span>até</span>
-              <input type="date" value={periodo.ate} onChange={(e) => setPeriodo({ ...periodo, ate: e.target.value })} className="input" aria-label="Fim do período" />
-            </div>
+            <>
+              {/* Navegação de mês: um clique para trás e para frente no fluxo de caixa. */}
+              <div className="flex items-center gap-1 rounded-xl border border-line px-1 py-1">
+                <button type="button" onClick={() => setPeriodo(navegarMes(periodo, -1))} className="btn btn-ghost btn-icon btn-sm h-7 w-7" aria-label="Mês anterior">
+                  <Icon name="arrowLeft" size={14} />
+                </button>
+                <span className="min-w-[150px] text-center text-sm font-semibold capitalize text-fg" aria-live="polite">
+                  {rotuloMes(periodo)}
+                </span>
+                <button type="button" onClick={() => setPeriodo(navegarMes(periodo, 1))} className="btn btn-ghost btn-icon btn-sm h-7 w-7" aria-label="Próximo mês">
+                  <Icon name="arrowRight" size={14} />
+                </button>
+              </div>
+              {!ehMesAtual(periodo) && (
+                <button type="button" onClick={() => setPeriodo(mesAtual())} className="rounded-xl border border-line px-3 py-1.5 text-sm font-semibold text-fg hover:bg-surface2">
+                  Mês atual
+                </button>
+              )}
+              <div className="flex items-center gap-1.5 text-sm text-muted">
+                <input type="date" value={periodo.de} onChange={(e) => setPeriodo({ ...periodo, de: e.target.value })} className="input" aria-label="Início do período" />
+                <span>até</span>
+                <input type="date" value={periodo.ate} onChange={(e) => setPeriodo({ ...periodo, ate: e.target.value })} className="input" aria-label="Fim do período" />
+              </div>
+            </>
           )}
           <Link href="/financeiro/importacao" className="inline-flex items-center gap-1.5 rounded-xl border border-line px-3.5 py-2 text-sm font-semibold text-fg hover:bg-surface2">
             <Icon name="upload" size={15} /> Importar planilha
