@@ -30,6 +30,13 @@ Ver `AUDITORIA_INICIAL.md`. Achados-chave: Ritinha fora da linha de frente (padr
 **Próximo passo**
 - Implementar o probe Avec como serviço no backend (read-only, com cache e fallback) + bateria de testes T01–T20 na bancada; depois canário no número autorizado.
 
+## 2026-11-16 — Front-end (agenda + financeiro) ENTREGUE
+
+- Pedido do dono: agenda legível mesmo com muitos atendimentos no dia, histórico acessível, financeiro com gestão de todo o fluxo de caixa.
+- Implementado (commit `158189a`): Resumo do dia com mini-trilhas por profissional, ocupação no cabeçalho da Equipe, calor por dia no Mês, stepper de mês no Financeiro, gráfico diário entradas×saídas + saldo acumulado.
+- Verificação: vitest 250/250 (9 novos), tsc limpo, lint limpo. Deploy web disparado (`vercel deploy --prod`).
+- Nota: Pedro adicionou `.github/workflows/manter-api-acordada.yml` (ping 5 min no Render) — mitiga o sono do plano free; plano pago segue recomendado para o SLA.
+
 ---
 
 ## Checkpoint para auditoria independente (16/11 ~12h)
