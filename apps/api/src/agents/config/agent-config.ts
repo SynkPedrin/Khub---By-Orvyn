@@ -22,6 +22,8 @@ const nivel = z.number().int().min(0).max(100);
 
 export const IDS_INTENCOES_BASE = [
   'saudacao',
+  /** Só agradeceu/confirmou ("obrigada", "ok, combinado"): resposta curta, sem nova venda. */
+  'confirmacao',
   'duvida',
   'interesse',
   'compra',

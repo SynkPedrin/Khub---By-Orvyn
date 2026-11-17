@@ -9,7 +9,7 @@ import { validarResposta } from '../../nyro/guardrails';
 import { AgentToolsService, type ContextoAgente, type FonteUsada } from '../agent-tools.service';
 import { cortarNoLimite, ferramentasDoAgente, toolsParaModelo } from '../catalogo';
 import type { AgentConfig } from '../config/agent-config';
-import { analiseJsonSchema, analiseSchema, analisarHeuristica, intencoesValidas, sanearAnalise, type Analise } from '../engines/analysis';
+import { analiseJsonSchema, analiseSchema, analisarHeuristica, contarObjecoes, ehSoConfirmacao, intencoesValidas, sanearAnalise, type Analise } from '../engines/analysis';
 import { fragmentarMensagem, type ResultadoFragmentacao } from '../engines/message-chunker';
 import { confirmou, contextoAgenda, contextoAgendado, detectarPedidoAgenda, escolheuHorario, horaEscolhida, isoLocal, quandoPorExtenso, servicosCitados, slotNaHora } from '../engines/agenda-intent';
 import { avaliarRegras, separarAcoes } from '../engines/rules-engine';
@@ -381,6 +381,7 @@ export class IntelligenceCoreService {
       intencoesExtras: e.intencoesExtras,
       agora: new Date(),
       fuso: cfg.horario.fuso,
+      objecoesAnteriores: contarObjecoes(e.historico.filter((m) => m.autorTipo === 'contato').slice(0, -1).slice(-20).map((m) => m.corpo ?? '')),
     })}`;
     const historico = historicoParaModelo(e.historico.slice(-cfg.inteligencia.janelaHistorico));
     // Dados do sistema (agenda consultada, agendamento feito, horários do
@@ -551,7 +552,8 @@ export class IntelligenceCoreService {
     const extras = e.intencoesExtras;
     const heuristica = () => analisarHeuristica(ultima, extras);
     const cfg = e.agente.config.inteligencia;
-    if (!cfg.analiseAtiva || !this.llm.configured() || !ultima.trim()) return heuristica();
+    // "obrigada"/"ok, combinado": classificação determinística, sem chamada ao modelo de análise.
+    if (!cfg.analiseAtiva || !this.llm.configured() || !ultima.trim() || ehSoConfirmacao(ultima)) return heuristica();
     const intencoes = intencoesValidas(extras);
     const transcricao = e.historico
       .slice(-10)
