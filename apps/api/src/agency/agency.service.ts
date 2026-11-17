@@ -338,8 +338,8 @@ export class AgencyService {
       await this.prisma.membership.update({ where: { identityId_tenantId: { identityId, tenantId: cliente.tenantId } }, data: { role: papel } });
     }
 
-    // "pedro.gabriel@..." → "Pedro Gabriel" — sem isto o primeiro acesso a
-    // um cliente novo criava um User com nome cru tipo "pedro.gabriel",
+    // "maria.souza@..." → "Maria Souza" — sem isto o primeiro acesso a
+    // um cliente novo criava um User com nome cru tipo "maria.souza",
     // inconsistente com o nome que a própria pessoa vê no resto do produto.
     const nome = identity.email
       .split('@')[0]

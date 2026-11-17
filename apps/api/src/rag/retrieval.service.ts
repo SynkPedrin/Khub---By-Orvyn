@@ -64,7 +64,7 @@ export class RetrievalService {
     // (Brief §2 — fallback funcional). O modo entra na chave do cache para o
     // resultado degradado não sobreviver à configuração da chave.
     const lexicalOnly = !this.embeddings.available;
-    const cacheKey = this.cacheKey(ctx, query, escopos, lexicalOnly);
+    const cacheKey = `${this.cacheKey(ctx, query, escopos, lexicalOnly)}:v${await this.versaoBase(ctx)}`;
     const cached = await this.cache.get(cacheKey);
     if (cached) {
       const hits = JSON.parse(cached) as RagHit[];
@@ -75,9 +75,16 @@ export class RetrievalService {
     // Uma transação com o tenant setado (RLS). tenantId validado como UUID em withTenant.
     // Casts explícitos: o driver envia números como bigint e NULL como unknown,
     // e a resolução de função no Postgres não faz o downcast sozinha (BUG-007).
+    // Provedor de embedding fora/limitado (ex.: Voyage 429 no plano sem cartão):
+    // a busca NÃO cai — degrada para BM25 e não guarda o resultado degradado no cache.
+    let degradou = false;
     const candidates = lexicalOnly
       ? await this.searchLexical(ctx, query, escopos)
-      : await this.searchHybrid(ctx, query, escopos);
+      : await this.searchHybrid(ctx, query, escopos).catch((e) => {
+          degradou = true;
+          this.log.warn(`embedding da consulta falhou, busca lexical: ${(e as Error).message.slice(0, 160)}`);
+          return this.searchLexical(ctx, query, escopos);
+        });
 
     if (!candidates.length) {
       await this.logQuery(ctx, query, escopos, [], Date.now() - t0, false);
@@ -108,7 +115,7 @@ export class RetrievalService {
         };
       });
 
-    await this.cache.set(cacheKey, JSON.stringify(hits), this.cacheTtl);
+    if (!degradou) await this.cache.set(cacheKey, JSON.stringify(hits), this.cacheTtl);
     await this.logQuery(ctx, query, escopos, hits, Date.now() - t0, false);
     this.log.debug(`RAG "${query.slice(0, 40)}" -> ${hits.length} hits em ${Date.now() - t0}ms`);
     return hits;
@@ -125,7 +132,8 @@ export class RetrievalService {
     if (documentIds && !documentIds.length && !escopos.some((e) => e !== 'tenant')) return [];
     const ids = documentIds && documentIds.length ? documentIds : documentIds ? ['00000000-0000-0000-0000-000000000000'] : null;
     const lexicalOnly = !this.embeddings.available;
-    const cacheKey = `${this.cacheKey(ctx, query, escopos, lexicalOnly)}:ag:${createHash('sha1').update((ids ?? ['*']).slice().sort().join(',')).digest('hex').slice(0, 16)}:${k}`;
+    let degradouAgente = false;
+    const cacheKey = `${this.cacheKey(ctx, query, escopos, lexicalOnly)}:v${await this.versaoBase(ctx)}:ag:${createHash('sha1').update((ids ?? ['*']).slice().sort().join(',')).digest('hex').slice(0, 16)}:${k}`;
     const cached = await this.cache.get(cacheKey);
     if (cached) {
       const hits = JSON.parse(cached) as RagHit[];
@@ -146,7 +154,17 @@ export class RetrievalService {
               EmbeddingsService.toSqlVector(qvec), query, ctx.nicho, ctx.subespecialidade, escopos, ids, this.kEach, this.preRerank, this.rrfK,
             ),
           ),
-        );
+        ).catch((e) => {
+          // Mesmo fallback da busca geral: o agente segue citando preço/política pela busca lexical.
+          degradouAgente = true;
+          this.log.warn(`embedding da consulta falhou (agente), busca lexical: ${(e as Error).message.slice(0, 160)}`);
+          return this.prisma.withTenant(ctx.tenantId, (tx) =>
+            tx.$queryRawUnsafe<Candidate[]>(
+              `SELECT * FROM agent_rag_search_lexical($1::text, $2::text, $3::text, $4::text[], $5::uuid[], $6::int)`,
+              query, ctx.nicho, ctx.subespecialidade, escopos, ids, this.preRerank,
+            ),
+          );
+        });
     if (!candidates.length) {
       await this.logQuery(ctx, query, escopos, [], Date.now() - t0, false);
       return [];
@@ -163,7 +181,7 @@ export class RetrievalService {
         const c = byId.get(r.id)!;
         return { chunkId: c.chunk_id, documentId: c.document_id, escopo: c.escopo, titulo: c.titulo, breadcrumb: c.breadcrumb, conteudo: c.conteudo, score: r.score };
       });
-    await this.cache.set(cacheKey, JSON.stringify(hits), this.cacheTtl);
+    if (!degradouAgente) await this.cache.set(cacheKey, JSON.stringify(hits), this.cacheTtl);
     await this.logQuery(ctx, query, escopos, hits, Date.now() - t0, false);
     return hits;
   }
@@ -223,6 +241,23 @@ export class RetrievalService {
 
   private esc(s: string): string {
     return (s ?? '').replace(/"/g, "'");
+  }
+
+  /**
+   * "Versão" da base do tenant (quantos documentos + última alteração) na chave
+   * do cache: incluir, trocar ou apagar uma fonte aposenta na hora o resultado
+   * antigo — em QUALQUER processo (API e worker têm caches separados). Sem
+   * isto o agente seguia citando preço/trecho apagado por até 1 h.
+   */
+  private async versaoBase(ctx: RagContext): Promise<string> {
+    try {
+      const r = await this.prisma.withTenant(ctx.tenantId, (tx) => tx.$queryRaw<{ v: string }[]>`
+        SELECT count(*)::text || '.' || COALESCE(extract(epoch FROM max(updated_at))::bigint, 0)::text AS v
+          FROM rag_documents WHERE tenant_id = ${ctx.tenantId}::uuid`);
+      return r[0]?.v ?? '0';
+    } catch {
+      return `sem-versao-${Date.now()}`; // sem versão confiável = sem reaproveitar cache
+    }
   }
 
   private cacheKey(ctx: RagContext, query: string, escopos: RagEscopo[], lexicalOnly: boolean): string {

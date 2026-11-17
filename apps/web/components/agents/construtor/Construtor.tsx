@@ -26,7 +26,8 @@ import { Simulador } from '../secoes/Simulador';
 import { AoVivo } from '../secoes/AoVivo';
 import { PainelTeste } from './PainelTeste';
 
-const LIMITE_PROMPT = 8000;
+// Mesmo limite da API (LIMITE_INSTRUCOES): o prompt da IA do GHL tinha ~15 mil caracteres.
+const LIMITE_PROMPT = 20000;
 
 type ModoTela = 'desativado' | 'sugestivo' | 'automatico';
 export function modoDoAgente(a: Pick<Agente, 'status' | 'config'>): ModoTela {

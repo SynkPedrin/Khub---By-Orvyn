@@ -38,6 +38,7 @@ import { VersioningService } from './versioning/versioning.service';
 import { fragmentacaoSchema, resolverConfig } from './config/agent-config';
 import { fragmentarMensagem } from './engines/message-chunker';
 import { PrismaService } from '../prisma/prisma.service';
+import { LIMITE_INSTRUCOES } from './catalogo';
 
 // ------------------------------------------------------------------ DTOs (forma; a regra é do serviço)
 
@@ -45,7 +46,7 @@ class AgenteDto {
   @IsOptional() @IsString() @MinLength(1) @MaxLength(80) nome?: string;
   @IsOptional() @IsString() @MaxLength(300) descricao?: string;
   @IsOptional() @IsString() @MaxLength(80) modelo?: string;
-  @IsOptional() @IsString() @MaxLength(8000) instrucoes?: string;
+  @IsOptional() @IsString() @MaxLength(LIMITE_INSTRUCOES) instrucoes?: string;
   @IsOptional() @IsString() @MaxLength(40) tom?: string;
   @IsOptional() @IsString() @MaxLength(1000) personalidade?: string;
   @IsOptional() @IsArray() @ArrayMaxSize(30) @IsString({ each: true }) ferramentas?: string[];

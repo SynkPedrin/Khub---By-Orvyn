@@ -6,8 +6,9 @@ import { Icon } from '@/components/icons';
 import type { Compromisso, ProfissionalAgenda, StatusAgenda } from '@/lib/agenda';
 import { hora } from '@/lib/format';
 import { STATUS_LABEL } from './agenda-utils';
-import { mesmoDia, posicionarDia } from './calendario-layout';
+import { mesmoDia, posicionarDia, type Bloco } from './calendario-layout';
 import { rotuloMinutos } from './resumo-dia';
+import { MARCA_STATUS, paletaEquipe, procedimento, type CorEquipe } from './cores-equipe';
 
 /** Altura de 1 hora nesta visão: maior que a da semana para o nome do cliente caber. */
 const PX_HORA = 72;
@@ -15,14 +16,7 @@ const SEM_PROFISSIONAL = '__sem__';
 const LARGURA_MIN = 200;
 const LARGURA_POR_ATENDIMENTO = 130;
 
-/** Cor por status: faixa à esquerda + fundo leve. Cancelado some pelo filtro padrão. */
-const TOM: Record<StatusAgenda, { faixa: string; fundo: string; texto: string }> = {
-  agendado: { faixa: 'bg-sky-500', fundo: 'bg-sky-500/10 hover:bg-sky-500/15', texto: 'text-fg' },
-  confirmado: { faixa: 'bg-emerald-500', fundo: 'bg-emerald-500/12 hover:bg-emerald-500/18', texto: 'text-fg' },
-  concluido: { faixa: 'bg-zinc-400', fundo: 'bg-surface2 hover:bg-surface3', texto: 'text-muted' },
-  faltou: { faixa: 'bg-amber-500', fundo: 'bg-amber-500/10 hover:bg-amber-500/15', texto: 'text-muted' },
-  cancelado: { faixa: 'bg-red-500', fundo: 'bg-surface2', texto: 'text-muted line-through' },
-};
+const idsProfissionais = (evs: Compromisso[]) => evs.map((e) => e.profissionalId);
 
 export const nomeCliente = (c: Compromisso, nomes: Record<string, string | null>) =>
   c.contatoNome ?? (c.contactId ? nomes[c.contactId] ?? null : null);
@@ -35,6 +29,7 @@ export const nomeServico = (c: Compromisso) => c.servicoNome ?? c.titulo;
  * dia (mais "Sem profissional", se houver).
  */
 export function AgendaEquipe({
+  corDe: corExterna,
   dia,
   eventos,
   profissionais,
@@ -43,6 +38,8 @@ export function AgendaEquipe({
   onAbrir,
   onCriar,
 }: {
+  /** Tabela de cores compartilhada com o resumo e as outras visões. */
+  corDe?: ((id: string | null | undefined) => CorEquipe) | null;
   dia: Date;
   eventos: Compromisso[];
   profissionais: ProfissionalAgenda[];
@@ -58,6 +55,7 @@ export function AgendaEquipe({
       porId.set(k, [...(porId.get(k) ?? []), e]);
     }
     const nomePorId = new Map(profissionais.map((p) => [p.id, p.nome]));
+    const corDe = corExterna ?? paletaEquipe(profissionais, idsProfissionais(eventos));
     const lista = [...porId.entries()].map(([id, evs]) => {
       const blocos = posicionarDia(evs, dia);
       // Quem atende em paralelo ganha coluna mais larga: ~130px por atendimento lado a lado.
@@ -66,6 +64,7 @@ export function AgendaEquipe({
       return {
         id,
         nome: id === SEM_PROFISSIONAL ? 'Sem profissional' : nomePorId.get(id) ?? evs[0]?.profissionalNome ?? 'Profissional',
+        cor: corDe(id === SEM_PROFISSIONAL ? null : id),
         blocos,
         total: evs.length,
         ocupados: Math.round(ocupados),
@@ -73,7 +72,7 @@ export function AgendaEquipe({
       };
     });
     return lista.sort((a, b) => (a.id === SEM_PROFISSIONAL ? 1 : b.id === SEM_PROFISSIONAL ? -1 : b.total - a.total || a.nome.localeCompare(b.nome, 'pt-BR')));
-  }, [eventos, profissionais, dia]);
+  }, [eventos, profissionais, dia, corExterna]);
 
   // Faixa de horas: do primeiro ao último atendimento (mínimo 08h–19h).
   const [h0, h1] = useMemo(() => {
@@ -109,8 +108,12 @@ export function AgendaEquipe({
           <div className="sticky top-0 z-10 flex border-b border-line bg-surface">
             <div className="w-14 shrink-0" />
             {colunas.map((c) => (
-              <div key={c.id} className="flex-1 border-l border-line px-3 py-2.5" style={{ minWidth: c.largura }}>
-                <p className={cx('truncate text-sm font-bold', c.id === SEM_PROFISSIONAL ? 'text-muted' : 'text-fg')}>{c.nome}</p>
+              <div key={c.id} className="relative flex-1 border-l border-line px-3 pb-2.5 pt-3" style={{ minWidth: c.largura }}>
+                <span className={cx('absolute inset-x-0 top-0 h-[3px]', c.cor.faixa)} aria-hidden />
+                <p className={cx('flex items-center gap-1.5 truncate text-sm font-bold', c.cor.texto)}>
+                  <span className={cx('h-2.5 w-2.5 shrink-0 rounded-full', c.cor.faixa)} aria-hidden />
+                  <span className="truncate">{c.nome}</span>
+                </p>
                 <p className="text-2xs text-muted">
                   {c.total === 1 ? '1 atendimento' : `${c.total} atendimentos`} · {rotuloMinutos(c.ocupados)}
                 </p>
@@ -143,43 +146,9 @@ export function AgendaEquipe({
                     style={{ height: PX_HORA }}
                   />
                 ))}
-                {c.blocos.map((b) => {
-                  const e = b.evento;
-                  const tom = TOM[e.status];
-                  const alto = (b.alturaMin / 60) * PX_HORA;
-                  const cliente = nomeCliente(e, nomes);
-                  const largura = 100 / b.colunas;
-                  return (
-                    <button
-                      key={e.id}
-                      type="button"
-                      onClick={(ev) => onAbrir(e.id, ev.currentTarget.getBoundingClientRect())}
-                      title={`${hora(e.inicio)}–${hora(e.fim)} · ${cliente ?? 'Sem cliente'} · ${nomeServico(e)} · ${STATUS_LABEL[e.status]}`}
-                      className={cx('absolute flex overflow-hidden rounded-lg text-left shadow-sm ring-1 ring-black/5 transition-colors', tom.fundo)}
-                      style={{ top: px(b.topoMin) + 1, height: Math.max(alto - 2, 22), left: `calc(${b.coluna * largura}% + 3px)`, width: `calc(${largura}% - 6px)` }}
-                    >
-                      <span className={cx('w-1 shrink-0', tom.faixa)} aria-hidden />
-                      <span className={cx('min-w-0 flex-1 px-2 py-1 leading-tight', tom.texto)}>
-                        {b.colunas > 1 && alto >= 48 ? (
-                          // estreito (atendimentos em paralelo): empilha hora, cliente e serviço
-                          <>
-                            <span className="block text-2xs font-bold tabular-nums opacity-80">{hora(e.inicio)}</span>
-                            <span className="block truncate text-[13px] font-semibold">{cliente ?? 'Sem cliente'}</span>
-                            <span className="block truncate text-xs opacity-80">{nomeServico(e)}</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="flex items-baseline gap-1.5">
-                              <span className="shrink-0 text-xs font-bold tabular-nums">{hora(e.inicio)}</span>
-                              <span className="truncate text-[13px] font-semibold">{cliente ?? 'Sem cliente'}</span>
-                            </span>
-                            {alto >= 38 && <span className="block truncate text-xs opacity-80">{nomeServico(e)}</span>}
-                          </>
-                        )}
-                      </span>
-                    </button>
-                  );
-                })}
+                {c.blocos.map((b) => (
+                  <BlocoAtendimento key={b.evento.id} b={b} cor={c.cor} cliente={nomeCliente(b.evento, nomes)} topo={px(b.topoMin) + 1} onAbrir={onAbrir} />
+                ))}
               </div>
             ))}
             {ehHoje && agoraMin >= h0 * 60 && agoraMin <= h1 * 60 && (
@@ -191,11 +160,79 @@ export function AgendaEquipe({
           </div>
         </div>
       </div>
-      <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-line px-4 py-2 text-2xs text-muted">
-        {(['agendado', 'confirmado', 'concluido', 'faltou'] as StatusAgenda[]).map((s) => (
-          <span key={s} className="flex items-center gap-1.5"><span className={cx('h-2.5 w-1 rounded-sm', TOM[s].faixa)} />{STATUS_LABEL[s]}</span>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line px-4 py-2 text-2xs text-muted">
+        <span className="font-semibold text-fg">Cor = profissional</span>
+        {(['confirmado', 'concluido', 'faltou', 'cancelado'] as StatusAgenda[]).map((s) => (
+          <span key={s} className="flex items-center gap-1">
+            <Icon name={MARCA_STATUS[s].icone ?? 'check'} size={11} className={MARCA_STATUS[s].iconeCor} />
+            {STATUS_LABEL[s]}
+          </span>
         ))}
       </div>
     </div>
+  );
+}
+
+/**
+ * Bloco do atendimento: hora e PROCEDIMENTO em negrito na primeira linha (o
+ * que a profissional vai fazer), cliente embaixo. Cor = profissional; status
+ * = ícone no canto e opacidade (concluído esmaece, falta fica tracejada).
+ */
+function BlocoAtendimento({
+  b,
+  cor,
+  cliente,
+  topo,
+  onAbrir,
+}: {
+  b: Bloco<Compromisso>;
+  cor: CorEquipe;
+  cliente: string | null;
+  topo: number;
+  onAbrir: (id: string, ancora: DOMRect | null) => void;
+}) {
+  const e = b.evento;
+  const marca = MARCA_STATUS[e.status];
+  const alto = (b.alturaMin / 60) * PX_HORA;
+  const largura = 100 / b.colunas;
+  const estreito = b.colunas > 1;
+  const proc = procedimento(e);
+  return (
+    <button
+      type="button"
+      onClick={(ev) => onAbrir(e.id, ev.currentTarget.getBoundingClientRect())}
+      title={`${hora(e.inicio)}–${hora(e.fim)} · ${proc} · ${cliente ?? 'Sem cliente'} · ${STATUS_LABEL[e.status]}`}
+      aria-label={`${hora(e.inicio)} às ${hora(e.fim)}, ${proc}, ${cliente ?? 'sem cliente'}, ${STATUS_LABEL[e.status]}`}
+      className={cx('absolute flex overflow-hidden rounded-lg text-left shadow-sm ring-1 ring-black/5 transition-colors', cor.fundo, marca.bloco)}
+      style={{ top: topo, height: Math.max(alto - 2, 22), left: `calc(${b.coluna * largura}% + 3px)`, width: `calc(${largura}% - 6px)` }}
+    >
+      <span className={cx('w-1 shrink-0', cor.faixa)} aria-hidden />
+      <span className="relative min-w-0 flex-1 px-2 py-1 leading-tight text-fg">
+        {marca.icone && <Icon name={marca.icone} size={12} className={cx('absolute right-1 top-1', marca.iconeCor)} aria-hidden />}
+        {estreito && alto >= 48 ? (
+          // Estreito (atendimentos em paralelo): empilha hora, procedimento e cliente.
+          <>
+            <span className="block text-2xs font-bold tabular-nums opacity-80">{hora(e.inicio)}</span>
+            <span className="block truncate pr-3 text-[13px] font-bold">{proc}</span>
+            <span className="block truncate text-xs text-muted">{cliente ?? 'Sem cliente'}</span>
+          </>
+        ) : alto >= 38 ? (
+          <>
+            <span className="flex items-baseline gap-1.5 pr-3">
+              <span className="shrink-0 text-xs font-bold tabular-nums">{hora(e.inicio)}</span>
+              <span className="truncate text-[13px] font-bold">{proc}</span>
+            </span>
+            <span className="block truncate text-xs text-muted">{cliente ?? 'Sem cliente'}</span>
+          </>
+        ) : (
+          // Curto (até ~30 min): tudo numa linha, procedimento em negrito.
+          <span className="flex items-baseline gap-1.5 pr-3">
+            <span className="shrink-0 text-xs font-bold tabular-nums">{hora(e.inicio)}</span>
+            <span className="shrink-0 text-[13px] font-bold">{proc}</span>
+            <span className="truncate text-xs text-muted">· {cliente ?? 'Sem cliente'}</span>
+          </span>
+        )}
+      </span>
+    </button>
   );
 }

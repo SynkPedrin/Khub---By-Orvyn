@@ -40,6 +40,9 @@ export const MODELOS = [
 export type ModeloAgente = (typeof MODELOS)[number]['id'];
 /** Padrão de agente novo: Sonnet 5.5 (decisão do dono em 2026-11-13: qualidade de atendimento com custo de Sonnet). */
 export const MODELO_PADRAO: ModeloAgente = 'claude-sonnet-5-5';
+
+/** Tamanho máximo das instruções do agente (o prompt da IA do GHL que substituímos tinha ~15 mil caracteres). */
+export const LIMITE_INSTRUCOES = 20_000;
 export const IDS_MODELOS: readonly string[] = MODELOS.map((m) => m.id);
 
 /** Tom de voz: vira uma instrução curta no system prompt. */
@@ -239,6 +242,39 @@ export const FERRAMENTAS: FerramentaAgente[] = [
     grupo: 'agenda',
     tipo: 'escrita',
     critica: true,
+  },
+  {
+    nome: 'ver_horarios_salao',
+    rotulo: 'Ver horários do salão',
+    descricao: 'Horários livres por profissional para um serviço (salão/estética), com duração e preço do catálogo.',
+    instrucaoModelo:
+      'Consulta os horários livres REAIS da agenda do salão para um serviço num dia. Informe `servico` (como a cliente falou, ex.: "design de sobrancelha"), `data` (AAAA-MM-DD) e, se a cliente pediu, `profissional` e/ou `horario` (HH:MM). Devolve, por profissional, os horários em que o serviço cabe inteiro (já considera a duração e o expediente de cada uma), mais duração e preço do serviço. Se o dia não tiver vaga, traz `proximosDiasComVaga`. Ofereça no máximo 3 opções por vez. NUNCA invente horário: só ofereça o que veio aqui. Se o serviço vier "ambíguo", pergunte à cliente qual das opções.',
+    schema: z
+      .object({
+        servico: z.string().min(2).max(120),
+        data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        profissional: z.string().min(2).max(80).optional(),
+        horario: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+      })
+      .strict(),
+    grupo: 'agenda',
+    tipo: 'leitura',
+  },
+  {
+    nome: 'reservar_horario_salao',
+    rotulo: 'Reservar horário no salão',
+    descricao: 'Reserva o horário escolhido com a profissional e o serviço, e avisa a equipe no WhatsApp.',
+    instrucaoModelo:
+      'Reserva na agenda do salão o horário que a cliente ESCOLHEU entre os oferecidos por ver_horarios_salao. Informe `servico`, `profissional` (nome como veio na consulta) e `inicio` (ISO 8601 com fuso, ex.: 2026-11-18T14:00:00-03:00). A ferramenta confere de novo se o horário está livre e avisa a equipe no WhatsApp. Depois de reservar, confirme para a cliente: serviço, profissional, dia e hora, e diga que a equipe confirma em seguida. Se a ferramenta recusar, consulte de novo e ofereça outro horário.',
+    schema: z
+      .object({
+        servico: z.string().min(2).max(120),
+        profissional: z.string().min(2).max(80),
+        inicio: z.string().datetime({ offset: true }),
+      })
+      .strict(),
+    grupo: 'agenda',
+    tipo: 'escrita',
   },
   {
     nome: 'remarcar_agendamento',

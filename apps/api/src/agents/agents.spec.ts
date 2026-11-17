@@ -1,6 +1,7 @@
 import { MODELO_PADRAO } from './catalogo';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { AgentsService } from './agents.service';
+import type { SalaoAgendaService } from './salao/salao-agenda.service';
 import { AgentToolsService, type ContextoAgente } from './agent-tools.service';
 import { cortarNoLimite, ferramentasDoAgente, paraJsonSchema, FERRAMENTAS_POR_NOME } from './catalogo';
 import type { PrismaService } from '../prisma/prisma.service';
@@ -142,7 +143,8 @@ function ferramentas(contato: Record<string, unknown> | null = { nome: 'Marina',
   const workflows = { dispararPorAgente: jest.fn(async () => ({ runId: 'r1' })) } as unknown as WorkflowsService;
   const rag = { searchAgente: jest.fn(async () => []) } as unknown as RetrievalService;
   const financeiro = { criar: jest.fn(async (_t: string, _i: string, dto: Record<string, unknown>) => ({ id: 'cb1', ...dto })) } as unknown as FinanceiroService;
-  return { svc: new AgentToolsService(prisma, crm, notas, tarefas, agenda, workflows, rag, financeiro), tx, crm, notas, tarefas, workflows, rag, agenda, financeiro };
+  const salao = { horarios: jest.fn(), reservar: jest.fn() } as unknown as SalaoAgendaService;
+  return { svc: new AgentToolsService(prisma, crm, notas, tarefas, agenda, workflows, rag, financeiro, salao), tx, crm, notas, tarefas, workflows, rag, agenda, financeiro, salao };
 }
 
 const CTX: ContextoAgente = {
@@ -347,7 +349,7 @@ describe('ferramentas de agenda respeitam o horário do agente', () => {
   });
 
   it('grade fina (20 min) expõe o último horário que cabe no dia — regra da clínica', async () => {
-    // Faixas do Instituto Bárbara Lopes: 07:40–11:00 e 14:00–19:00, seg–sex.
+    // Faixas do da clínica: 07:40–11:00 e 14:00–19:00, seg–sex.
     const horarioClinica = horarioSchema.parse({
       ativo: true,
       dias: {
@@ -462,7 +464,7 @@ describe('remarcar_agendamento / cancelar_agendamento — política da empresa',
 // ------------------------------------------------------------------ sinal Pix
 
 describe('sinal Pix — registrar e verificar (sem gateway: conciliação autorizada)', () => {
-  const tenantComPix = { settings: { operacao: { sinalCentavos: 10000, consultaParticularCentavos: 40000, consultaConvenioCentavos: 30000, pix: { chave: 'pix@clinica.com', recebedor: 'Instituto Bárbara Lopes', instrucoes: 'Envie o comprovante aqui.' } } } };
+  const tenantComPix = { settings: { operacao: { sinalCentavos: 10000, consultaParticularCentavos: 40000, consultaConvenioCentavos: 30000, pix: { chave: 'pix@clinica.com', recebedor: 'da clínica', instrucoes: 'Envie o comprovante aqui.' } } } };
 
   it('registra a cobrança enviada e devolve os dados oficiais da conta', async () => {
     const f = ferramentas();

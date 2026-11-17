@@ -17,6 +17,8 @@ class CriarCompromissoDto {
   @IsOptional() @ValidateIf((_o, v) => v !== null) @IsUUID() responsavelId?: string | null;
   /** Valor do atendimento em centavos: ao concluir, vira entrada no financeiro. */
   @IsOptional() @ValidateIf((_o, v) => v !== null) @IsInt() @Min(0) valorCentavos?: number | null;
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsUUID() profissionalId?: string | null;
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsUUID() servicoId?: string | null;
 }
 /** PATCH parcial: arrastar/redimensionar mandam só inicio/fim. `null` limpa o campo. */
 class AtualizarCompromissoDto {
@@ -29,6 +31,8 @@ class AtualizarCompromissoDto {
   @IsOptional() @IsIn([...TIPOS_AGENDA]) tipo?: TipoAgenda;
   @IsOptional() @ValidateIf((_o, v) => v !== null) @IsUUID() responsavelId?: string | null;
   @IsOptional() @ValidateIf((_o, v) => v !== null) @IsInt() @Min(0) valorCentavos?: number | null;
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsUUID() profissionalId?: string | null;
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsUUID() servicoId?: string | null;
 }
 class OpcoesImportacaoAgendaDto {
   @IsOptional() @IsBoolean() gerarComissoes?: boolean;
@@ -76,6 +80,12 @@ export class AgendaController {
   @Get('profissionais')
   profissionais(@TenantId() t: string) {
     return this.agenda.profissionais(t);
+  }
+
+  /** Catálogo de serviços (salão/clínica): a tela preenche título, duração e valor. */
+  @Get('servicos')
+  servicos(@TenantId() t: string) {
+    return this.agenda.servicos(t);
   }
   @Get('horarios')
   horarios(

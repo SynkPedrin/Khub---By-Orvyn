@@ -13,6 +13,7 @@ import { AgentStudioService } from './agent-studio.service';
 import { AgentsService } from './agents.service';
 import { AgentRuntimeService, FILA_AGENTES } from './agent-runtime.service';
 import { AgentToolsService } from './agent-tools.service';
+import { SalaoAgendaService } from './salao/salao-agenda.service';
 import { AgentesProcessor } from './agents.processor';
 import { AgentAnalyticsService } from './analytics/agent-analytics.service';
 import { DeliveryProcessor } from './delivery/delivery.processor';
@@ -57,6 +58,7 @@ import { AvaliacoesProcessor, FILA_MANUTENCAO_AGENTES, ManutencaoAgentesProcesso
     AgentStudioService,
     AgentRuntimeService,
     AgentToolsService,
+    SalaoAgendaService,
     AgentAnalyticsService,
     DeliveryService,
     EvaluationService,

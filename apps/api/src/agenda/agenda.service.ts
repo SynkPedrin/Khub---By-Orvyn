@@ -112,6 +112,10 @@ export interface CompromissoInput {
   status?: 'agendado' | 'confirmado';
   /** Valor do atendimento em centavos: ao concluir, vira entrada no financeiro (db/070). */
   valorCentavos?: number | null;
+  /** Salão/clínica: quem atende (catálogo). Com profissional, o choque de horário é DELA. */
+  profissionalId?: string | null;
+  /** Serviço do catálogo (duração e preço sugeridos na tela). */
+  servicoId?: string | null;
 }
 
 /** Edição parcial (arrastar, redimensionar, reagendar, editar campos). */
@@ -190,6 +194,12 @@ export class AgendaService {
     );
   }
 
+  servicos(tenantId: string) {
+    return this.prisma.withTenant(tenantId, (tx) =>
+      tx.servico.findMany({ where: { ativo: true }, orderBy: { nome: 'asc' }, select: { id: true, nome: true, categoria: true, duracaoMin: true, precoCentavos: true } }),
+    );
+  }
+
   /** Um compromisso pelo id (página pública de gerenciamento da reserva, Q4.2). */
   async obter(tenantId: string, id: string) {
     const c = await this.prisma.withTenant(tenantId, (tx) => tx.agendaCompromisso.findFirst({ where: { id } }));
@@ -203,14 +213,19 @@ export class AgendaService {
    * (sem responsável, ex.: o que a IA marca) bloqueia todo mundo, e quem tem
    * responsável também bloqueia a agenda geral. Conservador de propósito.
    */
-  private async choca(tx: Prisma.TransactionClient, inicio: Date, fim: Date, responsavelId: string | null, ignorarId?: string): Promise<boolean> {
+  private async choca(tx: Prisma.TransactionClient, inicio: Date, fim: Date, responsavelId: string | null, ignorarId?: string, profissionalId?: string | null): Promise<boolean> {
     const conflito = await tx.agendaCompromisso.findFirst({
       where: {
         status: { in: ATIVOS },
         inicio: { lt: fim },
         fim: { gt: inicio },
         ...(ignorarId ? { id: { not: ignorarId } } : {}),
-        ...(responsavelId ? { OR: [{ responsavelId }, { responsavelId: null }] } : {}),
+        // Salão: cada profissional tem a própria agenda (atendimentos em paralelo
+        // são normais). Sem profissional, atendimentos de profissional não contam
+        // (o import do Avec não tem responsável e travava a agenda inteira).
+        ...(profissionalId
+          ? { profissionalId }
+          : { profissionalId: null, ...(responsavelId ? { OR: [{ responsavelId }, { responsavelId: null }] } : {}) }),
       },
       select: { id: true },
     });
@@ -226,6 +241,12 @@ export class AgendaService {
    */
   private async travarAgenda(tx: Prisma.TransactionClient, tenantId: string): Promise<void> {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`agenda:${tenantId}`}, 0))`;
+  }
+
+  /** Profissional e serviço precisam existir no catálogo deste tenant (RLS já isola). */
+  private async validarCatalogo(tx: Prisma.TransactionClient, profissionalId: string | null | undefined, servicoId: string | null | undefined): Promise<void> {
+    if (profissionalId && !(await tx.profissional.findFirst({ where: { id: profissionalId }, select: { id: true } }))) throw new BadRequestException('profissional inexistente');
+    if (servicoId && !(await tx.servico.findFirst({ where: { id: servicoId }, select: { id: true } }))) throw new BadRequestException('serviço inexistente');
   }
 
   /** O responsável precisa ser membro do tenant (identities são globais). */
@@ -256,14 +277,17 @@ export class AgendaService {
     const responsavelId = dto.responsavelId !== undefined ? dto.responsavelId : actorType === 'humano' ? identityId : null;
     return this.prisma.withTenant(tenantId, async (tx) => {
       await this.validarResponsavel(tx, tenantId, responsavelId);
+      await this.validarCatalogo(tx, dto.profissionalId, dto.servicoId);
       await this.travarAgenda(tx, tenantId);
-      if (await this.choca(tx, inicio, fim, responsavelId)) throw new ConflictException('já existe um compromisso nesse horário');
+      if (await this.choca(tx, inicio, fim, responsavelId, undefined, dto.profissionalId)) throw new ConflictException('já existe um compromisso nesse horário');
       const c = await tx.agendaCompromisso.create({
         data: {
           tenantId, titulo, inicio, fim, contactId: dto.contactId ?? null, local: dto.local ?? null, notas: dto.notas ?? null,
           tipo: dto.tipo ?? 'reuniao', responsavelId, createdBy: actorType === 'humano' ? identityId : null,
           ...(dto.status ? { status: dto.status } : {}),
           ...(dto.valorCentavos != null ? { valorCentavos: dto.valorCentavos } : {}),
+          ...(dto.profissionalId ? { profissionalId: dto.profissionalId } : {}),
+          ...(dto.servicoId ? { servicoId: dto.servicoId } : {}),
         },
       });
       await audit(tx, tenantId, identityId, 'compromisso.criado', c.id, actorType);
@@ -282,9 +306,11 @@ export class AgendaService {
       const { inicio, fim } = this.datas(patch.inicio ?? atual.inicio.toISOString(), patch.fim ?? atual.fim.toISOString());
       const responsavelId = patch.responsavelId !== undefined ? patch.responsavelId : atual.responsavelId;
       if (patch.responsavelId !== undefined) await this.validarResponsavel(tx, tenantId, responsavelId);
-      const mudouHorario = +inicio !== +atual.inicio || +fim !== +atual.fim || responsavelId !== atual.responsavelId;
+      const profissionalId = patch.profissionalId !== undefined ? patch.profissionalId : atual.profissionalId;
+      await this.validarCatalogo(tx, patch.profissionalId, patch.servicoId);
+      const mudouHorario = +inicio !== +atual.inicio || +fim !== +atual.fim || responsavelId !== atual.responsavelId || profissionalId !== atual.profissionalId;
       if (mudouHorario && ATIVOS.includes(atual.status)) await this.travarAgenda(tx, tenantId);
-      if (mudouHorario && ATIVOS.includes(atual.status) && (await this.choca(tx, inicio, fim, responsavelId, id))) {
+      if (mudouHorario && ATIVOS.includes(atual.status) && (await this.choca(tx, inicio, fim, responsavelId, id, profissionalId))) {
         throw new ConflictException('já existe um compromisso nesse horário');
       }
       const titulo = patch.titulo !== undefined ? patch.titulo.trim() : undefined;
@@ -299,6 +325,8 @@ export class AgendaService {
           ...(patch.local !== undefined ? { local: patch.local } : {}),
           ...(patch.notas !== undefined ? { notas: patch.notas } : {}),
           ...(patch.valorCentavos !== undefined ? { valorCentavos: patch.valorCentavos } : {}),
+          ...(patch.profissionalId !== undefined ? { profissionalId: patch.profissionalId } : {}),
+          ...(patch.servicoId !== undefined ? { servicoId: patch.servicoId } : {}),
         },
       });
       // Atendimento já concluído: valor/responsável/título editados acompanham no caixa.
@@ -311,11 +339,11 @@ export class AgendaService {
   async atualizarStatus(tenantId: string, identityId: string, id: string, status: string, actorType: AtorAgenda = 'humano') {
     if (!(STATUS_AGENDA as readonly string[]).includes(status)) throw new BadRequestException('status inválido');
     return this.prisma.withTenant(tenantId, async (tx) => {
-      const atual = await tx.agendaCompromisso.findFirst({ where: { id }, select: { id: true, status: true, inicio: true, fim: true, responsavelId: true } });
+      const atual = await tx.agendaCompromisso.findFirst({ where: { id }, select: { id: true, status: true, inicio: true, fim: true, responsavelId: true, profissionalId: true } });
       if (!atual) throw new NotFoundException('compromisso inexistente');
       // Reativar (cancelado/faltou → agendado/confirmado) não pode atropelar
       // quem ocupou o horário nesse meio-tempo.
-      if (ATIVOS.includes(status) && !ATIVOS.includes(atual.status) && (await this.choca(tx, atual.inicio, atual.fim, atual.responsavelId, id))) {
+      if (ATIVOS.includes(status) && !ATIVOS.includes(atual.status) && (await this.choca(tx, atual.inicio, atual.fim, atual.responsavelId, id, atual.profissionalId))) {
         throw new ConflictException('o horário já foi ocupado por outro compromisso');
       }
       // Timestamps (confirmado_em, faltou_em...) e o evento de outbox saem dos

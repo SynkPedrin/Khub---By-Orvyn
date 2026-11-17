@@ -5,6 +5,7 @@ import { AI_PROVIDER, type AIProvider } from '../ai/provider.contract';
 import { AtendimentoService } from '../crm/messaging/atendimento.service';
 import { VersioningService } from './versioning/versioning.service';
 import { promptEstavel } from './intelligence/prompt';
+import { LIMITE_INSTRUCOES } from './catalogo';
 
 /**
  * STUDIO DO AGENTE — a tela "ver funcionando na prática" (cockpit de 3
@@ -185,7 +186,7 @@ export class AgentStudioService {
     const parsed = rascunhoSchema.safeParse(extrairJson(r.texto));
     if (!parsed.success) {
       // Sem JSON válido, o texto inteiro ainda é um prompt utilizável — não perde o trabalho.
-      return { instrucoes: r.texto.trim().slice(0, 8000) };
+      return { instrucoes: r.texto.trim().slice(0, LIMITE_INSTRUCOES) };
     }
     return { instrucoes: parsed.data.instrucoes, tom: parsed.data.tom, personalidade: parsed.data.personalidade };
   }

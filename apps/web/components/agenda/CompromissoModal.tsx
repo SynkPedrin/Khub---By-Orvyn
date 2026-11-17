@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } 
 import { Button, Modal, Select } from '@/components/kit';
 import { Icon } from '@/components/icons';
 import { cx } from '@/components/ui';
-import { agenda, type Compromisso, type TipoAgenda } from '@/lib/agenda';
+import { agenda, type Compromisso, type ProfissionalAgenda, type ServicoAgenda, type TipoAgenda } from '@/lib/agenda';
 import { crm, type Contato } from '@/lib/crm';
 import type { Member } from '@/lib/settings';
 import { duracao as formatarDuracao, hora } from '@/lib/format';
@@ -59,6 +59,11 @@ export function CompromissoModal({ open, onClose, onSaved, compromisso, inicioSu
   const [local, setLocal] = useState('');
   const [notas, setNotas] = useState('');
   const [valor, setValor] = useState('');
+  // Salão/clínica: profissional e serviço do catálogo (vazio = tenant sem catálogo).
+  const [profissionais, setProfissionais] = useState<ProfissionalAgenda[]>([]);
+  const [servicos, setServicos] = useState<ServicoAgenda[]>([]);
+  const [profissionalId, setProfissionalId] = useState('');
+  const [servicoId, setServicoId] = useState('');
   const [erros, setErros] = useState<Erros>({});
   const [erroApi, setErroApi] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -77,11 +82,36 @@ export function CompromissoModal({ open, onClose, onSaved, compromisso, inicioSu
     setLocal(compromisso?.local ?? '');
     setNotas(compromisso?.notas ?? '');
     setValor(compromisso?.valorCentavos ? valorParaCampo(compromisso.valorCentavos) : '');
+    setProfissionalId(compromisso?.profissionalId ?? '');
+    setServicoId(compromisso?.servicoId ?? '');
     setErros({});
     setErroApi(null);
     setSalvando(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, compromisso?.id, +base]);
+
+  useEffect(() => {
+    if (!open || profissionais.length) return;
+    Promise.all([agenda.profissionais(), agenda.servicos()])
+      .then(([p, sv]) => {
+        setProfissionais(p);
+        setServicos(sv);
+      })
+      .catch(() => undefined);
+  }, [open, profissionais.length]);
+  const salao = profissionais.length > 0;
+
+  /** Escolher o serviço preenche duração, valor e (se vazio ou automático) o título. */
+  const escolherServico = (id: string) => {
+    const anterior = servicos.find((x) => x.id === servicoId);
+    setServicoId(id);
+    const sv = servicos.find((x) => x.id === id);
+    if (!sv) return;
+    setMinutos(sv.duracaoMin);
+    if (sv.precoCentavos > 0) setValor(valorParaCampo(sv.precoCentavos));
+    const automatico = !titulo.trim() || (anterior && titulo.startsWith(anterior.nome));
+    if (automatico) setTitulo(contato ? `${sv.nome} — ${contato.nome}` : sv.nome);
+  };
 
   // Horários livres do dia escolhido, para a duração e o responsável atuais.
   const [livres, setLivres] = useState<{ inicio: string; fim: string }[] | null>(null);
@@ -124,6 +154,7 @@ export function CompromissoModal({ open, onClose, onSaved, compromisso, inicioSu
         tipo,
         responsavelId: responsavelId || null,
         valorCentavos: valorCentavos && valorCentavos > 0 ? valorCentavos : null,
+        ...(salao ? { profissionalId: profissionalId || null, servicoId: servicoId || null } : {}),
       };
       const salvo = editando && compromisso
         ? await agenda.atualizar(compromisso.id, { ...comum, contactId: contato?.id ?? null, local: local.trim() || null, notas: notas.trim() || null })
@@ -180,6 +211,29 @@ export function CompromissoModal({ open, onClose, onSaved, compromisso, inicioSu
           </Campo>
         </div>
 
+        {salao && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Campo id="cm-profissional" label="Profissional">
+              <Select
+                id="cm-profissional"
+                value={profissionalId}
+                onChange={setProfissionalId}
+                placeholder="Sem profissional"
+                options={profissionais.map((p) => ({ value: p.id, label: p.nome }))}
+              />
+            </Campo>
+            <Campo id="cm-servico" label="Serviço">
+              <Select
+                id="cm-servico"
+                value={servicoId}
+                onChange={escolherServico}
+                placeholder="Sem serviço do catálogo"
+                options={servicos.map((x) => ({ value: x.id, label: `${x.nome} · ${formatarDuracao(x.duracaoMin)}` }))}
+              />
+            </Campo>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Campo id="cm-dia" label="Data" erro={erros.dia}>
             <input id="cm-dia" type="date" className="input" value={dia} onChange={(e) => setDia(e.target.value)} aria-invalid={!!erros.dia} aria-describedby={erros.dia ? 'cm-dia-erro' : undefined} />
@@ -202,6 +256,9 @@ export function CompromissoModal({ open, onClose, onSaved, compromisso, inicioSu
           </p>
         )}
 
+        {salao && profissionalId ? (
+          <p className="text-xs text-muted">Se {profissionais.find((p) => p.id === profissionalId)?.nome ?? 'a profissional'} já tiver atendimento nesse horário, o KHUB avisa ao salvar.</p>
+        ) : (
         <div>
           <p className="mb-1.5 text-sm font-medium text-fg">Horários livres neste dia</p>
           {livres === null ? (
@@ -226,6 +283,7 @@ export function CompromissoModal({ open, onClose, onSaved, compromisso, inicioSu
             </div>
           )}
         </div>
+        )}
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Campo id="cm-responsavel" label="Responsável">

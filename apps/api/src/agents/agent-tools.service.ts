@@ -14,6 +14,8 @@ import { resolverConfig, type AcaoRegra } from './config/agent-config';
 import { DIAS_SEMANA, type ConfigHorario } from './config/horario';
 import { brl, lerOperacao, pixConfigurado, saldoConsultaCentavos } from './config/operacao';
 import { FinanceiroService } from '../financeiro/financeiro.service';
+import { SalaoAgendaService } from './salao/salao-agenda.service';
+import { fusoPadrao } from '../common/hora';
 
 /**
  * Contexto da execução. `contactId` e `tenantId` vêm da CONVERSA e da sessão
@@ -112,6 +114,7 @@ export class AgentToolsService {
     private readonly workflows: WorkflowsService,
     private readonly rag: RetrievalService,
     private readonly financeiro: FinanceiroService,
+    private readonly salao: SalaoAgendaService,
   ) {}
 
   async executar(
@@ -377,6 +380,26 @@ export class AgentToolsService {
           carol_agendamento_status: 'agendado',
         });
         return { ok: true, dados: { compromissoId: c.id, inicio: c.inicio } };
+      }
+      // Agenda de salão: por profissional e serviço, expediente
+      // deduzido do histórico; reserva avisa a equipe (número da Notificação Interna do GHL).
+      case 'ver_horarios_salao': {
+        const dados = await this.salao.horarios(
+          ctx.tenantId,
+          { servico: String(a.servico), data: String(a.data), profissional: a.profissional as string | undefined, horario: a.horario as string | undefined },
+          ctx.horario?.fuso ?? fusoPadrao(),
+        );
+        return { ok: true, dados };
+      }
+      case 'reservar_horario_salao': {
+        const id = this.exigirContato(ctx);
+        const dados = await this.salao.reservar(
+          ctx.tenantId,
+          { agentId: ctx.agentId, agentNome: ctx.agentNome, contactId: id },
+          { servico: String(a.servico), profissional: String(a.profissional), inicio: String(a.inicio) },
+          ctx.horario?.fuso ?? fusoPadrao(),
+        );
+        return { ok: true, dados };
       }
       case 'remarcar_agendamento': {
         const id = this.exigirContato(ctx);

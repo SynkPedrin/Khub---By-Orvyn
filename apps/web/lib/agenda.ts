@@ -60,6 +60,17 @@ export interface NovoCompromisso {
   tipo?: TipoAgenda;
   responsavelId?: string | null;
   valorCentavos?: number | null;
+  /** Salão/clínica: quem atende e o serviço do catálogo. */
+  profissionalId?: string | null;
+  servicoId?: string | null;
+}
+
+export interface ServicoAgenda {
+  id: string;
+  nome: string;
+  categoria: string | null;
+  duracaoMin: number;
+  precoCentavos: number;
 }
 
 /** PATCH parcial (arrastar, redimensionar, reagendar). `null` limpa o campo. */
@@ -71,6 +82,7 @@ export type PatchCompromisso = Partial<Omit<NovoCompromisso, 'contactId' | 'loca
 
 export const agenda = {
   profissionais: () => req<ProfissionalAgenda[]>('profissionais'),
+  servicos: () => req<ServicoAgenda[]>('servicos'),
   compromissos: (filtro?: { de?: string; ate?: string; responsavelId?: string; profissionalId?: string; status?: StatusAgenda[] }) => {
     const qs = new URLSearchParams();
     if (filtro?.de) qs.set('de', filtro.de);
