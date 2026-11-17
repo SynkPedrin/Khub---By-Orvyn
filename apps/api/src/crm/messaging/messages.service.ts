@@ -12,6 +12,7 @@ import { StevoApiProvider } from './stevo-api.provider';
 import type { MidiaSaida } from './provider.contract';
 import { CanaisService } from './canais/canais.service';
 import { horaCurta } from '../../common/hora';
+import { ehPedidoDeOptOut } from '../../common/optout';
 
 /**
  * Autoria do envio. `humano` com `identityId` = alguém digitou no Inbox (e por
@@ -236,7 +237,7 @@ export class MessagesService {
         contact = await tx.contact.create({ data: { tenantId: input.tenantId, nome: input.fromName || input.fromNumber, telefone: input.fromNumber, tag: 'Lead', origem: 'WhatsApp', ultimoContatoAt: new Date() } });
       }
       await tx.$queryRaw`SELECT id FROM contacts WHERE id=${contact.id}::uuid FOR UPDATE`;
-      const optout=/^(stop|parar|sair|cancelar|remover|não quero|nao quero)\b/i.test(input.text.trim());
+      const optout=ehPedidoDeOptOut(input.text);
       await tx.contact.update({where:{id:contact.id,tenantId:input.tenantId},data:{lastInboundAt:new Date(),...(optout?{optedOutAt:new Date()}: {})}});
       await tx.workflowRun.updateMany({where:{tenantId:input.tenantId,contactId:contact.id,status:{in:['rodando','esperando']},...(optout?{}:{workflow:{pararNoReply:true}})},data:{status:'cancelado',finishedAt:new Date(),erro:optout?'contato optou por sair':'contato respondeu'}});
       const hora = this.hora();

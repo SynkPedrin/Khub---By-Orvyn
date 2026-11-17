@@ -404,3 +404,33 @@ describe('travas de dinheiro (preço e desconto)', () => {
     expect(semDescontoInventado('Essa semana temos 15% de desconto no design!', ['Promoção da semana: 15% de desconto no design de sobrancelha.']).removeu).toBe(false);
   });
 });
+
+describe('classificação: agradecimento/confirmação e objeções (missão Ritinha 10/10)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { ehSoConfirmacao, contarObjecoes, analisarHeuristica } = require('./analysis') as typeof import('./analysis');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { guiaDeObjecoes } = require('../intelligence/prompt') as typeof import('../intelligence/prompt');
+
+  it.each(['obrigada!', 'Muito obrigada', 'ok', 'Ok, combinado', 'perfeito 👍', '👍', '❤️', 'tá bom', 'valeu', 'beleza então', 'Certinho, obrigada', 'isso mesmo', 'amei, obrigada por tudo'])(
+    'só confirmação: %s', (m) => {
+      expect(ehSoConfirmacao(m)).toBe(true);
+      const a = analisarHeuristica(m);
+      expect(a.intencao).toBe('confirmacao');
+      expect(a.precisaConhecimento).toBe(false);
+    });
+
+  it.each(['ok, e quanto custa?', 'obrigada, e tem horário sábado?', 'quero marcar manicure', 'perfeito, mas achei caro', 'oi tudo bem? queria saber das luzes'])(
+    'NÃO é só confirmação: %s', (m) => expect(ehSoConfirmacao(m)).toBe(false));
+
+  it('conta objeções anteriores do contato', () => {
+    expect(contarObjecoes(['achei caro', 'nossa, muito caro mesmo', 'vou pensar'])).toEqual({ preco: 2, adiamento: 1 });
+  });
+
+  it('framework: guia específico; segunda vez pede argumento novo; terceira vez para de argumentar', () => {
+    expect(guiaDeObjecoes(['preco'], {}).join(' ')).toMatch(/Nunca invente desconto/);
+    expect(guiaDeObjecoes(['tempo'], { tempo: 1 }).join(' ')).toMatch(/última tentativa/);
+    const terceira = guiaDeObjecoes(['preco'], { preco: 2 }).join(' ');
+    expect(terceira).toMatch(/Pare de argumentar/);
+    expect(terceira).not.toMatch(/combo cadastrado/);
+  });
+});

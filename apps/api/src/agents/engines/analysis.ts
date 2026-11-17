@@ -135,6 +135,22 @@ const RE_ORCAMENTO = /\b(?:ate|uns|cerca de|por volta de|no maximo|orcamento (?:
  * fallback quando a IA está sem credencial, fora do ar ou com orçamento
  * esgotado. Não substitui o modelo: a confiança dele é deliberadamente baixa.
  */
+const RE_SO_CONFIRMACAO = /^((muito )?(obrigad[ao]s?|obg|brigad[ao]|valeu|vlw|grata|grato)|ok(ay|ei)?|okk+|blz|beleza|certo|certinho|ta( bom)?|tudo bem|tudo certo|combinado|perfeito|otimo|maravilha|show|top|entendi|entendido|fechado|pode ser|sim|isso|isso mesmo|ah sim|ahh?|ata|aham|uhum|joia|legal|massa|amem|amei|que bom)( (entao|obrigad[ao]|muito obrigad[ao]|por tudo|demais|mesmo|viu|ta|sim|combinado|perfeito|ate (mais|logo|la)|bjs|beijos|um beijo))*$/;
+
+/**
+ * Mensagem que SÓ agradece ou confirma ("obrigada!", "ok, combinado", "perfeito 👍").
+ * Determinístico e sem custo: antes o modelo de análise lia "obrigada" como
+ * dúvida/interesse, consultava a base e a agente respondia com nova oferta.
+ * "Ok, e quanto custa?" NÃO é só confirmação (tem pergunta).
+ */
+export function ehSoConfirmacao(mensagem: string): boolean {
+  const semEmoji = mensagem.replace(/[\p{Extended_Pictographic}‍️]/gu, ' ');
+  const t = norm(semEmoji).replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+  if (!t) return /[\p{Extended_Pictographic}]/u.test(mensagem); // só emoji (👍, ❤️)
+  if (t.split(' ').length > 8 || /\?/.test(mensagem)) return false;
+  return RE_SO_CONFIRMACAO.test(t);
+}
+
 export function analisarHeuristica(mensagem: string, intencoesExtras: { chave: string; exemplos: string[] }[] = []): Analise {
   const t = norm(mensagem.trim());
   const pontos = new Map<string, number>();
@@ -145,7 +161,8 @@ export function analisarHeuristica(mensagem: string, intencoesExtras: { chave: s
   const ordenadas = [...pontos.entries()].sort((a, b) => b[1] - a[1]);
   const objecoes = PADROES_OBJECAO.filter(([, re]) => re.test(t)).map(([o]) => o);
   if (objecoes.length && !pontos.has('objecao')) ordenadas.push(['objecao', 1]);
-  const intencao = ordenadas[0]?.[0] ?? (t.length < 4 ? 'saudacao' : 'duvida');
+  const confirmacao = ehSoConfirmacao(mensagem);
+  const intencao = confirmacao ? 'confirmacao' : ordenadas[0]?.[0] ?? (t.length < 4 ? 'saudacao' : 'duvida');
   const sentimento: Analise['sentimento'] = NEGATIVAS.test(t) ? 'negativo' : POSITIVAS.test(t) ? 'positivo' : 'neutro';
   const urgencia: Analise['urgencia'] = URGENTE.test(t) ? 'alta' : MEDIA_URG.test(t) ? 'media' : 'baixa';
   const temperatura: Analise['temperatura'] = ['compra', 'agendamento', 'negociacao'].includes(intencao)
@@ -204,3 +221,18 @@ export function sanearAnalise(a: Analise, intencoes: readonly string[]): Analise
       .map((e) => ({ ...e, valor: e.valor.trim().slice(0, 400), confianca: Math.min(1, Math.max(0, e.confianca)) as number, campo: e.campo as CampoPerfil })),
   };
 }
+
+/**
+ * Quantas vezes cada objeção já apareceu nas mensagens ANTERIORES do contato
+ * (heurística determinística). Alimenta a regra "no máximo duas tentativas":
+ * na terceira vez a agente para de argumentar e encerra com respeito.
+ */
+export function contarObjecoes(mensagensAnterioresDoContato: string[]): Partial<Record<Analise['objecoes'][number], number>> {
+  const conta: Partial<Record<Analise['objecoes'][number], number>> = {};
+  for (const m of mensagensAnterioresDoContato) {
+    const t = norm(m);
+    for (const [tipo, re] of PADROES_OBJECAO) if (re.test(t)) conta[tipo] = (conta[tipo] ?? 0) + 1;
+  }
+  return conta;
+}
+
