@@ -365,15 +365,14 @@
 
 /* ---------------------------------------------------------------------
    LIGHT MODE — opt-in pelo usuário (Configurações › Tema ou o botão
-   sol/lua da topbar). Superfícies brancas; a sidebar fica escura com o
+   sol/lua da topbar). Superfícies brancas; a sidebar segue escura com o
    topo branco para a logo colorida (ver `.sidebar-shell`). Tudo que é verde no
    escuro (ação, iluminação, sinal) vira o roxo da logo: #7B2EFF para
    texto/ação (lê sobre branco) e o lilás #A66BFF para luz e brilho.
    Escopo: só a área logada. Login/cadastro e a LP seguem escuros
    (PersonalizationProvider devolve `dark` ao sair do shell).
    --------------------------------------------------------------------- */
-:root[data-theme='light'],
-:root[data-theme='dark'] .sidebar-shell {
+:root[data-theme='light'] {
   color-scheme: light;
   --violet: #7b2eff;
   --violet-glow: #a66bff;
@@ -487,8 +486,7 @@
   }
 }
 @media (prefers-contrast: more) {
-  :root[data-theme='light'],
-  :root[data-theme='dark'] .sidebar-shell {
+  :root[data-theme='light'] {
     --text-2: #2e2e36;
     --text-3: #45454f;
     --border-strong: #6e6e78;
@@ -504,14 +502,14 @@
   }
 }
 
-/* Sidebar invertida (logo colorida, 17/11/2026): o tema da sidebar é o
-   oposto do tema da página. No escuro ela é branca e a logo colorida lê
-   inteira; no claro ela é escura e só o topo (`.sidebar-brand`) fica
-   branco para a logo. As cores vêm dos blocos de tema acima, que também
-   miram `.sidebar-shell`. Aqui só se recalculam os apelidos que o :root
-   resolve uma vez (senão herdariam o valor do tema da página) e o fundo
-   fica quase opaco: vidro translúcido sobre o ambient escuro viraria cinza. */
+/* Sidebar sempre escura (logo colorida, 17/11/2026): nos dois temas ela é
+   escura e só o topo (`.sidebar-brand`) é uma caixa branca com a logo. No
+   claro as cores escuras vêm do bloco DARK acima, que também mira
+   `:root[data-theme='light'] .sidebar-shell`. Aqui se recalculam os
+   apelidos que o :root resolve uma vez (senão herdariam o valor do tema
+   da página) e o fundo é o mesmo escuro quase opaco nos dois temas. */
 .sidebar-shell {
+  --lg-surface: rgba(11, 11, 15, 0.94);
   --lime: var(--khub-lime);
   --edge-lime: var(--edge);
   --edge-lime-strong: var(--edge-hover);
@@ -531,13 +529,7 @@
   --lilac: var(--brand-2);
   color: var(--text);
 }
-:root[data-theme='dark'] .sidebar-shell {
-  --lg-surface: rgba(255, 255, 255, 0.96);
-}
-:root[data-theme='light'] .sidebar-shell {
-  --lg-surface: rgba(11, 11, 15, 0.94);
-}
-:root[data-theme='light'] .sidebar-brand {
+:root[data-theme] .sidebar-brand {
   margin: 8px 8px 0;
   border-bottom: 0;
   border-radius: var(--r-xl);
