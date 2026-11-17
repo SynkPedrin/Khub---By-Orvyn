@@ -224,7 +224,7 @@ export function AoVivo({ agente, onAtualizado }: SecaoProps) {
                   <Icon name="sparkles" size={14} /> {gerando ? 'NICO escrevendo…' : cfg.instrucoes.trim() ? 'NICO, melhorar meu prompt' : 'NICO, escrever o prompt'}
                 </button>
               </div>
-              <textarea className="textarea font-mono text-[12.5px]" rows={8} maxLength={8000} value={cfg.instrucoes} onChange={(e) => setCfg({ ...cfg, instrucoes: e.target.value })} placeholder="Escreva você mesmo ou deixe a NICO escrever a partir da descrição acima." />
+              <textarea className="textarea font-mono text-[12.5px]" rows={8} maxLength={20000} value={cfg.instrucoes} onChange={(e) => setCfg({ ...cfg, instrucoes: e.target.value })} placeholder="Escreva você mesmo ou deixe a NICO escrever a partir da descrição acima." />
             </div>
             <label className="flex items-start gap-3 text-[13.5px]">
               <input type="checkbox" className="checkbox mt-0.5" checked={cfg.conhecimentoAtivo} onChange={(e) => setCfg({ ...cfg, conhecimentoAtivo: e.target.checked })} />

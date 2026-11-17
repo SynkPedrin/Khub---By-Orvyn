@@ -40,6 +40,9 @@ export const MODELOS = [
 export type ModeloAgente = (typeof MODELOS)[number]['id'];
 /** Padrão de agente novo: Sonnet 5.5 (decisão do dono em 2026-11-13: qualidade de atendimento com custo de Sonnet). */
 export const MODELO_PADRAO: ModeloAgente = 'claude-sonnet-5-5';
+
+/** Tamanho máximo das instruções do agente (o prompt da IA do GHL que substituímos tinha ~15 mil caracteres). */
+export const LIMITE_INSTRUCOES = 20_000;
 export const IDS_MODELOS: readonly string[] = MODELOS.map((m) => m.id);
 
 /** Tom de voz: vira uma instrução curta no system prompt. */

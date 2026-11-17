@@ -20,12 +20,14 @@ function fakeEmbeddings(available = true): EmbeddingsService {
   return { embedOne: jest.fn().mockResolvedValue([0.1, 0.2, 0.3, 0.4]), dims: 4, available } as unknown as EmbeddingsService;
 }
 
+const versaoFake = { v: '3.1000' };
 function fakePrisma(rows: unknown[], seenTenants: string[]) {
   return {
     withTenant: jest.fn(async (tenantId: string, work: (tx: unknown) => Promise<unknown>) => {
       seenTenants.push(tenantId);
       const tx = {
         $queryRawUnsafe: jest.fn().mockResolvedValue(rows),
+        $queryRaw: jest.fn().mockResolvedValue([{ v: versaoFake.v }]),
         $executeRaw: jest.fn().mockResolvedValue(1),
       };
       return work(tx);
@@ -124,4 +126,37 @@ describe('RetrievalService (R1.4 / R1.5 isolamento)', () => {
     const svc = new RetrievalService(fakePrisma([], []), fakeEmbeddings(), new ConfigService(), new InMemoryRagCache(), new IdentityReranker());
     expect(await svc.search(CTX_A, 'nada')).toEqual([]);
   });
+
+  it('Voyage 429 na consulta: degrada para BM25 (não derruba a busca) e não cacheia o degradado', async () => {
+    const sqls: string[] = [];
+    const prisma = {
+      withTenant: jest.fn(async (_t: string, work: (tx: unknown) => Promise<unknown>) =>
+        work({ $queryRawUnsafe: jest.fn(async (sql: string) => { sqls.push(sql); return CANDIDATES; }), $queryRaw: jest.fn().mockResolvedValue([{ v: '1.1' }]), $executeRaw: jest.fn().mockResolvedValue(1) }),
+      ),
+    } as unknown as PrismaService;
+    const emb = { embedOne: jest.fn().mockRejectedValue(new Error('Voyage 429: reduced rate limits')), dims: 4, available: true } as unknown as EmbeddingsService;
+    const svc = new RetrievalService(prisma, emb, new ConfigService(), new InMemoryRagCache(), new IdentityReranker());
+    const geral = await svc.search(CTX_A, 'preço manicure');
+    expect(geral).toHaveLength(2);
+    expect(sqls.some((q) => q.includes('rag_search_lexical'))).toBe(true);
+    const agente = await svc.searchAgente(CTX_A, 'preço manicure', ['tenant'], ['d2']);
+    expect(agente.length).toBeGreaterThan(0);
+    expect(sqls.some((q) => q.includes('agent_rag_search_lexical'))).toBe(true);
+    // sem cache do degradado: a próxima consulta tenta o embedding de novo
+    await svc.search(CTX_A, 'preço manicure');
+    expect((emb.embedOne as jest.Mock).mock.calls.length).toBe(3);
+  });
+
+  it('trocar a base (fonte nova/apagada) aposenta o cache na hora, sem esperar o TTL', async () => {
+    const emb = fakeEmbeddings();
+    const svc = new RetrievalService(fakePrisma(CANDIDATES, []), emb, new ConfigService(), new InMemoryRagCache(), new IdentityReranker());
+    versaoFake.v = '5.2000';
+    await svc.searchAgente(CTX_A, 'preço escova', ['tenant'], ['d2']);
+    await svc.searchAgente(CTX_A, 'preço escova', ['tenant'], ['d2']);
+    expect((emb.embedOne as jest.Mock).mock.calls.length).toBe(1); // mesma versão: cache
+    versaoFake.v = '5.2001'; // fonte trocada
+    await svc.searchAgente(CTX_A, 'preço escova', ['tenant'], ['d2']);
+    expect((emb.embedOne as jest.Mock).mock.calls.length).toBe(2);
+  });
 });
+

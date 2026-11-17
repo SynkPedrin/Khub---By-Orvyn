@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestj
 import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { CurrentUser, TenantId, type AuthUser } from '../auth/decorators';
 import { AgentStudioService } from './agent-studio.service';
+import { LIMITE_INSTRUCOES } from './catalogo';
 
 class TestarWhatsAppDto {
   @IsUUID() contactId!: string;
@@ -11,13 +12,13 @@ class AssistentePromptDto {
   @IsOptional() @IsString() @MaxLength(80) nome?: string;
   @IsString() @MinLength(3) @MaxLength(60) foco!: string;
   @IsString() @MinLength(10) @MaxLength(2000) descricao!: string;
-  @IsOptional() @IsString() @MaxLength(8000) instrucoesAtuais?: string;
+  @IsOptional() @IsString() @MaxLength(LIMITE_INSTRUCOES) instrucoesAtuais?: string;
 }
 
 class AnalisarPromptDto {
   @IsOptional() @IsString() @MaxLength(80) nome?: string;
   @IsOptional() @IsString() @MaxLength(60) foco?: string;
-  @IsString() @MinLength(10) @MaxLength(8000) instrucoes!: string;
+  @IsString() @MinLength(10) @MaxLength(LIMITE_INSTRUCOES) instrucoes!: string;
   @IsOptional() @IsString() @MaxLength(40) tom?: string;
   @IsOptional() @IsIn([true, false]) conhecimentoAtivo?: boolean;
 }
