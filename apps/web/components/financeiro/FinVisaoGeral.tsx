@@ -126,7 +126,10 @@ function CaixaAtualCard() {
         <div>
           <p className="flex items-center gap-1.5 text-xs font-medium text-muted"><Icon name="finance" size={14} /> Caixa atual</p>
           <p className={cx('mt-1 text-3xl font-bold tabular', c && c.saldoCentavos < 0 ? 'text-red-500 dark:text-red-400' : 'text-fg')}>{c ? money(c.saldoCentavos) : '–'}</p>
-          <p className="mt-0.5 text-xs text-muted">Tudo que entrou menos tudo que saiu, recebido e pago até hoje.</p>
+          <p className="mt-0.5 text-xs text-muted">
+            Tudo que entrou menos tudo que saiu no caixa do KHUB{c?.desde ? ` desde ${c.desde.split('-').reverse().join('/')}` : ''}.
+            {c && c.historicoImportadoCentavos !== 0 ? ` Histórico importado (fora do caixa): ${money(c.historicoImportadoCentavos)}.` : ''}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <span className="rounded-xl bg-surface2 px-3 py-2 text-xs">

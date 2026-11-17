@@ -522,9 +522,13 @@ export class CaixaService {
   async caixaAtual(tenantId: string, agora = new Date()) {
     const hoje = dataNoFuso(+agora, FUSO_PADRAO);
     return this.prisma.withTenant(tenantId, async (tx) => {
-      const [saldo] = await tx.$queryRaw<{ entradas: bigint; saidas: bigint }[]>`
-        SELECT COALESCE(SUM(valor_centavos) FILTER (WHERE tipo = 'entrada'), 0)::bigint AS entradas,
-               COALESCE(SUM(valor_centavos) FILTER (WHERE tipo = 'saida'), 0)::bigint AS saidas
+      // Caixa = o que foi lançado no KHUB (histórico importado de outro sistema fica à parte:
+      // somado, virava "caixa atual" de milhões, que não é o dinheiro da gaveta).
+      const [saldo] = await tx.$queryRaw<{ entradas: bigint; saidas: bigint; historico: bigint; desde: string | null }[]>`
+        SELECT COALESCE(SUM(valor_centavos) FILTER (WHERE tipo = 'entrada' AND origem <> 'importacao'), 0)::bigint AS entradas,
+               COALESCE(SUM(valor_centavos) FILTER (WHERE tipo = 'saida' AND origem <> 'importacao'), 0)::bigint AS saidas,
+               COALESCE(SUM(CASE WHEN tipo = 'entrada' THEN valor_centavos ELSE -valor_centavos END) FILTER (WHERE origem = 'importacao'), 0)::bigint AS historico,
+               MIN(data_competencia) FILTER (WHERE origem <> 'importacao')::text AS desde
         FROM financeiro_transacoes
         WHERE tenant_id = ${tenantId}::uuid AND status = 'pago' AND data_competencia <= ${hoje}::date`;
       const porForma = await tx.$queryRaw<{ forma: string | null; tipo: string; total: bigint; qtd: bigint }[]>`
@@ -536,6 +540,8 @@ export class CaixaService {
       return {
         data: hoje,
         saldoCentavos: Number(saldo.entradas) - Number(saldo.saidas),
+        desde: saldo.desde,
+        historicoImportadoCentavos: Number(saldo.historico),
         hoje: {
           entradasCentavos: entradasHoje.reduce((a, r) => a + Number(r.total), 0),
           saidasCentavos: porForma.filter((r) => r.tipo === 'saida').reduce((a, r) => a + Number(r.total), 0),
