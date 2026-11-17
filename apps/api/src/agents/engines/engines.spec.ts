@@ -434,3 +434,19 @@ describe('classificação: agradecimento/confirmação e objeções (missão Rit
     expect(terceira).not.toMatch(/combo cadastrado/);
   });
 });
+
+describe('uma pergunta por vez (cortesia extra)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { semPerguntaDeCortesiaExtra } = require('./response-validator') as typeof import('./response-validator');
+  it('tira o "e com você?" quando já há outra pergunta', () => {
+    const r = semPerguntaDeCortesiaExtra('Boa tarde! Tudo bem sim, e com você? Sou a Ritinha. Em que posso te ajudar hoje?');
+    expect(r.removeu).toBe(true);
+    expect(r.texto).toBe('Boa tarde! Tudo bem sim! Sou a Ritinha. Em que posso te ajudar hoje?');
+  });
+  it('mantém quando é a única pergunta', () => {
+    expect(semPerguntaDeCortesiaExtra('Tudo ótimo por aqui, e você?').removeu).toBe(false);
+  });
+  it('não mexe em duas perguntas que não são cortesia', () => {
+    expect(semPerguntaDeCortesiaExtra('Prefere manhã? Ou tarde?').removeu).toBe(false);
+  });
+});

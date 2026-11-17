@@ -255,3 +255,16 @@ export function semDescontoInventado(texto: string, fontes: string[]): { texto: 
   return { texto: out || 'Sobre condições especiais, eu confirmo com a equipe e te retorno.', removeu: true };
 }
 
+/**
+ * Uma pergunta por vez: "Tudo bem sim, e com você? Em que posso ajudar?" vira
+ * "Tudo bem sim! Em que posso ajudar?". Só a pergunta de CORTESIA ("e você?")
+ * sai, e só quando já existe outra pergunta na resposta.
+ */
+export function semPerguntaDeCortesiaExtra(texto: string): { texto: string; removeu: boolean } {
+  if ((texto.match(/\?/g) ?? []).length < 2) return { texto, removeu: false };
+  const re = /,?\s*e (com |pra |para )?(voc[eê]|vc)( também| tambem)?(,? tudo (bem|certo|bom))?\s*\?/i;
+  if (!re.test(texto)) return { texto, removeu: false };
+  const out = texto.replace(re, '!');
+  return (out.match(/\?/g) ?? []).length >= 1 ? { texto: out, removeu: true } : { texto, removeu: false };
+}
+
