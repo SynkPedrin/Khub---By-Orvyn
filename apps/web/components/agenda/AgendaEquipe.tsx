@@ -1,32 +1,39 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { cx } from '@/components/ui';
 import { Icon } from '@/components/icons';
 import type { Compromisso, ProfissionalAgenda, StatusAgenda } from '@/lib/agenda';
 import { hora } from '@/lib/format';
-import { STATUS_LABEL } from './agenda-utils';
+import { STATUS_LABEL, chaveDia } from './agenda-utils';
 import { mesmoDia, posicionarDia, type Bloco } from './calendario-layout';
 import { rotuloMinutos } from './resumo-dia';
 import { MARCA_STATUS, paletaEquipe, procedimento, type CorEquipe } from './cores-equipe';
 
-/** Altura de 1 hora nesta visão: maior que a da semana para o nome do cliente caber. */
-const PX_HORA = 72;
+/** Grade de 10 em 10 minutos (como o Avec): cada faixa tem altura para uma linha de texto. */
+const SLOT_MIN = 10;
+const SLOT_PX = 22;
+const PX_HORA = (60 / SLOT_MIN) * SLOT_PX;
+const COL_HORAS = 60;
+const LARGURA_MIN = 132;
 const SEM_PROFISSIONAL = '__sem__';
-const LARGURA_MIN = 200;
-const LARGURA_POR_ATENDIMENTO = 130;
+/** Faixa padrão do dia; estica se houver atendimento fora dela. */
+const INICIO_PADRAO = 7 * 60;
+const FIM_PADRAO = 21 * 60;
 
-const idsProfissionais = (evs: Compromisso[]) => evs.map((e) => e.profissionalId);
+export const COLUNAS_OPCOES = [3, 5, 8, 10, 12] as const;
 
 export const nomeCliente = (c: Compromisso, nomes: Record<string, string | null>) =>
   c.contatoNome ?? (c.contactId ? nomes[c.contactId] ?? null : null);
 export const nomeServico = (c: Compromisso) => c.servicoNome ?? c.titulo;
 
+const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+
 /**
- * Agenda do dia por profissional (salão, clínica): uma coluna por quem atende,
- * horários na lateral. Pensada para a recepção bater o olho e ver QUEM, QUE
- * HORAS, O QUÊ e COM QUEM. Só aparecem as colunas de quem tem atendimento no
- * dia (mais "Sem profissional", se houver).
+ * Agenda do dia por profissional (salão, clínica), no molde do Avec: uma coluna
+ * fixa por profissional selecionada no painel (mesmo sem atendimento, para a
+ * recepção ver quem está livre), régua de 10 em 10 minutos e linha do agora.
+ * `colunas` diz quantas profissionais cabem na tela; o resto rola para o lado.
  */
 export function AgendaEquipe({
   corDe: corExterna,
@@ -35,6 +42,7 @@ export function AgendaEquipe({
   profissionais,
   nomes,
   agora,
+  colunas: porTela,
   onAbrir,
   onCriar,
 }: {
@@ -42,119 +50,150 @@ export function AgendaEquipe({
   corDe?: ((id: string | null | undefined) => CorEquipe) | null;
   dia: Date;
   eventos: Compromisso[];
+  /** Profissionais selecionadas no painel, na ordem do catálogo. */
   profissionais: ProfissionalAgenda[];
   nomes: Record<string, string | null>;
   agora: Date;
+  colunas: number;
   onAbrir: (id: string, ancora: DOMRect | null) => void;
-  onCriar: (inicio: Date) => void;
+  onCriar: (inicio: Date, profissionalId: string | null) => void;
 }) {
+  const scroller = useRef<HTMLDivElement>(null);
+  const [largura, setLargura] = useState(0);
+
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setLargura(e.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const colunas = useMemo(() => {
     const porId = new Map<string, Compromisso[]>();
     for (const e of eventos) {
       const k = e.profissionalId ?? SEM_PROFISSIONAL;
       porId.set(k, [...(porId.get(k) ?? []), e]);
     }
-    const nomePorId = new Map(profissionais.map((p) => [p.id, p.nome]));
-    const corDe = corExterna ?? paletaEquipe(profissionais, idsProfissionais(eventos));
-    const lista = [...porId.entries()].map(([id, evs]) => {
-      const blocos = posicionarDia(evs, dia);
-      // Quem atende em paralelo ganha coluna mais larga: ~130px por atendimento lado a lado.
-      const paralelo = blocos.reduce((m, b) => Math.max(m, b.colunas), 1);
+    const corDe = corExterna ?? paletaEquipe(profissionais, eventos.map((e) => e.profissionalId));
+    const monta = (id: string, nome: string) => {
+      const evs = porId.get(id) ?? [];
       const ocupados = evs.reduce((t, e) => t + Math.max(0, (new Date(e.fim).getTime() - new Date(e.inicio).getTime()) / 60_000), 0);
-      return {
-        id,
-        nome: id === SEM_PROFISSIONAL ? 'Sem profissional' : nomePorId.get(id) ?? evs[0]?.profissionalNome ?? 'Profissional',
-        cor: corDe(id === SEM_PROFISSIONAL ? null : id),
-        blocos,
-        total: evs.length,
-        ocupados: Math.round(ocupados),
-        largura: Math.max(LARGURA_MIN, paralelo * LARGURA_POR_ATENDIMENTO),
-      };
-    });
-    return lista.sort((a, b) => (a.id === SEM_PROFISSIONAL ? 1 : b.id === SEM_PROFISSIONAL ? -1 : b.total - a.total || a.nome.localeCompare(b.nome, 'pt-BR')));
+      return { id, nome, cor: corDe(id === SEM_PROFISSIONAL ? null : id), blocos: posicionarDia(evs, dia), total: evs.length, ocupados: Math.round(ocupados) };
+    };
+    const lista = profissionais.map((p) => monta(p.id, p.nome));
+    if (porId.has(SEM_PROFISSIONAL)) lista.push(monta(SEM_PROFISSIONAL, 'Sem profissional'));
+    return lista;
   }, [eventos, profissionais, dia, corExterna]);
 
-  // Faixa de horas: do primeiro ao último atendimento (mínimo 08h–19h).
-  const [h0, h1] = useMemo(() => {
-    let ini = 8 * 60;
-    let fim = 19 * 60;
-    for (const c of colunas) for (const b of c.blocos) {
-      ini = Math.min(ini, b.topoMin);
-      fim = Math.max(fim, b.topoMin + b.alturaMin);
+  const [ini, fim] = useMemo(() => {
+    let a = INICIO_PADRAO;
+    let b = FIM_PADRAO;
+    for (const c of colunas) for (const bl of c.blocos) {
+      a = Math.min(a, bl.topoMin);
+      b = Math.max(b, bl.topoMin + bl.alturaMin);
     }
-    return [Math.floor(ini / 60), Math.min(24, Math.ceil(fim / 60))];
+    return [Math.floor(a / 60) * 60, Math.min(24 * 60, Math.ceil(b / 60) * 60)];
   }, [colunas]);
-  const horas = Array.from({ length: h1 - h0 }, (_, i) => h0 + i);
-  const altura = (h1 - h0) * PX_HORA;
-  const px = (min: number) => ((min - h0 * 60) / 60) * PX_HORA;
+
+  const slots = Array.from({ length: (fim - ini) / SLOT_MIN }, (_, i) => ini + i * SLOT_MIN);
+  const altura = slots.length * SLOT_PX;
+  const px = (min: number) => ((min - ini) / SLOT_MIN) * SLOT_PX;
   const ehHoje = mesmoDia(dia, agora);
   const agoraMin = agora.getHours() * 60 + agora.getMinutes();
+  const mostrarAgora = ehHoje && agoraMin >= ini && agoraMin <= fim;
+  const larguraCol = Math.max(LARGURA_MIN, Math.floor((largura - COL_HORAS) / Math.max(1, Math.min(porTela, colunas.length || 1))));
+
+  // Abre rolado perto de agora (hoje) ou do começo do expediente.
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const alvo = ehHoje ? Math.max(ini, agoraMin - 120) : Math.max(ini, 8 * 60);
+    el.scrollTop = px(alvo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveDia(dia), ini]);
+
+  // Linhas: 10 min fracas, hora cheia forte, e faixas alternadas por hora (leitura do Avec).
+  const fundoGrade = {
+    backgroundImage: [
+      `linear-gradient(to bottom, var(--border-strong) 1px, transparent 1px)`,
+      `linear-gradient(to bottom, var(--border) 1px, transparent 1px)`,
+      `linear-gradient(to bottom, transparent 50%, var(--fill-4) 50%)`,
+    ].join(','),
+    backgroundSize: `100% ${PX_HORA}px, 100% ${SLOT_PX}px, 100% ${PX_HORA * 2}px`,
+  };
 
   if (!colunas.length) {
     return (
       <div className="card flex flex-col items-center gap-2 px-6 py-14 text-center">
-        <Icon name="calendar" size={28} className="text-muted" />
-        <p className="font-semibold text-fg">Nenhum atendimento neste dia</p>
-        <p className="text-sm text-muted">Use as setas para ir ao próximo dia ou clique em Novo para marcar.</p>
+        <Icon name="users" size={28} className="text-muted" />
+        <p className="font-semibold text-fg">Nenhuma profissional selecionada</p>
+        <p className="text-sm text-muted">Marque quem você quer ver no painel de profissionais.</p>
       </div>
     );
   }
 
   return (
     <div className="card overflow-hidden p-0">
-      <div className="overflow-x-auto scrollbar-thin">
-        <div className="min-w-full" style={{ width: `max(100%, ${56 + colunas.reduce((t, c) => t + c.largura, 0)}px)` }}>
-          {/* cabeçalho: profissionais */}
-          <div className="sticky top-0 z-10 flex border-b border-line bg-surface">
-            <div className="w-14 shrink-0" />
+      <div ref={scroller} className="max-h-[calc(100dvh-220px)] min-h-[420px] overflow-auto scrollbar-thin">
+        <div style={{ width: COL_HORAS + larguraCol * colunas.length }}>
+          {/* Cabeçalho: profissionais (fixo no topo ao rolar). */}
+          <div className="sticky top-0 z-20 flex border-b border-line bg-surface">
+            <div className="sticky left-0 z-10 shrink-0 bg-surface" style={{ width: COL_HORAS }} />
             {colunas.map((c) => (
-              <div key={c.id} className="relative flex-1 border-l border-line px-3 pb-2.5 pt-3" style={{ minWidth: c.largura }}>
+              <div key={c.id} className="relative flex shrink-0 flex-col items-center gap-1 border-l border-line px-2 pb-2 pt-2.5 text-center" style={{ width: larguraCol }}>
                 <span className={cx('absolute inset-x-0 top-0 h-[3px]', c.cor.faixa)} aria-hidden />
-                <p className={cx('flex items-center gap-1.5 truncate text-sm font-bold', c.cor.texto)}>
-                  <span className={cx('h-2.5 w-2.5 shrink-0 rounded-full', c.cor.faixa)} aria-hidden />
-                  <span className="truncate">{c.nome}</span>
+                <span className={cx('flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white', c.cor.faixa)} aria-hidden>
+                  {c.id === SEM_PROFISSIONAL ? <Icon name="user" size={15} /> : c.nome.split(' ').filter(Boolean).slice(0, 2).map((n) => n[0]?.toUpperCase()).join('')}
+                </span>
+                <p className={cx('w-full truncate text-[13px] font-bold', c.cor.texto)} title={c.nome}>
+                  {c.nome}
                 </p>
-                <p className="text-2xs text-muted">
-                  {c.total === 1 ? '1 atendimento' : `${c.total} atendimentos`} · {rotuloMinutos(c.ocupados)}
+                <p className="w-full truncate text-2xs text-muted">
+                  {c.total ? `${c.total === 1 ? '1 atend.' : `${c.total} atend.`} · ${rotuloMinutos(c.ocupados)}` : 'Livre'}
                 </p>
               </div>
             ))}
           </div>
 
-          {/* grade */}
+          {/* Grade */}
           <div className="relative flex" style={{ height: altura }}>
-            <div className="w-14 shrink-0">
-              {horas.map((h) => (
-                <div key={h} className="relative border-t border-line/60 text-right" style={{ height: PX_HORA }}>
-                  <span className="absolute -top-2 right-2 bg-surface px-0.5 text-2xs tabular-nums text-muted">{String(h).padStart(2, '0')}:00</span>
+            <div className="sticky left-0 z-10 shrink-0 border-r border-line bg-surface" style={{ width: COL_HORAS }} aria-hidden>
+              {slots.map((m) => (
+                <div key={m} className={cx('flex items-start justify-end pr-2 pt-0.5 tabular-nums', m % 60 === 0 ? 'text-xs font-bold text-fg' : 'text-2xs text-muted')} style={{ height: SLOT_PX }}>
+                  {hhmm(m)}
                 </div>
               ))}
+              {mostrarAgora && (
+                <span className="absolute right-1 z-[6] -translate-y-1/2 rounded bg-red-500 px-1 text-2xs font-bold tabular-nums text-white" style={{ top: px(agoraMin) }}>
+                  {hhmm(agoraMin)}
+                </span>
+              )}
             </div>
             {colunas.map((c) => (
-              <div key={c.id} className="relative flex-1 border-l border-line" style={{ minWidth: c.largura }}>
-                {horas.map((h) => (
-                  <button
-                    key={h}
-                    type="button"
-                    aria-label={`Marcar às ${h}:00${c.id === SEM_PROFISSIONAL ? '' : ` com ${c.nome}`}`}
-                    onClick={() => {
-                      const d = new Date(dia);
-                      d.setHours(h, 0, 0, 0);
-                      onCriar(d);
-                    }}
-                    className="block w-full border-t border-line/60 hover:bg-surface2/60"
-                    style={{ height: PX_HORA }}
-                  />
-                ))}
+              <div
+                key={c.id}
+                className="relative shrink-0 cursor-cell border-l border-line"
+                style={{ width: larguraCol, ...fundoGrade }}
+                title={c.id === SEM_PROFISSIONAL ? 'Clique num horário vazio para marcar' : `Clique num horário vazio para marcar com ${c.nome}`}
+                onClick={(e) => {
+                  if (e.target !== e.currentTarget) return;
+                  const y = e.clientY - e.currentTarget.getBoundingClientRect().top;
+                  const min = ini + Math.floor(y / SLOT_PX) * SLOT_MIN;
+                  const d = new Date(dia);
+                  d.setHours(Math.floor(min / 60), min % 60, 0, 0);
+                  onCriar(d, c.id === SEM_PROFISSIONAL ? null : c.id);
+                }}
+              >
                 {c.blocos.map((b) => (
                   <BlocoAtendimento key={b.evento.id} b={b} cor={c.cor} cliente={nomeCliente(b.evento, nomes)} topo={px(b.topoMin) + 1} onAbrir={onAbrir} />
                 ))}
               </div>
             ))}
-            {ehHoje && agoraMin >= h0 * 60 && agoraMin <= h1 * 60 && (
-              <div className="pointer-events-none absolute left-14 right-0 z-[5] flex items-center" style={{ top: px(agoraMin) }}>
+            {mostrarAgora && (
+              <div className="pointer-events-none absolute right-0 z-[5] flex items-center" style={{ top: px(agoraMin), left: COL_HORAS }} aria-hidden>
                 <span className="-ml-1 h-2 w-2 rounded-full bg-red-500" />
-                <span className="h-px flex-1 bg-red-500" />
+                <span className="h-0.5 flex-1 bg-red-500" />
               </div>
             )}
           </div>
@@ -168,15 +207,16 @@ export function AgendaEquipe({
             {STATUS_LABEL[s]}
           </span>
         ))}
+        <span className="ml-auto">Clique num horário vazio da coluna para marcar com a profissional.</span>
       </div>
     </div>
   );
 }
 
 /**
- * Bloco do atendimento: hora e PROCEDIMENTO em negrito na primeira linha (o
- * que a profissional vai fazer), cliente embaixo. Cor = profissional; status
- * = ícone no canto e opacidade (concluído esmaece, falta fica tracejada).
+ * Bloco do atendimento: hora e cliente na primeira linha (como o Avec), o
+ * PROCEDIMENTO em negrito embaixo. Cor = profissional; status = ícone no
+ * canto e opacidade (concluído esmaece, falta fica tracejada).
  */
 function BlocoAtendimento({
   b,
@@ -193,45 +233,29 @@ function BlocoAtendimento({
 }) {
   const e = b.evento;
   const marca = MARCA_STATUS[e.status];
-  const alto = (b.alturaMin / 60) * PX_HORA;
+  const alto = (b.alturaMin / SLOT_MIN) * SLOT_PX;
   const largura = 100 / b.colunas;
-  const estreito = b.colunas > 1;
   const proc = procedimento(e);
   return (
     <button
       type="button"
       onClick={(ev) => onAbrir(e.id, ev.currentTarget.getBoundingClientRect())}
-      title={`${hora(e.inicio)}–${hora(e.fim)} · ${proc} · ${cliente ?? 'Sem cliente'} · ${STATUS_LABEL[e.status]}`}
-      aria-label={`${hora(e.inicio)} às ${hora(e.fim)}, ${proc}, ${cliente ?? 'sem cliente'}, ${STATUS_LABEL[e.status]}`}
-      className={cx('absolute flex overflow-hidden rounded-lg text-left shadow-sm ring-1 ring-black/5 transition-colors', cor.fundo, marca.bloco)}
-      style={{ top: topo, height: Math.max(alto - 2, 22), left: `calc(${b.coluna * largura}% + 3px)`, width: `calc(${largura}% - 6px)` }}
+      title={`${hora(e.inicio)}–${hora(e.fim)} · ${cliente ?? 'Sem cliente'} · ${proc} · ${STATUS_LABEL[e.status]}`}
+      aria-label={`${hora(e.inicio)} às ${hora(e.fim)}, ${cliente ?? 'sem cliente'}, ${proc}, ${STATUS_LABEL[e.status]}`}
+      className={cx('group absolute z-[1] flex isolate overflow-hidden rounded-md text-left shadow-sm ring-1 ring-black/5', marca.bloco)}
+      style={{ top: topo, height: Math.max(alto - 2, SLOT_PX - 2), left: `calc(${b.coluna * largura}% + 2px)`, width: `calc(${largura}% - 4px)` }}
     >
+      {/* Base opaca: a cor translúcida da profissional não deixa a régua vazar pelo bloco. */}
+      <span className="absolute inset-0 -z-10 bg-surface" aria-hidden />
+      <span className={cx('absolute inset-0 -z-10 transition-colors', cor.fundo)} aria-hidden />
       <span className={cx('w-1 shrink-0', cor.faixa)} aria-hidden />
-      <span className="relative min-w-0 flex-1 px-2 py-1 leading-tight text-fg">
-        {marca.icone && <Icon name={marca.icone} size={12} className={cx('absolute right-1 top-1', marca.iconeCor)} aria-hidden />}
-        {estreito && alto >= 48 ? (
-          // Estreito (atendimentos em paralelo): empilha hora, procedimento e cliente.
-          <>
-            <span className="block text-2xs font-bold tabular-nums opacity-80">{hora(e.inicio)}</span>
-            <span className="block truncate pr-3 text-[13px] font-bold">{proc}</span>
-            <span className="block truncate text-xs text-muted">{cliente ?? 'Sem cliente'}</span>
-          </>
-        ) : alto >= 38 ? (
-          <>
-            <span className="flex items-baseline gap-1.5 pr-3">
-              <span className="shrink-0 text-xs font-bold tabular-nums">{hora(e.inicio)}</span>
-              <span className="truncate text-[13px] font-bold">{proc}</span>
-            </span>
-            <span className="block truncate text-xs text-muted">{cliente ?? 'Sem cliente'}</span>
-          </>
-        ) : (
-          // Curto (até ~30 min): tudo numa linha, procedimento em negrito.
-          <span className="flex items-baseline gap-1.5 pr-3">
-            <span className="shrink-0 text-xs font-bold tabular-nums">{hora(e.inicio)}</span>
-            <span className="shrink-0 text-[13px] font-bold">{proc}</span>
-            <span className="truncate text-xs text-muted">· {cliente ?? 'Sem cliente'}</span>
-          </span>
-        )}
+      <span className="relative min-w-0 flex-1 px-1.5 py-0.5 leading-tight text-fg">
+        {marca.icone && <Icon name={marca.icone} size={11} className={cx('absolute right-1 top-1', marca.iconeCor)} aria-hidden />}
+        <span className="flex items-baseline gap-1 pr-3">
+          <span className="shrink-0 text-2xs font-bold tabular-nums">{hora(e.inicio)}</span>
+          <span className="truncate text-xs">{cliente ?? 'Sem cliente'}</span>
+        </span>
+        {alto >= 34 && <span className="block truncate text-xs font-bold">{proc}</span>}
       </span>
     </button>
   );
