@@ -13,11 +13,16 @@ import { analiseJsonSchema, analiseSchema, analisarHeuristica, intencoesValidas,
 import { fragmentarMensagem, type ResultadoFragmentacao } from '../engines/message-chunker';
 import { confirmou, contextoAgenda, contextoAgendado, detectarPedidoAgenda, escolheuHorario, horaEscolhida, isoLocal, quandoPorExtenso, servicosCitados, slotNaHora } from '../engines/agenda-intent';
 import { avaliarRegras, separarAcoes } from '../engines/rules-engine';
-import { afirmaAgendamento, semAgendamentoInventado, semDisponibilidadeInventada, validarNaturalidade } from '../engines/response-validator';
+import { afirmaAgendamento, semAgendamentoInventado, semDescontoInventado, semDisponibilidadeInventada, semPrecoInventado, validarNaturalidade } from '../engines/response-validator';
 import { KnowledgeService, type ConfiancaBusca } from '../knowledge/knowledge.service';
 import { fatosComoTexto, ProfileService, type DecisaoExtracao, type PerfilContexto } from './profile.service';
 import type { ContextoMemoria } from './memory.service';
 import { contextoDinamico, promptAnalise, promptEstavel } from './prompt';
+
+/** Ferramentas que MARCAM horário de fato (clínica e salão). */
+const FERRAMENTAS_QUE_AGENDAM = ['solicitar_agendamento', 'reservar_horario_salao', 'remarcar_agendamento'];
+/** Ferramentas que CONSULTAM a agenda real (clínica e salão). */
+const FERRAMENTAS_QUE_CONSULTAM_AGENDA = ['ver_agendamentos', 'ver_horarios_salao'];
 
 /** Teto de idas ao modelo por mensagem: ferramenta em loop não vira conta infinita. */
 export const MAX_VOLTAS = 5;
@@ -397,6 +402,8 @@ export class IntelligenceCoreService {
     let transferir: string | undefined;
     let modelo = e.agente.modelo;
     const toolsApi = toolsParaModelo(ferramentasDef);
+    /** Resultado bruto das ferramentas deste turno: fonte da trava de preço. */
+    const textosFerramentas: string[] = [];
 
     for (let volta = 0; volta < MAX_VOLTAS; volta++) {
       const r = await this.chamarComFallback(e, { system, mensagens: conversa, tools: toolsApi });
@@ -415,7 +422,9 @@ export class IntelligenceCoreService {
         ferramentas.push({ nome: chamada.nome, ok: res.ok, pendente: res.aguardandoAprovacao, erro: res.erro });
         if (res.fontes?.length) fontes.push(...res.fontes.filter((f) => !fontes.some((x) => x.chunkId === f.chunkId)));
         if (res.transferir) transferir = res.transferir.motivo;
-        resultados.push({ type: 'tool_result', tool_use_id: chamada.id, is_error: !res.ok, content: JSON.stringify(res.ok ? res.dados ?? { ok: true } : { erro: res.erro }) });
+        const conteudoTool = JSON.stringify(res.ok ? res.dados ?? { ok: true } : { erro: res.erro });
+        if (res.ok) textosFerramentas.push(conteudoTool);
+        resultados.push({ type: 'tool_result', tool_use_id: chamada.id, is_error: !res.ok, content: conteudoTool });
       }
       conversa.push({ role: 'user', content: resultados });
       if (volta === MAX_VOLTAS - 1) this.log.warn(`agente ${e.agente.nome}: limite de ${MAX_VOLTAS} voltas de ferramenta atingido`);
@@ -456,7 +465,11 @@ export class IntelligenceCoreService {
 
     // (Se a fala anterior já confirmou um agendamento — que passou por esta mesma
     // checagem — repetir a confirmação é verdade.)
-    if (texto && !ferramentas.some((f) => f.nome === 'solicitar_agendamento' && f.ok) && !afirmaAgendamento(ultimaFalaDaEmpresa(e.historico))) {
+    // Agenda de clínica (ver/solicitar_agendamento) OU de salão (ver_horarios/reservar_horario_salao):
+    // sem isto a confirmação de uma reserva REAL do salão era apagada como "inventada".
+    const agendou = ferramentas.some((f) => f.ok && FERRAMENTAS_QUE_AGENDAM.includes(f.nome));
+    const consultouAgenda = ferramentas.some((f) => f.ok && FERRAMENTAS_QUE_CONSULTAM_AGENDA.includes(f.nome));
+    if (texto && !agendou && !afirmaAgendamento(ultimaFalaDaEmpresa(e.historico))) {
       const v = semAgendamentoInventado(texto);
       if (v.removeu) {
         texto = v.texto;
@@ -466,11 +479,33 @@ export class IntelligenceCoreService {
 
     // Vaga (ou falta de vaga) afirmada sem olhar a agenda neste turno: sai a
     // frase e entra o pedido de preferência (auditoria 16/11, P0 de agenda).
-    if (texto && !ferramentas.some((f) => f.nome === 'ver_agendamentos' && f.ok)) {
+    if (texto && !consultouAgenda) {
       const v = semDisponibilidadeInventada(texto);
       if (v.removeu) {
         texto = v.texto;
         validacao.push('afirmação de disponibilidade sem consultar a agenda removida');
+      }
+    }
+
+    // Travas de dinheiro: valor em reais só com fonte (instruções, base, ferramentas
+    // do turno ou o que a empresa já disse); desconto/promoção só se cadastrado.
+    if (texto) {
+      const fontesDinheiro = [
+        e.agente.instrucoes ?? '',
+        ...trechos.map((t) => t.conteudo),
+        ...textosFerramentas,
+        blocoAgenda,
+        ...e.historico.filter((m) => m.autorTipo !== 'contato').slice(-12).map((m) => m.corpo ?? ''),
+      ];
+      const d = semDescontoInventado(texto, fontesDinheiro);
+      if (d.removeu) {
+        texto = d.texto;
+        validacao.push('oferta de desconto/promoção sem fonte removida');
+      }
+      const p = semPrecoInventado(texto, fontesDinheiro);
+      if (p.removeu) {
+        texto = p.texto;
+        validacao.push(`valor sem fonte removido (${p.valores.map((v) => `R$ ${(v / 100).toFixed(2).replace('.', ',')}`).join(', ')})`);
       }
     }
 

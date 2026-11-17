@@ -368,3 +368,39 @@ describe('semDisponibilidadeInventada (P0 agenda — auditoria 16/11)', () => {
     expect(r.texto).toBe('Prefere de manhã ou à tarde?');
   });
 });
+
+describe('travas de dinheiro (preço e desconto)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { semPrecoInventado, semDescontoInventado, valoresEmCentavos, CONFIRMAR_VALOR } = require('./response-validator') as typeof import('./response-validator');
+  const FICHA = ['Manicure: R$ 38,50. Pedicure: R$ 44,00. Escova: a partir de R$ 85,00. Luzes: a partir de R$ 450,00. Lash lifting: R$ 130,00.'];
+
+  it('lê valores em reais em vários formatos', () => {
+    expect(valoresEmCentavos('R$ 38,50 · R$44 · R$ 1.617,00 · R$ 2.315')).toEqual([3850, 4400, 161700, 231500]);
+  });
+
+  it('valor das fontes passa; soma de dois e sinal de 50% também', () => {
+    for (const t of ['A manicure custa R$ 38,50.', 'As duas juntas ficam R$ 82,50.', 'O sinal da escova é R$ 42,50.', 'Luzes a partir de R$ 450,00.']) {
+      expect(semPrecoInventado(t, FICHA)).toMatchObject({ removeu: false, texto: t });
+    }
+  });
+
+  it('valor inventado sai e entra o "confirmo com a equipe"', () => {
+    const r = semPrecoInventado('Oi! A progressiva custa R$ 199,00 aqui. Quer agendar?', FICHA);
+    expect(r.removeu).toBe(true);
+    expect(r.valores).toEqual([19900]);
+    expect(r.texto).not.toContain('199');
+    expect(r.texto).toContain('Quer agendar?');
+    expect(r.texto).toContain(CONFIRMAR_VALOR);
+  });
+
+  it('desconto oferecido sem fonte sai; "não temos desconto" fica', () => {
+    expect(semDescontoInventado('Consigo te dar 10% de desconto no lash!', FICHA).removeu).toBe(true);
+    expect(semDescontoInventado('Posso fazer um descontinho pra você.', FICHA).removeu).toBe(true);
+    expect(semDescontoInventado('Faço um desconto especial se fechar hoje.', FICHA).removeu).toBe(true);
+    expect(semDescontoInventado('No momento não temos desconto, mas o combo sai mais em conta.', FICHA)).toEqual({ texto: 'No momento não temos desconto, mas o combo sai mais em conta.', removeu: false });
+  });
+
+  it('promoção cadastrada nas fontes pode ser oferecida', () => {
+    expect(semDescontoInventado('Essa semana temos 15% de desconto no design!', ['Promoção da semana: 15% de desconto no design de sobrancelha.']).removeu).toBe(false);
+  });
+});

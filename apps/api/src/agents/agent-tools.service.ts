@@ -16,6 +16,7 @@ import { brl, lerOperacao, pixConfigurado, saldoConsultaCentavos } from './confi
 import { FinanceiroService } from '../financeiro/financeiro.service';
 import { SalaoAgendaService } from './salao/salao-agenda.service';
 import { fusoPadrao } from '../common/hora';
+import { diaFechado } from './salao/agenda-salao';
 
 /**
  * Contexto da execução. `contactId` e `tenantId` vêm da CONVERSA e da sessão
@@ -388,6 +389,8 @@ export class AgentToolsService {
           ctx.tenantId,
           { servico: String(a.servico), data: String(a.data), profissional: a.profissional as string | undefined, horario: a.horario as string | undefined },
           ctx.horario?.fuso ?? fusoPadrao(),
+          Date.now(),
+          (d) => diaFechado(d, ctx.horario),
         );
         return { ok: true, dados };
       }
@@ -398,6 +401,8 @@ export class AgentToolsService {
           { agentId: ctx.agentId, agentNome: ctx.agentNome, contactId: id },
           { servico: String(a.servico), profissional: String(a.profissional), inicio: String(a.inicio) },
           ctx.horario?.fuso ?? fusoPadrao(),
+          Date.now(),
+          (d) => diaFechado(d, ctx.horario),
         );
         return { ok: true, dados };
       }

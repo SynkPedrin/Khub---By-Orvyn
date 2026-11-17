@@ -121,7 +121,7 @@ export class SalaoAgendaService {
     return lista;
   }
 
-  async horarios(tenantId: string, pedido: PedidoHorarios, fuso: string, agora = Date.now()) {
+  async horarios(tenantId: string, pedido: PedidoHorarios, fuso: string, agora = Date.now(), fechado: (data: string) => boolean = () => false) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(pedido.data)) throw new OrientacaoAgente('data deve ser AAAA-MM-DD');
     const base = await this.base(tenantId, fuso);
     const servico = this.resolverServico(base, pedido.servico);
@@ -136,7 +136,7 @@ export class SalaoAgendaService {
     }
     if (!profs.length) throw new OrientacaoAgente(`nenhuma profissional com agenda para ${servico.nome}; transfira para a equipe`);
 
-    const dia = (data: string) => this.livresDoDia(tenantId, base, profs, servico, data, fuso, agora);
+    const dia = (data: string) => (fechado(data) ? Promise.resolve([]) : this.livresDoDia(tenantId, base, profs, servico, data, fuso, agora));
     const doDia = await dia(pedido.data);
     const resposta: Record<string, unknown> = {
       servico: { nome: servico.nome, duracaoMin: servico.duracaoMin, preco: servico.precoCentavos ? `R$ ${(servico.precoCentavos / 100).toFixed(2).replace('.', ',')}` : null },
@@ -144,6 +144,7 @@ export class SalaoAgendaService {
       diaSemana: DIAS_SEMANA[diaDaSemana(pedido.data)],
       profissionais: doDia.filter((d) => d.horarios.length).map((d) => ({ nome: d.nome, horarios: d.horarios.slice(0, 10) })),
       naoAtendemNesseDia: doDia.filter((d) => d.semExpediente).map((d) => d.nome),
+      ...(fechado(pedido.data) ? { salaoFechado: `o salão não atende ${DIAS_SEMANA[diaDaSemana(pedido.data)]}: ofereça um dos próximos dias com vaga` } : {}),
     };
     if (pedido.horario && /^\d{2}:\d{2}$/.test(pedido.horario)) {
       const livresNoHorario = doDia.filter((d) => d.horarios.includes(pedido.horario!)).map((d) => d.nome);
@@ -152,8 +153,9 @@ export class SalaoAgendaService {
     if (!doDia.some((d) => d.horarios.length)) {
       // Nada no dia: os próximos 7 dias com vaga (até 3 dias, 4 horários cada).
       const proximos: { data: string; diaSemana: string; opcoes: string[] }[] = [];
-      for (let i = 1; i <= 7 && proximos.length < 3; i++) {
+      for (let i = 1; i <= 10 && proximos.length < 3; i++) {
         const data = somarDiasData(pedido.data, i);
+        if (fechado(data)) continue;
         const r = await dia(data);
         const opcoes = r.flatMap((d) => d.horarios.map((h) => `${h} com ${d.nome}`)).sort().slice(0, 4);
         if (opcoes.length) proximos.push({ data, diaSemana: DIAS_SEMANA[diaDaSemana(data)], opcoes });
@@ -190,6 +192,7 @@ export class SalaoAgendaService {
     pedido: PedidoReserva,
     fuso: string,
     agora = Date.now(),
+    fechado: (data: string) => boolean = () => false,
   ) {
     const base = await this.base(tenantId, fuso);
     const servico = this.resolverServico(base, pedido.servico);
@@ -198,6 +201,9 @@ export class SalaoAgendaService {
     const inicio = new Date(pedido.inicio);
     if (Number.isNaN(+inicio)) throw new OrientacaoAgente('horário inválido');
     const local = partesLocais(+inicio, fuso);
+    if (fechado(local.data)) {
+      throw new OrientacaoAgente(`o salão não atende ${DIAS_SEMANA[local.diaSemana]} (${local.data}); consulte ver_horarios_salao e ofereça outro dia`);
+    }
     const janela = base.expedientes.get(prof.id)?.get(local.diaSemana);
     const hora = `${String(Math.floor(local.minutos / 60)).padStart(2, '0')}:${String(local.minutos % 60).padStart(2, '0')}`;
     const livres = janela ? horariosLivres({ data: local.data, janela, duracaoMin: servico.duracaoMin, ocupados: [], fuso, agora }) : [];

@@ -4,7 +4,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 const [API, credArq, alvo, etapasArg] = process.argv.slice(2);
 const ETAPAS = (etapasArg ?? 'contatos,agenda,financeiro').split(',');
-const D = `${homedir()}/Downloads/avec-export/2026-11-14/khub`;
+// KHUB_IMPORT_DIR: outra origem no mesmo formato (ex.: Agendart, scripts/operar/agendart/converter.mjs).
+const D = process.env.KHUB_IMPORT_DIR ?? `${homedir()}/Downloads/avec-export/2026-11-14/khub`;
 const cred = Object.fromEntries(readFileSync(credArq, 'utf8').split('\n').filter((l) => l.includes('=')).map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1).trim()]));
 const norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 const espera = (ms) => new Promise((ok) => setTimeout(ok, ms));

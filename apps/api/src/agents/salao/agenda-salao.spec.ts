@@ -1,4 +1,4 @@
-import { acharProfissional, acharServico, duracaoTipica, horariosLivres, inferirExpedientes, instanteNoFuso, partesLocais, profissionaisDoServico, type AtendimentoHist } from './agenda-salao';
+import { diaFechado, acharProfissional, acharServico, duracaoTipica, horariosLivres, inferirExpedientes, instanteNoFuso, partesLocais, profissionaisDoServico, type AtendimentoHist } from './agenda-salao';
 
 const SP = 'America/Sao_Paulo';
 const em = (data: string, hhmm: string) => {
@@ -107,3 +107,24 @@ describe('agenda de salão: nomes falados pela cliente', () => {
     expect(acharProfissional(profs, 'Joana')).toBeNull();
   });
 });
+
+describe('agenda de salão: dia fechado (horário do agente)', () => {
+  const comercial = [{ inicio: '08:00', fim: '18:00' }];
+  const horario = { dias: { dom: [], seg: [], ter: comercial, qua: comercial, qui: comercial, sex: comercial, sab: [{ inicio: '08:00', fim: '12:00' }] }, feriados: ['2026-12-25'] };
+
+  it('segunda e domingo sem faixa = fechado; terça a sábado abertos', () => {
+    expect(diaFechado('2026-11-23', horario)).toBe(true); // segunda
+    expect(diaFechado('2026-11-22', horario)).toBe(true); // domingo
+    for (const d of ['2026-11-24', '2026-11-25', '2026-11-26', '2026-11-27', '2026-11-28']) expect(diaFechado(d, horario)).toBe(false);
+  });
+
+  it('feriado fecha mesmo em dia útil', () => {
+    expect(diaFechado('2026-12-25', horario)).toBe(true); // sexta, feriado
+  });
+
+  it('sem horário configurado (ou dia sem chave) não fecha nada', () => {
+    expect(diaFechado('2026-11-23', null)).toBe(false);
+    expect(diaFechado('2026-11-23', { dias: { ter: comercial } })).toBe(false);
+  });
+});
+
