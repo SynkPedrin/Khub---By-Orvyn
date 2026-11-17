@@ -182,3 +182,76 @@ export function semDisponibilidadeInventada(texto: string): { texto: string; rem
   return { texto: out ? (pergunta ? out : `${out}\n\n${PEDIR_PREFERENCIA_AGENDA}`) : PEDIR_PREFERENCIA_AGENDA, removeu: true };
 }
 
+// ---------------------------------------------------------------- travas de dinheiro
+
+/** "R$ 38,50", "R$38", "R$ 1.617,00" → centavos. */
+const RE_REAIS = /R\$\s*(\d{1,3}(?:\.\d{3})*|\d+)(?:,(\d{1,2}))?/g;
+export function valoresEmCentavos(texto: string): number[] {
+  return [...texto.matchAll(RE_REAIS)].map((m) => Number(m[1].replace(/\./g, '')) * 100 + Number((m[2] ?? '0').padEnd(2, '0')));
+}
+
+/** Frase com o valor que a IA vai trocar quando não houver fonte. */
+export const CONFIRMAR_VALOR = 'O valor certinho eu confirmo com a equipe e já te passo.';
+
+/**
+ * Trava de PREÇO: frase com valor em reais que não está nas fontes do turno
+ * (instruções, trechos da base, resultado das ferramentas, o que a empresa já
+ * disse na conversa) sai. Vale também a soma de dois valores conhecidos
+ * ("manicure + pedicure = R$ 82,50") e 50% de um valor (sinal). Preço
+ * inventado é o pior erro de atendimento de salão: a cliente cobra depois.
+ */
+export function semPrecoInventado(texto: string, fontes: string[]): { texto: string; removeu: boolean; valores: number[] } {
+  const conhecidos = new Set(fontes.flatMap(valoresEmCentavos));
+  const lista = [...conhecidos];
+  const permitido = (v: number) => {
+    if (conhecidos.has(v)) return true;
+    if (lista.some((a) => Math.abs(a / 2 - v) <= 1)) return true; // sinal de 50%
+    for (let i = 0; i < lista.length; i++) for (let j = i; j < lista.length; j++) if (lista[i] + lista[j] === v) return true;
+    return false;
+  };
+  const removidos: number[] = [];
+  const out = texto
+    .split(/\n\s*\n/)
+    .map((par) => segmentarFrases(par).filter((f) => {
+      const vals = valoresEmCentavos(f);
+      const ruins = vals.filter((v) => !permitido(v));
+      if (ruins.length) { removidos.push(...ruins); return false; }
+      return true;
+    }).join(' '))
+    .filter((x) => x.trim())
+    .join('\n\n')
+    .trim();
+  if (!removidos.length) return { texto, removeu: false, valores: [] };
+  return { texto: out ? `${out}\n\n${CONFIRMAR_VALOR}` : CONFIRMAR_VALOR, removeu: true, valores: removidos };
+}
+
+const RE_OFERTA_DESCONTO = /\b(consigo|posso|vou|dou|damos|faco|fazemos|temos|tem|te dou|te faco|ofereco|oferecemos|libero|liberar|aplico|aplicar|ganha|ganhar)\b[^.!?]{0,40}\b(descont\w*|abatimento|promoc\w*|cortesia|brinde|gratis|de graca)\b|\b\d{1,2}\s?%\s?(de\s)?(desconto|off)\b/;
+
+/**
+ * Trava de DESCONTO: a IA não tem autoridade para dar desconto, promoção ou
+ * cortesia. Frase que OFERECE isso sai, a não ser que a mesma condição esteja
+ * nas fontes (ex.: promoção cadastrada pela dona). "Não temos desconto" fica.
+ */
+const normPct = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+
+export function semDescontoInventado(texto: string, fontes: string[]): { texto: string; removeu: boolean } {
+  const base = normPct(fontes.join(' '));
+  let removeu = false;
+  const out = texto
+    .split(/\n\s*\n/)
+    .map((par) => segmentarFrases(par).filter((f) => {
+      const n = normPct(f);
+      if (/\b(nao|sem)\b[^.!?]{0,25}\b(descont|promoc)/.test(n)) return true;
+      if (!RE_OFERTA_DESCONTO.test(n)) return true;
+      const pct = n.match(/(\d{1,2})\s?%/)?.[1];
+      if (pct && base.includes(`${pct}%`) && /desconto|promocao/.test(base)) return true;
+      removeu = true;
+      return false;
+    }).join(' '))
+    .filter((x) => x.trim())
+    .join('\n\n')
+    .trim();
+  if (!removeu) return { texto, removeu: false };
+  return { texto: out || 'Sobre condições especiais, eu confirmo com a equipe e te retorno.', removeu: true };
+}
+

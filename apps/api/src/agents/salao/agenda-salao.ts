@@ -77,6 +77,22 @@ export function diaDaSemana(data: string): number {
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }
 
+const CHAVES_DIA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'] as const;
+
+/**
+ * Dia em que o salão NÃO atende, pelo horário do agente: dia da semana sem
+ * nenhuma faixa (ex.: segunda fechada) ou data em `feriados`. O expediente das
+ * profissionais é deduzido do histórico, e o histórico tem encaixes em dia
+ * fechado (ex.: 38 atendimentos de segunda em 120 dias no Studio): sem esta
+ * regra a IA ofereceria e marcaria segunda.
+ */
+export function diaFechado(data: string, horario?: { dias?: Partial<Record<(typeof CHAVES_DIA)[number], unknown[]>>; feriados?: string[] } | null): boolean {
+  if (!horario) return false;
+  if (horario.feriados?.includes(data)) return true;
+  const faixas = horario.dias?.[CHAVES_DIA[diaDaSemana(data)]];
+  return Array.isArray(faixas) && faixas.length === 0;
+}
+
 export function somarDiasData(data: string, n: number): string {
   const [y, m, d] = data.split('-').map(Number);
   const t = new Date(Date.UTC(y, m - 1, d + n));
