@@ -9,6 +9,20 @@ Status: `aberto` · `em correção` · `corrigido` · `não reproduz`.
 
 ## Abertos
 
+### BUG-049 — Travas de agenda da IA só conheciam as ferramentas da clínica (S1 para o salão) — corrigido e no ar 2026-11-17 (d997bd6)
+- **Causa:** `semAgendamentoInventado` e `semDisponibilidadeInventada` só consideravam `solicitar_agendamento` e `ver_agendamentos`. A Ritinha usa as ferramentas do salão (`reservar_horario_salao`, `ver_horarios_salao`). Com isso, a confirmação de uma reserva real ("Prontinho! Reservei…") podia ser apagada como inventada, e uma oferta de horário real ("temos horário amanhã às 14h") podia ser removida.
+- **Correção:**
+  - As listas `FERRAMENTAS_QUE_AGENDAM` e `FERRAMENTAS_QUE_CONSULTAM_AGENDA` cobrem clínica e salão.
+  - **Travas novas:**
+    - **preço:** um valor em reais só sai na resposta se tiver fonte (instruções, base, ferramentas do turno ou o que a empresa já disse). Soma de dois valores e sinal de 50% passam.
+    - **desconto/promoção:** não é oferecido sem estar cadastrado.
+    - **dia fechado:** dia sem faixa no horário do agente, ou feriado, bloqueia a consulta e a reserva no salão (segunda-feira do Studio).
+  - Testes em `engines.spec.ts` e `agenda-salao.spec.ts`.
+
+### BUG-048 — Instruções do agente acima de 8 mil caracteres davam HTTP 500 (S2) — corrigido 2026-11-17 (db/076)
+- **Causa:** a API passou a aceitar 20 mil caracteres (8db177c), mas o CHECK `agents_instrucoes_chk` da db/030 continuou em 8 mil.
+- **Correção:** `db/076_agents_instrucoes_20k.sql`, aplicada no QA e no Neon.
+
 ### BUG-041 — Webhook do WhatsApp (Stevo) com HTTP 500 em reentrega simultânea (S1) — corrigido na árvore 2026-11-16, aguarda deploy
 - **Como apareceu:** auditoria dos logs do Render. Em 15/11, às 17:45 UTC, `POST /v1/webhooks/stevo-api` respondeu 500 com `Unique constraint failed` em `outboxEvent.upsert`.
 - **Causa raiz:** o `upsert` do Prisma faz SELECT e depois INSERT, sem atomicidade. Duas entregas do mesmo evento ao mesmo tempo (a Stevo reenvia quando a primeira demora) passam pelo SELECT, e a segunda estoura a unique `(tenant_id, dedupe_key)`. Reproduzido no QA com 20 entregas simultâneas: **19 falhas de 20**.

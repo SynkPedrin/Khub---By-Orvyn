@@ -8,6 +8,10 @@
  *   node scripts/operar/ritinha-ligar.mjs --publicar  publica o rascunho
  *   node scripts/operar/ritinha-ligar.mjs --principal agente principal do WhatsApp (piloto automático: conversa
  *                                                     nova nasce com a IA e as abertas sem responsável passam para ela)
+ *   node scripts/operar/ritinha-ligar.mjs --ficha <arquivo> rascunho: acrescenta a FICHA DO STUDIO (horário, equipe, preços, políticas)
+ *   node scripts/operar/ritinha-ligar.mjs --bateria   conversas de várias mensagens no simulador (preço, equipe, segunda, desconto, reserva)
+ *   node scripts/operar/ritinha-ligar.mjs --automacao  Novo Lead 🚀 só com o CRM (oportunidade, etapa, tag de follow-up):
+ *                                                     as 2 mensagens saem porque a Ritinha (principal) conduz a conversa
  *   node scripts/operar/ritinha-ligar.mjs --estado
  */
 import { readFileSync } from 'node:fs';
@@ -68,6 +72,62 @@ if (flag('--simular')) {
     console.log(`\n👤 ${msgs.join(' | ')}\n🤖 ${(t.resposta ?? []).map((m) => m.texto).join(' ⏎ ')}\n   decisão ${JSON.stringify(t.decisao?.acao ?? t.decisao)} · ferramentas ${(tr.ferramentas ?? []).map((f) => `${f.nome}${f.ok ? '' : '✗'}`).join(', ') || '-'} · avisos ${(tr.validacao ?? []).join('; ') || '-'}`);
     await req('DELETE', `/api/v1/agents/simulacoes/${sim.id}`).catch(() => null);
     await new Promise((r) => setTimeout(r, 21000)); // Voyage sem cartão: 3/min
+  }
+}
+
+if (flag('--ficha')) {
+  const arq = process.argv[process.argv.indexOf('--ficha') + 1];
+  const ficha = readFileSync(arq, 'utf8').trim();
+  const d = await detalhe();
+  const sem = d.instrucoes.split('\nFICHA DO STUDIO')[0].trimEnd();
+  const r = ok(await req('PATCH', `/api/v1/agents/${rita.id}`, { instrucoes: `${sem}\n\n${ficha}` }), 'ficha');
+  console.log(`rascunho com ficha: ${r.instrucoes.length} caracteres`);
+}
+
+if (flag('--bateria')) {
+  const CONVERSAS = [
+    ['quanto custa manicure e pé?', 'e quem faz?'],
+    ['oi, vcs fazem luzes? quanto fica?'],
+    ['quero marcar alongamento de gel', 'pode ser quinta à tarde'],
+    ['tem horário segunda pra escova?'],
+    ['achei caro o lash lifting, faz por 100?'],
+    ['qual o horário de funcionamento de vcs? abre domingo?'],
+    ['quero fazer design de sobrancelha sábado de manhã', 'pode ser no primeiro horário que tiver', 'fechado, pode marcar'],
+  ];
+  for (const msgs of CONVERSAS) {
+    const sim = ok(await req('POST', `/api/v1/agents/${rita.id}/simulacoes`, { perfil: 'livre', usarRascunho: true }), 'simulação');
+    console.log('\n────────');
+    for (const m of msgs) {
+      const t = ok(await req('POST', `/api/v1/agents/simulacoes/${sim.id}/turno`, { mensagens: [m] }), 'turno');
+      const tr = t.trace ?? {};
+      console.log(`👤 ${m}\n🤖 ${(t.resposta ?? []).map((x) => x.texto).join(' ⏎ ')}\n   [${(tr.ferramentas ?? []).map((f) => `${f.nome}${f.ok ? '' : '✗'}`).join(', ') || 'sem ferramenta'}${(tr.validacao ?? []).length ? ` · TRAVA: ${tr.validacao.join('; ')}` : ''}]`);
+      await new Promise((r) => setTimeout(r, 21000)); // Voyage sem cartão: 3/min
+    }
+    await req('DELETE', `/api/v1/agents/simulacoes/${sim.id}`).catch(() => null);
+  }
+}
+
+if (flag('--automacao')) {
+  const fluxos = ok(await req('GET', '/api/v1/automations/workflows'), 'fluxos');
+  const nl = (Array.isArray(fluxos) ? fluxos : fluxos.itens).find((f) => f.nome === 'Novo Lead 🚀');
+  const w = ok(await req('GET', `/api/v1/automations/workflows/${nl.id}`), 'novo lead');
+  const g = w.grafo;
+  const msgs = g.nos.filter((n) => n.tipo === 'acao.enviar_sms').map((n) => n.id);
+  if (!msgs.length) { console.log('Novo Lead já sem mensagens'); } else {
+    // Religa por cima de cada nó de mensagem: quem apontava para ele passa a apontar para o seguinte.
+    let arestas = g.arestas;
+    for (const id of msgs) {
+      const saida = arestas.filter((a) => a.de === id);
+      const entrada = arestas.filter((a) => a.para === id);
+      arestas = arestas.filter((a) => a.de !== id && a.para !== id);
+      for (const e of entrada) for (const s2 of saida) arestas.push({ ...e, para: s2.para });
+    }
+    const novo = { ...g, nos: g.nos.filter((n) => !msgs.includes(n.id)), arestas };
+    ok(await req('PATCH', `/api/v1/automations/workflows/${nl.id}/grafo`, { grafo: novo }), 'rascunho');
+    const val = ok(await req('POST', `/api/v1/automations/workflows/${nl.id}/validar`, {}), 'validar');
+    if (val.ok === false || (val.problemas ?? []).length) throw new Error(`não valida: ${JSON.stringify(val).slice(0, 300)}`);
+    ok(await req('POST', `/api/v1/automations/workflows/${nl.id}/publicar`, {}), 'publicar');
+    console.log(`Novo Lead 🚀 publicado sem as ${msgs.length} mensagens: ${novo.arestas.map((a) => `${a.de}→${a.para}${a.ramo ? `[${a.ramo}]` : ''}`).join('  ')}`);
   }
 }
 
