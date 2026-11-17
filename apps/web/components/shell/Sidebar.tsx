@@ -105,7 +105,7 @@ export function Sidebar({
         className,
       )}
     >
-      {/* Marca — logo colorida de ponta a ponta (K colorido quando recolhida). A sidebar usa o tema oposto ao da página; no claro só este topo fica branco (globals.css, `.sidebar-shell`). */}
+      {/* Marca — logo colorida de ponta a ponta (K colorido quando recolhida). A sidebar é escura nos dois temas e só este topo é uma caixa branca (globals.css, `.sidebar-shell`). */}
       <div className={cx('sidebar-brand sidebar-hairline flex shrink-0 items-center border-b', curta ? 'h-topbar justify-center px-2' : 'px-4 py-5')}>
         <Link
           href="/dashboard"

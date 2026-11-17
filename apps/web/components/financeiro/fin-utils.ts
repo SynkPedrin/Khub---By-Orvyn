@@ -4,7 +4,8 @@ export { parseValor, lerValor, lerPercentual, valorParaCampo } from '@/lib/dinhe
 
 export const money = (centavos: number) => (centavos / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-export const dataBR = (iso: string) => new Date(iso.length === 10 ? `${iso}T12:00:00` : iso).toLocaleDateString('pt-BR');
+/** Data de competência (coluna DATE): vem como "2026-11-17" ou "2026-11-17T00:00:00.000Z"; nunca converter por fuso (a meia-noite UTC virava o dia anterior em Brasília). */
+export const dataBR = (iso: string) => (/^\d{4}-\d{2}-\d{2}(T00:00:00(\.000)?Z)?$/.test(iso) ? iso.slice(0, 10).split('-').reverse().join('/') : new Date(iso).toLocaleDateString('pt-BR'));
 
 /** Primeiro e último dia do mês (YYYY-MM-DD), para filtro de período. */
 export function mesAtual(): { de: string; ate: string } {

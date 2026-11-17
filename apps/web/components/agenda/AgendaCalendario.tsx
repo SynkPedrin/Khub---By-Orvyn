@@ -45,7 +45,8 @@ import {
   redimensionarEvento,
   type Visao,
 } from './calendario-layout';
-import { AgendaEquipe, nomeCliente, nomeServico } from './AgendaEquipe';
+import { AgendaEquipe, COLUNAS_OPCOES, nomeCliente, nomeServico } from './AgendaEquipe';
+import { PainelAgenda } from './PainelAgenda';
 import { ResumoDia } from './ResumoDia';
 import { CompromissoModal } from './CompromissoModal';
 import { DetalheCompromisso } from './DetalheCompromisso';
@@ -61,6 +62,24 @@ const VISOES_MOBILE: Visao[] = ['dia', 'lista'];
 const DIAS_CURTOS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 /** Status visíveis ao abrir: tudo menos cancelado (como no Google Agenda). */
 const STATUS_PADRAO: StatusAgenda[] = ['agendado', 'confirmado', 'concluido', 'faltou'];
+/** Preferências de tela deste navegador (não é dado do salão). */
+const PREF_COLUNAS = 'khub.agenda.colunas';
+const PREF_OCULTOS = 'khub.agenda.profissionaisOcultos';
+
+function lerPref(chave: string): string | null {
+  try {
+    return window.localStorage.getItem(chave);
+  } catch {
+    return null;
+  }
+}
+function gravarPref(chave: string, valor: string) {
+  try {
+    window.localStorage.setItem(chave, valor);
+  } catch {
+    /* navegador sem storage: a preferência só vale nesta aba */
+  }
+}
 
 function useCelular(): boolean {
   const [cel, setCel] = useState(false);
@@ -98,7 +117,12 @@ export function AgendaCalendario() {
   const [visao, setVisao] = useState<Visao>('semana');
   const escolheuVisao = useRef(false);
   const [profissionais, setProfissionais] = useState<ProfissionalAgenda[]>([]);
-  const [profissional, setProfissional] = useState('');
+  // Filtro do painel: quem aparece na agenda. Guardamos quem foi DESMARCADO,
+  // assim profissional nova entra visível.
+  const [selecionados, setSelecionadosState] = useState<Set<string>>(new Set());
+  const [colunas, setColunasState] = useState<number>(5);
+  const [busca, setBusca] = useState('');
+  const [painelAberto, setPainelAberto] = useState(false);
   const [ref, setRef] = useState(() => new Date());
   const [itens, setItens] = useState<Compromisso[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -107,7 +131,7 @@ export function AgendaCalendario() {
   const [statusVisiveis, setStatusVisiveis] = useState<StatusAgenda[]>(STATUS_PADRAO);
   const [nomes, setNomes] = useState<Record<string, string | null>>({});
   const [aberto, setAberto] = useState<{ id: string; ancora: DOMRect | null } | null>(null);
-  const [modal, setModal] = useState<{ compromisso?: Compromisso; inicio?: Date } | null>(null);
+  const [modal, setModal] = useState<{ compromisso?: Compromisso; inicio?: Date; profissionalId?: string | null } | null>(null);
   const pedido = useRef(0);
   const contatosPedidos = useRef(new Set<string>());
 
@@ -122,10 +146,28 @@ export function AgendaCalendario() {
       .profissionais()
       .then((ps) => {
         setProfissionais(ps);
+        let ocultos: string[] = [];
+        try {
+          ocultos = JSON.parse(lerPref(PREF_OCULTOS) ?? '[]') as string[];
+        } catch {
+          ocultos = [];
+        }
+        setSelecionadosState(new Set(ps.map((p) => p.id).filter((id) => !ocultos.includes(id))));
         if (ps.length && !escolheuVisao.current) setVisao(window.matchMedia('(max-width: 639px)').matches ? 'lista' : 'equipe');
       })
       .catch(() => setProfissionais([]));
+    const n = Number(lerPref(PREF_COLUNAS));
+    if ((COLUNAS_OPCOES as readonly number[]).includes(n)) setColunasState(n);
   }, []);
+
+  const setSelecionados = (s: Set<string>) => {
+    setSelecionadosState(s);
+    gravarPref(PREF_OCULTOS, JSON.stringify(profissionais.filter((p) => !s.has(p.id)).map((p) => p.id)));
+  };
+  const setColunas = (n: number) => {
+    setColunasState(n);
+    gravarPref(PREF_COLUNAS, String(n));
+  };
 
   useEffect(() => {
     settingsApi
@@ -160,7 +202,6 @@ export function AgendaCalendario() {
           de: janela.de.toISOString(),
           ate: janela.ate.toISOString(),
           ...(responsavel ? { responsavelId: responsavel } : {}),
-          ...(profissional ? { profissionalId: profissional } : {}),
         });
         if (id !== pedido.current) return;
         setItens(lista);
@@ -171,7 +212,7 @@ export function AgendaCalendario() {
         setItens(null);
       }
     },
-    [janela, responsavel, profissional],
+    [janela, responsavel],
   );
 
   useEffect(() => {
@@ -195,7 +236,18 @@ export function AgendaCalendario() {
     );
   }, [itens]);
 
-  const visiveis = useMemo(() => (itens ?? []).filter((c) => statusVisiveis.includes(c.status)), [itens, statusVisiveis]);
+  const todosSelecionados = selecionados.size === profissionais.length;
+  const visiveis = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return (itens ?? []).filter((c) => {
+      if (!statusVisiveis.includes(c.status)) return false;
+      // Painel de profissionais: sem profissional só aparece com "Todos" marcado.
+      if (profissionais.length && (c.profissionalId ? !selecionados.has(c.profissionalId) : !todosSelecionados)) return false;
+      if (!termo) return true;
+      return [nomeCliente(c, nomes), c.servicoNome, c.titulo, c.profissionalNome].some((t) => t?.toLowerCase().includes(termo));
+    });
+  }, [itens, statusVisiveis, profissionais.length, selecionados, todosSelecionados, busca, nomes]);
+  const profissionaisVisiveis = useMemo(() => profissionais.filter((p) => selecionados.has(p.id)), [profissionais, selecionados]);
   const selecionado = aberto ? (itens ?? []).find((c) => c.id === aberto.id) ?? null : null;
 
   const trocar = (c: Compromisso) => setItens((prev) => prev?.map((x) => (x.id === c.id ? c : x)) ?? prev);
@@ -266,9 +318,9 @@ export function AgendaCalendario() {
     }
   };
 
-  const criarEm = (inicio: Date) => {
+  const criarEm = (inicio: Date, profissionalId?: string | null) => {
     setAberto(null);
-    setModal({ inicio });
+    setModal({ inicio, profissionalId });
   };
 
   const aoSalvar = (c: Compromisso, modo: 'criado' | 'editado') => {
@@ -302,164 +354,214 @@ export function AgendaCalendario() {
     [profissionais, visiveis],
   );
 
-  return (
-    <div className="space-y-3">
-      {/* Barra de navegação */}
-      <div className="card flex flex-col gap-3 p-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <Button size="sm" onClick={() => setRef(new Date())} disabled={hojeNaJanela && visao !== 'lista'}>
-            Hoje
-          </Button>
-          <div className="flex items-center">
-            <Button size="sm" variant="ghost" icon="arrowLeft" iconOnly aria-label="Período anterior" onClick={() => setRef((r) => navegar(visao, r, -1))} />
-            <Button size="sm" variant="ghost" icon="arrowRight" iconOnly aria-label="Próximo período" onClick={() => setRef((r) => navegar(visao, r, 1))} />
-          </div>
-          <h2 className="min-w-0 truncate text-base font-semibold text-fg" aria-live="polite">
-            {titulo}
-          </h2>
-          <label className="inline-flex">
-            <span className="sr-only">Ir para a data</span>
-            <input
-              type="date"
-              className="input h-8 w-[150px] text-sm"
-              value={chaveDia(ref)}
-              onChange={(e) => {
-                const [a, m, d] = e.target.value.split('-').map(Number);
-                if (a && m && d) setRef(new Date(a, m - 1, d));
-              }}
-            />
-          </label>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Tabs
-            idBase="agenda-visao"
-            label="Visualização da agenda"
-            variant="segmented"
-            value={visao}
-            onChange={(v) => {
-              escolheuVisao.current = true;
-              setVisao(v);
-              setAberto(null);
-            }}
-            items={VISOES.filter((v) => !celular || VISOES_MOBILE.includes(v.value))}
-          />
-          <Button size="sm" variant="primary" icon="plus" onClick={() => setModal({})}>
-            Novo
-          </Button>
-        </div>
-      </div>
+  const comPainel = profissionais.length > 0;
 
-      {/* Filtros */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-        {profissionais.length > 0 && (
-          <div className="flex items-center gap-2">
-            <label htmlFor="agenda-profissional" className="text-sm text-muted">
-              Profissional
+  return (
+    <div className={cx(comPainel && 'grid gap-3 lg:grid-cols-[248px_minmax(0,1fr)] lg:items-start')}>
+      {/* Painel do salão (modelo Avec): mini calendário + profissionais por função. */}
+      {comPainel && (
+        <aside className={cx('min-w-0', painelAberto ? 'block' : 'hidden lg:block')} aria-label="Painel da agenda">
+          <PainelAgenda
+            dia={ref}
+            agora={agora}
+            onDia={(d) => {
+              setRef(d);
+              setPainelAberto(false);
+            }}
+            profissionais={profissionais}
+            selecionados={selecionados}
+            onSelecionados={setSelecionados}
+            corDe={corDe}
+          />
+        </aside>
+      )}
+
+      <div className="min-w-0 space-y-3">
+        {/* Barra de navegação */}
+        <div className="card flex flex-col gap-3 p-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <Button size="sm" onClick={() => setRef(new Date())} disabled={hojeNaJanela && visao !== 'lista'}>
+              Hoje
+            </Button>
+            <div className="flex items-center">
+              <Button size="sm" variant="ghost" icon="arrowLeft" iconOnly aria-label="Período anterior" onClick={() => setRef((r) => navegar(visao, r, -1))} />
+              <Button size="sm" variant="ghost" icon="arrowRight" iconOnly aria-label="Próximo período" onClick={() => setRef((r) => navegar(visao, r, 1))} />
+            </div>
+            <h2 className="min-w-0 truncate text-base font-semibold text-fg" aria-live="polite">
+              {titulo}
+            </h2>
+            {!comPainel && (
+              <label className="inline-flex">
+                <span className="sr-only">Ir para a data</span>
+                <input
+                  type="date"
+                  className="input h-8 w-[150px] text-sm"
+                  value={chaveDia(ref)}
+                  onChange={(e) => {
+                    const [a, m, d] = e.target.value.split('-').map(Number);
+                    if (a && m && d) setRef(new Date(a, m - 1, d));
+                  }}
+                />
+              </label>
+            )}
+            {comPainel && (
+              <Button size="sm" variant="ghost" icon="filter" className="lg:hidden" aria-expanded={painelAberto} onClick={() => setPainelAberto((v) => !v)}>
+                Profissionais ({selecionados.size}/{profissionais.length})
+              </Button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="relative">
+              <span className="sr-only">Buscar cliente ou serviço</span>
+              <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar cliente ou serviço…" className="input h-8 w-[220px] pr-8 text-sm" />
+              {busca ? (
+                <button type="button" onClick={() => setBusca('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-faint hover:text-fg" aria-label="Limpar busca">
+                  <Icon name="close" size={13} />
+                </button>
+              ) : (
+                <Icon name="search" size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-faint" />
+              )}
+            </label>
+            <Tabs
+              idBase="agenda-visao"
+              label="Visualização da agenda"
+              variant="segmented"
+              value={visao}
+              onChange={(v) => {
+                escolheuVisao.current = true;
+                setVisao(v);
+                setAberto(null);
+              }}
+              items={VISOES.filter((v) => !celular || VISOES_MOBILE.includes(v.value))}
+            />
+            {visao === 'equipe' && !celular && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-muted" aria-hidden>
+                  Colunas:
+                </span>
+                <div className="segbar" role="tablist" aria-label="Profissionais por tela">
+                  {COLUNAS_OPCOES.map((n) => (
+                    <button key={n} type="button" role="tab" className="seg min-w-[30px] px-2 text-xs" aria-selected={colunas === n} onClick={() => setColunas(n)}>
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <Button size="sm" variant="primary" icon="plus" onClick={() => setModal({})}>
+              Novo
+            </Button>
+          </div>
+        </div>
+
+        {/* Filtros */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className={cx('flex items-center gap-2', profissionais.length > 0 && membros.length <= 1 && 'hidden')}>
+            <label htmlFor="agenda-responsavel" className="text-sm text-muted">
+              Responsável
             </label>
             <Select
-              id="agenda-profissional"
+              id="agenda-responsavel"
               size="sm"
               className="w-auto min-w-[180px]"
-              value={profissional}
-              onChange={setProfissional}
-              options={[{ value: '', label: 'Todos' }, ...profissionais.map((p) => ({ value: p.id, label: p.nome }))]}
+              value={responsavel}
+              onChange={setResponsavel}
+              options={[
+                { value: '', label: 'Toda a equipe' },
+                ...membros.map((m) => ({ value: m.identityId, label: m.identityId === euId ? `${m.nome || m.email} (você)` : m.nome || m.email })),
+              ]}
             />
           </div>
-        )}
-        <div className={cx('flex items-center gap-2', profissionais.length > 0 && membros.length <= 1 && 'hidden')}>
-          <label htmlFor="agenda-responsavel" className="text-sm text-muted">
-            Responsável
-          </label>
-          <Select
-            id="agenda-responsavel"
-            size="sm"
-            className="w-auto min-w-[180px]"
-            value={responsavel}
-            onChange={setResponsavel}
-            options={[
-              { value: '', label: 'Toda a equipe' },
-              ...membros.map((m) => ({ value: m.identityId, label: m.identityId === euId ? `${m.nome || m.email} (você)` : m.nome || m.email })),
-            ]}
+          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtrar por status">
+            {STATUS_ORDEM.map((s) => {
+              const on = statusVisiveis.includes(s);
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setStatusVisiveis((prev) => (on ? prev.filter((x) => x !== s) : [...prev, s]))}
+                  className={cx('btn btn-sm h-7 px-2.5 text-xs', on ? 'btn-soft' : 'btn-ghost text-faint line-through')}
+                >
+                  {STATUS_LABEL[s]}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted sm:ml-auto" aria-live="polite">
+            {itens === null ? (erro ? 'Agenda indisponível' : 'Carregando…') : total === 1 ? '1 compromisso' : `${total} compromissos`}
+            {busca.trim() && itens !== null ? ` com "${busca.trim()}"` : ''}
+          </p>
+        </div>
+
+        {erro ? (
+          <div className="card">
+            <ErrorState title="Não foi possível carregar a agenda" description={erro} onRetry={() => void carregar()} />
+          </div>
+        ) : itens === null ? (
+          <div className="card space-y-2 p-4" aria-busy="true">
+            <span className="sr-only">Carregando compromissos…</span>
+            <div className="skeleton h-8 w-full rounded-md" />
+            <div className="skeleton h-[420px] w-full rounded-md" />
+          </div>
+        ) : visao === 'equipe' ? (
+          <>
+            <ResumoDia corDe={corDe} eventos={eventosDoDia(visiveis, ref)} profissionais={profissionaisVisiveis} agora={agora} ehHoje={mesmoDia(ref, agora)} />
+            <AgendaEquipe
+              corDe={corDe}
+              dia={ref}
+              eventos={eventosDoDia(visiveis, ref)}
+              profissionais={profissionaisVisiveis}
+              nomes={nomes}
+              agora={agora}
+              colunas={colunas}
+              onAbrir={abrir}
+              onCriar={criarEm}
+            />
+          </>
+        ) : visao === 'mes' ? (
+          <GradeMes
+            corDe={corDe}
+            nomes={nomes}
+            dias={dias}
+            mesRef={ref}
+            eventos={visiveis}
+            agora={agora}
+            onAbrir={abrir}
+            onDia={(d) => {
+              setRef(d);
+              setVisao(comPainel ? 'equipe' : 'dia');
+            }}
+            onCriar={(d) => criarEm(dataNoDia(d, 9 * 60))}
           />
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtrar por status">
-          {STATUS_ORDEM.map((s) => {
-            const on = statusVisiveis.includes(s);
-            return (
-              <button
-                key={s}
-                type="button"
-                aria-pressed={on}
-                onClick={() => setStatusVisiveis((prev) => (on ? prev.filter((x) => x !== s) : [...prev, s]))}
-                className={cx('btn btn-sm h-7 px-2.5 text-xs', on ? 'btn-soft' : 'btn-ghost text-faint line-through')}
-              >
-                {STATUS_LABEL[s]}
-              </button>
-            );
-          })}
-        </div>
-        <p className="text-xs text-muted sm:ml-auto" aria-live="polite">
-          {itens === null ? (erro ? 'Agenda indisponível' : 'Carregando…') : total === 1 ? '1 compromisso' : `${total} compromissos`}
-        </p>
+        ) : visao === 'lista' ? (
+          <Lista corDe={corDe} dias={dias} eventos={visiveis} nomes={nomes} nomeMembro={nomeMembro} onAbrir={abrir} onNovo={() => setModal({})} />
+        ) : (
+          <GradeHorarios corDe={corDe} dias={dias} eventos={visiveis} agora={agora} nomes={nomes} permitirArraste={!celular} onAbrir={abrir} onCriar={criarEm} onMover={mover} />
+        )}
+
+        {/* Legenda: profissionais (salão/clínica) ou tipos */}
+        {itens !== null && !erro && corDe && visao !== 'equipe' && (
+          <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs" aria-label="Cores das profissionais">
+            {profissionais.filter((p) => (visiveis ?? []).some((c) => c.profissionalId === p.id)).map((p) => (
+              <li key={p.id} className={cx('flex items-center gap-1.5 font-medium', corDe(p.id).texto)}>
+                <span className={cx('h-2.5 w-2.5 rounded-full', corDe(p.id).faixa)} aria-hidden />
+                {p.nome}
+              </li>
+            ))}
+          </ul>
+        )}
+        {itens !== null && !erro && !corDe && (
+          <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted" aria-label="Legenda de tipos">
+            {TIPO_ORDEM.map((t) => (
+              <li key={t} className="flex items-center gap-1.5">
+                <span className={cx('h-2 w-2 rounded-full', TIPO_TOM[t].ponto)} aria-hidden />
+                {TIPO_LABEL[t]}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
-
-      {erro ? (
-        <div className="card">
-          <ErrorState title="Não foi possível carregar a agenda" description={erro} onRetry={() => void carregar()} />
-        </div>
-      ) : itens === null ? (
-        <div className="card space-y-2 p-4" aria-busy="true">
-          <span className="sr-only">Carregando compromissos…</span>
-          <div className="skeleton h-8 w-full rounded-md" />
-          <div className="skeleton h-[420px] w-full rounded-md" />
-        </div>
-      ) : visao === 'equipe' ? (
-        <>
-          <ResumoDia corDe={corDe} eventos={eventosDoDia(visiveis, ref)} profissionais={profissionais} agora={agora} ehHoje={mesmoDia(ref, agora)} />
-          <AgendaEquipe corDe={corDe} dia={ref} eventos={visiveis} profissionais={profissionais} nomes={nomes} agora={agora} onAbrir={abrir} onCriar={criarEm} />
-        </>
-      ) : visao === 'mes' ? (
-        <GradeMes
-          corDe={corDe}
-          nomes={nomes}
-          dias={dias}
-          mesRef={ref}
-          eventos={visiveis}
-          agora={agora}
-          onAbrir={abrir}
-          onDia={(d) => {
-            setRef(d);
-            setVisao('dia');
-          }}
-          onCriar={(d) => criarEm(dataNoDia(d, 9 * 60))}
-        />
-      ) : visao === 'lista' ? (
-        <Lista corDe={corDe} dias={dias} eventos={visiveis} nomes={nomes} nomeMembro={nomeMembro} onAbrir={abrir} onNovo={() => setModal({})} />
-      ) : (
-        <GradeHorarios corDe={corDe} dias={dias} eventos={visiveis} agora={agora} nomes={nomes} permitirArraste={!celular} onAbrir={abrir} onCriar={criarEm} onMover={mover} />
-      )}
-
-      {/* Legenda: profissionais (salão/clínica) ou tipos */}
-      {itens !== null && !erro && corDe && visao !== 'equipe' && (
-        <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs" aria-label="Cores das profissionais">
-          {profissionais.filter((p) => (visiveis ?? []).some((c) => c.profissionalId === p.id)).map((p) => (
-            <li key={p.id} className={cx('flex items-center gap-1.5 font-medium', corDe(p.id).texto)}>
-              <span className={cx('h-2.5 w-2.5 rounded-full', corDe(p.id).faixa)} aria-hidden />
-              {p.nome}
-            </li>
-          ))}
-        </ul>
-      )}
-      {itens !== null && !erro && !corDe && (
-        <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted" aria-label="Legenda de tipos">
-          {TIPO_ORDEM.map((t) => (
-            <li key={t} className="flex items-center gap-1.5">
-              <span className={cx('h-2 w-2 rounded-full', TIPO_TOM[t].ponto)} aria-hidden />
-              {TIPO_LABEL[t]}
-            </li>
-          ))}
-        </ul>
-      )}
 
       {selecionado && aberto && (
         <DetalheCompromisso
@@ -486,6 +588,7 @@ export function AgendaCalendario() {
         onSaved={aoSalvar}
         compromisso={modal?.compromisso ?? null}
         inicioSugerido={modal?.inicio}
+        profissionalSugerido={modal?.profissionalId ?? null}
         membros={membros}
         euId={euId}
         nomeContato={modal?.compromisso?.contactId ? nomes[modal.compromisso.contactId] : null}

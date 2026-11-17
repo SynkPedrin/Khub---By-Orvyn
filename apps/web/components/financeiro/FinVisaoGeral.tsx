@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card, cx } from '@/components/ui';
 import { Icon } from '@/components/icons';
 import { SkeletonRows } from '@/components/kit';
-import { financeiro, type FluxoCaixa } from '@/lib/financeiro';
+import { ROTULO_FORMA, financeiro, type CaixaAtual, type FluxoCaixa } from '@/lib/financeiro';
 import { falhaDeCarga, money, type FalhaCarga } from './fin-utils';
 import { FinFalha } from './FinEstado';
 import { FinFluxoDiario } from './FinFluxoDiario';
@@ -48,6 +48,7 @@ export function FinVisaoGeral({ de, ate }: { de: string; ate: string }) {
 
   return (
     <div className="space-y-4">
+      <CaixaAtualCard />
       <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
         {kpis.map((k) => (
           <Card key={k.l} className="p-4">
@@ -108,5 +109,42 @@ export function FinVisaoGeral({ de, ate }: { de: string; ate: string }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** Caixa atual: tudo que entrou menos tudo que saiu (recebidos/pagos até hoje) + o movimento de hoje. */
+function CaixaAtualCard() {
+  const [c, setC] = useState<CaixaAtual | null>(null);
+  const [erro, setErro] = useState(false);
+  useEffect(() => {
+    financeiro.caixaAtual().then(setC).catch(() => setErro(true));
+  }, []);
+  if (erro) return null;
+  return (
+    <Card className="p-5">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="flex items-center gap-1.5 text-xs font-medium text-muted"><Icon name="finance" size={14} /> Caixa atual</p>
+          <p className={cx('mt-1 text-3xl font-bold tabular', c && c.saldoCentavos < 0 ? 'text-red-500 dark:text-red-400' : 'text-fg')}>{c ? money(c.saldoCentavos) : '–'}</p>
+          <p className="mt-0.5 text-xs text-muted">Tudo que entrou menos tudo que saiu, recebido e pago até hoje.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <span className="rounded-xl bg-surface2 px-3 py-2 text-xs">
+            <span className="block text-muted">Hoje entrou</span>
+            <span className="text-base font-bold tabular text-emerald-600 dark:text-emerald-400">{c ? money(c.hoje.entradasCentavos) : '–'}</span>
+          </span>
+          <span className="rounded-xl bg-surface2 px-3 py-2 text-xs">
+            <span className="block text-muted">Hoje saiu</span>
+            <span className="text-base font-bold tabular text-red-500 dark:text-red-400">{c ? money(c.hoje.saidasCentavos) : '–'}</span>
+          </span>
+          {c?.hoje.porForma.map((f) => (
+            <span key={f.forma} className="rounded-xl bg-surface2 px-3 py-2 text-xs">
+              <span className="block text-muted">{ROTULO_FORMA[f.forma] ?? f.forma} · {f.qtd}</span>
+              <span className="text-base font-bold tabular text-fg">{money(f.totalCentavos)}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+    </Card>
   );
 }

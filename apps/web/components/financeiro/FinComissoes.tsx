@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Badge, Button, Card, Input, cx } from '@/components/ui';
 import { Confirm, SkeletonRows } from '@/components/kit';
 import { Paginacao, usePaginacao } from '@/components/kit';
-import { financeiro, type ComissaoGerada, type ComissoesMes, type MembroComissao } from '@/lib/financeiro';
+import { financeiro, type Colaborador, type ComissaoGerada, type ComissoesMes, type MembroComissao } from '@/lib/financeiro';
 import { competenciaAtual, dataBR, falhaDeCarga, lerPercentual, mensagemFin, money, type FalhaCarga } from './fin-utils';
 import { FinAviso, FinFalha } from './FinEstado';
 
@@ -96,6 +96,8 @@ export function FinComissoes() {
     <div className="space-y-4">
       {msg && <FinAviso texto={msg} />}
       {ok && <FinAviso texto={ok} tom="ok" />}
+
+      <Colaboradoras onSalvo={(t) => { setOk(t); setMsg(null); }} onErro={(t) => { setMsg(t); setOk(null); }} />
 
       <Card className="overflow-hidden p-0">
         <div className="border-b border-line px-5 py-3">
@@ -204,5 +206,57 @@ export function FinComissoes() {
         description={estornar ? `A comissão de ${estornar.nome} (${money(estornar.valorCentavos)}) volta a ficar a pagar e a saída correspondente sai do fluxo de caixa.` : undefined}
       />
     </div>
+  );
+}
+
+/**
+ * Colaboradoras do salão (catálogo; não são usuárias do KHUB): % de comissão
+ * sobre cada venda atribuída a ela no caixa. Quem tem % > 0 aparece no campo
+ * "Profissional" do caixa.
+ */
+function Colaboradoras({ onSalvo, onErro }: { onSalvo: (t: string) => void; onErro: (t: string) => void }) {
+  const [lista, setLista] = useState<Colaborador[] | null>(null);
+  const [edicao, setEdicao] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const carregar = () =>
+    financeiro.colaboradores().then((l) => { setLista(l); setEdicao(Object.fromEntries(l.map((c) => [c.id, percentParaCampo(c.comissaoPercent)]))); }).catch(() => setLista([]));
+  useEffect(() => { carregar(); }, []);
+  if (lista && lista.length === 0) return null;
+  const salvar = async (c: Colaborador) => {
+    const p = lerPercentual(edicao[c.id] ?? '');
+    if (p === null) { onErro('O percentual precisa estar entre 0 e 100 (ex.: 40 ou 12,5).'); return; }
+    setBusy(c.id);
+    try {
+      await financeiro.definirColaborador(c.id, p);
+      onSalvo(`Comissão de ${c.nome}: ${String(p).replace('.', ',')}%. Vale para as próximas vendas.`);
+      carregar();
+    } catch (e) { onErro(mensagemFin(e, 'salvar a comissão')); } finally { setBusy(null); }
+  };
+  return (
+    <Card className="overflow-hidden p-0">
+      <div className="border-b border-line px-5 py-3">
+        <h2 className="font-bold text-fg">Colaboradoras: % de comissão</h2>
+        <p className="mt-0.5 text-xs text-muted">O % vale sobre cada venda recebida atribuída a ela no caixa. Quem tem % maior que zero aparece no campo Profissional do caixa.</p>
+      </div>
+      {!lista ? <SkeletonRows rows={4} label="Carregando colaboradoras" /> : (
+        <div className="grid divide-y divide-line sm:grid-cols-2 sm:divide-y-0">
+          {lista.map((c) => (
+            <div key={c.id} className="flex items-center gap-3 border-line px-5 py-2.5 sm:border-b">
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold text-fg">{c.nome}</p>
+                {c.especialidade && <p className="truncate text-[11px] text-muted">{c.especialidade}</p>}
+              </div>
+              <div className="relative w-24">
+                <Input value={edicao[c.id] ?? ''} onChange={(e) => setEdicao({ ...edicao, [c.id]: e.target.value })} placeholder="0" inputMode="decimal" aria-label={`Comissão de ${c.nome} em %`} className="pr-7 text-right" />
+                <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-muted">%</span>
+              </div>
+              <Button onClick={() => salvar(c)} disabled={busy === c.id || (edicao[c.id] ?? '') === percentParaCampo(c.comissaoPercent)} className="h-9 px-3 text-xs">
+                {busy === c.id ? '…' : 'Salvar'}
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }

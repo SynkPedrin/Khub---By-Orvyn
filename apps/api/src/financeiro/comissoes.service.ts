@@ -76,6 +76,34 @@ export class ComissoesService {
     );
   }
 
+  /**
+   * Colaboradoras do catálogo (salão/clínica: profissionais não são usuárias
+   * do KHUB) com o % de comissão. `comComissao` = só quem tem % > 0 (o campo
+   * "Profissional" do caixa).
+   */
+  async colaboradores(tenantId: string, comComissao = false) {
+    return this.prisma.withTenant(tenantId, async (tx) => {
+      const profs = await tx.profissional.findMany({
+        where: { ativo: true, ...(comComissao ? { comissaoPercent: { gt: 0 } } : {}) },
+        orderBy: { nome: 'asc' },
+        select: { id: true, nome: true, especialidade: true, comissaoPercent: true },
+      });
+      return profs.map((p) => ({ id: p.id, nome: p.nome, especialidade: p.especialidade, comissaoPercent: Number(p.comissaoPercent) }));
+    });
+  }
+
+  /** % de comissão de uma colaboradora do catálogo. Vale para as PRÓXIMAS vendas. */
+  async definirColaborador(tenantId: string, actorId: string, profissionalId: string, comissaoPercent: number) {
+    if (percentualEmPontosBase(comissaoPercent) === null) throw new BadRequestException('percentual inválido (0 a 100, no máximo 2 casas decimais)');
+    return this.prisma.withTenant(tenantId, async (tx) => {
+      const p = await tx.profissional.findFirst({ where: { id: profissionalId }, select: { id: true } });
+      if (!p) throw new NotFoundException('colaboradora inexistente');
+      const r = await tx.profissional.update({ where: { id: profissionalId }, data: { comissaoPercent: new Prisma.Decimal(comissaoPercent.toFixed(2)), updatedAt: new Date() } });
+      await audit(tx, tenantId, actorId, 'comissao.configurada', profissionalId);
+      return { id: r.id, nome: r.nome, comissaoPercent: Number(r.comissaoPercent) };
+    });
+  }
+
   /** Define cargo e % de um membro. Vale para as PRÓXIMAS entradas (não recalcula o passado). */
   async definir(tenantId: string, actorId: string, identityId: string, dto: { cargo?: string | null; comissaoPercent?: number }) {
     const percent = dto.comissaoPercent ?? 0;
@@ -102,14 +130,15 @@ export class ComissoesService {
     const comp = competenciaDe(competencia);
     return this.prisma.withTenant(tenantId, async (tx) => {
       const itens = await tx.$queryRaw<ComissaoItem[]>`
-        SELECT fc.id, fc.identity_id AS "identityId",
-               COALESCE(u.nome, i.email) AS nome,
+        SELECT fc.id, COALESCE(fc.identity_id, fc.profissional_id) AS "identityId",
+               COALESCE(p.nome, u.nome, i.email, 'colaboradora') AS nome,
                fc.base_centavos AS "baseCentavos", fc.percent::float8 AS percent,
                fc.valor_centavos AS "valorCentavos", fc.status, fc.pago_em AS "pagoEm",
                fc.competencia::text AS competencia, t.descricao, t.data_competencia::text AS "dataCompetencia"
         FROM financeiro_comissoes fc
-        JOIN identities i ON i.id = fc.identity_id
+        LEFT JOIN identities i ON i.id = fc.identity_id
         LEFT JOIN users u ON u.identity_id = fc.identity_id AND u.tenant_id = fc.tenant_id
+        LEFT JOIN profissionais p ON p.id = fc.profissional_id
         LEFT JOIN financeiro_transacoes t ON t.id = fc.transacao_id
         WHERE fc.tenant_id = ${tenantId}::uuid AND fc.competencia = ${comp}::date
         ORDER BY nome, t.data_competencia DESC NULLS LAST, fc.created_at DESC`;
@@ -139,10 +168,12 @@ export class ComissoesService {
       const virou = await tx.financeiroComissao.updateMany({ where: { id, status: 'prevista' }, data: { status: 'paga', pagoEm: agora } });
       if (virou.count === 0) return tx.financeiroComissao.findFirst({ where: { id } });
       if (com.valorCentavos > 0) {
-        const nomeRows = await tx.$queryRaw<{ nome: string }[]>`
+        const nomeRows = com.identityId
+          ? await tx.$queryRaw<{ nome: string }[]>`
           SELECT COALESCE(u.nome, i.email) AS nome FROM identities i
           LEFT JOIN users u ON u.identity_id = i.id AND u.tenant_id = ${tenantId}::uuid
-          WHERE i.id = ${com.identityId}::uuid`;
+          WHERE i.id = ${com.identityId}::uuid`
+          : await tx.$queryRaw<{ nome: string }[]>`SELECT nome FROM profissionais WHERE id = ${com.profissionalId}::uuid`;
         const nome = nomeRows[0]?.nome ?? 'colaborador';
         let cat = await tx.financeiroCategoria.findFirst({ where: { tipo: 'saida', nome: { equals: 'Comissões', mode: 'insensitive' } }, select: { id: true } });
         cat ??= await tx.financeiroCategoria.create({ data: { tenantId, nome: 'Comissões', tipo: 'saida' }, select: { id: true } });

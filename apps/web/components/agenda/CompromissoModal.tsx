@@ -24,6 +24,8 @@ export interface ModalCompromissoProps {
   /** Criar: início clicado na grade (ou o próximo horário cheio). */
   inicioSugerido?: Date;
   duracaoSugerida?: number;
+  /** Criar: profissional da coluna clicada na agenda por profissional. */
+  profissionalSugerido?: string | null;
   membros: Member[];
   /** identityId de quem está logado (responsável padrão). */
   euId: string | null;
@@ -44,7 +46,7 @@ function sugestaoPadrao(): Date {
  * `/agenda/horarios`, respeitando o responsável) como atalhos; o choque de
  * horário (409) volta como mensagem clara no próprio modal.
  */
-export function CompromissoModal({ open, onClose, onSaved, compromisso, inicioSugerido, duracaoSugerida, membros, euId, nomeContato }: ModalCompromissoProps) {
+export function CompromissoModal({ open, onClose, onSaved, compromisso, inicioSugerido, duracaoSugerida, profissionalSugerido, membros, euId, nomeContato }: ModalCompromissoProps) {
   const editando = !!compromisso;
   const base = useMemo(() => (compromisso ? new Date(compromisso.inicio) : inicioSugerido ?? sugestaoPadrao()), [compromisso, inicioSugerido]);
   const minutosBase = compromisso ? Math.max(15, Math.round((+new Date(compromisso.fim) - +new Date(compromisso.inicio)) / 60_000)) : duracaoSugerida ?? 60;
@@ -82,13 +84,13 @@ export function CompromissoModal({ open, onClose, onSaved, compromisso, inicioSu
     setLocal(compromisso?.local ?? '');
     setNotas(compromisso?.notas ?? '');
     setValor(compromisso?.valorCentavos ? valorParaCampo(compromisso.valorCentavos) : '');
-    setProfissionalId(compromisso?.profissionalId ?? '');
+    setProfissionalId(compromisso ? compromisso.profissionalId ?? '' : profissionalSugerido ?? '');
     setServicoId(compromisso?.servicoId ?? '');
     setErros({});
     setErroApi(null);
     setSalvando(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, compromisso?.id, +base]);
+  }, [open, compromisso?.id, +base, profissionalSugerido]);
 
   useEffect(() => {
     if (!open || profissionais.length) return;
