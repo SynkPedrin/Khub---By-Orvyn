@@ -211,7 +211,9 @@ describe('CanaisService: gating', () => {
     prod();
     const { url } = canais().svc.urlConexao(T, 'id', 'meta');
     const u = new URL(url);
-    expect(u.searchParams.get('scope')?.split(',')).toEqual(expect.arrayContaining(['instagram_manage_messages', 'pages_messaging', 'instagram_manage_comments', 'pages_manage_engagement']));
+    expect(u.searchParams.get('scope')?.split(',')).toEqual(expect.arrayContaining(['instagram_manage_messages', 'pages_messaging', 'instagram_manage_comments']));
+    // Sem a flag, não pede pages_manage_engagement (o diálogo da Meta falha com "Invalid Scopes" se o app não tem a permissão).
+    expect(u.searchParams.get('scope')).not.toContain('pages_manage_engagement');
     expect(u.searchParams.get('scope')).not.toContain('ads_');
     expect(u.searchParams.get('redirect_uri')).toMatch(/\/api\/integrations\/canais\/meta\/callback$/);
   });
@@ -270,9 +272,29 @@ describe('CanaisService: envio', () => {
     await a.svc.enviar(T, 'conv1', 'Chamei no Direct', 'k'.repeat(16));
     expect(a.meta.post).toHaveBeenCalledWith('C1/replies', {}, 'USER_TOKEN', { message: 'Chamei no Direct' });
   });
+  it('auth-url da Meta com META_COMENTARIOS_PAGINA=1 pede também pages_manage_engagement', () => {
+    prod();
+    process.env.META_COMENTARIOS_PAGINA = '1';
+    try {
+      const { url } = canais().svc.urlConexao(T, 'id', 'meta');
+      expect(new URL(url).searchParams.get('scope')?.split(',')).toContain('pages_manage_engagement');
+    } finally {
+      delete process.env.META_COMENTARIOS_PAGINA;
+    }
+  });
+
+  it('comentário da página sem pages_manage_engagement: não chama a Meta e diz o motivo', async () => {
+    prod();
+    const a = canais({ conv: { canal: 'Facebook', tipo: 'comentario', externoId: 'c:FC1' }, conexao: { id: 'cx1', rede: 'messenger', externalId: 'PAGE', pageId: 'PAGE', status: 'conectado', credentialsEncrypted: 'c', scopes: ['pages_messaging'] } });
+    const r = await a.svc.enviar(T, 'conv1', 'Tem sim', 'k'.repeat(16));
+    expect(a.meta.post).not.toHaveBeenCalled();
+    expect(r).toMatchObject({ status: 'failed' });
+    expect(String(r.erro)).toContain('pages_manage_engagement');
+  });
+
   it('comentário da página: POST /{comment-id}/comments com token da página', async () => {
     prod();
-    const a = canais({ conv: { canal: 'Facebook', tipo: 'comentario', externoId: 'c:FC1' }, conexao: { id: 'cx1', rede: 'messenger', externalId: 'PAGE', pageId: 'PAGE', status: 'conectado', credentialsEncrypted: 'c' } });
+    const a = canais({ conv: { canal: 'Facebook', tipo: 'comentario', externoId: 'c:FC1' }, conexao: { id: 'cx1', rede: 'messenger', externalId: 'PAGE', pageId: 'PAGE', status: 'conectado', credentialsEncrypted: 'c', scopes: ['pages_manage_engagement'] } });
     await a.svc.enviar(T, 'conv1', 'Tem sim', 'k'.repeat(16));
     expect(a.meta.post).toHaveBeenCalledWith('FC1/comments', {}, 'PAGE_TOKEN', { message: 'Tem sim' });
   });
