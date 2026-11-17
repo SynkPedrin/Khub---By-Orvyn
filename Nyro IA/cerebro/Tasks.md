@@ -484,3 +484,7 @@ Critério de sucesso da fase (PRD §16): **um cliente real da agência operando 
   - Aceite: tarefas com cliente (ou internas), responsável, prazo, prioridade, tipo, subtarefas, checklist e comentários; lista agrupável (prazo, status, responsável, prioridade, cliente) e quadro por status com arrastar; Minhas = atribuídas a mim, por prazo, com resumo (atrasadas, hoje, 7 dias, concluídas); Studio com etapas de aprovação, plataformas, legenda e data de publicação, quadro com arrastar e grade; calendário mês/semana com eventos, prazos e publicações, reagendar arrastando; membro restrito só vê o que é das subcontas dele; visualizador só lê; outra agência não vê nada.
   - Verificado: jest 31/31, E2E QA 56/56, UI Chrome 11/11. **Produção:** aplicar `db/074` no Neon antes do deploy da API.
 
+## CAIXA: PDV do Financeiro (pedido do product owner em 2026-11-17)
+- [x] **CAIXA-PDV**: caixa da recepção com forma de pagamento (pix/débito/crédito com parcelas/dinheiro), produto do estoque com autocompletar, colaboradora com comissão, caixa atual na Visão geral, aba Produtos e estoque (lista do Avec), senha do financeiro para Visão geral/Comissões e para editar/cancelar venda ([[Arquitetura|ADR-0051]], `db/075`).
+  - Verificado: jest 1596, vitest 256, E2E API no QA 34/34, UI Chrome 17/17.
+

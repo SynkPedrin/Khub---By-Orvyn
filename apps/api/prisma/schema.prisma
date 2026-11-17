@@ -1042,7 +1042,7 @@ model FinanceiroTransacao {
   descricao       String
   valorCentavos   Int      @map("valor_centavos")
   dataCompetencia DateTime @default(now()) @map("data_competencia") @db.Date
-  status          String   @default("pago") // pago|pendente
+  status          String   @default("pago") // pago|pendente|cancelada (db/075)
   contactId       String?  @map("contact_id") @db.Uuid
   cobrancaId      String?  @map("cobranca_id") @db.Uuid
   compromissoId   String?  @map("compromisso_id") @db.Uuid
@@ -1053,6 +1053,15 @@ model FinanceiroTransacao {
   /// Hash da linha importada + ocorrência no arquivo: reimportar não duplica.
   chaveImportacao String?  @map("chave_importacao")
   observacao      String?
+  /// Caixa (db/075): dinheiro|debito|credito|pix; parcelas só no crédito.
+  formaPagamento  String?  @map("forma_pagamento")
+  parcelas        Int?     @db.SmallInt
+  /// Venda de produto do estoque (baixa o estoque).
+  produtoId       String?  @map("produto_id") @db.Uuid
+  quantidade      Decimal? @db.Decimal(12, 3)
+  canceladaEm     DateTime? @map("cancelada_em") @db.Timestamptz(6)
+  canceladaPor    String?  @map("cancelada_por") @db.Uuid
+  motivoCancelamento String? @map("motivo_cancelamento")
   createdBy       String?  @map("created_by") @db.Uuid
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
@@ -2207,6 +2216,16 @@ model Servico {
   @@map("servicos")
 }
 
+/// Senha do financeiro (db/075): só o hash; abre Visão geral/Comissões e autoriza editar/cancelar venda.
+model FinanceiroConfig {
+  tenantId  String   @id @map("tenant_id") @db.Uuid
+  senhaHash String?  @map("senha_hash")
+  updatedBy String?  @map("updated_by") @db.Uuid
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("financeiro_config")
+}
+
 model Produto {
   id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   tenantId      String   @map("tenant_id") @db.Uuid
@@ -2236,10 +2255,12 @@ model EstoqueMovimento {
   custoCentavos   Int?     @map("custo_centavos")
   motivo          String?
   dataMovimento   DateTime @default(now()) @map("data_movimento") @db.Date
-  /// manual|importacao
+  /// manual|importacao|venda (db/075)
   origem          String   @default("manual")
   chaveImportacao String?  @map("chave_importacao")
   importacaoId    String?  @map("importacao_id") @db.Uuid
+  /// Venda do caixa que gerou a baixa (db/075).
+  transacaoId     String?  @map("transacao_id") @db.Uuid
   createdBy       String?  @map("created_by") @db.Uuid
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 

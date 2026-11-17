@@ -9,7 +9,32 @@ import { clienteApi } from './session-fetch';
  * `session-fetch.ts`. Ela estava copiada em dez arquivos e cada cópia
  * carregava o mesmo loop de redirecionamento infinito.
  */
-const req = clienteApi('/api/v1/financeiro/');
+const reqBase = clienteApi('/api/v1/financeiro/');
+
+/**
+ * Senha do financeiro (db/075): depois de digitada, o desbloqueio (token de
+ * 30 min) vai no cabeçalho de toda chamada deste módulo. Só em memória: some
+ * ao recarregar a página.
+ */
+export const CABECALHO_SENHA = 'x-financeiro-senha';
+let desbloqueio: { token: string; expiraEm: number } | null = null;
+export function definirDesbloqueio(token: string | null, expiraEm?: string | null) {
+  desbloqueio = token && expiraEm ? { token, expiraEm: +new Date(expiraEm) } : null;
+}
+export function desbloqueado(): boolean {
+  return !!desbloqueio && desbloqueio.expiraEm > Date.now() + 5_000;
+}
+const req = <T>(caminho: string, opts: RequestInit = {}): Promise<T> =>
+  reqBase<T>(caminho, {
+    ...opts,
+    headers: { 'content-type': 'application/json', ...(desbloqueado() ? { [CABECALHO_SENHA]: desbloqueio!.token } : {}) },
+  });
+
+/** A API pediu a senha do financeiro (403 com code senha_financeiro). */
+export function pedeSenha(e: unknown): boolean {
+  const b = (e as { status?: number; body?: { code?: string } } | null) ?? null;
+  return b?.status === 403 && b.body?.code === 'senha_financeiro';
+}
 
 export interface Cobranca {
   id: string;
@@ -49,14 +74,57 @@ export interface Transacao {
   descricao: string;
   valorCentavos: number;
   dataCompetencia: string;
-  status: 'pago' | 'pendente';
+  status: 'pago' | 'pendente' | 'cancelada';
   contactId: string | null;
   cobrancaId: string | null;
   compromissoId: string | null;
   responsavelId: string | null;
   origem: 'manual' | 'agenda' | 'cobranca' | 'importacao' | 'comissao';
   observacao: string | null;
+  formaPagamento: FormaPagamento | null;
+  parcelas: number | null;
+  produtoId: string | null;
+  produtoNome: string | null;
+  quantidade: number | null;
+  profissionalId: string | null;
+  profissionalNome: string | null;
+  canceladaEm: string | null;
+  motivoCancelamento: string | null;
   createdAt: string;
+}
+
+export type FormaPagamento = 'dinheiro' | 'debito' | 'credito' | 'pix';
+export const FORMAS: { valor: FormaPagamento; rotulo: string }[] = [
+  { valor: 'pix', rotulo: 'Pix' },
+  { valor: 'debito', rotulo: 'Débito' },
+  { valor: 'credito', rotulo: 'Crédito' },
+  { valor: 'dinheiro', rotulo: 'Dinheiro' },
+];
+export const ROTULO_FORMA: Record<string, string> = { pix: 'Pix', debito: 'Débito', credito: 'Crédito', dinheiro: 'Dinheiro', nao_informada: 'Sem forma' };
+
+export interface Produto {
+  id: string;
+  nome: string;
+  categoria: string | null;
+  precoCentavos: number;
+  custoCentavos: number;
+  estoque: number;
+  estoqueMinimo: number;
+  ativo: boolean;
+  vendas30d: number;
+}
+
+export interface Colaborador {
+  id: string;
+  nome: string;
+  especialidade: string | null;
+  comissaoPercent: number;
+}
+
+export interface CaixaAtual {
+  data: string;
+  saldoCentavos: number;
+  hoje: { entradasCentavos: number; saidasCentavos: number; vendas: number; porForma: { forma: string; totalCentavos: number; qtd: number }[] };
 }
 
 export interface NovaTransacao {
@@ -68,6 +136,11 @@ export interface NovaTransacao {
   status?: 'pago' | 'pendente';
   responsavelId?: string | null;
   observacao?: string | null;
+  formaPagamento?: FormaPagamento | null;
+  parcelas?: number | null;
+  produtoId?: string | null;
+  quantidade?: number | null;
+  profissionalId?: string | null;
 }
 
 export interface FluxoCaixa {
@@ -143,6 +216,28 @@ export const financeiro = {
   atualizarCategoria: (id: string, d: { nome?: string; cor?: string | null }) =>
     req<Categoria>(`categorias/${id}`, { method: 'PATCH', body: JSON.stringify(d) }),
   removerCategoria: (id: string) => req<{ ok: boolean }>(`categorias/${id}`, { method: 'DELETE' }),
+  // ------------------------- senha, caixa atual, produtos, colaboradoras -------------------------
+  senhaEstado: () => req<{ configurada: boolean }>('senha'),
+  verificarSenha: (senha: string) => req<{ token: string | null; expiraEm: string | null; configurada: boolean }>('senha/verificar', { method: 'POST', body: JSON.stringify({ senha }) }),
+  definirSenha: (d: { senhaAtual?: string; novaSenha: string }) => req<{ ok: boolean }>('senha', { method: 'POST', body: JSON.stringify(d) }),
+  caixaAtual: () => req<CaixaAtual>('caixa-atual'),
+  cancelarTransacao: (id: string, motivo?: string | null) => req<Transacao>(`transacoes/${id}/cancelar`, { method: 'POST', body: JSON.stringify({ motivo: motivo ?? null }) }),
+  produtos: (f: { q?: string; limite?: number; inativos?: boolean } = {}) => {
+    const qs = new URLSearchParams();
+    if (f.q) qs.set('q', f.q);
+    if (f.limite) qs.set('limite', String(f.limite));
+    if (f.inativos) qs.set('inativos', '1');
+    return req<Produto[]>(`produtos${qs.toString() ? `?${qs}` : ''}`);
+  },
+  criarProduto: (d: { nome: string; precoCentavos?: number; custoCentavos?: number; categoria?: string | null; estoqueMinimo?: number }) =>
+    req<Produto>('produtos', { method: 'POST', body: JSON.stringify(d) }),
+  atualizarProduto: (id: string, d: Partial<{ nome: string; precoCentavos: number; custoCentavos: number; categoria: string | null; estoqueMinimo: number; ativo: boolean }>) =>
+    req<Produto>(`produtos/${id}`, { method: 'PATCH', body: JSON.stringify(d) }),
+  movimentarEstoque: (id: string, d: { tipo: 'entrada' | 'ajuste'; quantidade: number; motivo?: string | null }) =>
+    req<{ ok: boolean; delta: number }>(`produtos/${id}/estoque`, { method: 'POST', body: JSON.stringify(d) }),
+  colaboradores: (comComissao = false) => req<Colaborador[]>(`colaboradores${comComissao ? '?comComissao=1' : ''}`),
+  definirColaborador: (id: string, comissaoPercent: number) => req<Colaborador>(`colaboradores/${id}`, { method: 'PATCH', body: JSON.stringify({ comissaoPercent }) }),
+
   transacoes: (filtro?: { de?: string; ate?: string; tipo?: string; status?: string; categoriaId?: string }) => {
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(filtro ?? {})) if (v) qs.set(k, v);

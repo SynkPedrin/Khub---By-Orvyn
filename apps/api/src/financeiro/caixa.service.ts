@@ -44,6 +44,26 @@ export interface TransacaoInput {
   contactId?: string | null;
   responsavelId?: string | null;
   observacao?: string | null;
+  /** Caixa (db/075). */
+  formaPagamento?: FormaPagamento | null;
+  parcelas?: number | null;
+  produtoId?: string | null;
+  quantidade?: number | null;
+  /** Colaboradora do catálogo (db/071) com comissão configurada. */
+  profissionalId?: string | null;
+}
+
+export const FORMAS_PAGAMENTO = ['dinheiro', 'debito', 'credito', 'pix'] as const;
+export type FormaPagamento = (typeof FORMAS_PAGAMENTO)[number];
+
+/** Parcela só existe no crédito (1x quando não informada); nas outras formas some. */
+export function normalizarPagamento(forma: FormaPagamento | null | undefined, parcelas: number | null | undefined): { formaPagamento: FormaPagamento | null; parcelas: number | null } {
+  if (!forma) return { formaPagamento: null, parcelas: null };
+  if (!(FORMAS_PAGAMENTO as readonly string[]).includes(forma)) throw new BadRequestException('forma de pagamento inválida');
+  if (forma !== 'credito') return { formaPagamento: forma, parcelas: null };
+  const n = parcelas ?? 1;
+  if (!Number.isInteger(n) || n < 1 || n > 24) throw new BadRequestException('parcelas inválidas (1 a 24)');
+  return { formaPagamento: forma, parcelas: n };
 }
 
 export type TransacaoPatch = Partial<Omit<TransacaoInput, 'tipo'>>;
@@ -197,13 +217,26 @@ export class CaixaService {
     if (filtro.tipo === 'entrada' || filtro.tipo === 'saida') where.tipo = filtro.tipo;
     if (filtro.categoriaId) where.categoriaId = filtro.categoriaId;
     if (filtro.responsavelId) where.responsavelId = filtro.responsavelId;
-    if (filtro.status === 'pago' || filtro.status === 'pendente') where.status = filtro.status;
+    if (filtro.status === 'pago' || filtro.status === 'pendente' || filtro.status === 'cancelada') where.status = filtro.status;
     if (filtro.origem && (ORIGENS as readonly string[]).includes(filtro.origem)) where.origem = filtro.origem;
     return this.prisma.withTenant(tenantId, async (tx) => {
       const transacoes = await tx.financeiroTransacao.findMany({ where, orderBy: [{ dataCompetencia: 'desc' }, { createdAt: 'desc' }] });
       const categorias = await tx.financeiroCategoria.findMany({ select: { id: true, nome: true, tipo: true, cor: true } });
       const porId = new Map(categorias.map((c) => [c.id, c]));
-      return transacoes.map(({ chaveImportacao: _chave, ...t }) => ({ ...t, categoria: t.categoriaId ? (porId.get(t.categoriaId) ?? null) : null }));
+      const ids = (k: 'produtoId' | 'profissionalId') => [...new Set(transacoes.map((t) => t[k]).filter((x): x is string => !!x))];
+      const [produtos, profissionais] = await Promise.all([
+        ids('produtoId').length ? tx.produto.findMany({ where: { id: { in: ids('produtoId') } }, select: { id: true, nome: true } }) : [],
+        ids('profissionalId').length ? tx.profissional.findMany({ where: { id: { in: ids('profissionalId') } }, select: { id: true, nome: true } }) : [],
+      ]);
+      const nomeProd = new Map(produtos.map((p) => [p.id, p.nome]));
+      const nomeProf = new Map(profissionais.map((p) => [p.id, p.nome]));
+      return transacoes.map(({ chaveImportacao: _chave, ...t }) => ({
+        ...t,
+        quantidade: t.quantidade == null ? null : Number(t.quantidade),
+        categoria: t.categoriaId ? (porId.get(t.categoriaId) ?? null) : null,
+        produtoNome: t.produtoId ? (nomeProd.get(t.produtoId) ?? null) : null,
+        profissionalNome: t.profissionalId ? (nomeProf.get(t.profissionalId) ?? null) : null,
+      }));
     });
   }
 
@@ -212,8 +245,16 @@ export class CaixaService {
     tx: Prisma.TransactionClient,
     tenantId: string,
     tipo: 'entrada' | 'saida',
-    refs: { categoriaId?: string | null; contactId?: string | null; responsavelId?: string | null },
+    refs: { categoriaId?: string | null; contactId?: string | null; responsavelId?: string | null; produtoId?: string | null; profissionalId?: string | null },
   ) {
+    if (refs.produtoId) {
+      const p = await tx.produto.findFirst({ where: { id: refs.produtoId }, select: { id: true } });
+      if (!p) throw new BadRequestException('produto inexistente');
+    }
+    if (refs.profissionalId) {
+      const p = await tx.profissional.findFirst({ where: { id: refs.profissionalId }, select: { id: true } });
+      if (!p) throw new BadRequestException('profissional inexistente');
+    }
     if (refs.categoriaId) {
       const cat = await tx.financeiroCategoria.findFirst({ where: { id: refs.categoriaId }, select: { tipo: true } });
       if (!cat) throw new BadRequestException('categoria inexistente');
@@ -250,6 +291,8 @@ export class CaixaService {
     if (!descricao) throw new BadRequestException('informe a descrição');
     if (!Number.isInteger(dto.valorCentavos) || dto.valorCentavos <= 0) throw new BadRequestException('valor inválido (centavos, inteiro > 0)');
     await this.validarReferencias(tx, tenantId, dto.tipo, dto);
+    const pag = normalizarPagamento(dto.formaPagamento, dto.parcelas);
+    if (dto.quantidade != null && (!Number.isFinite(dto.quantidade) || dto.quantidade <= 0)) throw new BadRequestException('quantidade inválida');
     const t = await tx.financeiroTransacao.create({
       data: {
         tenantId,
@@ -265,12 +308,45 @@ export class CaixaService {
         compromissoId: dto.compromissoId ?? null,
         chaveImportacao: dto.chaveImportacao ?? null,
         observacao: dto.observacao ?? null,
+        formaPagamento: pag.formaPagamento,
+        parcelas: pag.parcelas,
+        produtoId: dto.produtoId ?? null,
+        quantidade: dto.produtoId ? new Prisma.Decimal(dto.quantidade ?? 1) : dto.quantidade != null ? new Prisma.Decimal(dto.quantidade) : null,
+        profissionalId: dto.profissionalId ?? null,
         origem,
         createdBy: identityId,
       },
     });
+    await this.sincronizarEstoque(tx, tenantId, t, identityId);
     if (opcoes.gerarComissao !== false) await this.gerarComissao(tx, tenantId, t);
     return t;
+  }
+
+  /**
+   * Estoque acompanha o lançamento: venda (entrada com produto) baixa,
+   * compra (saída com produto) repõe; cancelar/excluir/editar refaz.
+   */
+  private async sincronizarEstoque(tx: Prisma.TransactionClient, tenantId: string, t: TransacaoRow, actorId: string | null, tinhaProduto = false) {
+    // Sem produto antes nem agora: estoque não é tocado.
+    if (!t.produtoId && !tinhaProduto) return;
+    if (tinhaProduto) await tx.estoqueMovimento.deleteMany({ where: { transacaoId: t.id, origem: 'venda' } });
+    if (!t.produtoId || t.status === 'cancelada') return;
+    const q = Number(t.quantidade ?? 1);
+    if (!(q > 0)) return;
+    const venda = t.tipo === 'entrada';
+    await tx.estoqueMovimento.create({
+      data: {
+        tenantId,
+        produtoId: t.produtoId,
+        tipo: venda ? 'saida' : 'entrada',
+        delta: new Prisma.Decimal(venda ? -q : q),
+        motivo: (venda ? `Venda no caixa: ${t.descricao}` : `Compra: ${t.descricao}`).slice(0, 200),
+        dataMovimento: t.dataCompetencia,
+        origem: 'venda',
+        transacaoId: t.id,
+        createdBy: actorId,
+      },
+    });
   }
 
   /**
@@ -278,8 +354,30 @@ export class CaixaService {
    * na competência (mês) da entrada. Uma por transação. Arredondamento: meio
    * para cima no centavo (calcularComissaoCentavos).
    */
-  private async gerarComissao(tx: Prisma.TransactionClient, tenantId: string, t: Pick<TransacaoRow, 'id' | 'tipo' | 'status' | 'responsavelId' | 'valorCentavos' | 'dataCompetencia'>) {
-    if (t.tipo !== 'entrada' || t.status !== 'pago' || !t.responsavelId) return;
+  private async gerarComissao(tx: Prisma.TransactionClient, tenantId: string, t: Pick<TransacaoRow, 'id' | 'tipo' | 'status' | 'responsavelId' | 'profissionalId' | 'valorCentavos' | 'dataCompetencia'>) {
+    if (t.tipo !== 'entrada' || t.status !== 'pago') return;
+    // Colaboradora do catálogo (salão): % no cadastro dela.
+    if (!t.responsavelId && t.profissionalId) {
+      const prof = await tx.profissional.findFirst({ where: { id: t.profissionalId }, select: { comissaoPercent: true } });
+      if (!prof || Number(prof.comissaoPercent) <= 0) return;
+      const valorP = calcularComissaoCentavos(t.valorCentavos, prof.comissaoPercent);
+      if (valorP <= 0) return;
+      if (await tx.financeiroComissao.findFirst({ where: { transacaoId: t.id }, select: { id: true } })) return;
+      const c = t.dataCompetencia;
+      await tx.financeiroComissao.create({
+        data: {
+          tenantId,
+          profissionalId: t.profissionalId,
+          transacaoId: t.id,
+          baseCentavos: t.valorCentavos,
+          percent: prof.comissaoPercent,
+          valorCentavos: valorP,
+          competencia: new Date(Date.UTC(c.getUTCFullYear(), c.getUTCMonth(), 1)),
+        },
+      });
+      return;
+    }
+    if (!t.responsavelId) return;
     const cfg = await tx.equipeComissao.findUnique({ where: { tenantId_identityId: { tenantId, identityId: t.responsavelId } } });
     if (!cfg) return;
     const valor = calcularComissaoCentavos(t.valorCentavos, cfg.comissaoPercent);
@@ -317,6 +415,7 @@ export class CaixaService {
     return this.prisma.withTenant(tenantId, async (tx) => {
       const atual = await tx.financeiroTransacao.findFirst({ where: { id } });
       if (!atual) throw new NotFoundException('lançamento inexistente');
+      if (atual.status === 'cancelada') throw new ConflictException('venda cancelada não pode ser editada');
       const descricao = patch.descricao !== undefined ? patch.descricao.trim() : undefined;
       if (descricao === '') throw new BadRequestException('informe a descrição');
       if (patch.valorCentavos !== undefined && (!Number.isInteger(patch.valorCentavos) || patch.valorCentavos <= 0)) {
@@ -326,6 +425,7 @@ export class CaixaService {
       const mexeNoDinheiro =
         (patch.valorCentavos !== undefined && patch.valorCentavos !== atual.valorCentavos) ||
         (patch.responsavelId !== undefined && patch.responsavelId !== atual.responsavelId) ||
+        (patch.profissionalId !== undefined && patch.profissionalId !== atual.profissionalId) ||
         (patch.status !== undefined && patch.status !== atual.status) ||
         (novaData !== undefined && +novaData !== +atual.dataCompetencia);
       if (mexeNoDinheiro && atual.origem === 'comissao') {
@@ -336,7 +436,13 @@ export class CaixaService {
         categoriaId: patch.categoriaId,
         contactId: patch.contactId,
         responsavelId: patch.responsavelId,
+        produtoId: patch.produtoId,
+        profissionalId: patch.profissionalId,
       });
+      const mexePagamento = patch.formaPagamento !== undefined || patch.parcelas !== undefined;
+      const pag = mexePagamento ? normalizarPagamento(patch.formaPagamento !== undefined ? patch.formaPagamento : (atual.formaPagamento as FormaPagamento | null), patch.parcelas !== undefined ? patch.parcelas : atual.parcelas) : null;
+      if (patch.quantidade != null && (!Number.isFinite(patch.quantidade) || patch.quantidade <= 0)) throw new BadRequestException('quantidade inválida');
+      const mexeEstoque = patch.produtoId !== undefined || patch.quantidade !== undefined || patch.status !== undefined || novaData !== undefined || descricao !== undefined;
       const t = await tx.financeiroTransacao.update({
         where: { id },
         data: {
@@ -348,9 +454,14 @@ export class CaixaService {
           ...(patch.contactId !== undefined ? { contactId: patch.contactId } : {}),
           ...(patch.responsavelId !== undefined ? { responsavelId: patch.responsavelId } : {}),
           ...(patch.observacao !== undefined ? { observacao: patch.observacao } : {}),
+          ...(pag ? { formaPagamento: pag.formaPagamento, parcelas: pag.parcelas } : {}),
+          ...(patch.produtoId !== undefined ? { produtoId: patch.produtoId } : {}),
+          ...(patch.quantidade !== undefined ? { quantidade: patch.quantidade == null ? null : new Prisma.Decimal(patch.quantidade) } : {}),
+          ...(patch.profissionalId !== undefined ? { profissionalId: patch.profissionalId } : {}),
           updatedAt: new Date(),
         },
       });
+      if (mexeEstoque) await this.sincronizarEstoque(tx, tenantId, t, identityId, !!atual.produtoId);
       if (mexeNoDinheiro) await this.recalcularComissao(tx, tenantId, t, false);
       await audit(tx, tenantId, identityId, 'transacao.editada', 'financeiro_transacao', id);
       return t;
@@ -367,16 +478,71 @@ export class CaixaService {
    */
   async removerTransacao(tenantId: string, identityId: string, id: string) {
     return this.prisma.withTenant(tenantId, async (tx) => {
-      const existe = await tx.financeiroTransacao.findFirst({ where: { id }, select: { id: true } });
+      const existe = await tx.financeiroTransacao.findFirst({ where: { id }, select: { id: true, produtoId: true } });
       if (!existe) throw new NotFoundException('lançamento inexistente');
       await this.exigirComissaoNaoPaga(tx, id, 'a comissão desta entrada já foi paga: estorne o pagamento da comissão antes de excluir');
       await tx.financeiroComissao.updateMany({
         where: { pagamentoTransacaoId: id },
         data: { status: 'prevista', pagoEm: null, pagamentoTransacaoId: null },
       });
+      if (existe.produtoId) await tx.estoqueMovimento.deleteMany({ where: { transacaoId: id, origem: 'venda' } });
       await tx.financeiroTransacao.delete({ where: { id } });
       await audit(tx, tenantId, identityId, 'transacao.removida', 'financeiro_transacao', id);
       return { ok: true };
+    });
+  }
+
+  /**
+   * Cancela a venda/lançamento: continua no histórico (quem, quando e por
+   * quê), sai de todos os totais (somam só 'pago'), devolve o estoque e
+   * remove a comissão prevista. Comissão já paga → 409 (estornar antes).
+   */
+  async cancelarTransacao(tenantId: string, identityId: string, id: string, motivo?: string | null) {
+    return this.prisma.withTenant(tenantId, async (tx) => {
+      const atual = await tx.financeiroTransacao.findFirst({ where: { id } });
+      if (!atual) throw new NotFoundException('lançamento inexistente');
+      if (atual.status === 'cancelada') return atual;
+      if (atual.origem === 'comissao') throw new ConflictException('este lançamento é o pagamento de uma comissão: estorne o pagamento em Comissões');
+      await this.exigirComissaoNaoPaga(tx, id, 'a comissão desta venda já foi paga: estorne o pagamento da comissão antes de cancelar');
+      await tx.financeiroComissao.deleteMany({ where: { transacaoId: id, status: 'prevista' } });
+      const t = await tx.financeiroTransacao.update({
+        where: { id },
+        data: { status: 'cancelada', canceladaEm: new Date(), canceladaPor: identityId, motivoCancelamento: motivo?.trim().slice(0, 300) || null, updatedAt: new Date() },
+      });
+      await this.sincronizarEstoque(tx, tenantId, t, identityId, !!atual.produtoId);
+      await audit(tx, tenantId, identityId, 'transacao.cancelada', 'financeiro_transacao', id);
+      return t;
+    });
+  }
+
+  /**
+   * Caixa atual: tudo que entrou menos tudo que saiu (pagos, até hoje) e o
+   * movimento de HOJE por forma de pagamento.
+   */
+  async caixaAtual(tenantId: string, agora = new Date()) {
+    const hoje = dataNoFuso(+agora, FUSO_PADRAO);
+    return this.prisma.withTenant(tenantId, async (tx) => {
+      const [saldo] = await tx.$queryRaw<{ entradas: bigint; saidas: bigint }[]>`
+        SELECT COALESCE(SUM(valor_centavos) FILTER (WHERE tipo = 'entrada'), 0)::bigint AS entradas,
+               COALESCE(SUM(valor_centavos) FILTER (WHERE tipo = 'saida'), 0)::bigint AS saidas
+        FROM financeiro_transacoes
+        WHERE tenant_id = ${tenantId}::uuid AND status = 'pago' AND data_competencia <= ${hoje}::date`;
+      const porForma = await tx.$queryRaw<{ forma: string | null; tipo: string; total: bigint; qtd: bigint }[]>`
+        SELECT forma_pagamento AS forma, tipo, COALESCE(SUM(valor_centavos), 0)::bigint AS total, COUNT(*)::bigint AS qtd
+        FROM financeiro_transacoes
+        WHERE tenant_id = ${tenantId}::uuid AND status = 'pago' AND data_competencia = ${hoje}::date
+        GROUP BY forma_pagamento, tipo`;
+      const entradasHoje = porForma.filter((r) => r.tipo === 'entrada');
+      return {
+        data: hoje,
+        saldoCentavos: Number(saldo.entradas) - Number(saldo.saidas),
+        hoje: {
+          entradasCentavos: entradasHoje.reduce((a, r) => a + Number(r.total), 0),
+          saidasCentavos: porForma.filter((r) => r.tipo === 'saida').reduce((a, r) => a + Number(r.total), 0),
+          vendas: entradasHoje.reduce((a, r) => a + Number(r.qtd), 0),
+          porForma: entradasHoje.map((r) => ({ forma: r.forma ?? 'nao_informada', totalCentavos: Number(r.total), qtd: Number(r.qtd) })),
+        },
+      };
     });
   }
 

@@ -116,6 +116,11 @@ Tabelas (todas `tenant_id NOT NULL`, RLS FORCE `tenant_rw`, gatilho `tenant_refe
 - `agency_events(agency_id, titulo, inicio_em, fim_em CHECK ≥ inicio, dia_inteiro, local, notas, client_account_id SET NULL, criador_id SET NULL)` + `agency_event_participantes(event_id, member_id)`.
 - Rollback no cabeçalho da migração (DROP das 5 tabelas). Aditiva.
 
+## 2.12 Caixa (PDV) ([[Arquitetura|ADR-0051]] · `db/075_caixa_pdv.sql`)
+- `financeiro_transacoes`: + `forma_pagamento`, `parcelas` (CHECK só crédito), `produto_id`→produtos, `quantidade`, status `cancelada` (+ `cancelada_em`, `cancelada_por`, `motivo_cancelamento`).
+- `estoque_movimentos`: + origem `venda`, `transacao_id`→financeiro_transacoes (baixa/reposição ligada à venda).
+- `financeiro_config(tenant_id PK, senha_hash scrypt, updated_by, updated_at)` com RLS `tenant_rw`.
+
 ## 3. Escopo de F0 — schema inicial
 
 F0 entrega **apenas** (ver [[Sprint]] / [[Tasks]] F0-08):

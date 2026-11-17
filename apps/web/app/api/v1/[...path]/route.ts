@@ -14,7 +14,7 @@ async function forward(req: NextRequest, path: string[]) {
   const target = `${API}/v1/${path.map(encodeURIComponent).join('/')}${url.search}`;
   const init: RequestInit = {
     method: req.method,
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey ?? at}`, ...(req.headers.get('idempotency-key') ? {'idempotency-key': req.headers.get('idempotency-key')!} : {}) },
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey ?? at}`, ...(req.headers.get('idempotency-key') ? {'idempotency-key': req.headers.get('idempotency-key')!} : {}), ...(req.headers.get('x-financeiro-senha') ? {'x-financeiro-senha': req.headers.get('x-financeiro-senha')!} : {}) },
     cache: 'no-store',
     // Análise de criativo com visão (imagem/frames) leva ~1 min num modelo
     // local, e o chat da NICO roda várias tools por resposta; o resto da API segue com 25 s.
