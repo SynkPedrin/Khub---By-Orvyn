@@ -104,7 +104,9 @@ export class SalaoAgendaService {
   }
 
   private resolverServico(base: Base, termo: string): ServicoCatalogo {
-    const r = acharServico(base.servicos, termo);
+    const pop = new Map<string, number>();
+    for (const a of base.hist) if (a.servicoId) pop.set(a.servicoId, (pop.get(a.servicoId) ?? 0) + 1);
+    const r = acharServico(base.servicos, termo, pop);
     if (r.servico) return r.servico;
     if (r.candidatos.length) {
       throw new OrientacaoAgente(`serviço "${termo}" é ambíguo; pergunte à cliente qual destes: ${r.candidatos.map((s) => s.nome).join('; ')}`);

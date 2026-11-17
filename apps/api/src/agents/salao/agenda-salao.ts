@@ -177,27 +177,64 @@ export function normalizar(s: string): string {
     .trim();
 }
 
+/** Jeito que a cliente fala → como o catálogo do salão escreve. */
+const SINONIMOS: [RegExp, string][] = [
+  [/\bpedicure\b|\bpedicuro\b|\bunhas? (do|dos|de) pes?\b/g, 'pe'],
+  [/\bmanicure\b|\bunhas? (da|das|de) maos?\b/g, 'mao'],
+  [/\bmaos\b/g, 'mao'],
+  [/\bpes\b/g, 'pe'],
+  [/\bsobrancelhas\b/g, 'sobrancelha'],
+  [/\bcilios\b/g, 'cilios'],
+];
+function falado(termo: string): string {
+  let t = normalizar(termo);
+  for (const [re, por] of SINONIMOS) t = t.replace(re, por);
+  return t.replace(/\s+/g, ' ').trim();
+}
+const palavrasDe = (s: string) => s.split(' ').filter((w) => w && w !== 'e' && w !== 'de' && w !== 'com' && w !== 'do' && w !== 'da');
+const mesmasPalavras = (a: string, b: string) => {
+  const x = new Set(palavrasDe(a));
+  const y = new Set(palavrasDe(b));
+  return x.size > 0 && x.size === y.size && [...x].every((w) => y.has(w));
+};
+
 /**
- * Serviço do catálogo pelo nome que a cliente falou ("design de sobrancelha",
- * "pé e mão"). Ordem: nome igual; nome contém o termo (o mais curto vence);
- * mais palavras em comum. Devolve até 5 candidatos quando é ambíguo.
+ * Serviço do catálogo pelo nome que a cliente falou ("pedicure", "pé e mão",
+ * "design de sobrancelha"). Ordem: nome igual (aceita sinônimo e ordem das
+ * palavras); nome que contém o termo; palavras em comum (palavra de 3+ letras:
+ * sigla de variação como "P"/"TP" não casa sozinha). Variações do MESMO serviço
+ * ("Design de Sobrancelha T/P/TP") → a mais feita no histórico (`popularidade`),
+ * a cliente não conhece o código interno; a equipe ajusta se precisar.
  */
-export function acharServico(servicos: ServicoCatalogo[], termo: string): { servico: ServicoCatalogo | null; candidatos: ServicoCatalogo[] } {
-  const t = normalizar(termo);
+export function acharServico(
+  servicos: ServicoCatalogo[],
+  termo: string,
+  popularidade: Map<string, number> = new Map(),
+): { servico: ServicoCatalogo | null; candidatos: ServicoCatalogo[]; variacoes?: string[] } {
+  const t = falado(termo);
   if (!t) return { servico: null, candidatos: [] };
-  const exato = servicos.find((s) => normalizar(s.nome) === t);
+  const nome = (s: ServicoCatalogo) => falado(s.nome);
+  const exato = servicos.find((s) => nome(s) === t) ?? servicos.find((s) => mesmasPalavras(nome(s), t));
   if (exato) return { servico: exato, candidatos: [] };
-  const contem = servicos.filter((s) => normalizar(s.nome).includes(t)).sort((a, b) => a.nome.length - b.nome.length);
+  const pop = (s: ServicoCatalogo) => popularidade.get(s.id) ?? 0;
+  const contem = servicos.filter((s) => nome(s).includes(t));
   if (contem.length === 1) return { servico: contem[0], candidatos: [] };
-  if (contem.length > 1) return { servico: null, candidatos: contem.slice(0, 5) };
-  const palavras = t.split(' ').filter((p) => p.length > 2);
+  if (contem.length > 1) {
+    // Todas começam pelo que a cliente falou = variações do mesmo serviço.
+    if (contem.every((s) => nome(s).startsWith(t))) {
+      const ord = [...contem].sort((a, b) => pop(b) - pop(a) || a.nome.length - b.nome.length);
+      return { servico: ord[0], candidatos: [], variacoes: ord.slice(1).map((s) => s.nome) };
+    }
+    return { servico: null, candidatos: [...contem].sort((a, b) => pop(b) - pop(a)).slice(0, 5) };
+  }
+  const palavras = palavrasDe(t).filter((p) => p.length > 2);
   const pontuados = servicos
     .map((s) => {
-      const n = normalizar(s.nome).split(' ');
+      const n = palavrasDe(nome(s)).filter((w) => w.length > 2);
       return { s, pts: palavras.filter((p) => n.some((w) => w.startsWith(p) || p.startsWith(w))).length };
     })
     .filter((x) => x.pts > 0)
-    .sort((a, b) => b.pts - a.pts || a.s.nome.length - b.s.nome.length);
+    .sort((a, b) => b.pts - a.pts || pop(b.s) - pop(a.s) || a.s.nome.length - b.s.nome.length);
   if (pontuados.length && (pontuados.length === 1 || pontuados[0].pts > pontuados[1].pts)) return { servico: pontuados[0].s, candidatos: [] };
   return { servico: null, candidatos: pontuados.slice(0, 5).map((x) => x.s) };
 }
