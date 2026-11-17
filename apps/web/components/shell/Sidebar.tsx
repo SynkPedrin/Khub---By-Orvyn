@@ -105,7 +105,7 @@ export function Sidebar({
         className,
       )}
     >
-      {/* Marca — logo branca ocupando a sidebar de ponta a ponta; símbolo KHUB quando recolhida. */}
+      {/* Marca — logo colorida ocupando a sidebar de ponta a ponta; símbolo K colorido quando recolhida. */}
       <div className={cx('sidebar-brand sidebar-hairline flex shrink-0 items-center border-b', curta ? 'h-topbar justify-center px-2' : 'px-4 py-5')}>
         <Link
           href="/dashboard"
