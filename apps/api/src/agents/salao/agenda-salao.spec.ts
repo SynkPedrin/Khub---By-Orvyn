@@ -78,10 +78,26 @@ describe('agenda de salão: nomes falados pela cliente', () => {
     expect(acharServico(servicos, 'tonalizacao').servico?.id).toBe('5');
   });
 
-  it('ambíguo devolve candidatos para a IA perguntar', () => {
-    const r = acharServico(servicos, 'design de sobrancelha');
+  it('variações do mesmo serviço: a mais feita no histórico, sem perguntar código interno', () => {
+    const r = acharServico(servicos, 'design de sobrancelha', new Map([['2', 10], ['1', 40]]));
+    expect(r.servico?.id).toBe('1');
+    expect(r.variacoes).toEqual(['Design de Sobrancelha com Henna']);
+  });
+
+  it('jeito da cliente falar: pedicure, manicure, pé e mão', () => {
+    const cat = [...servicos, { id: '6', nome: 'Mao e Pe', duracaoMin: 90, precoCentavos: 8000 }, { id: '7', nome: '1 esmalt pé', duracaoMin: 20, precoCentavos: 1500 }, { id: '8', nome: 'Design de Sobrancelha P', duracaoMin: 30, precoCentavos: 0 }];
+    expect(acharServico(cat, 'pedicure').servico?.id).toBe('3');
+    expect(acharServico(cat, 'manicure').servico?.id).toBe('4');
+    expect(acharServico(cat, 'pé e mão').servico?.id).toBe('6');
+    expect(acharServico(cat, 'mão e pé').servico?.id).toBe('6');
+  });
+
+  it('serviços diferentes com o termo continuam perguntando', () => {
+    const cat = [{ id: 'a', nome: 'Escova', duracaoMin: 45, precoCentavos: 0 }, { id: 'b', nome: 'Corte e Escova', duracaoMin: 90, precoCentavos: 0 }];
+    expect(acharServico(cat, 'escova').servico?.id).toBe('a');
+    const r = acharServico([{ id: 'x', nome: 'Luzes com tonalização', duracaoMin: 180, precoCentavos: 0 }, { id: 'y', nome: 'Coloração ou Tonalização', duracaoMin: 120, precoCentavos: 0 }], 'tonalizacao');
     expect(r.servico).toBeNull();
-    expect(r.candidatos.map((s) => s.id)).toEqual(['1', '2']);
+    expect(r.candidatos.length).toBe(2);
   });
 
   it('profissional pelo primeiro nome', () => {
