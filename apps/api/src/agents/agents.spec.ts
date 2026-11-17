@@ -1,6 +1,7 @@
 import { MODELO_PADRAO } from './catalogo';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { AgentsService } from './agents.service';
+import type { SalaoAgendaService } from './salao/salao-agenda.service';
 import { AgentToolsService, type ContextoAgente } from './agent-tools.service';
 import { cortarNoLimite, ferramentasDoAgente, paraJsonSchema, FERRAMENTAS_POR_NOME } from './catalogo';
 import type { PrismaService } from '../prisma/prisma.service';
@@ -142,7 +143,8 @@ function ferramentas(contato: Record<string, unknown> | null = { nome: 'Marina',
   const workflows = { dispararPorAgente: jest.fn(async () => ({ runId: 'r1' })) } as unknown as WorkflowsService;
   const rag = { searchAgente: jest.fn(async () => []) } as unknown as RetrievalService;
   const financeiro = { criar: jest.fn(async (_t: string, _i: string, dto: Record<string, unknown>) => ({ id: 'cb1', ...dto })) } as unknown as FinanceiroService;
-  return { svc: new AgentToolsService(prisma, crm, notas, tarefas, agenda, workflows, rag, financeiro), tx, crm, notas, tarefas, workflows, rag, agenda, financeiro };
+  const salao = { horarios: jest.fn(), reservar: jest.fn() } as unknown as SalaoAgendaService;
+  return { svc: new AgentToolsService(prisma, crm, notas, tarefas, agenda, workflows, rag, financeiro, salao), tx, crm, notas, tarefas, workflows, rag, agenda, financeiro, salao };
 }
 
 const CTX: ContextoAgente = {
