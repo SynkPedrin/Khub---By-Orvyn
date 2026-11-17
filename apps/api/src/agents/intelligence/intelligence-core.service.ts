@@ -13,7 +13,7 @@ import { analiseJsonSchema, analiseSchema, analisarHeuristica, contarObjecoes, e
 import { fragmentarMensagem, type ResultadoFragmentacao } from '../engines/message-chunker';
 import { confirmou, contextoAgenda, contextoAgendado, detectarPedidoAgenda, escolheuHorario, horaEscolhida, isoLocal, quandoPorExtenso, servicosCitados, slotNaHora } from '../engines/agenda-intent';
 import { avaliarRegras, separarAcoes } from '../engines/rules-engine';
-import { afirmaAgendamento, semAgendamentoInventado, semDescontoInventado, semDisponibilidadeInventada, semPrecoInventado, validarNaturalidade } from '../engines/response-validator';
+import { afirmaAgendamento, semAgendamentoInventado, semDescontoInventado, semDisponibilidadeInventada, semPerguntaDeCortesiaExtra, semPrecoInventado, validarNaturalidade } from '../engines/response-validator';
 import { KnowledgeService, type ConfiancaBusca } from '../knowledge/knowledge.service';
 import { fatosComoTexto, ProfileService, type DecisaoExtracao, type PerfilContexto } from './profile.service';
 import type { ContextoMemoria } from './memory.service';
@@ -507,6 +507,14 @@ export class IntelligenceCoreService {
       if (p.removeu) {
         texto = p.texto;
         validacao.push(`valor sem fonte removido (${p.valores.map((v) => `R$ ${(v / 100).toFixed(2).replace('.', ',')}`).join(', ')})`);
+      }
+    }
+
+    if (texto) {
+      const q = semPerguntaDeCortesiaExtra(texto);
+      if (q.removeu) {
+        texto = q.texto;
+        validacao.push('pergunta de cortesia extra removida (uma pergunta por vez)');
       }
     }
 
