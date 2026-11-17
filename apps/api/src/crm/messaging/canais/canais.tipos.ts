@@ -49,18 +49,27 @@ export const DOC = {
  * - pages_messaging: DM do Messenger (messengerEnvio);
  * - instagram_basic, instagram_manage_messages: DM do Instagram (instagramEnvio, instagramWebhook);
  * - instagram_manage_comments, pages_read_engagement: comentários do Instagram (instagramWebhookCampos, instagramResposta);
- * - pages_manage_engagement: responder comentário da página (paginaResposta).
+ *
+ * `pages_manage_engagement` (responder comentário da página, DOC.paginaResposta)
+ * NÃO vai aqui: se o app da Meta não tem essa permissão liberada no caso de uso,
+ * o diálogo falha com "Invalid Scopes" para quem administra o app e derruba a
+ * conexão do Instagram junto. Ela só é pedida com META_COMENTARIOS_PAGINA=1,
+ * depois de liberada no painel do app (ver ESCOPO_RESPONDER_PAGINA).
  */
 export const ESCOPOS_META_CONVERSAS = [
   'pages_show_list',
   'pages_manage_metadata',
   'pages_messaging',
   'pages_read_engagement',
-  'pages_manage_engagement',
   'instagram_basic',
   'instagram_manage_messages',
   'instagram_manage_comments',
 ] as const;
+
+/** Opcional: responder comentários dos posts da página do Facebook (DOC.paginaResposta). */
+export const ESCOPO_RESPONDER_PAGINA = 'pages_manage_engagement';
+/** Liga o pedido de ESCOPO_RESPONDER_PAGINA no login da Meta. */
+export const FLAG_COMENTARIOS_PAGINA = 'META_COMENTARIOS_PAGINA';
 
 /** Escopo do YouTube exigido por `comments.insert` (DOC.youtubeResposta); também cobre a leitura. */
 export const ESCOPO_YOUTUBE = 'https://www.googleapis.com/auth/youtube.force-ssl';

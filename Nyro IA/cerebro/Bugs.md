@@ -380,3 +380,11 @@ Invariante 6 exige "rate limiting por tenant e por integração; circuit breaker
 - **Como foi pego:** o deploy seguinte falhou no boot do worker; o erro só apareceu depois de instrumentar o `worker.ts`, que engolia a exceção real ("Worker failed to start" genérico → agora imprime `Error: Env inválida — JWT_SECRET: Required`).
 - **Correção:** conjunto completo restaurado (22 vars) a partir de `deploy/.env.render` (JWT/DB/proxy), `apps/api/.env` (chaves de provedor) e `render.yaml` (AI_PROVIDER, REDIS_URL derivada do keyvalue). Opcionais `ANTHROPIC_EFFORT_MAX` e `ANTHROPIC_MODEL_FORCE` não foram restauradas (valor desconhecido; o código tem default).
 - **Lição (permanente):** para mudar UMA var no Render, primeiro GET a lista inteira e fazer PUT com a lista completa alterada. Melhor: manter as vars no `render.yaml` (que faz merge) e não na API.
+
+### BUG-047 — Conectar Instagram/Messenger em Conversas falhava com "Invalid Scopes: pages_manage_engagement" (2026-11-17)
+- Severidade: S1 (ninguém conseguia conectar ou reconectar Instagram/Messenger; as conexões antigas seguiam funcionando, por isso a DM continuava chegando)
+- Status: corrigido
+- Ambiente: prod
+- Reprodução: Configurações → Conversas → Conectar Instagram → diálogo da Meta: "Este conteúdo não está disponível no momento · Invalid Scopes: pages_manage_engagement".
+- Causa raiz: `ESCOPOS_META_CONVERSAS` pedia `pages_manage_engagement` (só usada para responder comentário de post da página do Facebook), mas o app da Meta não tem essa permissão liberada no caso de uso. Para quem administra o app, a Meta bloqueia o diálogo inteiro.
+- Correção: `pages_manage_engagement` saiu da lista padrão; só é pedida com `META_COMENTARIOS_PAGINA=1` (ligar depois de liberar a permissão no app da Meta). Responder comentário da página sem a permissão concedida não chama a Meta e falha com o motivo; o cartão mostra "Responder comentários da página" indisponível com o motivo. Specs novos em `canais.spec.ts` (38/38; suíte API 1598 ok).

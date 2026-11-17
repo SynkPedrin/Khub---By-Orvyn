@@ -35,6 +35,8 @@ const schema = z.object({
   META_APP_SECRET: z.string().optional(),
   META_GRAPH_VERSION: z.string().default('v21.0'),
   META_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
+  /** '1' = pede pages_manage_engagement no login de Conversas (só depois de liberada no app da Meta). */
+  META_COMENTARIOS_PAGINA: z.string().optional(),
 
   // Google Ads / TikTok / Stripe / WhatsApp (sprints B/C/D)
   GOOGLE_ADS_DEVELOPER_TOKEN: z.string().optional(),

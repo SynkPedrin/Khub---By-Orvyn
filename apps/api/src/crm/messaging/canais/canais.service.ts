@@ -8,7 +8,7 @@ import { AtendimentoService, type EstadoAtendimento } from '../atendimento.servi
 import type { AutorEnvio } from '../messages.service';
 import { CanaisIngestaoService } from './canais-ingestao.service';
 import { ErroCanal, MetaCanaisHttp, YoutubeHttp } from './canais.http';
-import { CANAL_POR_REDE, DOC, ESCOPOS_META_CONVERSAS, ESCOPO_YOUTUBE, type CredencialCanal, type ProvedorCanal, type Rede } from './canais.tipos';
+import { CANAL_POR_REDE, DOC, ESCOPOS_META_CONVERSAS, ESCOPO_RESPONDER_PAGINA, ESCOPO_YOUTUBE, FLAG_COMENTARIOS_PAGINA, type CredencialCanal, type ProvedorCanal, type Rede } from './canais.tipos';
 import { horaCurta } from '../../../common/hora';
 
 /* ------------------------------------------------------------------ */
@@ -157,6 +157,9 @@ export class CanaisService {
         recursos: [
           { rotulo: 'Mensagens do Messenger', disponivel: true, motivo: 'A Meta só permite responder dentro de 24 h da última mensagem do cliente.' },
           { rotulo: 'Comentários da página', disponivel: true },
+          this.comentariosPaginaLigado()
+            ? { rotulo: 'Responder comentários da página', disponivel: true }
+            : { rotulo: 'Responder comentários da página', disponivel: false, motivo: `Precisa da permissão ${ESCOPO_RESPONDER_PAGINA} liberada no app da Meta. Os comentários chegam; a resposta é feita pelo Facebook.` },
         ],
         contas: contas('messenger'),
         docs: [DOC.messengerEnvio, DOC.messengerWebhook, DOC.paginaResposta],
@@ -228,6 +231,11 @@ export class CanaisService {
     if (missing.length) throw new HttpException({ status: 'config_required', provider: p, missing, title: `Configuração pendente: ${p}` }, 501);
   }
 
+  /** Só pede `pages_manage_engagement` quando liberada no app da Meta (ver ESCOPOS_META_CONVERSAS). */
+  private comentariosPaginaLigado(): boolean {
+    return this.config.get(FLAG_COMENTARIOS_PAGINA) === '1';
+  }
+
   urlConexao(tenantId: string, identityId: string, provedor: string): { url: string } {
     if (provedor === 'tiktok') {
       this.exigir('tiktok');
@@ -242,7 +250,7 @@ export class CanaisService {
         redirect_uri: this.redirectUri('meta'),
         state,
         response_type: 'code',
-        scope: ESCOPOS_META_CONVERSAS.join(','),
+        scope: [...ESCOPOS_META_CONVERSAS, ...(this.comentariosPaginaLigado() ? [ESCOPO_RESPONDER_PAGINA] : [])].join(','),
       });
       return { url: `https://www.facebook.com/${this.meta.versao()}/dialog/oauth?${p.toString()}` };
     }
@@ -529,7 +537,7 @@ export class CanaisService {
     tenantId: string,
     rede: Rede,
     conv: { canal: string; tipo: string; externoId: string | null },
-    conexao: { id: string; externalId: string; pageId: string | null; credentialsEncrypted: string | null },
+    conexao: { id: string; externalId: string; pageId: string | null; credentialsEncrypted: string | null; scopes?: string[] | null },
     texto: string,
   ): Promise<string | undefined> {
     const cred = this.crypto.decryptJson<CredencialCanal>(conexao.credentialsEncrypted!);
@@ -551,6 +559,9 @@ export class CanaisService {
       return str(r.id);
     }
     // DOC.paginaResposta: POST /{comment-id}/comments com token da página.
+    if (!(conexao.scopes ?? []).includes(ESCOPO_RESPONDER_PAGINA)) {
+      throw new ErroCanal(`Facebook: responder comentário da página precisa da permissão ${ESCOPO_RESPONDER_PAGINA}, que esta conexão não tem. Responda pelo Facebook.`, 403, false);
+    }
     const r = await this.meta.post(`${alvo}/comments`, {}, cred.accessToken, { message: texto });
     return str(r.id);
   }
