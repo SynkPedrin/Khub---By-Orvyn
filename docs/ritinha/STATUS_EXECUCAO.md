@@ -45,3 +45,49 @@ Ver `AUDITORIA_INICIAL.md`. Achados-chave: Ritinha fora da linha de frente (padr
 2. API: workflows ativos = 4 (Novo Lead v2 c/ filtro, MetaAds Tagging, Notificação Interna simples, Notificação GHL c/ 3 gatilhos).
 3. Ritinha: `versaoPublicadaId=8f897eb0` (v2, inalterada); rascunho 7.415 chars.
 4. Avec: probe read-only funcionando (reservas reais de 17/11–21/11 listadas em MAPA_AVEC.md).
+
+## 2026-11-17 (tarde) — Missão "Ritinha 10/10": motor, travas e homologação
+
+**No ar (Render, deploys `d997bd6`, `8de9ea0`, `0bfdcb9`; Ritinha v5 publicada e principal no WhatsApp)**
+
+Travas:
+- **Preço:** só com fonte no turno.
+- **Desconto/promoção:** não é oferecido sem estar cadastrado.
+- **Dia fechado:** segunda, domingo e feriados bloqueados no código das ferramentas do salão.
+- **Agenda:** as travas reconhecem o salão (BUG-049).
+- **Uma pergunta por vez:** a pergunta de cortesia extra sai.
+
+Motor:
+- **Opt-out preciso:** antes, "cancelar meu horário" marcava opt-out para sempre.
+- **Intenção `confirmacao`:** determinística, sem nova venda.
+- **Framework de objeções:** guia por tipo e contador; na 3ª vez para de argumentar.
+- **Desinteresse e resistência emocional:** regra própria.
+
+Banco: `db/076` (instruções até 20 mil caracteres, BUG-048).
+
+Ritinha v5: v4 + FICHA DO STUDIO:
+- funcionamento de terça a sábado, das 9h às 18h30;
+- equipe de 8, com especialidades;
+- 22 preços;
+- políticas;
+- sem PIX.
+
+Novo Lead 🚀 só com o CRM: as mensagens saíram porque a IA principal conduz a conversa.
+
+**Homologação** (`scripts/operar/ritinha-avaliacao.mjs`, 42 cenários no simulador de produção, critérios determinísticos):
+- Linha de base v5: 40/42 (95,2%).
+- Depois das correções: **41/42 (97,6%)**, latência mediana 2,8 s, p90 4,8 s, US$ 1,32 por bateria.
+- Críticos 100%:
+  - nenhum preço, desconto ou horário inventado;
+  - isolamento da outra subconta;
+  - opt-out e humano respeitados;
+  - injeção recusada.
+- Falha remanescente: `digitacao` (2 perguntas numa mensagem de esclarecimento).
+- Evidência: `docs/ritinha/homologacao/avaliacao-*.json`.
+
+**Bloqueia o 10/10**
+- **Avec ao vivo:**
+  - o login exige troca de senha;
+  - a sincronização (AVEC-5) depende de decisão.
+- **Hoje:** a disponibilidade vem da agenda do KHUB (importada até 16/11). Cada reserva avisa a equipe, e a mensagem diz que "a equipe confirma".
+- **Teste E2E pelo WhatsApp** com o número autorizado: não rodado nesta etapa.
