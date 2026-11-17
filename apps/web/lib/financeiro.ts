@@ -124,6 +124,10 @@ export interface Colaborador {
 export interface CaixaAtual {
   data: string;
   saldoCentavos: number;
+  /** Primeiro dia com lançamento feito no KHUB (o caixa começa aí). */
+  desde: string | null;
+  /** Resultado do histórico importado de outro sistema (fora do caixa). */
+  historicoImportadoCentavos: number;
   hoje: { entradasCentavos: number; saidasCentavos: number; vendas: number; porForma: { forma: string; totalCentavos: number; qtd: number }[] };
 }
 
