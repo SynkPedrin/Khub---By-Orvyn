@@ -25,7 +25,14 @@ export const metadata: Metadata = {
   title: 'KHUB',
   description:
     'Transforme leads em receita: CRM, atendimento, automação, inteligência artificial, follow-up, campanhas, agenda e analytics em uma única plataforma.',
-  icons: { icon: '/khub-mark.png' },
+  // Ícone da aba: o K colorido num quadrado escuro (legível em aba clara e escura).
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/khub-icon.png', type: 'image/png', sizes: '512x512' },
+    ],
+    apple: { url: '/apple-touch-icon.png', sizes: '180x180' },
+  },
 };
 
 export const viewport: Viewport = {
