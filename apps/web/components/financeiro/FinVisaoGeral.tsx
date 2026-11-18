@@ -5,7 +5,7 @@ import { Card, cx } from '@/components/ui';
 import { Icon } from '@/components/icons';
 import { SkeletonRows } from '@/components/kit';
 import { ROTULO_FORMA, financeiro, type CaixaAtual, type FluxoCaixa } from '@/lib/financeiro';
-import { falhaDeCarga, money, type FalhaCarga } from './fin-utils';
+import { dataBR, falhaDeCarga, money, type FalhaCarga } from './fin-utils';
 import { FinFalha } from './FinEstado';
 import { FinFluxoDiario } from './FinFluxoDiario';
 
@@ -36,7 +36,6 @@ export function FinVisaoGeral({ de, ate }: { de: string; ate: string }) {
   const kpis = [
     { l: 'Entradas', v: fluxo ? money(fluxo.entradasCentavos) : '–', cor: 'text-emerald-600 dark:text-emerald-400', icon: 'trend' as const },
     { l: 'Saídas', v: fluxo ? money(fluxo.saidasCentavos) : '–', cor: 'text-red-500 dark:text-red-400', icon: 'finance' as const },
-    { l: 'Saldo', v: fluxo ? money(fluxo.saldoCentavos) : '–', cor: fluxo && fluxo.saldoCentavos < 0 ? 'text-red-500 dark:text-red-400' : 'text-fg', icon: 'dashboard' as const },
     { l: 'A receber', v: fluxo ? money(fluxo.aReceberCentavos) : '–', cor: 'text-fg', icon: 'inbox' as const },
     { l: 'A pagar', v: fluxo ? money(fluxo.aPagarCentavos) : '–', cor: 'text-amber-600 dark:text-amber-400', icon: 'alert' as const },
   ];
@@ -48,8 +47,8 @@ export function FinVisaoGeral({ de, ate }: { de: string; ate: string }) {
 
   return (
     <div className="space-y-4">
-      <CaixaAtualCard />
-      <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
+      <CaixaDoPeriodoCard de={de} ate={ate} />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {kpis.map((k) => (
           <Card key={k.l} className="p-4">
             <div className="flex items-center justify-between">
@@ -112,23 +111,53 @@ export function FinVisaoGeral({ de, ate }: { de: string; ate: string }) {
   );
 }
 
-/** Caixa atual: tudo que entrou menos tudo que saiu (recebidos/pagos até hoje) + o movimento de hoje. */
-function CaixaAtualCard() {
+/** Nome do mês quando o período é um mês inteiro ("novembro de 2026"); senão as datas. */
+function rotuloPeriodo(de: string, ate: string): string {
+  const [y, m] = de.split('-').map(Number);
+  const ultimo = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  if (de.endsWith('-01') && ate === ultimo) {
+    return `de ${new Date(Date.UTC(y, m - 1, 15)).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' })}`;
+  }
+  return `de ${dataBR(de)} a ${dataBR(ate)}`;
+}
+
+/**
+ * Caixa do período (mês corrente por padrão, segue o seletor de período): o que
+ * entrou menos o que saiu, recebido/pago até hoje, separando o que veio do Avec
+ * do que foi lançado no KHUB; mais o movimento de hoje.
+ */
+function CaixaDoPeriodoCard({ de, ate }: { de: string; ate: string }) {
   const [c, setC] = useState<CaixaAtual | null>(null);
   const [erro, setErro] = useState(false);
   useEffect(() => {
-    financeiro.caixaAtual().then(setC).catch(() => setErro(true));
-  }, []);
+    let vivo = true;
+    setC(null);
+    setErro(false);
+    financeiro.caixaAtual(de, ate).then((r) => vivo && setC(r)).catch(() => vivo && setErro(true));
+    return () => {
+      vivo = false;
+    };
+  }, [de, ate]);
   if (erro) return null;
+  const p = c?.periodo;
   return (
     <Card className="p-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="flex items-center gap-1.5 text-xs font-medium text-muted"><Icon name="finance" size={14} /> Caixa atual</p>
-          <p className={cx('mt-1 text-3xl font-bold tabular', c && c.saldoCentavos < 0 ? 'text-red-500 dark:text-red-400' : 'text-fg')}>{c ? money(c.saldoCentavos) : '–'}</p>
+          <p className="flex items-center gap-1.5 text-xs font-medium text-muted"><Icon name="finance" size={14} /> Caixa {rotuloPeriodo(de, ate)}</p>
+          <p className={cx('mt-1 text-3xl font-bold tabular', p && p.saldoCentavos < 0 ? 'text-red-500 dark:text-red-400' : 'text-fg')}>{p ? money(p.saldoCentavos) : '–'}</p>
           <p className="mt-0.5 text-xs text-muted">
-            Tudo que entrou menos tudo que saiu no caixa do KHUB{c?.desde ? ` desde ${c.desde.split('-').reverse().join('/')}` : ''}.
-            {c && c.historicoImportadoCentavos !== 0 ? ` Histórico importado (fora do caixa): ${money(c.historicoImportadoCentavos)}.` : ''}
+            {p && p.ate < p.de ? (
+              "O período ainda não começou."
+            ) : p ? (
+              <>
+                Entrou <span className="font-semibold text-emerald-600 dark:text-emerald-400">{money(p.entradasCentavos)}</span> e saiu{' '}
+                <span className="font-semibold text-red-500 dark:text-red-400">{money(p.saidasCentavos)}</span> de {dataBR(p.de)} até {dataBR(p.ate)}.
+                {p.importadoCentavos !== 0 ? ` Do Avec: ${money(p.importadoCentavos)} · lançado no KHUB: ${money(p.khubCentavos)}.` : ''}
+              </>
+            ) : (
+              'Carregando o caixa do período…'
+            )}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

@@ -519,8 +519,14 @@ export class CaixaService {
    * Caixa atual: tudo que entrou menos tudo que saiu (pagos, até hoje) e o
    * movimento de HOJE por forma de pagamento.
    */
-  async caixaAtual(tenantId: string, agora = new Date()) {
+  async caixaAtual(tenantId: string, agora = new Date(), periodo: { de?: string; ate?: string } = {}) {
     const hoje = dataNoFuso(+agora, FUSO_PADRAO);
+    // Caixa do período (padrão: o mês corrente), só o que já foi recebido/pago até hoje.
+    const dia = (v: string | undefined) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+    const de = dia(periodo.de) ?? `${hoje.slice(0, 7)}-01`;
+    const ateBruto = dia(periodo.ate) ?? hoje;
+    const ate = ateBruto > hoje ? hoje : ateBruto;
+    if (de > ateBruto) throw new BadRequestException('o início do período é depois do fim');
     return this.prisma.withTenant(tenantId, async (tx) => {
       // Caixa = o que foi lançado no KHUB (histórico importado de outro sistema fica à parte:
       // somado, virava "caixa atual" de milhões, que não é o dinheiro da gaveta).
@@ -531,17 +537,35 @@ export class CaixaService {
                MIN(data_competencia) FILTER (WHERE origem <> 'importacao')::text AS desde
         FROM financeiro_transacoes
         WHERE tenant_id = ${tenantId}::uuid AND status = 'pago' AND data_competencia <= ${hoje}::date`;
+      const [mes] = await tx.$queryRaw<{ entradas: bigint; saidas: bigint; importado: bigint; khub: bigint }[]>`
+        SELECT COALESCE(SUM(valor_centavos) FILTER (WHERE tipo = 'entrada'), 0)::bigint AS entradas,
+               COALESCE(SUM(valor_centavos) FILTER (WHERE tipo = 'saida'), 0)::bigint AS saidas,
+               COALESCE(SUM(CASE WHEN tipo = 'entrada' THEN valor_centavos ELSE -valor_centavos END) FILTER (WHERE origem = 'importacao'), 0)::bigint AS importado,
+               COALESCE(SUM(CASE WHEN tipo = 'entrada' THEN valor_centavos ELSE -valor_centavos END) FILTER (WHERE origem <> 'importacao'), 0)::bigint AS khub
+        FROM financeiro_transacoes
+        WHERE tenant_id = ${tenantId}::uuid AND status = 'pago' AND data_competencia >= ${de}::date AND data_competencia <= ${ate}::date`;
+      // Importado do sistema anterior não tem forma de pagamento: aparece como "avec".
       const porForma = await tx.$queryRaw<{ forma: string | null; tipo: string; total: bigint; qtd: bigint }[]>`
-        SELECT forma_pagamento AS forma, tipo, COALESCE(SUM(valor_centavos), 0)::bigint AS total, COUNT(*)::bigint AS qtd
+        SELECT COALESCE(forma_pagamento, CASE WHEN origem = 'importacao' THEN 'importado' END) AS forma, tipo,
+               COALESCE(SUM(valor_centavos), 0)::bigint AS total, COUNT(*)::bigint AS qtd
         FROM financeiro_transacoes
         WHERE tenant_id = ${tenantId}::uuid AND status = 'pago' AND data_competencia = ${hoje}::date
-        GROUP BY forma_pagamento, tipo`;
+        GROUP BY 1, tipo`;
       const entradasHoje = porForma.filter((r) => r.tipo === 'entrada');
       return {
         data: hoje,
         saldoCentavos: Number(saldo.entradas) - Number(saldo.saidas),
         desde: saldo.desde,
         historicoImportadoCentavos: Number(saldo.historico),
+        periodo: {
+          de,
+          ate,
+          entradasCentavos: Number(mes.entradas),
+          saidasCentavos: Number(mes.saidas),
+          saldoCentavos: Number(mes.entradas) - Number(mes.saidas),
+          importadoCentavos: Number(mes.importado),
+          khubCentavos: Number(mes.khub),
+        },
         hoje: {
           entradasCentavos: entradasHoje.reduce((a, r) => a + Number(r.total), 0),
           saidasCentavos: porForma.filter((r) => r.tipo === 'saida').reduce((a, r) => a + Number(r.total), 0),

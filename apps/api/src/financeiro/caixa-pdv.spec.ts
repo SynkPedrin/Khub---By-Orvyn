@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, HttpException } from '@nestjs/common';
-import { normalizarPagamento } from './caixa.service';
+import { CaixaService, normalizarPagamento } from './caixa.service';
 import { FinanceiroSenhaService, conferirHash, gerarHash } from './senha.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { ConfigService } from '../config/config.service';
@@ -69,5 +69,48 @@ describe('senha do financeiro', () => {
     await s.definir(T, { identityId: U, role: 'owner' }, { novaSenha: '@Senha123' });
     await expect(s.definir(T, { identityId: U, role: 'owner' }, { senhaAtual: 'errada', novaSenha: 'outra1' })).rejects.toThrow(ForbiddenException);
     await expect(s.definir(T, { identityId: U, role: 'owner' }, { senhaAtual: '@Senha123', novaSenha: 'outra1' })).resolves.toEqual({ ok: true });
+  });
+});
+
+describe('caixa do período (mensal por padrão)', () => {
+  function caixaCom(linhas: Record<string, bigint | string | null>[][]) {
+    const chamadas: unknown[][] = [];
+    const tx = {
+      $queryRaw: jest.fn(async (...args: unknown[]) => { chamadas.push(args); return linhas.shift() ?? []; }),
+    };
+    const prisma = { withTenant: jest.fn(async (_t: string, fn: (x: typeof tx) => unknown) => fn(tx)) } as unknown as PrismaService;
+    return { caixa: new CaixaService(prisma), chamadas };
+  }
+  const respostas = () => [
+    [{ entradas: 0n, saidas: 0n, historico: 0n, desde: null }],
+    [{ entradas: 500000n, saidas: 120000n, importado: 300000n, khub: 80000n }],
+    [{ forma: 'importado', tipo: 'entrada', total: 31400n, qtd: 3n }],
+  ];
+  const valores = (args: unknown[]) => args.slice(1).map(String);
+
+  it('sem período: do dia 1º do mês até hoje, separando Avec e KHUB', async () => {
+    const { caixa, chamadas } = caixaCom(respostas());
+    const r = await caixa.caixaAtual(T, new Date('2026-11-18T15:00:00Z'));
+    expect(r.periodo).toEqual({ de: '2026-11-01', ate: '2026-11-18', entradasCentavos: 500000, saidasCentavos: 120000, saldoCentavos: 380000, importadoCentavos: 300000, khubCentavos: 80000 });
+    expect(valores(chamadas[1])).toEqual(expect.arrayContaining(['2026-11-01', '2026-11-18']));
+    expect(r.hoje.porForma).toEqual([{ forma: 'importado', totalCentavos: 31400, qtd: 3 }]);
+  });
+
+  it('mês inteiro pedido: corta em hoje (não conta recebimento futuro)', async () => {
+    const { caixa, chamadas } = caixaCom(respostas());
+    const r = await caixa.caixaAtual(T, new Date('2026-11-18T15:00:00Z'), { de: '2026-11-01', ate: '2026-11-30' });
+    expect([r.periodo.de, r.periodo.ate]).toEqual(['2026-11-01', '2026-11-18']);
+    expect(valores(chamadas[1])).toEqual(expect.arrayContaining(['2026-11-01', '2026-11-18']));
+  });
+
+  it('mês passado: período inteiro', async () => {
+    const { caixa } = caixaCom(respostas());
+    const r = await caixa.caixaAtual(T, new Date('2026-11-18T15:00:00Z'), { de: '2026-10-01', ate: '2026-10-31' });
+    expect([r.periodo.de, r.periodo.ate]).toEqual(['2026-10-01', '2026-10-31']);
+  });
+
+  it('início depois do fim: 400', async () => {
+    const { caixa } = caixaCom(respostas());
+    await expect(caixa.caixaAtual(T, new Date('2026-11-18T15:00:00Z'), { de: '2026-11-20', ate: '2026-11-10' })).rejects.toBeInstanceOf(BadRequestException);
   });
 });

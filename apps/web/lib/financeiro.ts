@@ -100,7 +100,7 @@ export const FORMAS: { valor: FormaPagamento; rotulo: string }[] = [
   { valor: 'credito', rotulo: 'Crédito' },
   { valor: 'dinheiro', rotulo: 'Dinheiro' },
 ];
-export const ROTULO_FORMA: Record<string, string> = { pix: 'Pix', debito: 'Débito', credito: 'Crédito', dinheiro: 'Dinheiro', nao_informada: 'Sem forma' };
+export const ROTULO_FORMA: Record<string, string> = { pix: 'Pix', debito: 'Débito', credito: 'Crédito', dinheiro: 'Dinheiro', importado: 'Do Avec', nao_informada: 'Sem forma' };
 
 export interface Produto {
   id: string;
@@ -128,6 +128,8 @@ export interface CaixaAtual {
   desde: string | null;
   /** Resultado do histórico importado de outro sistema (fora do caixa). */
   historicoImportadoCentavos: number;
+  /** Caixa do período pedido (padrão: o mês corrente), recebido/pago até hoje. */
+  periodo: { de: string; ate: string; entradasCentavos: number; saidasCentavos: number; saldoCentavos: number; importadoCentavos: number; khubCentavos: number };
   hoje: { entradasCentavos: number; saidasCentavos: number; vendas: number; porForma: { forma: string; totalCentavos: number; qtd: number }[] };
 }
 
@@ -224,7 +226,13 @@ export const financeiro = {
   senhaEstado: () => req<{ configurada: boolean }>('senha'),
   verificarSenha: (senha: string) => req<{ token: string | null; expiraEm: string | null; configurada: boolean }>('senha/verificar', { method: 'POST', body: JSON.stringify({ senha }) }),
   definirSenha: (d: { senhaAtual?: string; novaSenha: string }) => req<{ ok: boolean }>('senha', { method: 'POST', body: JSON.stringify(d) }),
-  caixaAtual: () => req<CaixaAtual>('caixa-atual'),
+  caixaAtual: (de?: string, ate?: string) => {
+    const q = new URLSearchParams();
+    if (de) q.set('de', de);
+    if (ate) q.set('ate', ate);
+    const qs = q.toString();
+    return req<CaixaAtual>(`caixa-atual${qs ? `?${qs}` : ''}`);
+  },
   cancelarTransacao: (id: string, motivo?: string | null) => req<Transacao>(`transacoes/${id}/cancelar`, { method: 'POST', body: JSON.stringify({ motivo: motivo ?? null }) }),
   produtos: (f: { q?: string; limite?: number; inativos?: boolean } = {}) => {
     const qs = new URLSearchParams();

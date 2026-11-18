@@ -198,9 +198,9 @@ export class FinanceiroController {
 
   // --------------------- caixa atual (Visão geral) ---------------------
   @Get('caixa-atual')
-  async caixaAtual(@TenantId() t: string, @CurrentUser() u: AuthUser, @Headers(CABECALHO_SENHA) token?: string) {
+  async caixaAtual(@TenantId() t: string, @CurrentUser() u: AuthUser, @Query() q: FiltroTransacaoDto, @Headers(CABECALHO_SENHA) token?: string) {
     await this.exigirSenha(t, u, token);
-    return this.caixa.caixaAtual(t);
+    return this.caixa.caixaAtual(t, new Date(), { de: q.de, ate: q.ate });
   }
 
   // --------------------- cobranças (existente) ---------------------
