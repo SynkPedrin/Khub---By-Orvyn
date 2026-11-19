@@ -5,6 +5,8 @@ import { isWorker } from '../common/queue-connection';
 
 /** 4x ao dia: a Graph API consolida insights com atraso, sync mais frequente repete dado. */
 const A_CADA = 6 * 3_600_000;
+/** Agenda do Avec (ADR-0052): a cada 10 min; antes de oferecer/reservar a IA ainda relê o dia ao vivo. */
+const AVEC_A_CADA = 10 * 60_000;
 
 /**
  * Agenda o sync periódico de anúncios (SÓ no worker, mesmo desenho de
@@ -20,6 +22,7 @@ export class AdsSyncScheduler implements OnModuleInit {
   async onModuleInit() {
     if (!isWorker()) return;
     await this.fila.upsertJobScheduler('ads-sync-6h', { every: A_CADA }, { name: 'sync-todos', data: {}, opts: { removeOnComplete: 20, removeOnFail: 100 } });
-    this.log.log('sync de anúncios agendado (a cada 6h)');
+    await this.fila.upsertJobScheduler('avec-agenda-10min', { every: AVEC_A_CADA }, { name: 'avec-agenda', data: {}, opts: { removeOnComplete: 20, removeOnFail: 100 } });
+    this.log.log('sync de anúncios agendado (a cada 6h) e agenda do Avec (a cada 10 min)');
   }
 }

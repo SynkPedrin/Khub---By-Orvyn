@@ -4,6 +4,7 @@ import type { Job } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdsSyncService } from './ads-sync.service';
 import { ADS_CONNECTORS, type AdsConnector } from './ads-connector';
+import { AvecAgendaService } from './avec/avec-agenda.service';
 
 interface SyncJob {
   tenantId: string;
@@ -24,11 +25,14 @@ export class AdsSyncProcessor extends WorkerHost {
     private readonly sync: AdsSyncService,
     private readonly prisma: PrismaService,
     @Inject(ADS_CONNECTORS) private readonly connectors: Record<string, AdsConnector>,
+    private readonly avec: AvecAgendaService,
   ) {
     super();
   }
 
-  async process(job: Job<SyncJob>): Promise<{ records: number } | ResultadoSyncTodos> {
+  async process(job: Job<SyncJob>): Promise<{ records: number } | ResultadoSyncTodos | { saloes: number; falhas: number }> {
+    // Agenda do Avec (ADR-0052) divide a fila de sync: nenhuma conexão Redis a mais.
+    if (job.name === 'avec-agenda') return this.avec.sincronizarTodos();
     // 'sync-todos' vem do agendador periódico (ads-sync.scheduler.ts); o resto
     // é o sync manual de UMA integração (POST /integrations/:id/sync).
     if (job.name === 'sync-todos') return this.syncTodos();

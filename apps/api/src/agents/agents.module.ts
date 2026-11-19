@@ -6,6 +6,7 @@ import { AgendaModule } from '../agenda/agenda.module';
 import { AutomationsModule } from '../automations/automations.module';
 import { FinanceiroModule } from '../financeiro/financeiro.module';
 import { AiModule } from '../ai/ai.module';
+import { AvecModule } from '../integrations/avec/avec.module';
 import { isWorker } from '../common/queue-connection';
 import { AgentKnowledgeController, AgentLearningController, AgentOperationsController, AgentsController } from './agents.controller';
 import { AgentStudioController } from './agent-studio.controller';
@@ -46,6 +47,7 @@ import { AvaliacoesProcessor, FILA_MANUTENCAO_AGENTES, ManutencaoAgentesProcesso
     AutomationsModule,
     FinanceiroModule,
     AiModule,
+    AvecModule,
     BullModule.registerQueue({ name: FILA_AGENTES }),
     BullModule.registerQueue({ name: FILA_ENTREGAS }),
     BullModule.registerQueue({ name: FILA_AVALIACOES }),

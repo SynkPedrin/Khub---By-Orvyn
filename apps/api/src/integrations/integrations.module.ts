@@ -15,6 +15,7 @@ import { AdsSyncProcessor } from './ads-sync.processor';
 import { AdsSyncScheduler } from './ads-sync.scheduler';
 import { AdsController, AdsSimuladorController, IntegrationsController } from './integrations.controller';
 import { MetaWebhookController } from './meta-webhook.controller';
+import { AvecModule } from './avec/avec.module';
 
 import { queueConnection, isWorker } from '../common/queue-connection';
 
@@ -29,6 +30,8 @@ import { queueConnection, isWorker } from '../common/queue-connection';
     // integrations -> redes (o simulador puxa posts do Instagram). Redes não
     // importa integrations como módulo, então não há ciclo.
     RedesModule,
+    // Agenda do Avec: o processor da fila 'ads-sync' roda o sync periódico dela.
+    AvecModule,
   ],
   controllers: [IntegrationsController, AdsController, AdsSimuladorController, MetaWebhookController],
   providers: [

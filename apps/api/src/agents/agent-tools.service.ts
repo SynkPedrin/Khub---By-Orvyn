@@ -580,15 +580,26 @@ export class AgentToolsService {
   /** Próximo compromisso ativo do contato (ou um específico, conferindo o dono). */
   private async acharCompromisso(tx: Prisma.TransactionClient, contactId: string, compromissoId?: string) {
     if (compromissoId) {
-      const c = await tx.agendaCompromisso.findFirst({ where: { id: compromissoId, contactId }, select: { id: true, inicio: true, fim: true, status: true } });
+      const c = await tx.agendaCompromisso.findFirst({ where: { id: compromissoId, contactId }, select: { id: true, inicio: true, fim: true, status: true, origem: true } });
       if (!c) throw new Error('compromisso não pertence a este contato');
-      return c;
+      return this.semAgendaExterna(c);
     }
-    return tx.agendaCompromisso.findFirst({
+    const c = await tx.agendaCompromisso.findFirst({
       where: { contactId, inicio: { gte: new Date() }, status: { in: ['agendado', 'confirmado'] } },
       orderBy: { inicio: 'asc' },
-      select: { id: true, inicio: true, fim: true, status: true },
+      select: { id: true, inicio: true, fim: true, status: true, origem: true },
     });
+    return c ? this.semAgendaExterna(c) : null;
+  }
+
+  /**
+   * Atendimento que vem do Avec (ADR-0052) só muda no Avec: remarcar ou
+   * cancelar aqui seria desfeito no próximo sync e a cliente ficaria com a
+   * informação errada. A IA passa para a equipe.
+   */
+  private semAgendaExterna<T extends { origem: string | null }>(c: T): T {
+    if (c.origem === 'avec') throw new Error('este agendamento está na agenda oficial do salão (Avec) e só a equipe altera: use notificar_equipe com o pedido da cliente');
+    return c;
   }
 
   /**

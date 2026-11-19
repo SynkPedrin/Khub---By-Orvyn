@@ -489,6 +489,7 @@ export class AgendaService {
    * `gatilho.lembrete_agendamento` abre o fluxo (template "Lembrete D-1").
    * Idempotente: só pega quem ainda não tem lembrete (reagendar zera).
    * Compromisso marcado há menos de 30 min não recebe lembrete imediato.
+   * Linha que veio do Avec (origem 'avec', ADR-0052) não recebe: o Avec já avisa.
    */
   async dispararLembretes(tenantId: string): Promise<number> {
     return this.prisma.withTenant(tenantId, (tx) => tx.$executeRaw`
@@ -496,6 +497,7 @@ export class AgendaService {
        WHERE lembrete_enviado_em IS NULL
          AND status = 'agendado'
          AND contact_id IS NOT NULL
+         AND origem IS NULL
          AND inicio > now()
          AND inicio <= now() + ${`${JANELA_LEMBRETE_H} hours`}::interval
          AND created_at <= now() - interval '30 minutes'`);

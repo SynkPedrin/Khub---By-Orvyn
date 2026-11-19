@@ -1145,11 +1145,29 @@ model AgendaCompromisso {
   canceladoEm   DateTime? @map("cancelado_em") @db.Timestamptz(6)
   /// Quando a varredura D-1 disparou o lembrete (gera appointment.reminder_due).
   lembreteEnviadoEm DateTime? @map("lembrete_enviado_em") @db.Timestamptz(6)
+  /// db/077: a linha veio de outro sistema ('avec') e a chave dela lá. NULL = nasceu no KHUB.
+  origem         String?
+  externoId      String?   @map("externo_id")
+  sincronizadoEm DateTime? @map("sincronizado_em") @db.Timestamptz(6)
   createdBy     String?   @map("created_by") @db.Uuid
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
 
   @@map("agenda_compromissos")
+}
+
+/// db/077: expediente real por dia vindo do Avec (ini/fim NULL = folga).
+model AgendaJornada {
+  tenantId       String   @map("tenant_id") @db.Uuid
+  profissionalId String   @map("profissional_id") @db.Uuid
+  data           DateTime @db.Date
+  iniMin         Int?     @map("ini_min")
+  fimMin         Int?     @map("fim_min")
+  origem         String   @default("avec")
+  atualizadoEm   DateTime @default(now()) @map("atualizado_em") @db.Timestamptz(6)
+
+  @@id([tenantId, profissionalId, data])
+  @@map("agenda_jornadas")
 }
 
 // ======================= Nyro IA (Sprint F · migration 013) =======================

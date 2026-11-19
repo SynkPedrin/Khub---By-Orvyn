@@ -9,6 +9,13 @@ Status: `aberto` · `em correção` · `corrigido` · `não reproduz`.
 
 ## Abertos
 
+### BUG-050 — Ritinha marcava em cima de horário já ocupado no Avec (S1) — corrigido 2026-11-19 (ADR-0052, db/077)
+- **Reprodução (17/11, 14:12–19:07):** a IA fez 21 reservas pelo WhatsApp; conferidas contra a agenda AO VIVO do Avec em 19/11: 15 caíam em cima de atendimento ou bloqueio, 2 eram de clientes que já tinham horário em outro momento no Avec, 3 estavam livres mas não foram lançadas no Avec e 1 a equipe já tinha lançado.
+- **Causa raiz:** a IA só enxergava a agenda do KHUB, uma cópia da exportação do Avec de 14/11 e 18/11. A equipe continuou marcando no Avec (é o sistema do salão), então o KHUB não via nada novo. O expediente era deduzido do histórico, e bloqueios e folgas do Avec não existiam no KHUB.
+- **Correção:** sync do Avec (ADR-0052): a cada 10 min mais leitura ao vivo antes de oferecer e de reservar. Avec fora do ar → não reserva. Jornada real por dia. A IA não duplica um serviço que a cliente já tem marcado e não remarca nem cancela atendimento do Avec.
+- **Testes:** `cognito-srp.spec.ts` (vetor da AWS) e `avec-agenda.spec.ts` (mapeamento, chave, plano do dia: criar, atualizar, cancelar, adotar, conflito). QA com o Avec real (somente leitura): 14 dias em 8,5 s, 412 linhas, segunda rodada com 0 mudanças, cópia antiga adotada sem duplicar, reserva da IA em horário do Avec recusada.
+- **Pendente:** escrever no Avec (a reserva da IA ainda depende de a equipe lançar no Avec) só depois de um canário autorizado.
+
 ### BUG-049 — Travas de agenda da IA só conheciam as ferramentas da clínica (S1 para o salão) — corrigido e no ar 2026-11-17 (d997bd6)
 - **Causa:** `semAgendamentoInventado` e `semDisponibilidadeInventada` só consideravam `solicitar_agendamento` e `ver_agendamentos`. A Ritinha usa as ferramentas do salão (`reservar_horario_salao`, `ver_horarios_salao`). Com isso, a confirmação de uma reserva real ("Prontinho! Reservei…") podia ser apagada como inventada, e uma oferta de horário real ("temos horário amanhã às 14h") podia ser removida.
 - **Correção:**

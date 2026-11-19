@@ -121,6 +121,11 @@ Tabelas (todas `tenant_id NOT NULL`, RLS FORCE `tenant_rw`, gatilho `tenant_refe
 - `estoque_movimentos`: + origem `venda`, `transacao_id`→financeiro_transacoes (baixa/reposição ligada à venda).
 - `financeiro_config(tenant_id PK, senha_hash scrypt, updated_by, updated_at)` com RLS `tenant_rw`.
 
+## 2.13 Agenda do Avec ([[Arquitetura|ADR-0052]] · `db/077_agenda_avec_sync.sql`)
+- `agenda_compromissos`: + `origem` (`NULL` = nasceu no KHUB | `'avec'`), `externo_id` (chave da reserva no Avec, CHECK anda junto com origem), `sincronizado_em`. Índice único parcial `(tenant_id, origem, externo_id) WHERE externo_id IS NOT NULL`.
+- `agenda_jornadas(tenant_id, profissional_id, data)` PK, `ini_min`/`fim_min` (minutos no fuso; ambos NULL = folga), `origem`, `atualizado_em`. RLS `tenant_rw`, `tenant_reference` para profissional. Teste `db/077_agenda_avec_sync_isolation_test.sql`.
+- Rollback no cabeçalho da migração. Aditiva.
+
 ## 3. Escopo de F0 — schema inicial
 
 F0 entrega **apenas** (ver [[Sprint]] / [[Tasks]] F0-08):
