@@ -20,6 +20,8 @@ export interface ToastOpcoes {
   description?: string;
   /** Milissegundos até sumir. Padrão: 4000 (erro: 7000). `0` = só fecha no X. */
   duration?: number;
+  /** Ação no toast (ex.: "Desfazer"). Renderiza como botão lime. */
+  action?: { label: string; onClick: () => void };
 }
 
 export interface ToastItem extends ToastOpcoes {
@@ -56,9 +58,9 @@ export function ToastProvider({ children, max = 4 }: { children: ReactNode; max?
   }, []);
 
   const show = useCallback<ToastApi['show']>(
-    ({ tone, title, description, duration }) => {
+    ({ tone, title, description, duration, action }) => {
       const id = ++seq.current;
-      setItens((x) => [...x, { id, tone, title, description, duration }].slice(-max));
+      setItens((x) => [...x, { id, tone, title, description, duration, action }].slice(-max));
       const ms = duration ?? DURACAO[tone];
       if (ms > 0) timers.current.set(id, setTimeout(() => dismiss(id), ms));
       return id;
@@ -118,6 +120,18 @@ function ToastCard({ t, onClose }: { t: ToastItem; onClose: () => void }) {
         <p className="font-medium">{t.title}</p>
         {t.description && <p className="mt-0.5 text-xs text-muted">{t.description}</p>}
       </div>
+      {t.action && (
+        <button
+          type="button"
+          className="shrink-0 self-center rounded-control px-2 py-1 text-xs font-semibold text-lime-ink transition-colors duration-fast hover:bg-[var(--lime-900)]"
+          onClick={() => {
+            t.action!.onClick();
+            onClose();
+          }}
+        >
+          {t.action.label}
+        </button>
+      )}
       <button type="button" className="btn btn-ghost btn-icon btn-sm -mr-1 -mt-1 h-7 w-7 shrink-0" aria-label="Fechar aviso" onClick={onClose}>
         <Icon name="close" size={14} />
       </button>

@@ -1264,11 +1264,11 @@ a {
     gap: 8px;
     height: 38px;
     padding: 0 16px;
-    border-radius: var(--r-full);
+    border-radius: var(--r-control);
     border: 1px solid var(--lg-edge);
     background: var(--lg-fill-control);
     color: var(--text);
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 560;
     line-height: 1;
     letter-spacing: -0.006em;
@@ -1299,55 +1299,41 @@ a {
     cursor: not-allowed;
   }
 
-  /* ADR-0036: roxo da marca com volume sutil (degradê vertical curto) e
-     sombra leve — a única ação com cor forte na tela. Sem halo, sem brilho. */
+  /* v2: lime = sinal. Preenchimento lime + tinta escura, sem sombra colorida. */
   .btn-primary {
-    background: linear-gradient(180deg, color-mix(in srgb, var(--brand) 88%, #fff) 0%, var(--brand) 60%, color-mix(in srgb, var(--brand) 92%, #000) 100%);
-    border-color: color-mix(in srgb, var(--brand) 50%, #000);
-    color: #0e1a04;
+    background: linear-gradient(180deg, var(--lime-400) 0%, var(--lime-500) 60%, color-mix(in srgb, var(--lime-500) 92%, #000) 100%);
+    border-color: color-mix(in srgb, var(--lime-500) 55%, #000);
+    color: var(--lime-ink);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.28),
-      0 1px 2px rgba(40, 25, 80, 0.12),
-      0 8px 24px -6px color-mix(in srgb, var(--brand) 55%, transparent);
+      inset 0 1px 0 rgba(255, 255, 255, 0.35),
+      0 1px 2px rgba(0, 0, 0, 0.25);
     --lg-specular: rgba(255, 255, 255, 0.3);
   }
   .btn-primary:hover:not(:disabled) {
-    background: linear-gradient(180deg, color-mix(in srgb, var(--brand) 88%, #fff) 0%, var(--brand) 60%, color-mix(in srgb, var(--brand) 94%, #000) 100%);
-    filter: brightness(1.05);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--lime-400) 90%, #fff) 0%, var(--lime-400) 60%, var(--lime-500) 100%);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.3),
-      0 1px 2px rgba(40, 25, 80, 0.12),
-      0 8px 20px -6px color-mix(in srgb, var(--brand) 45%, transparent);
+      inset 0 1px 0 rgba(255, 255, 255, 0.38),
+      0 1px 2px rgba(0, 0, 0, 0.25);
   }
 
-  /* Ação de IA: grafite, para se distinguir do roxo de ação comum */
+  /* v2: violeta = inteligência, nos DOIS temas (antes: grafite no claro). */
   .btn-ai {
-    background: linear-gradient(180deg, #3a3a3c 0%, #1d1d1f 100%);
-    border-color: transparent;
-    color: #fff;
+    background: linear-gradient(180deg, var(--violet-600) 0%, var(--violet-700) 100%);
+    border-color: color-mix(in srgb, var(--violet-700) 70%, #000);
+    color: #ffffff;
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.16),
-      0 1px 2px rgba(0, 0, 0, 0.2),
-      0 4px 14px rgba(0, 0, 0, 0.14);
+      inset 0 1px 0 rgba(255, 255, 255, 0.18),
+      0 1px 2px rgba(0, 0, 0, 0.2);
     --lg-specular: rgba(255, 255, 255, 0.22);
   }
   .btn-ai:hover:not(:disabled) {
-    background: linear-gradient(180deg, #48484a 0%, #242426 100%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--violet-600) 88%, #fff) 0%, var(--violet-600) 100%);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.18),
-      0 1px 2px rgba(0, 0, 0, 0.2),
-      0 8px 22px rgba(0, 0, 0, 0.18);
+      inset 0 1px 0 rgba(255, 255, 255, 0.2),
+      0 1px 2px rgba(0, 0, 0, 0.2);
   }
-  /* Claro: ação principal em roxo da logo pede texto branco. */
+  /* Claro: --brand é #4c7a00 (escuro) — texto branco mantém AA. */
   :root[data-theme='light'] .btn-primary {
-    color: #ffffff;
-  }
-
-  :root[data-theme='dark'] .btn-ai,
-  .dark .btn-ai {
-    /* Kroma: violeta é a cor da inteligência. */
-    background: linear-gradient(180deg, var(--violet-glow) 0%, var(--violet) 100%);
-    border-color: color-mix(in srgb, var(--violet) 60%, #000);
     color: #ffffff;
   }
 
