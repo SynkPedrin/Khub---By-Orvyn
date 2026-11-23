@@ -26,7 +26,7 @@ const ROTAS_CLIENTE = [
   '/configuracoes',
 ];
 const ROTAS_AGENCIA = ['/agency', '/agency/clients', '/agency/equipe', '/agency/calendario', '/agency/studio', '/agency/tarefas', '/agency/configuracoes'];
-const ROTAS = process.argv[2] === 'agencia' ? ROTAS_AGENCIA : ROTAS_CLIENTE;
+const ROTAS = process.env.ROTAS ? process.env.ROTAS.split(',') : process.argv[2] === 'agencia' ? ROTAS_AGENCIA : ROTAS_CLIENTE;
 
 const VIEWS = [
   { nome: 'desktop', width: 1440, height: 900 },
