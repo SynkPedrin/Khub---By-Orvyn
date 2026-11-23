@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { Card, cx } from '@/components/ui';
 import { Icon, type IconName } from '@/components/icons';
 import { marketplace, type TemplateResumo, type TemplateDetalhe } from '@/lib/marketplace';
+import { pipelineApi } from '@/lib/pipeline';
+import { Select } from '@/components/kit';
 
 interface Doc { slug: string; title: string; excerpt: string; words: number }
 
@@ -61,6 +63,16 @@ export default function BibliotecaPage() {
   const [erroDocs, setErroDocs] = useState(false);
   // Modal de binding: quando o template tem variáveis, coleta os valores antes de instalar.
   const [bind, setBind] = useState<{ tpl: TemplateDetalhe; valores: Record<string, string> } | null>(null);
+  // Etapas reais do funil: variável do tipo 'etapa' vira um Select (nunca UUID colado à mão).
+  const [etapas, setEtapas] = useState<{ value: string; label: string }[]>([]);
+
+  useEffect(() => {
+    if (!bind?.tpl.variables.some((v) => v.tipo === 'etapa')) return;
+    pipelineApi
+      .quadro(undefined, {})
+      .then((q) => setEtapas(q.stages.map((s) => ({ value: s.id, label: s.nome }))))
+      .catch(() => setEtapas([]));
+  }, [bind]);
 
   const carregar = () => {
     setErroTpl(false); setErroDocs(false);
@@ -212,7 +224,15 @@ export default function BibliotecaPage() {
               {bind.tpl.variables.map((v) => (
                 <div key={v.chave}>
                   <label className="mb-1 block text-xs font-semibold text-muted">{v.label}{v.obrigatorio && ' *'}</label>
-                  {v.tipo === 'texto' && (bind.valores[v.chave]?.length ?? 0) > 40 ? (
+                  {v.tipo === 'etapa' ? (
+                    <Select
+                      value={bind.valores[v.chave] ?? ''}
+                      onChange={(val) => setBind({ ...bind, valores: { ...bind.valores, [v.chave]: val } })}
+                      options={etapas}
+                      placeholder="Escolha a etapa do funil"
+                      aria-label={v.label}
+                    />
+                  ) : v.tipo === 'texto' && (bind.valores[v.chave]?.length ?? 0) > 40 ? (
                     <textarea
                       value={bind.valores[v.chave] ?? ''}
                       onChange={(e) => setBind({ ...bind, valores: { ...bind.valores, [v.chave]: e.target.value } })}
