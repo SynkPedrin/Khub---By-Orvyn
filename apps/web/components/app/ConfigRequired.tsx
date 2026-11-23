@@ -14,8 +14,9 @@ export function ConfigRequired({ provider, missing, compact }: { provider: strin
         Configurar {label}
       </p>
       <p className={`mt-1 text-amber-700/90 dark:text-amber-200/80 ${compact ? 'text-[11px]' : 'text-xs'}`}>
-        A integração está pronta, só falta ligar a credencial do {label} no servidor do KHUB. Quem administra o
-        servidor cadastra estas variáveis nas configurações da API (no Render: Environment) e salva:
+        A integração está pronta, só falta a credencial do {label}. Importante: as variáveis vão no serviço da
+        API no Render (<strong>render.com → serviço da API → Environment → Save Changes</strong> — o serviço
+        reinicia sozinho). Variável cadastrada na Vercel (site) não chega na API. Variáveis necessárias:
       </p>
       <ul className="mt-1.5 flex flex-wrap gap-1.5">
         {missing.map((v) => (
