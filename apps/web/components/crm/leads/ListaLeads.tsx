@@ -6,14 +6,14 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Icon } from '@/components/icons';
 import { Avatar, cx } from '@/components/ui';
-import { Button, Confirm, Menu, Modal, PaginacaoCursor, Select, SkeletonRows, Switch, useToast, type MenuEntry } from '@/components/kit';
+import { Button, Confirm, Menu, Modal, PaginacaoCursor, Select, SkeletonRows, Switch, Tabs, useToast, type MenuEntry } from '@/components/kit';
 import { EmptyState, ErrorState } from '@/components/revenue/States';
 import { Quando } from '@/components/revenue/Quando';
 import { ApiError } from '@/lib/api-error';
 import { crm, type Atendente } from '@/lib/crm';
 import { funisApi, type FunilConfig } from '@/lib/comercial';
 import { customFields, type CampoDef } from '@/lib/custom-fields';
-import { moeda, numero } from '@/lib/format';
+import { moeda, numero, telefone } from '@/lib/format';
 import {
   COLUNAS, COLUNAS_PADRAO, ORDENS, contarFiltros, contatos,
   type AcaoMassa, type ColunaId, type ContatoLista, type FiltroContatos, type ListaSalva, type OrdemContatos,
@@ -36,6 +36,16 @@ function gravarColunas(c: ColunaId[]) {
 }
 
 const mensagem = (e: unknown, padrao: string) => (e instanceof ApiError && e.message && !/^Erro \d+$/.test(e.message) ? e.message : padrao);
+
+/** Anel do avatar pela cor do canal de entrada (tokens --ch-* do tema). */
+const ANEL_CANAL: Record<string, string> = {
+  whatsapp_direto: 'var(--ch-whatsapp)',
+  instagram_direto: 'var(--ch-instagram)',
+  meta_ads: 'var(--ch-facebook)',
+  formulario: 'var(--ch-email)',
+};
+
+type Chip = { id: string; rotulo: string; remover: () => void };
 
 type ModalAberto = null | 'tag_add' | 'tag_remove' | 'etapa' | 'dono' | 'excluir' | 'salvar' | 'apagar_lista';
 
@@ -145,6 +155,33 @@ export function ListaLeads({ versao, vazio }: { versao: number; vazio: ReactNode
     });
   const limparFiltros = () => { setFiltro({}); setBusca(''); setQ(''); };
 
+  // Chips de filtro ativos (v2): a linha 2 da toolbar mostra o recorte e
+  // permite remover cada pedaço sem reabrir o painel.
+  const removerCf = (k: string) => setFiltro((f) => {
+    const cf = { ...(f.cf ?? {}) };
+    delete cf[k];
+    const n: FiltroContatos = { ...f, cf };
+    if (!Object.keys(cf).length) delete n.cf;
+    return n;
+  });
+  const chips: Chip[] = [];
+  if (q) chips.push({ id: 'q', rotulo: `Busca: “${q}”`, remover: () => { setBusca(''); setQ(''); } });
+  if (filtro.stageId) chips.push({ id: 'stageId', rotulo: `Etapa: ${etapas.find((e) => e.value === filtro.stageId)?.label ?? '…'}`, remover: () => mudarFiltro('stageId', '') });
+  if (filtro.origem) chips.push({ id: 'origem', rotulo: `Origem: ${filtro.origem}`, remover: () => mudarFiltro('origem', '') });
+  if (filtro.tag) chips.push({ id: 'tag', rotulo: `Tag: ${filtro.tag}`, remover: () => mudarFiltro('tag', '') });
+  if (filtro.ownerId) chips.push({ id: 'ownerId', rotulo: `Dono: ${filtro.ownerId === 'nenhum' ? 'Sem dono' : nomeDono.get(filtro.ownerId) ?? 'Membro da equipe'}`, remover: () => mudarFiltro('ownerId', '') });
+  if (filtro.naoPerturbe) chips.push({ id: 'naoPerturbe', rotulo: `Não perturbe: ${filtro.naoPerturbe === 'sim' ? 'Só marcados' : 'Só não marcados'}`, remover: () => mudarFiltro('naoPerturbe', '') });
+  const dataBR = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('pt-BR');
+  if (filtro.criadoDe) chips.push({ id: 'criadoDe', rotulo: `Criado de: ${dataBR(filtro.criadoDe)}`, remover: () => mudarFiltro('criadoDe', '') });
+  if (filtro.criadoAte) chips.push({ id: 'criadoAte', rotulo: `Criado até: ${dataBR(filtro.criadoAte)}`, remover: () => mudarFiltro('criadoAte', '') });
+  for (const [k, v] of Object.entries(filtro.cf ?? {})) {
+    if (!v) continue;
+    const base = k.replace(/_(min|max)$/, '');
+    const sufixo = k.endsWith('_min') ? ' (a partir de)' : k.endsWith('_max') ? ' (até)' : '';
+    const rotulo = campos.find((c) => c.chave === base)?.rotulo ?? base;
+    chips.push({ id: `cf-${k}`, rotulo: `${rotulo}${sufixo}: ${v}`, remover: () => removerCf(k) });
+  }
+
   const aplicarLista = (id: string) => {
     setListaId(id);
     const l = listas.find((x) => x.id === id);
@@ -238,50 +275,76 @@ export function ListaLeads({ versao, vazio }: { versao: number; vazio: ReactNode
 
   return (
     <div className="space-y-4">
-      {/* Barra de ferramentas */}
-      <div className="card flex flex-wrap items-center gap-2 p-3">
-        <Select
-          aria-label="Lista salva"
-          className="h-9 w-auto min-w-[180px]"
-          value={listaId}
-          onChange={aplicarLista}
-          placeholder="Todos os leads"
-          options={listas.map((l) => ({ value: l.id, label: l.minha ? l.nome : `${l.nome} (equipe)` }))}
-        />
-        <div className="relative min-w-[200px] flex-1">
-          <Icon name="search" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
-          <input
-            type="search"
-            className="input h-9 w-full pl-9"
-            placeholder="Buscar por nome, e-mail ou telefone"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            aria-label="Buscar leads"
+      {/* Barra de ferramentas (v2 — corrige B1):
+          linha 0 = abas das visualizações salvas · linha 1 = busca (flex-1) +
+          ações primárias · linha 2 = chips dos filtros ativos. Controles com
+          min-width saneados: nada se sobrepõe em 1280px nem 1024px. */}
+      <div className="card">
+        {listas.length > 0 && (
+          <div className="px-3 pt-1.5">
+            <Tabs
+              label="Visualizações de leads"
+              idBase="leads-visao"
+              variant="underline"
+              value={listaId || 'todas'}
+              onChange={(v) => aplicarLista(v === 'todas' ? '' : v)}
+              items={[
+                { value: 'todas', label: 'Todos os leads', count: !listaId && !carregando && !erro ? itens.length : undefined },
+                ...listas.map((l) => ({
+                  value: l.id,
+                  label: l.minha ? l.nome : `${l.nome} (equipe)`,
+                  count: listaId === l.id && !carregando && !erro ? itens.length : undefined,
+                })),
+              ]}
+            />
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-2 p-3">
+          <div className="relative min-w-[220px] flex-1 basis-[240px]">
+            <Icon name="search" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
+            <input
+              type="search"
+              className="input h-9 w-full pl-9"
+              placeholder="Buscar por nome, e-mail ou telefone"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              aria-label="Buscar leads"
+            />
+          </div>
+          <Button variant={painel || nFiltros ? 'soft' : 'secondary'} size="sm" icon="filter" onClick={() => setPainel((v) => !v)} aria-expanded={painel}>
+            Filtros{nFiltros ? ` (${nFiltros})` : ''}
+          </Button>
+          <Select aria-label="Ordenar leads" className="h-9 w-auto min-w-[150px]" value={ordem} onChange={(v) => setOrdem(v as OrdemContatos)} options={ORDENS.map((o) => ({ value: o.value, label: o.label }))} />
+          <Menu label="Escolher colunas" items={menuColunas} triggerClassName="btn btn-sm !w-auto !px-3" menuClassName="w-56" trigger={<><Icon name="grid" size={15} /> Colunas</>} />
+          <Menu
+            label="Listas salvas"
+            triggerClassName="btn btn-sm !w-auto !px-3"
+            trigger={<><Icon name="star" size={15} /> Salvar lista</>}
+            items={[
+              { id: 'nova', label: 'Salvar como nova lista', icon: 'plus', onSelect: () => setModal('salvar') },
+              ...(listaAtiva?.minha
+                ? ([
+                    { id: 'atualizar', label: `Atualizar "${listaAtiva.nome}"`, icon: 'refresh', onSelect: () => void salvarLista({ nome: listaAtiva.nome, compartilhada: listaAtiva.compartilhada, atualizar: true }) },
+                    { type: 'separator', id: 's' },
+                    { id: 'apagar', label: 'Excluir esta lista', icon: 'trash', danger: true, onSelect: () => setModal('apagar_lista') },
+                  ] as MenuEntry[])
+                : []),
+            ]}
           />
+          <Link href="/leads/duplicados" className="btn btn-sm">
+            <Icon name="users" size={15} /> Duplicados
+          </Link>
         </div>
-        <Button variant={painel || nFiltros ? 'soft' : 'secondary'} size="sm" icon="filter" onClick={() => setPainel((v) => !v)} aria-expanded={painel}>
-          Filtros{nFiltros ? ` (${nFiltros})` : ''}
-        </Button>
-        <Select aria-label="Ordenar leads" className="h-9 w-auto" value={ordem} onChange={(v) => setOrdem(v as OrdemContatos)} options={ORDENS.map((o) => ({ value: o.value, label: o.label }))} />
-        <Menu label="Escolher colunas" items={menuColunas} triggerClassName="btn btn-sm" menuClassName="w-56" trigger={<><Icon name="grid" size={15} /> Colunas</>} />
-        <Menu
-          label="Listas salvas"
-          triggerClassName="btn btn-sm"
-          trigger={<><Icon name="star" size={15} /> Salvar lista</>}
-          items={[
-            { id: 'nova', label: 'Salvar como nova lista', icon: 'plus', onSelect: () => setModal('salvar') },
-            ...(listaAtiva?.minha
-              ? ([
-                  { id: 'atualizar', label: `Atualizar "${listaAtiva.nome}"`, icon: 'refresh', onSelect: () => void salvarLista({ nome: listaAtiva.nome, compartilhada: listaAtiva.compartilhada, atualizar: true }) },
-                  { type: 'separator', id: 's' },
-                  { id: 'apagar', label: 'Excluir esta lista', icon: 'trash', danger: true, onSelect: () => setModal('apagar_lista') },
-                ] as MenuEntry[])
-              : []),
-          ]}
-        />
-        <Link href="/leads/duplicados" className="btn btn-sm">
-          <Icon name="users" size={15} /> Duplicados
-        </Link>
+        {chips.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-line px-3 py-2.5" role="group" aria-label="Filtros ativos">
+            {chips.map((chip) => (
+              <ChipFiltro key={chip.id} rotulo={chip.rotulo} onRemover={chip.remover} />
+            ))}
+            <button type="button" className="text-xs font-medium text-muted underline-offset-2 transition-colors hover:text-fg hover:underline" onClick={limparFiltros}>
+              Limpar tudo
+            </button>
+          </div>
+        )}
       </div>
 
       {painel && (
@@ -290,13 +353,18 @@ export function ListaLeads({ versao, vazio }: { versao: number; vazio: ReactNode
 
       {/* Ações em massa */}
       {(marcados.size > 0 || todosDoFiltro) && (
-        <div className="card flex flex-wrap items-center gap-2 border-brand/40 bg-brand/5 p-3" role="region" aria-label="Ações em massa">
-          <p className="mr-2 text-sm font-semibold text-fg">{todosDoFiltro ? 'Todos os leads do filtro selecionados' : `${numero(qtdSelecionada ?? 0)} selecionado(s)`}</p>
+        <div
+          className="flex flex-wrap items-center gap-2 rounded-card border p-3"
+          style={{ background: 'var(--surface-3)', borderColor: 'var(--line-1)' }}
+          role="region"
+          aria-label="Ações em massa"
+        >
+          <p className="mr-2 text-sm font-semibold tabular text-fg">{todosDoFiltro ? 'Todos os leads do filtro selecionados' : `${numero(qtdSelecionada ?? 0)} selecionado(s)`}</p>
           <Button size="sm" icon="tag" onClick={() => setModal('tag_add')} disabled={executando}>Adicionar tag</Button>
           <Button size="sm" icon="minus" onClick={() => setModal('tag_remove')} disabled={executando}>Remover tag</Button>
           <Button size="sm" icon="pipeline" onClick={() => setModal('etapa')} disabled={executando || etapas.length === 0}>Mover etapa</Button>
           <Button size="sm" icon="user" onClick={() => setModal('dono')} disabled={executando}>Atribuir dono</Button>
-          <Menu label="Não perturbe" items={acoesNaoPerturbe} triggerClassName="btn btn-sm" disabled={executando} trigger={<><Icon name="bell" size={15} /> Não perturbe</>} />
+          <Menu label="Não perturbe" items={acoesNaoPerturbe} triggerClassName="btn btn-sm !w-auto !px-3" disabled={executando} trigger={<><Icon name="bell" size={15} /> Não perturbe</>} />
           <Button size="sm" variant="danger" icon="trash" onClick={() => setModal('excluir')} disabled={executando}>Excluir</Button>
           <Button size="sm" variant="ghost" onClick={limparSelecao} disabled={executando}>Limpar seleção</Button>
         </div>
@@ -354,7 +422,7 @@ export function ListaLeads({ versao, vazio }: { versao: number; vazio: ReactNode
                     </td>
                     <td className="whitespace-nowrap">
                       <Link href={`/contatos/${c.id}`} className="flex items-center gap-2.5 hover:text-brand">
-                        <AvatarContato nome={c.nome} fotoUrl={(c as { fotoUrl?: string | null }).fotoUrl} contatoId={c.id} size={30} />
+                        <AvatarComCanal c={c} />
                         <span className="min-w-0">
                           <span className="block truncate text-sm font-semibold text-fg">{c.nome}</span>
                           {!colunas.includes('email') && c.email && <span className="block truncate text-xs text-muted">{c.email}</span>}
@@ -436,11 +504,45 @@ export function ListaLeads({ versao, vazio }: { versao: number; vazio: ReactNode
 
 /* ------------------------------------------------------------------ */
 
+/** Avatar com anel na cor do canal de entrada do lead (v2: WhatsApp, Instagram…). */
+function AvatarComCanal({ c }: { c: ContatoLista }) {
+  const cor = c.fonte ? ANEL_CANAL[c.fonte] : undefined;
+  return (
+    <span
+      className="inline-flex shrink-0 rounded-full"
+      style={cor ? { padding: 2, background: cor } : undefined}
+      title={c.fonte ? (ROTULO_FONTE[c.fonte] ?? c.fonte) : undefined}
+    >
+      <AvatarContato nome={c.nome} fotoUrl={(c as { fotoUrl?: string | null }).fotoUrl} contatoId={c.id} size={30} />
+    </span>
+  );
+}
+
+/** Chip removível de filtro ativo (linha 2 da toolbar). */
+function ChipFiltro({ rotulo, onRemover }: { rotulo: string; onRemover: () => void }) {
+  return (
+    <span
+      className="inline-flex h-7 max-w-full items-center gap-1 rounded-full border bg-surface2 pl-2.5 pr-1 text-xs font-medium text-fg"
+      style={{ borderColor: 'var(--line-2)' }}
+    >
+      <span className="min-w-0 truncate">{rotulo}</span>
+      <button
+        type="button"
+        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface3 hover:text-fg"
+        aria-label={`Remover filtro: ${rotulo}`}
+        onClick={onRemover}
+      >
+        <Icon name="close" size={11} />
+      </button>
+    </span>
+  );
+}
+
 function Celula({ c, coluna, dono }: { c: ContatoLista; coluna: ColunaId; dono: string | null }) {
   const vazio = <span className="text-faint">-</span>;
   switch (coluna) {
     case 'email': return c.email ? <span className="text-sm text-muted">{c.email}</span> : vazio;
-    case 'telefone': return c.telefone ? <span className="text-sm tabular text-muted">{c.telefone}</span> : vazio;
+    case 'telefone': return c.telefone ? <span className="text-sm tabular text-muted">{telefone(c.telefone)}</span> : vazio;
     case 'empresa': return c.empresa ? <span className="text-sm text-muted">{c.empresa}</span> : vazio;
     case 'tags': {
       const todas = [...new Set([...(c.tags ?? [])])];
