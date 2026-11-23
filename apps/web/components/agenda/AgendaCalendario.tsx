@@ -753,9 +753,10 @@ function GradeHorarios({
                       <div key={h} className="pointer-events-none absolute inset-x-0 border-b border-line" style={{ top: (h + 1) * ALTURA_HORA - 1 }} aria-hidden />
                     ))}
                     {hoje && (
+                      /* v2: linha do "agora" em lime (sinal), antes vermelha */
                       <div className="pointer-events-none absolute inset-x-0 z-[2] flex items-center" style={{ top: (minAgora / 60) * ALTURA_HORA - 1 }} aria-hidden>
-                        <span className="-ml-1 h-2.5 w-2.5 rounded-full bg-danger" />
-                        <span className="h-0.5 flex-1 bg-danger" />
+                        <span className="-ml-1 h-2.5 w-2.5 rounded-full bg-[var(--lime-500)]" />
+                        <span className="h-0.5 flex-1 bg-[var(--lime-500)]" />
                       </div>
                     )}
                     {blocos.map((b) => {
