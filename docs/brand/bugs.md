@@ -4,13 +4,14 @@ Regra: bugs não são maquiados com visual. Esta lista é viva; cada item marca 
 
 | # | Bug | Evidência | Status |
 |---|---|---|---|
-| B1 | Toolbar de Leads com controles espremidos/sobrepostos em larguras intermediárias | `components/crm/leads/ListaLeads.tsx:242` (flex-wrap sem min-width por item) | conhecido |
-| B2 | Seletor de conta (agência × cliente) desincronizado — dois switchers (`components/agency/SubaccountSwitcher.tsx` e `components/shell/Topbar.tsx:138-291`) com `clienteAtivo` derivado de duas fontes (`AgencyProvider.tsx:104-107`) + transição por `sessionStorage` TTL 15s | auditado 22/11 | conhecido, correção prevista na Fase 4.3 (provider único) |
-| B3 | Dashboard: agendamentos (21.304) > leads (3.978) — suspeita de métrica/contagem errada | reportado; verificar query do dashboard | aberto |
-| B4 | Página Google exibe nomes de variáveis de ambiente ao usuário final | `app/(app)/marketing/google/page.tsx:103` + `components/app/ConfigRequired.tsx:20-24` | conhecido |
-| B5 | "Todas as tarefas" sem estado vazio de verdade — grupos vazios renderizam "Nada aqui." cru | `components/agency/daily/TarefasView.tsx:432` | conhecido |
-| B6 | Formatação de moeda com 4 casas (`dolar()` em `lib/format.ts:142-145` — intencional p/ USD de provedor, mas vaza para telas de Agentes) + mês com maiúscula indevida | conhecido; revisar call sites | aberto |
-| B7 | **E-mails transacionais com logo quebrada**: referenciam `/logo-revenue.png` inexistente em `apps/web/public` | `apps/api/src/common/invite-email.ts:22`, `password-reset-email.ts:9` | novo |
-| B8 | Asset `public/cristais png` sem extensão de arquivo (2,4 MB inutilizável) | ls public | novo |
-| B9 | Bolhas do Inbox com cores hardcoded do WhatsApp (`#d9fdd3`/`#005c4b`) e wallpaper claro servindo o tema escuro | `components/inbox/InboxAtendimento.tsx:839`, `globals.css:48` | conhecido (será resolvido no redesign do Inbox, sem quebrar funcionalidade) |
-| B10 | `/ia` é demo-only e redireciona para `/nyro` em modo real — rota duplicada confusa | `app/(app)/ia/page.tsx:44-47` | novo |
+| B1 | Toolbar de Leads com controles espremidos/sobrepostos em larguras intermediárias | `components/crm/leads/ListaLeads.tsx:242` | **em correção** (migração Leads v2) |
+| B2 | Seletor de conta desincronizado — dois switchers com `clienteAtivo` derivado de JWT + `agency.seletor()` | auditado 22/11 | mitigado: ambos consomem o memo único do `AgencyProvider`; transição por reload completo mantida por ADR. Monitorar na 4.5 |
+| B3 | Dashboard: agendamentos > leads (suspeita de métrica) | reportado | aberto (backend, fora do escopo visual) |
+| B4 | Página Google exibe nomes de env vars | `ConfigRequired.tsx` | **won't fix (contratual)** — `docs/ENV.md` define que a UI mostra exatamente as variáveis para quem configura. Polimento visual herdado do EmptyState |
+| B5 | "Todas as tarefas" com grupos vazios ("Nada aqui.") | `TarefasView.tsx:432` | **corrigido** (grupos vazios filtrados no agrupamento por status) |
+| B6 | Mês com maiúscula indevida ("Novembro De 2026") | `financeiro/page.tsx` (classe `capitalize`) | **corrigido** (`first-letter:uppercase`). As 4 casas de `dolar()` são intencionais p/ custo USD do provedor |
+| B7 | E-mails com logo quebrada (`/logo-revenue.png` inexistente) | `apps/api/src/common/*email.ts` | **corrigido** → `/khub-logo.png`; CTA no lime de marca |
+| B8 | Asset `public/cristais png` sem extensão | ls public | aberto (decidir: renomear ou apagar — sem referências no código) |
+| B9 | Bolhas Inbox hardcoded WhatsApp + wallpaper invertido | `InboxAtendimento.tsx:839`, `globals.css:48` | **em correção** (migração Inbox v2) |
+| B10 | `/ia` demo-only redireciona para `/nyro` | `ia/page.tsx:44-47` | aberto (avaliar remoção da rota na 4.5 — fora do visual) |
+| B11 | Contraste: texto branco sobre lime em ~20 badges/toggles | grep `bg-brand text-white` | **corrigido** com a utilidade `.text-on-brand` |
