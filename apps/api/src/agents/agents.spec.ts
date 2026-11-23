@@ -399,6 +399,103 @@ describe('ferramentas de agenda respeitam o horário do agente', () => {
       expect.objectContaining({ camposCustom: expect.objectContaining({ carol_agendamento_id: 'cp1', carol_agendamento_status: 'agendado' }) }),
     );
   });
+
+  it('sem duracaoMin, agenda usa a duração LONGA (100 min) como margem conservadora', async () => {
+    const horarioClinica = horarioSchema.parse({
+      ativo: true,
+      dias: {
+        dom: [], sab: [],
+        seg: [{ inicio: '07:40', fim: '11:00' }, { inicio: '14:00', fim: '19:00' }],
+        ter: [{ inicio: '07:40', fim: '11:00' }, { inicio: '14:00', fim: '19:00' }],
+        qua: [{ inicio: '07:40', fim: '11:00' }, { inicio: '14:00', fim: '19:00' }],
+        qui: [{ inicio: '07:40', fim: '11:00' }, { inicio: '14:00', fim: '19:00' }],
+        sex: [{ inicio: '07:40', fim: '11:00' }, { inicio: '14:00', fim: '19:00' }],
+      },
+    });
+    const f = ferramentas();
+    const data = proximoDiaDaSemana(2, 10); // terça (evita a quinta, marcada como última opção de manhã)
+    // Mock tenant sem settings → lerOperacao assume 100 min (duracaoConsultaLongaMin).
+    const lista = (await f.svc.executar('ver_agendamentos', { data }, { ...CTX, horario: horarioClinica }, TODAS)).dados as {
+      horariosLivres: { inicio: string }[];
+      duracaoMinConsiderada: number;
+    };
+    expect(lista.duracaoMinConsiderada).toBe(100);
+    const ultimos = lista.horariosLivres.map((s) => horaLocalSP(s.inicio));
+    expect(ultimos).toContain('17:20'); // 100 min: último que cabe (termina 19:00)
+    expect(ultimos).not.toContain('17:40'); // com 100 min terminaria 19:20
+
+    const inicio = new Date(instanteLocal(data, 9 * 60, SP)).toISOString();
+    const r = await f.svc.executar('solicitar_agendamento', { inicio }, { ...CTX, horario: horarioClinica }, TODAS);
+    expect(r.ok).toBe(true);
+    expect(f.agenda.criar).toHaveBeenCalledWith(TENANT, 'ag1', expect.objectContaining({ fim: new Date(+new Date(inicio) + 100 * 60_000).toISOString() }), 'nyro');
+  });
+
+  it('14h–15h, 17h+ e quinta de manhã são marcados ultimaOpcao e ordenados por último', async () => {
+    const horarioClinica = horarioSchema.parse({
+      ativo: true,
+      dias: {
+        dom: [], sab: [],
+        seg: [{ inicio: '07:40', fim: '11:00' }, { inicio: '14:00', fim: '19:00' }],
+        ter: [{ inicio: '07:40', fim: '11:00' }, { inicio: '14:00', fim: '19:00' }],
+        qua: [{ inicio: '07:40', fim: '11:00' }, { inicio: '14:00', fim: '19:00' }],
+        qui: [{ inicio: '07:40', fim: '11:00' }, { inicio: '14:00', fim: '19:00' }],
+        sex: [{ inicio: '07:40', fim: '11:00' }, { inicio: '14:00', fim: '19:00' }],
+      },
+    });
+    const f = ferramentas();
+    const terca = proximoDiaDaSemana(2, 10);
+    const lista = (await f.svc.executar('ver_agendamentos', { data: terca, duracaoMin: 80 }, { ...CTX, horario: horarioClinica }, TODAS)).dados as {
+      horariosLivres: { inicio: string; ultimaOpcao?: boolean }[];
+    };
+    const livres = lista.horariosLivres;
+    const marcados = livres.filter((s) => s.ultimaOpcao).map((s) => horaLocalSP(s.inicio));
+    expect(marcados.length).toBeGreaterThan(0);
+    for (const h of marcados) expect(h.startsWith('14:') || Number(h.split(':')[0]) >= 17).toBe(true);
+    expect(marcados).toContain('17:40'); // 17h+ é última opção, mas CONTINUA oferecível
+    // Nenhum horário preferido depois de um última-opção (ordenação).
+    const primeiroUltima = livres.findIndex((s) => s.ultimaOpcao);
+    expect(livres.slice(primeiroUltima).every((s) => s.ultimaOpcao)).toBe(true);
+
+    const quinta = proximoDiaDaSemana(4, 10);
+    const listaQui = (await f.svc.executar('ver_agendamentos', { data: quinta, duracaoMin: 80 }, { ...CTX, horario: horarioClinica }, TODAS)).dados as {
+      horariosLivres: { inicio: string; ultimaOpcao?: boolean }[];
+    };
+    const quiManha = listaQui.horariosLivres.filter((s) => Number(horaLocalSP(s.inicio).split(':')[0]) < 11);
+    expect(quiManha.length).toBeGreaterThan(0);
+    expect(quiManha.every((s) => s.ultimaOpcao)).toBe(true);
+  });
+
+  it('horário pedido pelo contato: diz se está livre e ordena alternativas por proximidade', async () => {
+    const horarioClinica = horarioSchema.parse({
+      ativo: true,
+      dias: {
+        dom: [], sab: [],
+        seg: [{ inicio: '07:40', fim: '11:00' }, { inicio: '14:00', fim: '19:00' }],
+        ter: [{ inicio: '07:40', fim: '11:00' }, { inicio: '14:00', fim: '19:00' }],
+        qua: [{ inicio: '07:40', fim: '11:00' }, { inicio: '14:00', fim: '19:00' }],
+        qui: [{ inicio: '07:40', fim: '11:00' }, { inicio: '14:00', fim: '19:00' }],
+        sex: [{ inicio: '07:40', fim: '11:00' }, { inicio: '14:00', fim: '19:00' }],
+      },
+    });
+    const f = ferramentas();
+    const data = proximoDiaDaSemana(2, 10);
+    // Livre: 15:00 existe na grade de 20 min.
+    const livre = (await f.svc.executar('ver_agendamentos', { data, horario: '15:00' }, { ...CTX, horario: horarioClinica }, TODAS)).dados as {
+      solicitado: { horario: string; disponivel: boolean };
+      horariosLivres: { inicio: string }[];
+    };
+    expect(livre.solicitado).toEqual({ horario: '15:00', disponivel: true });
+    expect(horaLocalSP(livre.horariosLivres[0].inicio)).toBe('15:00'); // alternativas começam pelo pedido
+    // Ocupado: compromisso 15:00–16:40 → 15:00 e 15:20 saem da grade.
+    const ini = instanteLocal(data, 15 * 60, SP);
+    (f.agenda.listar as jest.Mock).mockResolvedValue([{ id: 'x', inicio: new Date(ini), fim: new Date(ini + 100 * 60_000), responsavelId: null }]);
+    const ocupado = (await f.svc.executar('ver_agendamentos', { data, horario: '15:00' }, { ...CTX, horario: horarioClinica }, TODAS)).dados as {
+      solicitado: { horario: string; disponivel: boolean };
+      horariosLivres: { inicio: string }[];
+    };
+    expect(ocupado.solicitado.disponivel).toBe(false);
+    expect(horaLocalSP(ocupado.horariosLivres[0].inicio)).toBe('16:40'); // 15:00/15:20/15:40/16:00/16:20 colidem com o compromisso de 100 min
+  });
 });
 
 // ------------------------------------------------------------------ remarcar / cancelar

@@ -94,7 +94,12 @@ try {
       VALUES (gen_random_uuid(), ${TENANT}::uuid, ${alvo.contact_id}::uuid, ${inicio}, ${new Date(inicio.getTime() + 80 * 60_000)}, 'TESTE HOMOLOGAÇÃO (descartável)', 'agendado', now(), now()) RETURNING id`;
     return rows[0].id;
   });
-  const fu3 = await criarFollowup(1);
+  const debugC3 = await prisma.withTenant(TENANT, async (tx) => {
+    const fu = await tx.agentFollowup.findUnique({ where: { id: fu3.id } });
+    const comp2 = await tx.agendaCompromisso.findFirst({ where: { contactId: fu.contactId, createdAt: { gt: fu.createdAt }, status: { in: ['agendado', 'confirmado'] } }, select: { id: true } });
+    return { fuCriado: fu.createdAt, compAchado: comp2?.id ?? null };
+  });
+  console.log('  debug C3:', JSON.stringify(debugC3));
   await followups.executar(TENANT, fu3.id);
   const f3 = await estado(fu3.id);
   t('C3: contato com compromisso → follow-up cancelado', f3.status === 'cancelado', `status=${f3.status} motivo=${f3.motivo ?? ''}`);

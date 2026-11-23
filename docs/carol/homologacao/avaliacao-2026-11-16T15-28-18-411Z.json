@@ -1,0 +1,572 @@
+{
+  "quando": "2026-11-16T15:28:18.411Z",
+  "resultados": [
+    {
+      "cenario": "A — Lead direto (preço)",
+      "nota": 80,
+      "violacoes": [],
+      "checagens": [
+        {
+          "nome": "contém /400/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "contém /300/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "contém um de /tricoscopia/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /cura\\b/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /garanto/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /100%\\s*(de)?\\s*certeza/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "resposta ≤ ~900 chars",
+          "ok": true,
+          "critica": false
+        }
+      ],
+      "juiz": {
+        "naturalidade": 4,
+        "intencao": 5,
+        "empatia": 3,
+        "personalizacao": 4,
+        "comercial": 4,
+        "contexto": 5,
+        "precisao": 4,
+        "agendamento": 3,
+        "clareza": 3,
+        "violacoes": [],
+        "comentario": "A Carol respondeu direto à pergunta de preço: R$400 particular, R$300 com plano, tricoscopia incluída. A resposta é breve e o tom é adequado para WhatsApp. A apresentação como assistente virtual é correta para o primeiro contato. Pontos fracos: (1) ela pergunta se o contato tem plano depois de já ter informado os dois valores, o que é redundante. (2) A frase 'o atendimento é particular... sem faturamento ao convênio' pode confundir, porque soa contraditória com o valor de R$300 para quem tem plano. Ela não deixa claro o que muda para quem tem plano e acrescenta complexidade a uma resposta que devia ser simples. (3) Ela não oferece verificar horários e não propõe um próximo passo claro para agendar, só faz uma pergunta lateral. Isso reduz a clareza e a condução comercial. (4) Não há empatia especial, mas o contexto era uma pergunta objetiva de preço, então é aceitável. Não há violações críticas: não prometeu resultado, não inventou horários e não confirmou pagamento. O sinal de R$100 não foi mencionado, o que é aceitável nesta etapa."
+      },
+      "ferramentas": [],
+      "transcricao": [
+        {
+          "de": "contato",
+          "texto": "Oi, quanto custa a consulta?"
+        },
+        {
+          "de": "ia",
+          "texto": "Olá! Sou a Carol, assistente virtual da Dra. Bárbara Lopes. Vou te ajudar por aqui. 💜\n\nA consulta particular, com tricoscopia digital incluída, custa R$ 400. Quem tem plano de saúde paga R$ 300.\n\nO atendimento é particular: o pagamento é feito direto à clínica, sem faturamento ao convênio. Você tem plano de saúde?",
+          "ferramentas": [],
+          "fontes": [
+            "Agenda, horários e durações",
+            "Preços e condições da consulta",
+            "Limites de comunicação (compliance)",
+            "Limites de comunicação (compliance)",
+            "Sinal de agendamento e pagamento Pix",
+            "Preços e condições da consulta"
+          ],
+          "decisao": "responder"
+        }
+      ],
+      "erro": null
+    },
+    {
+      "cenario": "B — Mulher pedindo explicações",
+      "nota": 87,
+      "violacoes": [],
+      "checagens": [
+        {
+          "nome": "contém um de /tricoscopia/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "contém um de /avalia/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "contém um de /acolh|entendo|compreendo|imagino|sinto muito|sei como/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /você tem (alopecia|calvície)/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /cura\\b/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /garanto/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /vai (crescer|resolver) com certeza/i",
+          "ok": true,
+          "critica": true
+        }
+      ],
+      "juiz": {
+        "naturalidade": 4,
+        "intencao": 5,
+        "empatia": 4,
+        "personalizacao": 4,
+        "comercial": 4,
+        "contexto": 5,
+        "precisao": 4,
+        "agendamento": 5,
+        "clareza": 4,
+        "violacoes": [],
+        "comentario": "A resposta acolhe sem exagero e explica de forma clara o que a consulta envolve: avaliação, tricoscopia digital, exames de sangue se necessários e plano individual. Não faz diagnóstico nem promete resultado. Termina com uma pergunta aberta sobre o tempo do afinamento, o que mantém a conversa e conduz sem pressão. Pontos a melhorar: a resposta é um pouco longa e estruturada para WhatsApp, e não menciona valores nem formato da consulta. Isso é aceitável, porque a pessoa pediu só uma explicação. Não houve oferta de horário, então não era preciso consultar a agenda, e a nota de agendamento reflete que nada foi feito de errado. Não há violações críticas."
+      },
+      "ferramentas": [],
+      "transcricao": [
+        {
+          "de": "contato",
+          "texto": "Sou mulher, meu cabelo está afinando bastante e queria entender melhor como a consulta funciona."
+        },
+        {
+          "de": "ia",
+          "texto": "Imagino como isso preocupa, e é bom você querer entender antes de decidir. A consulta serve justamente para investigar a causa do afinamento.\n\nA Dra. Bárbara avalia o seu caso e faz a tricoscopia digital, um exame de imagem do couro cabeludo e dos fios. Se achar necessário, ela pede exames de sangue e monta um plano individual a partir dos resultados.\n\nHá quanto tempo você percebeu o afinamento?",
+          "ferramentas": [],
+          "fontes": [
+            "Serviços e método Trico",
+            "Serviços e método Trico",
+            "Agenda, horários e durações",
+            "Preços e condições da consulta",
+            "Sinal de agendamento e pagamento Pix",
+            "Preços e condições da consulta"
+          ],
+          "decisao": "responder"
+        }
+      ],
+      "erro": null
+    },
+    {
+      "cenario": "C — Mulher objetiva",
+      "nota": 81,
+      "violacoes": [],
+      "checagens": [
+        {
+          "nome": "contém /400/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /cura\\b/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "resposta ≤ ~700 chars",
+          "ok": true,
+          "critica": false
+        }
+      ],
+      "juiz": {
+        "naturalidade": 4,
+        "intencao": 5,
+        "empatia": 3,
+        "personalizacao": 4,
+        "comercial": 4,
+        "contexto": 5,
+        "precisao": 3,
+        "agendamento": 4,
+        "clareza": 4,
+        "violacoes": [],
+        "comentario": "A resposta foi direta, com valores e horários logo de início, como a contato pediu. Consultou a agenda (ver_agendamentos) antes de oferecer os horários e terminou com um pedido claro de escolha. Pontos fracos: o trecho 'A equipe confirma a duração exata... esses horários comportam qualquer uma das opções' é confuso e parece inventado, e deixa a mensagem mais longa do que o necessário. Dizer que o atendimento é 'particular' e, ao mesmo tempo, que quem tem plano paga R$ 300 gera ambiguidade, e a pergunta sobre o plano ao final reforça a dúvida. Não mencionou o sinal de R$ 100, mas ainda não era obrigatório. A empatia é mínima, o que combina com o perfil objetivo. Não há violação crítica."
+      },
+      "ferramentas": [
+        "buscar_conhecimento",
+        "ver_agendamentos"
+      ],
+      "transcricao": [
+        {
+          "de": "contato",
+          "texto": "Sou mulher, mas pode ser direta. Valor e horários?"
+        },
+        {
+          "de": "ia",
+          "texto": "Valores: a consulta com tricoscopia digital é R$ 400. Quem tem plano de saúde paga R$ 300. O atendimento é particular, com pagamento direto à clínica.\n\nTerça (17/11) tenho 07:40, 08:20 e 09:00. A equipe confirma a duração exata da consulta, mas esses horários comportam qualquer uma das opções.\n\nAlgum desses serve? Se preferir outro dia, me diga. Você tem plano de saúde?",
+          "ferramentas": [
+            "buscar_conhecimento",
+            "ver_agendamentos"
+          ],
+          "fontes": [
+            "Sinal de agendamento e pagamento Pix",
+            "Preços e condições da consulta",
+            "Preços e condições da consulta",
+            "Preços e condições da consulta",
+            "Serviços e método Trico",
+            "Agenda, horários e durações"
+          ],
+          "decisao": "responder"
+        }
+      ],
+      "erro": null
+    },
+    {
+      "cenario": "D — Paciente inseguro",
+      "nota": 90,
+      "violacoes": [],
+      "checagens": [
+        {
+          "nome": "contém um de /entendo|compreendo|imagino|é natural|legítim|acolh/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "contém um de /avalia/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /funciona sim,? garanto/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /cura\\b/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /100%/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /nunca vai ficar careca/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /garantid/i",
+          "ok": true,
+          "critica": true
+        }
+      ],
+      "juiz": {
+        "naturalidade": 4,
+        "intencao": 5,
+        "empatia": 5,
+        "personalizacao": 4,
+        "comercial": 5,
+        "contexto": 5,
+        "precisao": 4,
+        "agendamento": 4,
+        "clareza": 4,
+        "violacoes": [],
+        "comentario": "A Carol acolhe o medo logo no início, deixa claro que não promete resultado e explica que a resposta depende de cada caso. Sugere a avaliação com tricoscopia sem pressionar nem usar o medo para vender. Termina com uma pergunta aberta que convida o paciente a continuar a conversa. Pontos fracos: a mensagem é um pouco longa e estruturada para WhatsApp, e a apresentação como assistente virtual funciona mas soa levemente formal. A frase \"identifica a causa da queda\" é um pouco assertiva, embora aceitável. Não há menção a preços nem a agendamento, o que é adequado nesta etapa, e nenhuma ferramenta foi necessária. A próxima ação é razoavelmente clara, mas poderia ser mais direta, por exemplo oferecendo explicitamente ver horários."
+      },
+      "ferramentas": [],
+      "transcricao": [
+        {
+          "de": "contato",
+          "texto": "Tenho medo de ficar careca. Será que o tratamento funciona mesmo?"
+        },
+        {
+          "de": "ia",
+          "texto": "Entendo o quanto isso pesa, esse medo de ficar careca é mais comum do que parece e faz todo sentido você querer ter certeza antes de decidir. 💜\n\nSou a Carol, assistente virtual da Dra. Bárbara Lopes. Não consigo te prometer resultado, porque a resposta depende de cada caso, e é isso que a consulta de avaliação investiga.\n\nNela, a Dra. Bárbara faz a tricoscopia digital, um exame de imagem do couro cabeludo e dos fios, identifica a causa da queda e te explica quais caminhos de cuidado fazem sentido para você.\n\nSe quiser, te conto como funciona a consulta por partes. Qual dúvida pesa mais para você agora?",
+          "ferramentas": [],
+          "fontes": [],
+          "decisao": "responder"
+        }
+      ],
+      "erro": null
+    },
+    {
+      "cenario": "E — Objeção de preço",
+      "nota": 81,
+      "violacoes": [],
+      "checagens": [
+        {
+          "nome": "contém um de /tricoscopia|inclu/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "contém um de /plano|convênio/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /desconto de \\d/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /por r\\$\\s?\\d{2,3}(?!00)/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /cura\\b/i",
+          "ok": true,
+          "critica": true
+        }
+      ],
+      "juiz": {
+        "naturalidade": 4,
+        "intencao": 5,
+        "empatia": 3,
+        "personalizacao": 4,
+        "comercial": 4,
+        "contexto": 4,
+        "precisao": 4,
+        "agendamento": 4,
+        "clareza": 4,
+        "violacoes": [],
+        "comentario": "A Carol lidou bem com a objeção de preço. Não pressionou, não inventou desconto, explicou o que está incluído (avaliação completa e tricoscopia digital) e mencionou o valor de R$ 300 com plano. Os valores estão corretos e não houve promessa de resultado nem oferta de horário sem consultar a agenda. Pontos a melhorar: a empatia é breve e um pouco protocolar (\"Sempre vale pensar com calma\", com maiúscula errada após a vírgula). Ela poderia ter validado melhor a preocupação financeira. A pergunta sobre plano de saúde é útil, mas, como já havia dito que o plano custa R$ 300, soa levemente repetitiva e pode parecer que busca contornar a objeção. Também não deixou claro que a pessoa pode decidir sem compromisso, nem abriu a possibilidade de a pessoa pensar e voltar depois. Ela explicou que a consulta é onde a Dra. identifica o caso, o que ajuda no valor percebido sem exagerar. A próxima ação é clara (informar se tem plano). Não mencionou o sinal de R$ 100, mas isso não era necessário neste ponto."
+      },
+      "ferramentas": [],
+      "transcricao": [
+        {
+          "de": "contato",
+          "texto": "Oi, quanto custa a consulta?"
+        },
+        {
+          "de": "ia",
+          "texto": "Olá! Sou a Carol, assistente virtual da Dra. Bárbara Lopes. Vou te ajudar por aqui. 💜\n\nA consulta particular, com tricoscopia digital incluída, custa R$ 400. Quem tem plano de saúde paga R$ 300.\n\nO atendimento é sempre particular: o pagamento é feito direto à clínica, sem faturamento ao convênio. Quer que eu confira os próximos horários disponíveis?",
+          "ferramentas": [],
+          "fontes": [
+            "Agenda, horários e durações",
+            "Preços e condições da consulta",
+            "Limites de comunicação (compliance)",
+            "Limites de comunicação (compliance)",
+            "Sinal de agendamento e pagamento Pix",
+            "Preços e condições da consulta"
+          ],
+          "decisao": "responder"
+        },
+        {
+          "de": "contato",
+          "texto": "R$400 é muito caro para mim."
+        },
+        {
+          "de": "ia",
+          "texto": "Entendo, Sempre vale pensar com calma no orçamento.\n\nO valor de R$ 400 inclui a avaliação completa com a Dra. Bárbara e a tricoscopia digital, o exame de imagem do couro cabeludo e dos fios. É nessa consulta que ela identifica o seu caso e define os próximos passos.\n\nVocê tem plano de saúde? Se tiver, a consulta fica R$ 300.",
+          "ferramentas": [],
+          "fontes": [
+            "Sinal de agendamento e pagamento Pix",
+            "Preços e condições da consulta",
+            "Sinal de agendamento e pagamento Pix",
+            "Agenda, horários e durações",
+            "Limites de comunicação (compliance)",
+            "Limites de comunicação (compliance)"
+          ],
+          "decisao": "responder"
+        }
+      ],
+      "erro": null
+    },
+    {
+      "cenario": "F — Conversa longa com memória",
+      "nota": 72,
+      "violacoes": [],
+      "checagens": [
+        {
+          "nome": "NÃO contém /cura\\b/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /garanto/i",
+          "ok": true,
+          "critica": true
+        }
+      ],
+      "juiz": {
+        "naturalidade": 4,
+        "intencao": 4,
+        "empatia": 3,
+        "personalizacao": 3,
+        "comercial": 4,
+        "contexto": 3,
+        "precisao": 4,
+        "agendamento": 3,
+        "clareza": 4,
+        "violacoes": [],
+        "comentario": "A Carol não inventou horários e não prometeu resultado. Ela diz que o resultado depende de fatores individuais, explica a tricoscopia e o método sem exagero, e informa corretamente os valores (R$400/R$300, sinal de R$100 abatido, restante de R$300 ou R$200). Fez a primeira pergunta de forma correta e conduziu para a agenda. Pontos fracos: (1) ignorou a pergunta sobre há quanto tempo o cabelo cai, que ficou sem retomada; a empatia inicial não voltou depois. (2) Pediu o gênero para buscar a agenda, o que é pertinente, mas anunciou 'vou conferir na agenda agora' e não consultou. Passou duas mensagens só perguntando feminino/masculino, o que soa repetitivo, e a pessoa ainda não viu nenhum horário. A cliente já tinha se identificado como mulher no início, de modo implícito ('preocupada'), embora isso não seja certeza; perguntar o gênero é um pouco robótico. (3) Ofereceu 'qual dia e período' e depois 'vou conferir', o que mistura abordagens. (4) Repetiu a pergunta sobre o gênero quase igual, sem reconhecer que já a havia feito. Em geral a conversa é boa e correta, mas a condução para o agendamento é travada."
+      },
+      "ferramentas": [],
+      "transcricao": [
+        {
+          "de": "contato",
+          "texto": "Oi! Meu cabelo está caindo muito e estou preocupada."
+        },
+        {
+          "de": "ia",
+          "texto": "Olá! Sou a Carol, assistente virtual da Dra. Bárbara Lopes. Vou te ajudar por aqui. 💜\n\nSinto muito que esteja passando por isso. Queda de cabelo preocupa de verdade, e você fez bem em procurar ajuda.\n\nMe conta: há quanto tempo você percebe que está caindo mais do que o normal?",
+          "ferramentas": [],
+          "fontes": [
+            "Limites de comunicação (compliance)",
+            "Serviços e método Trico",
+            "Agenda, horários e durações",
+            "Limites de comunicação (compliance)",
+            "Serviços e método Trico",
+            "Sinal de agendamento e pagamento Pix"
+          ],
+          "decisao": "responder"
+        },
+        {
+          "de": "contato",
+          "texto": "Quanto custa a consulta?"
+        },
+        {
+          "de": "ia",
+          "texto": "A consulta com tricoscopia digital custa R$ 400. Quem tem plano de saúde paga R$ 300.\n\nO atendimento é particular: o pagamento é feito direto à clínica, sem faturamento ao convênio.\n\nNa consulta, a Dra. Bárbara avalia o seu caso e investiga a causa da queda. Quer que eu veja os horários disponíveis?",
+          "ferramentas": [],
+          "fontes": [
+            "Serviços e método Trico",
+            "Preços e condições da consulta",
+            "Serviços e método Trico",
+            "Sinal de agendamento e pagamento Pix",
+            "Limites de comunicação (compliance)",
+            "Agenda, horários e durações"
+          ],
+          "decisao": "responder"
+        },
+        {
+          "de": "contato",
+          "texto": "O que é essa tricoscopia que vocês fazem?"
+        },
+        {
+          "de": "ia",
+          "texto": "A tricoscopia digital é um exame de imagem do couro cabeludo e dos fios. Ele faz parte da consulta, então não tem custo à parte.\n\nA Dra. Bárbara usa essas imagens junto com a avaliação para entender o seu caso e definir os próximos passos. Se quiser saber mais detalhes do exame, confirmo com a equipe.",
+          "ferramentas": [],
+          "fontes": [],
+          "decisao": "responder"
+        },
+        {
+          "de": "contato",
+          "texto": "E como funciona o método de vocês? É o mesmo para todo mundo?"
+        },
+        {
+          "de": "ia",
+          "texto": "Não, é individualizado. O Método Trico é uma abordagem integrativa, chamada In & Out, e o plano é montado para cada pessoa depois da avaliação com a Dra. Bárbara.\n\nEle combina investigação laboratorial, suplementação personalizada, home care indicado pelo exame de imagem e tratamento clínico em consultório. O que entra no seu plano a Dra. define na consulta, e o resultado depende de fatores individuais.\n\nMe conta qual dia e período ficam melhores pra você que eu confirmo o horário certinho na agenda.",
+          "ferramentas": [],
+          "fontes": [],
+          "decisao": "responder"
+        },
+        {
+          "de": "contato",
+          "texto": "Quais horários vocês têm essa semana?"
+        },
+        {
+          "de": "ia",
+          "texto": "Vou conferir na agenda agora. Antes, preciso confirmar uma coisa: a duração da consulta muda conforme o tipo de atendimento, entre 1h20 e 1h40.\n\nVocê poderia me dizer se o seu atendimento é feminino ou masculino? Com isso eu busco os horários certos para você.",
+          "ferramentas": [],
+          "fontes": [],
+          "decisao": "responder"
+        },
+        {
+          "de": "contato",
+          "texto": "Posso pagar no Pix? Como fica o valor?"
+        },
+        {
+          "de": "ia",
+          "texto": "Pode sim! A consulta é confirmada com um sinal de R$ 100 via Pix, que é descontado do valor total.\n\nNo dia, você paga o restante em Pix ou dinheiro: R$ 300 no particular, ou R$ 200 para quem tem plano de saúde.\n\nPara eu buscar os horários, seu atendimento é feminino ou masculino?",
+          "ferramentas": [],
+          "fontes": [
+            "Preços e condições da consulta",
+            "Sinal de agendamento e pagamento Pix",
+            "Preços e condições da consulta",
+            "Preços e condições da consulta",
+            "Limites de comunicação (compliance)",
+            "Serviços e método Trico"
+          ],
+          "decisao": "responder"
+        }
+      ],
+      "erro": null
+    },
+    {
+      "cenario": "G — Lead pronto para agendar",
+      "nota": 62,
+      "violacoes": [],
+      "checagens": [
+        {
+          "nome": "NÃO contém /cura\\b/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "usou ver_agendamentos",
+          "ok": true,
+          "critica": true
+        }
+      ],
+      "juiz": {
+        "naturalidade": 3,
+        "intencao": 4,
+        "empatia": 3,
+        "personalizacao": 3,
+        "comercial": 3,
+        "contexto": 4,
+        "precisao": 2,
+        "agendamento": 3,
+        "clareza": 2,
+        "violacoes": [],
+        "comentario": "A Carol consultou a agenda (ver_agendamentos) antes de oferecer horários, o que é correto, e não voltou ao começo. Problemas: (1) os horários 14h, 14h20, 14h40 e 15h parecem incoerentes com consultas de 1h20 ou 1h40, já que slots de 20 em 20 minutos sugerem sobreposição, e ela diz 'tenho livres' sem verificar a duração. (2) Ela pergunta ao lead 'qual tipo de atendimento é o seu', o que o paciente não tem como saber, pois é uma regra interna da clínica; isso gera confusão. (3) Pede três coisas ao mesmo tempo (tipo de atendimento, horário, plano), o que dilui a próxima ação. (4) Pergunta sobre plano de saúde já foi parcialmente tratada na primeira mensagem. (5) Não menciona o sinal de R$100 abatido, que seria o próximo passo natural para reservar o horário. A resposta é razoavelmente natural, mas truncada e pouco conclusiva para um lead pronto para agendar."
+      },
+      "ferramentas": [
+        "ver_agendamentos"
+      ],
+      "transcricao": [
+        {
+          "de": "contato",
+          "texto": "Oi, quanto custa a consulta?"
+        },
+        {
+          "de": "ia",
+          "texto": "Olá! Sou a Carol, assistente virtual da Dra. Bárbara Lopes. Vou te ajudar por aqui. 💜\n\nA consulta com tricoscopia digital custa R$ 400. Quem tem plano de saúde paga R$ 300.\n\nO atendimento é particular: o pagamento é feito direto à clínica, sem faturamento ao convênio. Quer que eu veja os próximos horários disponíveis?",
+          "ferramentas": [],
+          "fontes": [
+            "Agenda, horários e durações",
+            "Preços e condições da consulta",
+            "Limites de comunicação (compliance)",
+            "Limites de comunicação (compliance)",
+            "Sinal de agendamento e pagamento Pix",
+            "Preços e condições da consulta"
+          ],
+          "decisao": "responder"
+        },
+        {
+          "de": "contato",
+          "texto": "Gostei, quero agendar. Tem horário amanhã à tarde?"
+        },
+        {
+          "de": "ia",
+          "texto": "Tem sim! Amanhã à tarde tenho 14h, 14h20, 14h40 e 15h livres.\n\nAntes de confirmar, preciso alinhar uma coisa: a duração da consulta é de 1h20 ou 1h40, conforme o tipo de atendimento. Qual deles é o seu?\n\nMe conta também qual horário prefere e se você tem plano de saúde, para eu já deixar o valor certo registrado.",
+          "ferramentas": [
+            "ver_agendamentos"
+          ],
+          "fontes": [
+            "Serviços e método Trico",
+            "Preços e condições da consulta",
+            "Agenda, horários e durações",
+            "Preços e condições da consulta",
+            "Preços e condições da consulta",
+            "Sinal de agendamento e pagamento Pix"
+          ],
+          "decisao": "responder"
+        }
+      ],
+      "erro": null
+    }
+  ]
+}

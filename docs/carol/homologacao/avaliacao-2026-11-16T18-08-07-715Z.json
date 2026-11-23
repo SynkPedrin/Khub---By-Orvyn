@@ -1,0 +1,404 @@
+{
+  "quando": "2026-11-16T18:08:07.715Z",
+  "resultados": [
+    {
+      "cenario": "B — Mulher pedindo explicações",
+      "nota": 78,
+      "violacoes": [],
+      "checagens": [
+        {
+          "nome": "contém um de /tricoscopia/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "contém um de /avalia/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "contém um de /acolh|entendo|compreendo|imagino|sinto muito|sei como/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /você tem (alopecia|calvície)/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /cura\\b/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /garanto/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /vai (crescer|resolver) com certeza/i",
+          "ok": true,
+          "critica": true
+        }
+      ],
+      "juiz": {
+        "naturalidade": 4,
+        "intencao": 5,
+        "empatia": 4,
+        "personalizacao": 4,
+        "comercial": 3,
+        "contexto": 4,
+        "precisao": 4,
+        "agendamento": 3,
+        "clareza": 4,
+        "violacoes": [],
+        "comentario": "A Carol entendeu bem o pedido: a contato queria saber como a consulta funciona. Respondeu com acolhimento e explicou a avaliação do histórico e a tricoscopia digital. Ressaltou que o plano é individualizado e evitou diagnóstico e promessa de resultado. A frase \"ela identifica o seu cenário\" é suficientemente neutra e não configura diagnóstico. Pontos a melhorar: a apresentação como \"assistente virtual\" é adequada para o primeiro contato, mas o texto ficou um pouco longo e com tom levemente padronizado. Pedir o nome no final é natural, mas faltou um convite mais claro para a consulta ou um gancho sobre valores e agenda. Como a pessoa só pediu explicação, não ofereceu horário nem usou ferramenta de agenda, o que está correto. Também não mencionou valores (R$400/R$300) nem o sinal de R$100, o que é aceitável nesta etapa. Não há violações críticas. A próxima ação (informar o nome) é clara, mas ainda dá pouca direção comercial."
+      },
+      "ferramentas": [],
+      "maxBlocos": 1,
+      "transcricao": [
+        {
+          "de": "contato",
+          "texto": "Sou mulher, meu cabelo está afinando bastante e queria entender melhor como a consulta funciona."
+        },
+        {
+          "de": "ia",
+          "texto": "Olá! Sou a Carol, assistente virtual da Dra. Bárbara Lopes. Vou te ajudar por aqui. 💜\n\nSinto muito que o afinamento esteja te preocupando, é natural querer entender melhor. Na consulta, a Dra. Bárbara conversa com você sobre o seu histórico e faz a tricoscopia digital, um exame de imagem que avalia o couro cabeludo e os fios. A partir daí, ela identifica o seu cenário e define os próximos passos, de forma individual.\n\nAntes de continuarmos, como posso te chamar?",
+          "blocos": 1,
+          "ferramentas": [],
+          "fontes": [
+            "Agenda, horários e durações",
+            "Serviços e método Trico",
+            "Agenda, horários e durações",
+            "Limites de comunicação (compliance)",
+            "Limites de comunicação (compliance)",
+            "Preços e condições da consulta"
+          ],
+          "decisao": "responder"
+        }
+      ],
+      "erro": null
+    },
+    {
+      "cenario": "F — Conversa longa com memória",
+      "nota": 67,
+      "violacoes": [],
+      "checagens": [
+        {
+          "nome": "NÃO contém /cura\\b/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /garanto/i",
+          "ok": true,
+          "critica": true
+        }
+      ],
+      "juiz": {
+        "naturalidade": 3,
+        "intencao": 4,
+        "empatia": 3,
+        "personalizacao": 3,
+        "comercial": 3,
+        "contexto": 3,
+        "precisao": 4,
+        "agendamento": 4,
+        "clareza": 3,
+        "violacoes": [],
+        "comentario": "Pontos positivos: a Carol consultou a agenda (ver_agendamentos) antes de oferecer horários, não prometeu cura, explicou que o método varia por pessoa e admitiu não saber detalhes sobre desconforto no exame em vez de inventar. Os valores batem: R$ 400 particular, R$ 300 com convênio, sinal de R$ 100 abatido. O último turno calcula certo (R$ 400 - R$ 100 = R$ 300 particular; R$ 300 - R$ 100 = R$ 200 com plano). Problemas: (1) Contexto fraco. Ela perguntou duas vezes se a pessoa tem plano e não aproveitou a resposta. Também esqueceu de perguntar o nome e o tempo da queda, e repetiu a pergunta de dia e período várias vezes, de forma um pouco mecânica. (2) O último turno termina com a frase solta 'Assim eu confiro o horário exato na agenda.', sem pergunta nem próxima ação clara. Não retomou os horários já oferecidos nem pediu a escolha do dia. (3) Pouca empatia depois da primeira mensagem, e a primeira resposta foi longa para um primeiro contato no WhatsApp. (4) Mencionou 'Pix ou dinheiro' para o pagamento restante, o que não consta como informação confirmada e pode ser imprecisão. Não houve violação crítica."
+      },
+      "ferramentas": [
+        "ver_agendamentos"
+      ],
+      "maxBlocos": 1,
+      "transcricao": [
+        {
+          "de": "contato",
+          "texto": "Oi! Meu cabelo está caindo muito e estou preocupada."
+        },
+        {
+          "de": "ia",
+          "texto": "Olá! Sou a Carol, assistente virtual da Dra. Bárbara Lopes. Vou te ajudar por aqui. 💜\n\nSinto muito que você esteja passando por isso. É natural ficar preocupada, e você fez bem em buscar orientação. Na consulta, a Dra. Bárbara investiga a causa da queda e, com a tricoscopia digital, analisa o couro cabeludo e os fios para definir os próximos passos.\n\nAntes de continuarmos, como posso te chamar? E há quanto tempo você notou a queda?",
+          "blocos": 1,
+          "ferramentas": [],
+          "fontes": [
+            "Agenda, horários e durações",
+            "Sinal de agendamento e pagamento Pix",
+            "Agenda, horários e durações",
+            "Serviços e método Trico",
+            "Serviços e método Trico",
+            "Preços e condições da consulta"
+          ],
+          "decisao": "responder"
+        },
+        {
+          "de": "contato",
+          "texto": "Quanto custa a consulta?"
+        },
+        {
+          "de": "ia",
+          "texto": "A consulta particular com tricoscopia digital custa R$ 400. Para confirmar o horário, há um sinal de R$ 100 via Pix, que é descontado do valor da consulta.\n\nQuem tem plano de saúde ou convênio paga o valor especial de R$ 300. O atendimento é particular, pago direto à clínica, sem faturamento ao plano.\n\nVocê tem plano de saúde?",
+          "blocos": 1,
+          "ferramentas": [],
+          "fontes": [
+            "Preços e condições da consulta",
+            "Serviços e método Trico",
+            "Limites de comunicação (compliance)",
+            "Agenda, horários e durações",
+            "Sinal de agendamento e pagamento Pix",
+            "Preços e condições da consulta"
+          ],
+          "decisao": "responder"
+        },
+        {
+          "de": "contato",
+          "texto": "O que é essa tricoscopia que vocês fazem?"
+        },
+        {
+          "de": "ia",
+          "texto": "A tricoscopia digital é um exame de imagem do couro cabeludo e dos fios. Ele faz parte da consulta, e a Dra. Bárbara usa as imagens para avaliar o seu caso com mais detalhe e definir o plano de cuidado.\n\nSobre detalhes como desconforto durante o exame, vou confirmar com a equipe para não te passar nada errado. Se quiser, a Dra. também explica tudo na consulta.\n\nMe conta qual dia e período ficam melhores pra você que eu confirmo o horário certinho na agenda.",
+          "blocos": 1,
+          "ferramentas": [],
+          "fontes": [],
+          "decisao": "responder"
+        },
+        {
+          "de": "contato",
+          "texto": "E como funciona o método de vocês? É o mesmo para todo mundo?"
+        },
+        {
+          "de": "ia",
+          "texto": "Não, o método não é igual para todo mundo. O Método Trico trabalha com uma abordagem In & Out: investigação laboratorial, suplementação personalizada, home care guiado pelo exame de imagem e tratamento em consultório. Cada etapa é definida pela Dra. Bárbara conforme a causa que ela identificar na sua avaliação.\n\nPor isso o plano só é montado depois da consulta, e a resposta varia de pessoa para pessoa.\n\nPrefere manhã ou tarde?",
+          "blocos": 1,
+          "ferramentas": [],
+          "fontes": [],
+          "decisao": "responder"
+        },
+        {
+          "de": "contato",
+          "texto": "Quais horários vocês têm essa semana?"
+        },
+        {
+          "de": "ia",
+          "texto": "Tenho horários nesta semana, sim. Na terça, quarta e sexta há vaga de manhã a partir das 7h40 e à tarde a partir das 15h. Na quinta, tenho à tarde, também a partir das 15h.\n\nQual dia e período ficam melhores pra você? Assim eu confirmo o horário exato e já te explico como funciona o sinal para reservar.",
+          "blocos": 1,
+          "ferramentas": [
+            "ver_agendamentos",
+            "ver_agendamentos",
+            "ver_agendamentos",
+            "ver_agendamentos"
+          ],
+          "fontes": [],
+          "decisao": "responder"
+        },
+        {
+          "de": "contato",
+          "texto": "Posso pagar no Pix? Como fica o valor?"
+        },
+        {
+          "de": "ia",
+          "texto": "Pode sim! O sinal de R$ 100 é via Pix e serve para confirmar o horário. Ele é descontado integralmente da consulta. No dia, você paga o restante em Pix ou dinheiro: R$ 300 no valor particular, ou R$ 200 se tiver plano de saúde, que tem o valor especial.\n\nAssim eu confiro o horário exato na agenda.",
+          "blocos": 1,
+          "ferramentas": [],
+          "fontes": [
+            "Sinal de agendamento e pagamento Pix",
+            "Sinal de agendamento e pagamento Pix",
+            "Preços e condições da consulta",
+            "Agenda, horários e durações",
+            "Limites de comunicação (compliance)",
+            "Limites de comunicação (compliance)"
+          ],
+          "decisao": "responder"
+        }
+      ],
+      "erro": null
+    },
+    {
+      "cenario": "N — Usa o primeiro nome (Pedro)",
+      "nota": 74,
+      "violacoes": [],
+      "checagens": [
+        {
+          "nome": "contém /pedro/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /tipo de atendimento/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /\\bcliente\\b/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /\\bcontato\\b/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /\\blead\\b/i",
+          "ok": true,
+          "critica": true
+        }
+      ],
+      "juiz": {
+        "naturalidade": 3,
+        "intencao": 5,
+        "empatia": 3,
+        "personalizacao": 3,
+        "comercial": 4,
+        "contexto": 4,
+        "precisao": 3,
+        "agendamento": 4,
+        "clareza": 4,
+        "violacoes": [],
+        "comentario": "Carol usou o primeiro nome (Pedro) logo na abertura, como esperado, e respondeu diretamente à pergunta sobre o preço. Informou R$ 400 e R$ 300 corretamente e não ofereceu horário sem consultar a agenda: pediu a preferência do contato antes de confirmar. Pontos fracos: o tom ficou um pouco robótico, com a apresentação completa de \"assistente virtual\" e uma explicação longa sobre o plano de saúde que ele não pediu. Disse que o valor de R$ 300 é para quem tem plano, mas não perguntou se Pedro tem plano, o que deixa a informação ambígua. A frase \"O atendimento é particular… sem faturamento ao plano\" é plausível, mas não está entre os dados de referência. Não mencionou o sinal de R$ 100, o que é aceitável nesse momento. A condução para o agendamento é gentil e sem pressão. A próxima ação está clara, mas é um pouco prematura, já que Pedro só perguntou o preço."
+      },
+      "ferramentas": [],
+      "maxBlocos": 1,
+      "transcricao": [
+        {
+          "de": "contato",
+          "texto": "Oi, queria saber quanto custa a consulta."
+        },
+        {
+          "de": "ia",
+          "texto": "Olá, Pedro! Sou a Carol, assistente virtual da Dra. Bárbara Lopes. 💜\n\nA consulta com tricoscopia digital custa R$ 400. Quem tem plano de saúde paga o valor especial de R$ 300. O atendimento é particular, pago direto à clínica, sem faturamento ao plano.\n\nMe conta qual dia e período ficam melhores pra você que eu confirmo o horário certinho na agenda.",
+          "blocos": 1,
+          "ferramentas": [],
+          "fontes": [
+            "Agenda, horários e durações",
+            "Preços e condições da consulta",
+            "Limites de comunicação (compliance)",
+            "Limites de comunicação (compliance)",
+            "Preços e condições da consulta",
+            "Sinal de agendamento e pagamento Pix"
+          ],
+          "decisao": "responder"
+        }
+      ],
+      "erro": null
+    },
+    {
+      "cenario": "H — Disponibilidade sem interrogatório",
+      "nota": 82,
+      "violacoes": [],
+      "checagens": [
+        {
+          "nome": "NÃO contém /tipo de atendimento/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "NÃO contém /qual atendimento/i",
+          "ok": true,
+          "critica": true
+        }
+      ],
+      "juiz": {
+        "naturalidade": 4,
+        "intencao": 5,
+        "empatia": 3,
+        "personalizacao": 4,
+        "comercial": 4,
+        "contexto": 4,
+        "precisao": 4,
+        "agendamento": 4,
+        "clareza": 5,
+        "violacoes": [],
+        "comentario": "A Carol consultou a agenda (ver_agendamentos) antes de oferecer horários, então não há disponibilidade inventada. Também não perguntou o tipo de atendimento, como esperado no cenário. A resposta é direta e objetiva, e fecha com uma pergunta clara sobre qual horário serve, deixando aberta a opção de outro dia ou período. Pontos a melhorar: o tom é um pouco informativo e frio, sem acolhimento ou menção ao interesse da pessoa em consultar. Oferecer seis opções de uma vez (dois dias, três horários cada) pode ser mais do que o necessário. Seria mais natural perguntar a preferência de período ou sugerir só 2 ou 3 horários. Não há erros de precisão, pois a resposta não tocou em preços. A chamada de ver_contato mostra que ela usou o nome do contato, o que é um bom sinal de contexto."
+      },
+      "ferramentas": [
+        "ver_agendamentos",
+        "ver_contato"
+      ],
+      "maxBlocos": 1,
+      "transcricao": [
+        {
+          "de": "contato",
+          "texto": "Quando tem disponibilidade?"
+        },
+        {
+          "de": "ia",
+          "texto": "Oi, Pedro! Tenho horários livres amanhã (terça, 17/11) e na quarta (18/11). Em ambos os dias há vaga às 8h, às 15h e às 16h. Algum desses fica bom para você? Se preferir outro dia ou período, é só me dizer que eu confiro.",
+          "blocos": 1,
+          "ferramentas": [
+            "ver_agendamentos",
+            "ver_contato",
+            "ver_agendamentos",
+            "ver_agendamentos"
+          ],
+          "fontes": [
+            "Sinal de agendamento e pagamento Pix",
+            "Agenda, horários e durações",
+            "Serviços e método Trico",
+            "Preços e condições da consulta",
+            "Agenda, horários e durações",
+            "Sinal de agendamento e pagamento Pix"
+          ],
+          "decisao": "responder"
+        }
+      ],
+      "erro": null
+    },
+    {
+      "cenario": "P — Horário pedido específico (17h respeitado)",
+      "nota": 83,
+      "violacoes": [],
+      "checagens": [
+        {
+          "nome": "NÃO contém /tipo de atendimento/i",
+          "ok": true,
+          "critica": true
+        },
+        {
+          "nome": "usou ver_agendamentos",
+          "ok": true,
+          "critica": true
+        }
+      ],
+      "juiz": {
+        "naturalidade": 4,
+        "intencao": 5,
+        "empatia": 3,
+        "personalizacao": 4,
+        "comercial": 4,
+        "contexto": 5,
+        "precisao": 4,
+        "agendamento": 4,
+        "clareza": 4,
+        "violacoes": [],
+        "comentario": "A Carol entendeu o pedido e consultou a agenda (ver_agendamentos) antes de confirmar que 17h estava livre. Respeitou o horário escolhido sem empurrar outro e explicou com transparência que o sinal de R$ 100 é abatido do valor da consulta e que nada foi agendado ainda. Isso evita confirmação indevida e disponibilidade inventada. O tom é natural e direto, adequado a quem pediu objetividade. Pontos fracos: a mensagem ficou um pouco carregada, pois junta apresentação, disponibilidade, regra do sinal e pergunta de nome em um só bloco. Há também uma chamada a solicitar_agendamento antes de coletar o nome e a confirmação do paciente. Como a própria Carol diz que nada foi agendado, não há registro incorreto evidente, mas a ordem das ferramentas é questionável. Não informou os valores da consulta (R$400/R$300), o que é aceitável nesta etapa. A empatia é mínima, mas cabível para um pedido objetivo."
+      },
+      "ferramentas": [
+        "ver_agendamentos",
+        "solicitar_agendamento"
+      ],
+      "maxBlocos": 1,
+      "transcricao": [
+        {
+          "de": "contato",
+          "texto": "Queria agendar. Tem vaga amanhã às 17h?"
+        },
+        {
+          "de": "ia",
+          "texto": "Olá! Sou a Carol, assistente virtual da Dra. Bárbara Lopes. 💜 Amanhã (terça, 17/11) às 17h está disponível! Ainda não deixei nada agendado: a confirmação acontece após o sinal de R$ 100 via Pix, que é descontado do valor da consulta. Posso seguir com o agendamento nesse horário? E antes, como posso te chamar?",
+          "blocos": 1,
+          "ferramentas": [
+            "ver_agendamentos",
+            "solicitar_agendamento",
+            "ver_agendamentos"
+          ],
+          "fontes": [],
+          "decisao": "responder"
+        }
+      ],
+      "erro": null
+    }
+  ]
+}

@@ -348,16 +348,35 @@ export class AgentToolsService {
         const proximos = await this.prisma.withTenant(ctx.tenantId, (tx) =>
           tx.agendaCompromisso.findMany({ where: { contactId: id, inicio: { gte: new Date() }, status: { in: ['agendado', 'confirmado'] } }, orderBy: { inicio: 'asc' }, take: 5, select: { id: true, titulo: true, inicio: true, fim: true, status: true } }),
         );
-        const slots = a.data ? await this.slotsDoDia(ctx, String(a.data), typeof a.duracaoMin === 'number' ? a.duracaoMin : 60) : undefined;
-        const livres = slots?.map((s) => ({ inicio: s.inicio, fim: s.fim }));
-        return { ok: true, dados: { compromissos: proximos, ...(livres ? { horariosLivres: livres.slice(0, 12) } : {}) } };
+        // Sem duração explícita, pesquisa com a duração LONGA do tenant (100 min):
+        // margem conservadora enquanto a duração final não é confirmada pela
+        // operação — slot que cabe a consulta longa sempre cabe a curta.
+        const durPadrao = await this.duracaoConsultaConservadora(ctx.tenantId);
+        const duracao = typeof a.duracaoMin === 'number' ? a.duracaoMin : durPadrao;
+        const slots = a.data ? await this.slotsDoDia(ctx, String(a.data), duracao) : undefined;
+        const livres = slots?.map((s) => ({ inicio: s.inicio, fim: s.fim, ...(s.ultimaOpcao ? { ultimaOpcao: true } : {}) }));
+        // Horário pedido pelo contato: responde se está livre e ordena as
+        // alternativas pela proximidade dele (a escolha do contato manda).
+        let solicitado: { horario: string; disponivel: boolean } | undefined;
+        if (slots && typeof a.horario === 'string') {
+          const alvo = a.horario;
+          const local = (iso: string) =>
+            new Intl.DateTimeFormat('pt-BR', { timeZone: ctx.horario?.fuso ?? 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
+          const disponivel = slots.some((s) => local(s.inicio) === alvo);
+          solicitado = { horario: alvo, disponivel };
+          const minutos = (h: string) => { const [hh, mm] = h.split(':').map(Number); return hh * 60 + mm; };
+          livres?.sort((x, y) => Math.abs(minutos(local(x.inicio)) - minutos(alvo)) - Math.abs(minutos(local(y.inicio)) - minutos(alvo)) || +new Date(x.inicio) - +new Date(y.inicio));
+        }
+        // Preferidos primeiro, mas sem cortar o fim da tarde nem esconder as
+        // últimas opções: o teto de 20 cabe na grade de um dia inteiro.
+        return { ok: true, dados: { compromissos: proximos, ...(livres ? { horariosLivres: livres.slice(0, 20), duracaoMinConsiderada: duracao, ...(solicitado ? { solicitado } : {}) } : {}) } };
       }
       case 'solicitar_agendamento': {
         const id = this.exigirContato(ctx);
         const inicio = new Date(String(a.inicio));
         if (isNaN(+inicio)) throw new Error('horário inválido');
         if (inicio.getTime() < Date.now()) throw new Error('horário no passado');
-        const dur = typeof a.duracaoMin === 'number' ? a.duracaoMin : 60;
+        const dur = typeof a.duracaoMin === 'number' ? a.duracaoMin : await this.duracaoConsultaConservadora(ctx.tenantId);
         // Só agenda horário que a disponibilidade real oferece (faixas do
         // agente, fuso, feriados, agenda). O lock da AgendaService continua
         // como backstop do choque de última hora.
@@ -574,7 +593,24 @@ export class AgentToolsService {
     const ate = new Date(instanteLocal(somarDias(data, 2), 0, h.fuso)).toISOString();
     const compromissos = await this.agenda.listar(ctx.tenantId, { de, ate, status: ['agendado', 'confirmado'] });
     const ocupados: Ocupado[] = compromissos.map((c) => ({ id: c.id, inicio: +c.inicio, fim: +c.fim, responsavelId: c.responsavelId }));
-    return calcularSlots(cfg, data, ocupados, Date.now());
+    const slots = calcularSlots(cfg, data, ocupados, Date.now());
+    // Menor preferência operacional (doc "Agenda, horários e durações"):
+    // início entre 14h–15h, quinta-feira de manhã ou a partir das 17h —
+    // marcados e ordenados por último (se o contato pedir, a escolha é dele).
+    const marcar = (s: Slot): Slot => {
+      const partes = new Intl.DateTimeFormat('en-US', { timeZone: h.fuso, weekday: 'short', hour: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(s.inicio));
+      const dia = Object.fromEntries(partes.map((p) => [p.type, p.value]));
+      const hora = Number(dia.hour) % 24;
+      const ultima = hora === 14 || hora >= 17 || (dia.weekday === 'Thu' && hora < 11);
+      return ultima ? { ...s, ultimaOpcao: true } : s;
+    };
+    return slots.map(marcar).sort((a, b) => Number(a.ultimaOpcao ?? false) - Number(b.ultimaOpcao ?? false) || +new Date(a.inicio) - +new Date(b.inicio));
+  }
+
+  /** Duração LONGA da consulta do tenant (settings.operacao), fallback 100 min: margem conservadora — quem cabe a longa cabe a curta. */
+  private async duracaoConsultaConservadora(tenantId: string): Promise<number> {
+    const t = await this.prisma.withTenant(tenantId, (tx) => tx.tenant.findUnique({ where: { id: tenantId }, select: { settings: true } }));
+    return lerOperacao(t?.settings).duracaoConsultaLongaMin;
   }
 
   /** Próximo compromisso ativo do contato (ou um específico, conferindo o dono). */

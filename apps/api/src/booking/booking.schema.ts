@@ -176,6 +176,8 @@ export interface Slot {
   fim: string;
   /** Responsáveis livres neste horário (na ordem da configuração). Vazio quando a página usa a agenda geral. */
   livres: string[];
+  /** Horário de menor preferência operacional (ex.: 14h–15h, quinta de manhã): oferecer só como última opção. */
+  ultimaOpcao?: boolean;
 }
 
 /** Primeiro e último dia reserváveis (datas locais no fuso da página). */

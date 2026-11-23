@@ -337,7 +337,8 @@ export class FollowupService {
     if (!texto) return this.finalizar(tenantId, fu.id, 'pulado', `guardrail: ${g.motivo ?? 'bloqueado'}`);
     const anteriores = ctx.historico.filter((m) => m.autorTipo === 'ia').slice(-4).map((m) => m.corpo);
     texto = validarNaturalidade(texto, { agenteNome: efetivo.nome, contatoNome: ctx.contato?.nome ?? null, jaFalouAntes: true, reapresentar: false, usarNome: efetivo.config.comunicacao.usarNome, emojis: efetivo.config.comunicacao.emojis, evitarRepeticao: true, anteriores }).texto;
-    const frag = fragmentarMensagem(texto, { ...efetivo.config.comunicacao.fragmentacao, maxBlocos: Math.min(3, efetivo.config.comunicacao.fragmentacao.maxBlocos) });
+    // Uma tentativa de follow-up = UMA mensagem consolidada (nunca balões em sequência).
+    const frag = fragmentarMensagem(texto, { ...efetivo.config.comunicacao.fragmentacao, ativo: false, maxBlocos: 1 });
     const seq = await this.entregas.enfileirar({ tenantId, agentId: fu.agentId, conversationId: fu.conversationId, followupId: fu.id, blocos: frag.blocos, chaveBase: `fu:${fu.id}` });
     await this.prisma.withTenant(tenantId, (tx) =>
       tx.agentFollowup.update({ where: { id: fu.id }, data: { status: 'enviado', executadoEm: new Date(), mensagem: texto.slice(0, 4000), sequenciaId: seq.sequenciaId || null, motivo: null, updatedAt: new Date() } }),
