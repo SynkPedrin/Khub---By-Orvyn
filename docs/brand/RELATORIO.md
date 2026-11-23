@@ -39,9 +39,11 @@ Diretriz do dono registrada: **clean, profissional, usabilidade primeiro** — m
 - **Automações**: `components/automations/NoCanvas.tsx` (gatilho lime, controle/ação neutros, IA violeta).
 - **Agenda**: `components/agenda/AgendaCalendario.tsx` (linha do "agora" lime).
 - **Login/Auth** (9 arquivos): `AuthShell`, `LoginForm`, `SignupForm`, `SenhaForms`, `AceiteConviteForm`, `IconInput`, `PasswordInput`, `agency-invite`, bloco AUTH do globals.css.
+- **Inbox** (5 arquivos): sem wallpaper WhatsApp (fundo do tema + textura violeta 3%), bolhas com tokens (recebida `--surface-3`, operador lime 14%, IA/automação violeta), `SugestoesIA` violeta, fix de densidade no `Composer`, unificação de canais (Instagram perdeu degradê decorativo; identificado por ícone).
+- **Agência**: herda o shell v2 sem trabalho extra (verificado em `/agency` com conta própria).
 - **E-mails** (API): `invite-email.ts`, `password-reset-email.ts` (logo B7 + CTA lime).
 - **Contraste global**: ~20 arquivos com `bg-brand text-white` → `.text-on-brand`.
-- **Inbox e Leads**: em curso (subagentes).
+- **Leads**: em curso (subagente).
 
 ## 5. Bugs funcionais (docs/brand/bugs.md)
 
