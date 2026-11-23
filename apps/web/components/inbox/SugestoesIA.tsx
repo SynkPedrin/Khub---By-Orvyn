@@ -74,10 +74,10 @@ export function SugestoesIA({ conversationId, onEscolher }: { conversationId: st
                   <button
                     type="button"
                     onClick={() => onEscolher(s.texto)}
-                    className="h-full w-full rounded-xl border border-[var(--violet-border)] bg-[var(--violet-soft)] p-2.5 text-left transition-colors hover:border-[var(--violet)]"
+                    className="h-full w-full rounded-[var(--r-card)] border border-[var(--violet-border)] bg-[var(--violet-soft)] p-2.5 text-left transition-colors hover:border-[var(--violet-400)]"
                     title="Usar como rascunho (você revisa antes de enviar)"
                   >
-                    <span className="block text-[12.5px] font-semibold text-fg">{s.titulo}</span>
+                    <span className="block text-[12.5px] font-semibold text-[var(--violet-300)]">{s.titulo}</span>
                     <span className="mt-0.5 line-clamp-2 block text-[12px] leading-snug text-muted">{s.texto}</span>
                   </button>
                 </li>

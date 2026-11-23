@@ -73,10 +73,6 @@
 
   /* Foco */
   --ring: var(--lime-500);
-
-  /* Chat: papel de parede do WhatsApp sai na migração do Inbox (4.4);
-     aqui os tokens já seguem o tema (sem inverter claro/escuro). */
-  --chat-bg: var(--bg-0);
 }
 
 :root[data-theme='light'] {
@@ -135,5 +131,4 @@
   --radius-lg: var(--r-overlay);
 
   --ring: var(--lime-500);
-  --chat-bg: var(--bg-0);
 }

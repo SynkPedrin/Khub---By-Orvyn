@@ -12,7 +12,7 @@ import { tamanhoLegivel, type AnexoMensagem } from '@/lib/inbox';
  */
 export function AnexoBolha({ anexo, claro }: { anexo: AnexoMensagem; claro: boolean }) {
   const [imagemFalhou, setImagemFalhou] = useState(false);
-  const tom = claro ? 'text-[#54656f] dark:text-[#e9edef]/80' : 'text-muted';
+  const tom = claro ? 'text-[var(--fg-2)]' : 'text-muted';
 
   if (anexo.figurinha && anexo.url && !imagemFalhou) {
     // Figurinha do WhatsApp: fundo transparente, tamanho fixo, sem moldura.

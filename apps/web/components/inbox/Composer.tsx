@@ -194,7 +194,7 @@ export function Composer({ iaRespondendo, atendentes, meuId, dados, ocupado, top
       }}
     >
       {topo}
-      <div className="mb-2 flex items-center gap-2">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
         <div className="segbar" role="tablist" aria-label="Tipo de mensagem">
           <button type="button" role="tab" aria-selected={!nota} className="seg px-3" onClick={() => { setModo('responder'); setSugestao(null); }}>
             Responder
@@ -203,7 +203,7 @@ export function Composer({ iaRespondendo, atendentes, meuId, dados, ocupado, top
             <Icon name="lock" size={12} /> Nota interna
           </button>
         </div>
-        <button type="button" className="ml-auto text-xs font-medium text-muted hover:text-fg" onClick={() => setGerenciar(true)}>
+        <button type="button" className="ml-auto whitespace-nowrap text-xs font-medium text-muted hover:text-fg" onClick={() => setGerenciar(true)}>
           Respostas rápidas
         </button>
       </div>

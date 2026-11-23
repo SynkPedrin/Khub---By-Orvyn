@@ -788,7 +788,7 @@ export function InboxAtendimento() {
               )}
             </header>
 
-            <div className={cx('min-h-0 flex-1 overflow-y-auto scrollbar-thin px-4 py-5 lg:px-6', conversa.canal === 'Instagram' ? 'chat-fundo-insta' : 'chat-fundo')}>
+            <div className="chat-fundo min-h-0 flex-1 overflow-y-auto scrollbar-thin px-4 py-5 lg:px-6">
               {erroThread && <ErrorState title="Não consegui abrir esta conversa" description="Tente de novo em instantes." onRetry={() => void abrir(conversa.id)} />}
               {!thread && !erroThread && (
                 <div className="space-y-3">
@@ -806,7 +806,7 @@ export function InboxAtendimento() {
                 <div key={g.dia} className="space-y-1.5">
                   {g.dia && (
                     <div className="my-4 flex justify-center">
-                      <span className="rounded-full bg-[var(--base-0)] px-3 py-1 text-[11.5px] font-medium text-muted shadow-sm">{g.dia}</span>
+                      <span className="rounded-full border border-line bg-[var(--surface-2)] px-3 py-1 text-[11.5px] font-medium text-muted">{g.dia}</span>
                     </div>
                   )}
                   {g.itens.map((m) => {
@@ -833,24 +833,26 @@ export function InboxAtendimento() {
                         <div
                           className={cx(
                             'max-w-[78%] rounded-2xl px-3.5 py-2 text-[14px] leading-relaxed shadow-sm sm:max-w-[68%]',
-                            !minha && 'rounded-bl-md border border-line bg-[var(--base-0)] text-fg',
-                            // Padrão WhatsApp: verde com texto escuro no claro, verde-escuro com texto claro no escuro (o lima da marca não tinha contraste com texto branco).
-                            // No Instagram o balão da conta segue o gradiente da DM roxa.
-                            minha && !ia && !automacao && (conversa.canal === 'Instagram' ? 'rounded-br-md bolha-insta' : 'rounded-br-md bg-[#d9fdd3] text-[#111b21] dark:bg-[#005c4b] dark:text-[#e9edef]'),
-                            // IA: halo da marca — quem responde vê de longe que a mensagem foi da agente.
-                            ia && 'rounded-br-md border border-[color-mix(in_srgb,var(--brand)_18%,transparent)] bg-brand-soft text-fg shadow-[0_0_22px_-4px_var(--brand)]',
-                            // Automação: halo lima — distinto da IA e da equipe.
-                            automacao && 'rounded-br-md border border-lime-border bg-lime-soft text-fg shadow-[0_0_22px_-4px_var(--khub-lime)]',
+                            // Recebida: superfície elevada do tema.
+                            !minha && 'rounded-bl-md border border-line bg-[var(--surface-3)] text-fg',
+                            // Enviada pelo operador: sinal lime suave, texto do tema, sem glow.
+                            minha && !ia && !automacao && 'rounded-br-md border border-[var(--lime-border)] bg-[color-mix(in_oklab,var(--lime-500)_14%,transparent)] text-fg',
+                            // IA e automação = inteligência: marcador violeta (borda esquerda 2px + fundo soft), sem glow.
+                            (ia || automacao) && 'rounded-br-md border border-[var(--violet-border)] border-l-2 border-l-[var(--violet-600)] bg-[var(--violet-soft)] text-fg',
                           )}
                         >
-                          {ia && <p className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold text-brand"><Icon name="sparkles" size={11} /> IA{m.agentNome ? ` · ${m.agentNome}` : ''}</p>}
+                          {ia && (
+                            <p className="mb-1 inline-flex items-center gap-1 rounded-[var(--r-badge)] border border-[var(--violet-border)] px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-[var(--violet-300)]">
+                              <Icon name="sparkles" size={10} /> {m.agentNome ?? 'NICO'}
+                            </p>
+                          )}
                           {automacao && (
-                            <p className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold text-lime-ink">
+                            <p className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold text-[var(--violet-300)]">
                               <Icon name="zap" size={11} /> Automação{m.workflowNome ? `: ${m.workflowNome}` : ''}
                             </p>
                           )}
                                                     {!ia && !automacao && minha && (
-                            <p className={cx('mb-0.5 flex items-center gap-1 text-[11px] font-semibold', conversa.canal === 'Instagram' ? 'text-white/85' : 'text-[#1f7a57] dark:text-[#7fe0b8]')}>
+                            <p className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold text-[var(--lime-300)]">
                               {/* Mensagens antigas (importadas antes da migration 036) não
                                   têm autor gravado — o histórico do WhatsApp não traz isso.
                                   Caem no rótulo genérico "Equipe" em vez de ficar sem origem. */}
@@ -865,7 +867,7 @@ export function InboxAtendimento() {
                           ) : (
                             <CorpoMensagem texto={m.texto} />
                           )}
-                          <p className={cx('mt-1 text-right text-[10.5px] tabular', minha && !ia && !automacao ? (conversa.canal === 'Instagram' ? 'text-white/75' : 'text-[#667781] dark:text-[#e9edef]/70') : 'text-muted')}>
+                          <p className={cx('mt-1 text-right text-[10.5px] tabular', minha && !ia && !automacao ? 'text-[var(--fg-2)]' : 'text-muted')}>
                             {horaMensagem(m.criadaEm, m.hora)}
                           </p>
                         </div>
@@ -979,10 +981,10 @@ function EstadoIa({ conversa, agentes, trocando, onAssumir, onIa }: {
     return (
       <>
         <span
-          className={cx('pill', parado ? 'pill-warning' : 'pill-brand')}
+          className={cx('pill', parado ? 'pill-warning' : 'border-[var(--violet-border)] bg-[var(--violet-soft)] text-[var(--violet-300)]')}
           title={parado ? `O agente ${agente.nome} está ${agente.status}: ele não responde até ser ativado.` : 'A IA responde as próximas mensagens do contato.'}
         >
-          <span className={cx('h-1.5 w-1.5 rounded-full', parado ? 'bg-warning' : 'animate-pulse bg-brand')} aria-hidden />
+          <span className={cx('h-1.5 w-1.5 rounded-full', parado ? 'bg-warning' : 'animate-pulse bg-[var(--violet-400)]')} aria-hidden />
           {parado ? `IA pausada · ${agente.nome}` : `IA ativa${agente ? ` · ${agente.nome}` : ''}`}
         </span>
         <button type="button" className="btn btn-sm" disabled={trocando} onClick={onAssumir}>
