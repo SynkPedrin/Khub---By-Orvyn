@@ -51,16 +51,19 @@ export default function DashboardPage() {
 
   return (
     <PageShell>
-      <PageHeader
-        title={saudacaoAtual ? `${saudacaoAtual}${nome ? `, ${nome}` : ''}.` : nome ? `Olá, ${nome}.` : 'Seu painel de receita'}
-        subtitle="Aqui está o panorama completo da sua operação hoje."
-        actions={
-          <>
-            {!demo && <SeletorDias periodo={periodo} onChange={setPeriodo} />}
-            <SeloDemo />
-          </>
-        }
-      />
+      {/* v2: faixa de boas-vindas é o momento Aurora da tela (máx. 1) */}
+      <div className="aurora -mx-2 mb-2 rounded-card px-2 pt-2">
+        <PageHeader
+          title={saudacaoAtual ? `${saudacaoAtual}${nome ? `, ${nome}` : ''}.` : nome ? `Olá, ${nome}.` : 'Seu painel de receita'}
+          subtitle="Aqui está o panorama completo da sua operação hoje."
+          actions={
+            <>
+              {!demo && <SeletorDias periodo={periodo} onChange={setPeriodo} />}
+              <SeloDemo />
+            </>
+          }
+        />
+      </div>
 
       {demo ? <DashboardComDados /> : <DashboardReal periodo={periodo} onPeriodo={setPeriodo} />}
     </PageShell>
@@ -250,7 +253,7 @@ function DashboardReal({ periodo, onPeriodo }: { periodo: PeriodoDashboard; onPe
           title="Insights da NICO"
           info="A NICO analisa sua operação continuamente"
           action={
-            <Link href="/nyro" className="flex items-center gap-1 text-[13px] font-medium text-brand hover:underline">
+            <Link href="/nyro" className="flex items-center gap-1 text-[13px] font-medium text-violet-300 hover:underline">
               Conversar com a NICO <Icon name="arrowRight" size={14} />
             </Link>
           }
@@ -259,9 +262,10 @@ function DashboardReal({ periodo, onPeriodo }: { periodo: PeriodoDashboard; onPe
             <ul className="space-y-3">
               {insightsNico.map((i) => (
                 <li key={i.id}>
+                  {/* v2: insight da IA = cartão violeta */}
                   <Link
                     href={`/nyro?q=${encodeURIComponent(i.pergunta)}`}
-                    className="group flex items-start gap-3 rounded-xl border border-line bg-surface p-3.5 transition-colors hover:border-brand-border hover:bg-brand-softer"
+                    className="group flex items-start gap-3 rounded-card border border-violet-border bg-violet-soft p-3.5 transition-colors hover:border-violet-400"
                   >
                     <span className={cx('icon-tile h-9 w-9 shrink-0', tomDaGravidade(i.gravidade))}>
                       <Icon name={iconeDaGravidade(i.gravidade)} size={16} />
@@ -269,7 +273,7 @@ function DashboardReal({ periodo, onPeriodo }: { periodo: PeriodoDashboard; onPe
                     <span className="min-w-0 flex-1">
                       <span className="block text-[13.5px] font-medium text-fg">{i.titulo}</span>
                       <span className="mt-0.5 block text-xs leading-relaxed text-muted">{i.detalhe}</span>
-                      <span className="mt-1.5 inline-flex items-center gap-1 text-[12.5px] font-medium text-brand">
+                      <span className="mt-1.5 inline-flex items-center gap-1 text-[12.5px] font-medium text-violet-300">
                         Resolver com a NICO <Icon name="arrowRight" size={13} />
                       </span>
                     </span>
@@ -716,13 +720,14 @@ function PainelInsights() {
     <section className="card flex flex-col">
       <div className="flex items-center justify-between gap-3 px-5 pt-5">
         <h2 className="t-section">Insights da NICO</h2>
-        <span className="pill pill-brand">Beta</span>
+        <span className="pill border border-violet-border bg-violet-soft text-violet-300">IA</span>
       </div>
 
+      {/* v2: violeta = inteligência — tudo que a IA produz nesta tela é violeta. */}
       <div className="flex-1 p-5">
-        <div className="rounded-lg border border-brand-border bg-brand-softer p-4">
+        <div className="rounded-card border border-violet-border bg-violet-soft p-4">
           <div className="flex items-start gap-2.5">
-            <Icon name="ai" size={18} className="mt-0.5 shrink-0 text-brand" />
+            <Icon name="ai" size={18} className="mt-0.5 shrink-0 text-violet-300" />
             <div>
               <p className="text-[13.5px] font-semibold text-fg">
                 {INSIGHTS_DASHBOARD.length} recomendações para você
@@ -734,7 +739,7 @@ function PainelInsights() {
           <ol className="mt-4 space-y-3.5">
             {INSIGHTS_DASHBOARD.map((i, idx) => (
               <li key={i.id} className="flex gap-2.5">
-                <span className="mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-soft text-[11px] font-semibold text-brand">
+                <span className="mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-900 text-[11px] font-semibold text-violet-300">
                   {idx + 1}
                 </span>
                 <div>
@@ -746,9 +751,9 @@ function PainelInsights() {
           </ol>
         </div>
 
-        <Link href="/ia" className="btn btn-ai mt-4 w-full">
+        <Link href="/nyro" className="btn btn-ai mt-4 w-full">
           <Icon name="ai" size={16} />
-          Aplicar recomendações com IA
+          Aplicar recomendações com a NICO
           <Icon name="arrowRight" size={15} />
         </Link>
       </div>
