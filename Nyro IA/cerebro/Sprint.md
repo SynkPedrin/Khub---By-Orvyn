@@ -4,6 +4,13 @@
 
 ---
 
+## Ops 2026-11-23 — Inbox mostra respostas da equipe enviadas do celular (from_me)
+- Diagnóstico a pedido do PO: mensagens chegavam, mas respostas não apareciam — o webhook ignorava `from_me` por design. Na Dra. Bárbara, as clientes eram atendidas pela **Júlia (GHL ainda vivo no número)** e/ou pela secretária no celular, invisíveis no KHUB.
+- **Mudança:** `StevoApiEventosService` + `MessagesService.receberHumano` — `from_me` entra no inbox como `humano` (sem não-lida, sem disparar agente/automação, idempotente via webhook_events). 4 testes novos; jest 1744, tsc limpo. Deploy: push `a1c8e92` + Render.
+- **Pendente:** histórico das respostas antigas — Stevo não expõe histórico; recuperar via **GHL** (falta o token da location da Dra. Bárbara) ou export do celular. A Júlia do GHL precisa ser desligada antes de ativar a Carol no número (virada dela, pendente).
+
+---
+
 ## ✅ SPRINT ONBOARDING-KROMA — Implantação inteligente de clientes da agência *(CONCLUÍDA — 2026-11-22)*
 > Prompt master "ONBOARDING KROMA" do product owner (2026-11-22): sistema interno de implantação de clientes da agência KROMA — visão exclusiva da agência (NÃO é portal do cliente). Escopo autorizado: auditoria + implementação full-stack integrada ao KHUB existente. Decisão: [[Arquitetura|ADR-0054]]. Task: [[Tasks|ONB-KROMA]].
 
