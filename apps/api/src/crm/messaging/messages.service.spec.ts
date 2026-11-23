@@ -181,6 +181,40 @@ describe('MessagesService.send — a mensagem SEMPRE persiste (ADR-0008)', () =>
   });
 });
 
+describe('MessagesService.receberHumano — equipe digitando direto no celular (from_me)', () => {
+  const ENVIADA = { tenantId: TENANT, numeroContato: '5511999991111', texto: 'Oi, aqui é a secretária', providerMessageId: 'wamid-h1' };
+
+  it('grava como humano na conversa existente, sem mexer nas não lidas', async () => {
+    const a = ambiente({
+      contatos: [{ id: 'c1', nome: 'Marina', telefone: '+55 11 99999-1111' }],
+      conversas: [{ id: 'conv1', contactId: 'c1', canal: 'WhatsApp', naoLidas: 2 }],
+    });
+    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).receberHumano(ENVIADA);
+
+    expect(a.mensagens[0]).toMatchObject({ autorTipo: 'humano', corpo: 'Oi, aqui é a secretária' });
+    expect(a.conversas[0].naoLidas).toBe(2); // resposta nossa não vira pendência de leitura
+    expect(a.conversas[0].ultimaPrevia).toBe('Oi, aqui é a secretária');
+    expect(a.publicados.find((p) => p.evento === 'message.created')?.dados.de).toBe('humano');
+  });
+
+  it('contato desconhecido: cria contato e conversa em atendimento humano (nunca com a IA)', async () => {
+    const a = ambiente({});
+    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).receberHumano(ENVIADA);
+
+    expect(a.contatos[0].telefone).toBe('5511999991111');
+    expect(a.conversas[0].atendimento).toBe('humano');
+  });
+
+  it('IDEMPOTÊNCIA: reentrega do mesmo evento não duplica nem republica', async () => {
+    const a = ambiente({ contatos: [{ id: 'c1', nome: 'Marina', telefone: '+55 11 99999-1111' }], dedupe: true });
+    const r = await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi).receberHumano(ENVIADA);
+
+    expect(r).toEqual({ deduped: true });
+    expect(a.mensagens).toHaveLength(0);
+    expect(a.publicados).toHaveLength(0);
+  });
+});
+
 describe('MessagesService.receiveInbound — entrada do WhatsApp', () => {
   const ENTRADA = { tenantId: TENANT, fromNumber: '5511999991111', text: 'Oi, tenho interesse', providerMessageId: 'wamid-1' };
 

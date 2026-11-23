@@ -219,6 +219,38 @@ export class MessagesService {
     return r.deduped ? { deduped: true } : { conversationId: r.conversationId };
   }
 
+  /**
+   * Mensagem enviada pela equipe DIRETO NO CELULAR (`from_me` no webhook da
+   * Stevo): entra no inbox como `humano`, para a conversa na tela refletir a
+   * realidade. Não marca não-lida (foi a gente que respondeu), não dispara
+   * agente/automação e não mexe em `lastInboundAt` — isso é métrica do contato.
+   */
+  async receberHumano(input: { tenantId: string; numeroContato: string; texto: string; providerMessageId: string }) {
+    const r = await this.prisma.withTenant(input.tenantId, async (tx) => {
+      const inserted = await tx.$executeRaw`INSERT INTO webhook_events(tenant_id,provider,event_id,payload,processed_at)
+        VALUES(${input.tenantId}::uuid,'stevo',${input.tenantId + ':' + input.providerMessageId},'{}',now()) ON CONFLICT(provider,event_id) DO NOTHING`;
+      if (!inserted) return { deduped: true as const };
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${input.tenantId + ':' + input.numeroContato},0))`;
+      const achadoId = await acharContatoPorTelefone(tx, input.numeroContato);
+      const existente = achadoId ? await tx.contact.findUnique({ where: { id: achadoId } }) : null;
+      const contact = existente ?? (await tx.contact.create({ data: { tenantId: input.tenantId, nome: input.numeroContato, telefone: input.numeroContato, tag: 'Lead', origem: 'WhatsApp' } }));
+      const hora = this.hora();
+      let conv = await tx.conversation.findFirst({ where: { contactId: contact.id, canal: 'WhatsApp' } });
+      if (!conv) {
+        conv = await tx.conversation.create({ data: { tenantId: input.tenantId, contactId: contact.id, nome: contact.nome, canal: 'WhatsApp', ultimaPrevia: input.texto.slice(0, 140), ultimaHora: hora, atendimento: 'humano' } });
+      } else {
+        conv = await tx.conversation.update({ where: { id: conv.id }, data: { ultimaPrevia: input.texto.slice(0, 140), ultimaHora: hora, status: 'aberta', updatedAt: new Date() } });
+      }
+      const msg = await tx.message.create({ data: { tenantId: input.tenantId, conversationId: conv.id, autorTipo: 'humano', corpo: input.texto, hora }, select: { id: true } });
+      return { deduped: false as const, conversationId: conv.id, messageId: msg.id, hora };
+    });
+    if (!r.deduped) {
+      this.eventos.publicar(input.tenantId, 'message.created', { conversationId: r.conversationId, id: r.messageId!, de: 'humano', texto: input.texto, hora: r.hora! });
+      this.eventos.publicar(input.tenantId, 'conversation.updated', { id: r.conversationId, ultimaPrevia: input.texto.slice(0, 140), ultimaHora: r.hora! });
+    }
+    return r.deduped ? { deduped: true } : { conversationId: r.conversationId };
+  }
+
   private async entrada(input: InboundInput) {
     return this.prisma.withTenant(input.tenantId, async (tx) => {
       const inserted=await tx.$executeRaw`INSERT INTO webhook_events(tenant_id,provider,event_id,payload,processed_at)

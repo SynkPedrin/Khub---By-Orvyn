@@ -65,17 +65,26 @@ export class StevoApiEventosService {
   }
 
   /**
-   * Mensagem do contato → inbox. Grupo e `from_me` ficam de fora nesta versão:
-   * grupo não é atendimento 1:1, e `from_me` é a própria empresa digitando no
-   * celular (registrar isso como humano é a próxima melhoria — doc 18).
+   * Mensagem do contato → inbox. Grupo fica de fora (não é atendimento 1:1).
+   * `from_me` (a equipe digitando direto no celular) entra como mensagem de
+   * `humano` — o inbox passa a refletir a conversa real (doc 18, 2026-11-23).
    */
   private async recebida(tenantId: string, ev: EventoStevoApi): Promise<DesfechoEvento> {
-    if (ev.isGroup || ev.fromMe) return 'ignorado';
+    if (ev.isGroup) return 'ignorado';
     const numero = numeroDoJid(ev.chat) ?? numeroDoJid(ev.from);
     if (!numero) return 'ignorado';
     const midia = ev.midia ?? null;
     const texto = ev.texto?.trim() || midia?.legenda || (midia ? ROTULO_MIDIA[midia.tipo] : ev.conteudoTipo && ev.conteudoTipo !== 'text' ? `[${ev.conteudoTipo}]` : '');
     if (!texto) return 'ignorado';
+    if (ev.fromMe) {
+      await this.mensagens.receberHumano({
+        tenantId,
+        numeroContato: numero,
+        texto: texto.slice(0, 4000),
+        providerMessageId: `stevo_api:${ev.messageId ?? ev.eventId}`,
+      });
+      return 'entrada';
+    }
     const r = await this.mensagens.receiveInbound({
       tenantId,
       fromNumber: numero,

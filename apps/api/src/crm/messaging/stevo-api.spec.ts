@@ -154,7 +154,7 @@ describe('StevoApiEventosService', () => {
       integration: { updateMany: jest.fn(async () => ({ count: 1 })) },
     };
     const prisma = { withTenant: jest.fn(async (_t: string, w: (t: unknown) => Promise<unknown>) => w(tx)) } as unknown as PrismaService;
-    const mensagens = { receiveInbound: jest.fn(async () => ({ conversationId: 'cv1' })) } as unknown as MessagesService;
+    const mensagens = { receiveInbound: jest.fn(async () => ({ conversationId: 'cv1' })), receberHumano: jest.fn(async () => ({ conversationId: 'cv1' })) } as unknown as MessagesService;
     return { svc: new StevoApiEventosService(prisma, mensagens), tx, mensagens };
   }
   const base = { instanciaId: INST, messageId: 'wamid-1', messageIds: [], chat: '5518991234567@s.whatsapp.net', from: null, fromMe: false, isGroup: false, pushName: 'Lia', conteudoTipo: 'text', texto: 'Oi', timestamp: null, motivo: null, eventId: 'evt_1' };
@@ -165,11 +165,13 @@ describe('StevoApiEventosService', () => {
     expect(m.mensagens.receiveInbound).toHaveBeenCalledWith({ tenantId: TENANT, fromNumber: '5518991234567', fromName: 'Lia', text: 'Oi', providerMessageId: 'stevo_api:wamid-1' });
   });
 
-  it('grupo e from_me ficam de fora', async () => {
+  it('grupo fica de fora; from_me entra como mensagem da equipe (humano)', async () => {
     const m = montar();
     await m.svc.processar(TENANT, { ...base, tipo: 'message.received', isGroup: true });
-    await m.svc.processar(TENANT, { ...base, tipo: 'message.received', fromMe: true });
     expect(m.mensagens.receiveInbound).not.toHaveBeenCalled();
+    await m.svc.processar(TENANT, { ...base, tipo: 'message.received', fromMe: true, texto: 'Oi, aqui é a secretária' });
+    expect(m.mensagens.receiveInbound).not.toHaveBeenCalled();
+    expect(m.mensagens.receberHumano).toHaveBeenCalledWith({ tenantId: TENANT, numeroContato: '5518991234567', texto: 'Oi, aqui é a secretária', providerMessageId: 'stevo_api:wamid-1' });
   });
 
   it('mídia sem texto vira marcador legível ([audio])', async () => {
