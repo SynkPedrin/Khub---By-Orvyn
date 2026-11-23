@@ -1,0 +1,206 @@
+/* ==========================================================================
+   KHUB v2 — Tokens "Signal + Intelligence"
+   Fonte da verdade: docs/brand/02-direcao-de-arte.md
+   Dark-first: :root é o tema escuro. Light sob [data-theme="light"].
+   Contraste validado em docs/brand/contraste.md (scripts/brand-contraste.mjs).
+   ========================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* Neutros — viés frio para conversar com o violeta */
+  --bg-0: #050506;        /* canvas da aplicação */
+  --bg-1: #0a0a0c;        /* sidebar */
+  --surface-1: #0f0f12;   /* cards, tabelas */
+  --surface-2: #15151a;   /* hover, headers de tabela */
+  --surface-3: #1c1c22;   /* elevado, inputs */
+  --line-1: rgba(255, 255, 255, 0.07);
+  --line-2: rgba(255, 255, 255, 0.12);
+  --fg-1: #f4f4f6;
+  --fg-2: #a9a9b4;
+  --fg-3: #7f7f89;        /* ajustado p/ AA 4.83:1 (era #75757f, 4.20:1) */
+  --fg-4: #4e4e57;        /* apenas desabilitado/placeholder (isento de AA) */
+
+  /* Lime = SINAL (ação do usuário, foco, ativo, delta positivo) */
+  --lime-500: #b6ff00;    /* preenchimento */
+  --lime-400: #c8ff4d;    /* hover */
+  --lime-300: #d6ff8f;    /* texto de marca no dark */
+  --lime-900: #1d2605;    /* fundo sinal */
+  --lime-950: #141a03;    /* fundo sinal profundo */
+  --lime-border: #3b5205;
+  --lime-ink: #0b1000;    /* texto sobre lime */
+
+  /* Violeta = INTELIGÊNCIA (NICO, agentes, sugestões, automações rodando) */
+  --violet-950: #12062e;
+  --violet-900: #1e0b4a;
+  --violet-800: #331177;
+  --violet-700: #4411aa;
+  --violet-600: #5511cc;
+  --violet-400: #8f6bff;
+  --violet-300: #b8a2ff;  /* texto de IA no dark */
+  --violet-border: color-mix(in oklab, var(--violet-600) 45%, transparent);
+  --violet-soft: color-mix(in oklab, var(--violet-600) 14%, transparent);
+
+  /* Gradiente assinatura — máx. 1 por tela */
+  --gradient-signature: linear-gradient(135deg, #331177 0%, #5511cc 45%, #b6ff00 120%);
+
+  /* Semânticas (distintas do lime: sucesso ≠ ação) */
+  --success: #2ee6a6;
+  --success-soft: color-mix(in oklab, var(--success) 12%, transparent);
+  --warning: #ffb547;
+  --warning-soft: color-mix(in oklab, var(--warning) 12%, transparent);
+  --danger: #ff5d6c;
+  --danger-soft: color-mix(in oklab, var(--danger) 12%, transparent);
+  --info: #5eb0ff;
+  --info-soft: color-mix(in oklab, var(--info) 12%, transparent);
+
+  /* Dados — ordem fixa de séries */
+  --data-1: #b6ff00;
+  --data-2: #8f6bff;
+  --data-3: #4fe3ff;
+  --data-4: #ffb547;
+  --data-5: #ff6bd5;
+  --data-6: #6e6e78;
+  --data-grid: rgba(255, 255, 255, 0.04);
+
+  /* Canais */
+  --ch-whatsapp: #25d366;
+  --ch-instagram: #e1306c;
+  --ch-email: var(--fg-3);
+
+  /* Raios — escala fechada */
+  --r-badge: 4px;
+  --r-control: 6px;
+  --r-card: 10px;
+  --r-overlay: 14px;
+  --r-full: 999px;
+
+  /* Profundidade: elevação por luz, não sombra. Sombras só em overlays. */
+  --hl-inset: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --shadow-overlay: 0 16px 48px -12px rgba(0, 0, 0, 0.6), 0 4px 12px -4px rgba(0, 0, 0, 0.4);
+
+  /* Glass — só camadas flutuantes (topbar, ⌘K, popover, modal, dock NICO) */
+  --glass-bg: color-mix(in oklab, var(--surface-1) 72%, transparent);
+  --glass-blur: blur(16px) saturate(140%);
+  --glass-border: var(--line-2);
+
+  /* Tipografia — escala fechada de 7 (+ hero login) */
+  --text-2xs: 11px;
+  --text-xs: 12px;
+  --text-sm: 13px;   /* corpo de UI */
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 28px;
+  --text-hero: 40px; /* só login/hero de marca */
+  --text-hero-lg: 56px;
+
+  /* Movimento */
+  --dur-color: 120ms;
+  --dur-popover: 180ms;
+  --dur-modal: 240ms;
+  --ease-khub: cubic-bezier(0.2, 0, 0, 1);
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+
+  --bg-0: #f8f8f5;
+  --bg-1: #f0f0ec;        /* sidebar */
+  --surface-1: #ffffff;
+  --surface-2: #f4f4f1;
+  --surface-3: #eaeae6;
+  --line-1: rgba(17, 17, 20, 0.08);
+  --line-2: rgba(17, 17, 20, 0.14);
+  --fg-1: #111114;
+  --fg-2: #4e4e57;
+  --fg-3: #6e6e78;
+  --fg-4: #a9a9b4;
+
+  /* Lime nunca como texto no claro: marca em #4c7a00, fill permanece #b6ff00 */
+  --lime-300: #4c7a00;    /* texto/ícone de marca no claro */
+  --lime-900: #f0f7dc;
+  --lime-950: #e6f2c8;
+  --lime-border: #c3dfa0;
+
+  --violet-300: #4411aa;  /* texto de IA no claro */
+  --violet-400: #5511cc;
+  --violet-soft: color-mix(in oklab, var(--violet-700) 10%, transparent);
+  --violet-border: color-mix(in oklab, var(--violet-700) 30%, transparent);
+
+  --success: #0a7a52;
+  --warning: #9a6200;
+  --danger: #b4232f;
+  --info: #1668b3;
+
+  --data-grid: rgba(17, 17, 20, 0.06);
+  --hl-inset: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --shadow-overlay: 0 16px 48px -12px rgba(17, 17, 20, 0.18), 0 4px 12px -4px rgba(17, 17, 20, 0.1);
+}
+
+/* ==========================================================================
+   Utilitários de marca (Fase 4.1)
+   ========================================================================== */
+
+/* Aurora — mesh violeta+lime com grão. Só momentos de marca, máx. 1/tela. */
+.aurora {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(60% 80% at 15% 20%, color-mix(in oklab, var(--violet-700) 55%, transparent) 0%, transparent 60%),
+    radial-gradient(50% 70% at 85% 15%, color-mix(in oklab, var(--violet-600) 35%, transparent) 0%, transparent 55%),
+    radial-gradient(70% 90% at 80% 85%, color-mix(in oklab, var(--lime-500) 16%, transparent) 0%, transparent 60%),
+    var(--bg-0);
+}
+.aurora::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Glass — camadas flutuantes apenas (máx. 3 visíveis simultâneos) */
+.glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--hl-inset), var(--shadow-overlay);
+}
+@supports (backdrop-filter: blur(1px)) {
+  .glass { backdrop-filter: var(--glass-blur); }
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .glass { background: var(--surface-1); }
+}
+
+/* Signal ring — foco visível lime (AA como indicador não-texto) */
+.signal-ring:focus-visible,
+.signal-ring:focus-within {
+  outline: 2px solid var(--lime-500);
+  outline-offset: 2px;
+}
+
+/* AI border — borda cônica violeta→lime girando enquanto a IA "pensa" */
+@property --ai-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+.ai-border {
+  position: relative;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--surface-1), var(--surface-1)) padding-box,
+    conic-gradient(from var(--ai-angle), var(--violet-600), var(--lime-500), var(--violet-600)) border-box;
+  animation: ai-spin 2.4s linear infinite;
+}
+@keyframes ai-spin {
+  to { --ai-angle: 360deg; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-border { animation: none; background:
+    linear-gradient(var(--surface-1), var(--surface-1)) padding-box,
+    linear-gradient(135deg, var(--violet-600), var(--lime-500)) border-box; }
+}

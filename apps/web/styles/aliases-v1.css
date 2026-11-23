@@ -1,0 +1,89 @@
+/* ==========================================================================
+   KHUB v2 — ALIASES TEMPORÁRIOS (Fase 4.1)
+   Mapeia os tokens legados (globals.css) para os novos (styles/tokens.css).
+   Telas não migradas herdam o visual novo automaticamente.
+   REMOVER ESTE ARQUIVO ao fim da migração (Fase 4.5) e apontar os
+   consumidores diretamente para os tokens novos.
+   Carregar DEPOIS de globals.css e tokens.css.
+   ========================================================================== */
+
+:root {
+  /* Superfícies */
+  --base-2: var(--bg-0);      /* fundo mais profundo */
+  --base-1: var(--bg-1);      /* fundo */
+  --base-0: var(--surface-1); /* superfície */
+  --base-3: var(--surface-3); /* elevada */
+  --bg: var(--bg-0);
+  --surface: var(--surface-1);
+  --surface-2-alias: var(--surface-2); /* placeholder: --surface já existia; ver abaixo */
+  --muted: var(--fg-3);
+
+  /* Texto */
+  --text: var(--fg-1);
+  --text-2: var(--fg-2);
+  --text-3: var(--fg-3);
+
+  /* Bordas */
+  --edge: var(--line-1);
+  --edge-hover: var(--line-2);
+  --border: var(--line-1);
+  --border-strong: var(--line-2);
+
+  /* Marca — UM lime só, em todos os contextos (mata #9bee45 e o violeta do light) */
+  --brand: var(--lime-500);
+  --brand-2: var(--lime-400);
+  --brand-highlight: var(--lime-300);
+  --brand-deep: var(--lime-300);
+  --brand-soft: var(--lime-900);
+  --brand-softer: var(--lime-950);
+  --brand-border: var(--lime-border);
+  --khub-lime: var(--lime-500);
+  --khub-lime-2: var(--lime-400);
+  --khub-lime-soft: var(--lime-900);
+  --khub-lime-border: var(--lime-border);
+  --khub-lime-ink: var(--lime-300);
+  --lime: var(--lime-500);
+  --lime-edge: var(--lime-400);
+  --brand-bright: var(--lime-400);
+  --lime-leak: transparent;
+
+  /* Violeta = inteligência (agora existe em todo contexto) */
+  --violet: var(--violet-400);
+  --violet-glow: var(--violet-300);
+  --violet-soft-legacy: var(--violet-soft);
+  --lilac: var(--violet-300);
+  --amethyst: var(--violet-400);
+  --amethyst-deep: var(--violet-600);
+  --amethyst-glow: var(--violet-300);
+  --amethyst-highlight: var(--violet-300);
+  --amethyst-soft: var(--violet-soft);
+  --amethyst-softer: var(--violet-950);
+  --amethyst-border: var(--violet-border);
+
+  /* Dados — nova ordem fixa de séries */
+  --cat-1: var(--data-1);
+  --cat-2: var(--data-2);
+  --cat-3: var(--data-3);
+  --cat-4: var(--data-4);
+
+  /* Raios legados → escala fechada */
+  --r-sm: var(--r-control);
+  --r-md: var(--r-card);
+  --r-lg: var(--r-overlay);
+  --r-xl: var(--r-overlay);
+  --r-2xl: var(--r-overlay);
+  --radius: var(--r-card);
+  --radius-lg: var(--r-overlay);
+
+  /* Foco */
+  --ring: var(--lime-500);
+}
+
+/* Chat: o papel de parede do WhatsApp sai na migração do Inbox (4.4);
+   aqui apenas alinhamos os tokens ao tema (sem inverter claro/escuro). */
+:root {
+  --chat-bg: var(--bg-0);
+}
+[data-theme='light'] {
+  --chat-bg: var(--bg-0);
+}
