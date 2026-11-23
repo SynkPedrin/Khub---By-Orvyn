@@ -519,6 +519,7 @@ export class CaixaService {
    * Caixa atual: tudo que entrou menos tudo que saiu (pagos, até hoje) e o
    * movimento de HOJE por forma de pagamento.
    */
+<<<<<<< HEAD
   async caixaAtual(tenantId: string, agora = new Date(), periodo: { de?: string; ate?: string } = {}) {
     const hoje = dataNoFuso(+agora, FUSO_PADRAO);
     // Caixa do período (padrão: o mês corrente), só o que já foi recebido/pago até hoje.
@@ -527,6 +528,10 @@ export class CaixaService {
     const ateBruto = dia(periodo.ate) ?? hoje;
     const ate = ateBruto > hoje ? hoje : ateBruto;
     if (de > ateBruto) throw new BadRequestException('o início do período é depois do fim');
+=======
+  async caixaAtual(tenantId: string, agora = new Date()) {
+    const hoje = dataNoFuso(+agora, FUSO_PADRAO);
+>>>>>>> producao/main
     return this.prisma.withTenant(tenantId, async (tx) => {
       // Caixa = o que foi lançado no KHUB (histórico importado de outro sistema fica à parte:
       // somado, virava "caixa atual" de milhões, que não é o dinheiro da gaveta).
@@ -537,6 +542,7 @@ export class CaixaService {
                MIN(data_competencia) FILTER (WHERE origem <> 'importacao')::text AS desde
         FROM financeiro_transacoes
         WHERE tenant_id = ${tenantId}::uuid AND status = 'pago' AND data_competencia <= ${hoje}::date`;
+<<<<<<< HEAD
       const [mes] = await tx.$queryRaw<{ entradas: bigint; saidas: bigint; importado: bigint; khub: bigint }[]>`
         SELECT COALESCE(SUM(valor_centavos) FILTER (WHERE tipo = 'entrada'), 0)::bigint AS entradas,
                COALESCE(SUM(valor_centavos) FILTER (WHERE tipo = 'saida'), 0)::bigint AS saidas,
@@ -551,12 +557,20 @@ export class CaixaService {
         FROM financeiro_transacoes
         WHERE tenant_id = ${tenantId}::uuid AND status = 'pago' AND data_competencia = ${hoje}::date
         GROUP BY 1, tipo`;
+=======
+      const porForma = await tx.$queryRaw<{ forma: string | null; tipo: string; total: bigint; qtd: bigint }[]>`
+        SELECT forma_pagamento AS forma, tipo, COALESCE(SUM(valor_centavos), 0)::bigint AS total, COUNT(*)::bigint AS qtd
+        FROM financeiro_transacoes
+        WHERE tenant_id = ${tenantId}::uuid AND status = 'pago' AND data_competencia = ${hoje}::date
+        GROUP BY forma_pagamento, tipo`;
+>>>>>>> producao/main
       const entradasHoje = porForma.filter((r) => r.tipo === 'entrada');
       return {
         data: hoje,
         saldoCentavos: Number(saldo.entradas) - Number(saldo.saidas),
         desde: saldo.desde,
         historicoImportadoCentavos: Number(saldo.historico),
+<<<<<<< HEAD
         periodo: {
           de,
           ate,
@@ -566,6 +580,8 @@ export class CaixaService {
           importadoCentavos: Number(mes.importado),
           khubCentavos: Number(mes.khub),
         },
+=======
+>>>>>>> producao/main
         hoje: {
           entradasCentavos: entradasHoje.reduce((a, r) => a + Number(r.total), 0),
           saidasCentavos: porForma.filter((r) => r.tipo === 'saida').reduce((a, r) => a + Number(r.total), 0),

@@ -401,7 +401,11 @@ export class AgentToolsService {
         });
         return { ok: true, dados: { compromissoId: c.id, inicio: c.inicio } };
       }
+<<<<<<< HEAD
       // Agenda de salão (Studio da Beleza): por profissional e serviço, expediente
+=======
+      // Agenda de salão: por profissional e serviço, expediente
+>>>>>>> producao/main
       // deduzido do histórico; reserva avisa a equipe (número da Notificação Interna do GHL).
       case 'ver_horarios_salao': {
         const dados = await this.salao.horarios(

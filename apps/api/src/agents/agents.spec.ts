@@ -349,7 +349,7 @@ describe('ferramentas de agenda respeitam o horário do agente', () => {
   });
 
   it('grade fina (20 min) expõe o último horário que cabe no dia — regra da clínica', async () => {
-    // Faixas do Instituto Bárbara Lopes: 07:40–11:00 e 14:00–19:00, seg–sex.
+    // Faixas do da clínica: 07:40–11:00 e 14:00–19:00, seg–sex.
     const horarioClinica = horarioSchema.parse({
       ativo: true,
       dias: {
@@ -561,7 +561,7 @@ describe('remarcar_agendamento / cancelar_agendamento — política da empresa',
 // ------------------------------------------------------------------ sinal Pix
 
 describe('sinal Pix — registrar e verificar (sem gateway: conciliação autorizada)', () => {
-  const tenantComPix = { settings: { operacao: { sinalCentavos: 10000, consultaParticularCentavos: 40000, consultaConvenioCentavos: 30000, pix: { chave: 'pix@clinica.com', recebedor: 'Instituto Bárbara Lopes', instrucoes: 'Envie o comprovante aqui.' } } } };
+  const tenantComPix = { settings: { operacao: { sinalCentavos: 10000, consultaParticularCentavos: 40000, consultaConvenioCentavos: 30000, pix: { chave: 'pix@clinica.com', recebedor: 'da clínica', instrucoes: 'Envie o comprovante aqui.' } } } };
 
   it('registra a cobrança enviada e devolve os dados oficiais da conta', async () => {
     const f = ferramentas();

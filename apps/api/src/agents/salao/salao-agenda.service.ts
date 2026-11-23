@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MessagesService } from '../../crm/messaging/messages.service';
+<<<<<<< HEAD
 import { AvecAgendaService } from '../../integrations/avec/avec-agenda.service';
+=======
+>>>>>>> producao/main
 import {
   acharProfissional,
   acharServico,
@@ -16,7 +19,10 @@ import {
   type AtendimentoHist,
   type Expedientes,
   type ProfissionalCatalogo,
+<<<<<<< HEAD
   type Janela,
+=======
+>>>>>>> producao/main
   type ServicoCatalogo,
 } from './agenda-salao';
 
@@ -62,6 +68,7 @@ export class SalaoAgendaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mensagens: MessagesService,
+<<<<<<< HEAD
     private readonly avec: AvecAgendaService,
   ) {}
 
@@ -88,6 +95,10 @@ export class SalaoAgendaService {
     return new Map(linhas.map((l) => [l.profissionalId, l.iniMin !== null && l.fimMin !== null ? { iniMin: l.iniMin, fimMin: l.fimMin } : null]));
   }
 
+=======
+  ) {}
+
+>>>>>>> producao/main
   /** O tenant opera como salão? (tem catálogo de profissionais e serviços) */
   async ehSalao(tenantId: string): Promise<boolean> {
     const n = await this.prisma.withTenant(tenantId, (tx) => tx.profissional.count({ where: { ativo: true } }));
@@ -163,7 +174,10 @@ export class SalaoAgendaService {
     if (!profs.length) throw new OrientacaoAgente(`nenhuma profissional com agenda para ${servico.nome}; transfira para a equipe`);
 
     const dia = (data: string) => (fechado(data) ? Promise.resolve([]) : this.livresDoDia(tenantId, base, profs, servico, data, fuso, agora));
+<<<<<<< HEAD
     const avecFora = fechado(pedido.data) ? null : await this.atualizarDoAvec(tenantId, pedido.data, false);
+=======
+>>>>>>> producao/main
     const doDia = await dia(pedido.data);
     const resposta: Record<string, unknown> = {
       servico: { nome: servico.nome, duracaoMin: servico.duracaoMin, preco: servico.precoCentavos ? `R$ ${(servico.precoCentavos / 100).toFixed(2).replace('.', ',')}` : null },
@@ -172,7 +186,10 @@ export class SalaoAgendaService {
       profissionais: doDia.filter((d) => d.horarios.length).map((d) => ({ nome: d.nome, horarios: d.horarios.slice(0, 10) })),
       naoAtendemNesseDia: doDia.filter((d) => d.semExpediente).map((d) => d.nome),
       ...(fechado(pedido.data) ? { salaoFechado: `o salão não atende ${DIAS_SEMANA[diaDaSemana(pedido.data)]}: ofereça um dos próximos dias com vaga` } : {}),
+<<<<<<< HEAD
       ...(avecFora ? { avisoAgenda: 'a agenda oficial do salão (Avec) não respondeu agora: estes horários podem estar desatualizados; não confirme nenhum, diga que a equipe vai confirmar e use notificar_equipe' } : {}),
+=======
+>>>>>>> producao/main
     };
     if (pedido.horario && /^\d{2}:\d{2}$/.test(pedido.horario)) {
       const livresNoHorario = doDia.filter((d) => d.horarios.includes(pedido.horario!)).map((d) => d.nome);
@@ -196,10 +213,17 @@ export class SalaoAgendaService {
 
   private async livresDoDia(tenantId: string, base: Base, profs: ProfissionalCatalogo[], servico: ServicoCatalogo, data: string, fuso: string, agora: number) {
     const ini = instanteNoFuso(data, 0, fuso);
+<<<<<<< HEAD
     const [ocup, jornadas] = await Promise.all([this.ocupados(tenantId, ini, ini + 86_400_000), this.jornadasDoDia(tenantId, data)]);
     const ds = diaDaSemana(data);
     return profs.map((p) => {
       const janela = jornadas.has(p.id) ? jornadas.get(p.id) : base.expedientes.get(p.id)?.get(ds);
+=======
+    const ocup = await this.ocupados(tenantId, ini, ini + 86_400_000);
+    const ds = diaDaSemana(data);
+    return profs.map((p) => {
+      const janela = base.expedientes.get(p.id)?.get(ds);
+>>>>>>> producao/main
       if (!janela) return { nome: p.nome, id: p.id, horarios: [] as string[], semExpediente: true };
       const livres = horariosLivres({ data, janela, duracaoMin: servico.duracaoMin, ocupados: ocup.get(p.id) ?? [], fuso, agora });
       const hhmm = (ms: number) => {
@@ -232,6 +256,7 @@ export class SalaoAgendaService {
     if (fechado(local.data)) {
       throw new OrientacaoAgente(`o salão não atende ${DIAS_SEMANA[local.diaSemana]} (${local.data}); consulte ver_horarios_salao e ofereça outro dia`);
     }
+<<<<<<< HEAD
     // Avec: relê o dia AO VIVO; sem confirmação da agenda oficial não reserva.
     const avecFora = await this.atualizarDoAvec(tenantId, local.data, true);
     if (avecFora) {
@@ -239,6 +264,9 @@ export class SalaoAgendaService {
     }
     const jornadas = await this.jornadasDoDia(tenantId, local.data);
     const janela = jornadas.has(prof.id) ? jornadas.get(prof.id) : base.expedientes.get(prof.id)?.get(local.diaSemana);
+=======
+    const janela = base.expedientes.get(prof.id)?.get(local.diaSemana);
+>>>>>>> producao/main
     const hora = `${String(Math.floor(local.minutos / 60)).padStart(2, '0')}:${String(local.minutos % 60).padStart(2, '0')}`;
     const livres = janela ? horariosLivres({ data: local.data, janela, duracaoMin: servico.duracaoMin, ocupados: [], fuso, agora }) : [];
     if (!livres.includes(+inicio)) {
@@ -254,6 +282,7 @@ export class SalaoAgendaService {
         select: { id: true },
       });
       if (choque) throw new OrientacaoAgente(`${prof.nome} acabou de ser reservada às ${hora}; consulte ver_horarios_salao de novo e ofereça outro horário`);
+<<<<<<< HEAD
       // A cliente já tem esse serviço marcado (pelo Avec, pela equipe ou pela IA): não duplica.
       const jaTem = await tx.agendaCompromisso.findFirst({
         where: { contactId: ctx.contactId, servicoId: servico.id, status: { in: ATIVOS }, inicio: { gt: new Date(agora) } },
@@ -267,6 +296,8 @@ export class SalaoAgendaService {
           `a cliente JÁ TEM ${servico.nome} marcado ${quandoJa}${comQuem ? ` com ${comQuem}` : ''}: não marque de novo; confirme com ela se mantém esse horário. Se quiser trocar, é remarcação: use notificar_equipe`,
         );
       }
+=======
+>>>>>>> producao/main
       const contato = await tx.contact.findUnique({ where: { id: ctx.contactId }, select: { nome: true, telefone: true } });
       const c = await tx.agendaCompromisso.create({
         data: {
