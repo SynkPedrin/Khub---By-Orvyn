@@ -174,6 +174,16 @@ describe('StevoApiEventosService', () => {
     expect(m.mensagens.receberHumano).toHaveBeenCalledWith({ tenantId: TENANT, numeroContato: '5518991234567', texto: 'Oi, aqui é a secretária', providerMessageId: 'stevo_api:wamid-1' });
   });
 
+  it('message.sent com from_me+texto (digitado no celular) entra no inbox; sem texto segue como recibo de status', async () => {
+    const m = montar();
+    await m.svc.processar(TENANT, { ...base, tipo: 'message.sent', fromMe: true, texto: 'Pode vir às 14h' });
+    expect(m.mensagens.receberHumano).toHaveBeenCalledWith(expect.objectContaining({ numeroContato: '5518991234567', texto: 'Pode vir às 14h' }));
+    // Recibo de envio do próprio KHUB: sem texto → só atualiza status, nada no inbox de novo.
+    (m.mensagens.receberHumano as jest.Mock).mockClear();
+    await m.svc.processar(TENANT, { ...base, tipo: 'message.sent', fromMe: true, texto: null, conteudoTipo: null });
+    expect(m.mensagens.receberHumano).not.toHaveBeenCalled();
+  });
+
   it('mídia sem texto vira marcador legível ([audio])', async () => {
     const m = montar();
     await m.svc.processar(TENANT, { ...base, tipo: 'message.received', texto: null, conteudoTipo: 'audio' });

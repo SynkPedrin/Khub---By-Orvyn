@@ -230,6 +230,11 @@ export class MessagesService {
       const inserted = await tx.$executeRaw`INSERT INTO webhook_events(tenant_id,provider,event_id,payload,processed_at)
         VALUES(${input.tenantId}::uuid,'stevo',${input.tenantId + ':' + input.providerMessageId},'{}',now()) ON CONFLICT(provider,event_id) DO NOTHING`;
       if (!inserted) return { deduped: true as const };
+      // Mensagem que o próprio KHUB enviou (API) também dispara message.sent
+      // com from_me — já está no banco com provider_id = id do provedor.
+      const provedorId = input.providerMessageId.replace(/^stevo_api:/, '');
+      const jaEnviada = await tx.message.findFirst({ where: { tenantId: input.tenantId, providerId: provedorId }, select: { id: true } });
+      if (jaEnviada) return { deduped: true as const };
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${input.tenantId + ':' + input.numeroContato},0))`;
       const achadoId = await acharContatoPorTelefone(tx, input.numeroContato);
       const existente = achadoId ? await tx.contact.findUnique({ where: { id: achadoId } }) : null;

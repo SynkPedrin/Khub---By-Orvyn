@@ -37,6 +37,7 @@ function ambiente(opts: { contatos?: any[]; conversas?: any[]; dedupe?: boolean;
       }),
     },
     message: {
+      findFirst: jest.fn(async ({ where }: any) => mensagens.find((m) => m.tenantId === where.tenantId && m.providerId === where.providerId) ?? null),
       findUnique: jest.fn(async ({ where }: any) => mensagens.find((m) =>
         m.tenantId === where.tenantId_idempotencyKey?.tenantId &&
         m.idempotencyKey === where.tenantId_idempotencyKey?.idempotencyKey) ?? null),

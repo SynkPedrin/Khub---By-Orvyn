@@ -48,6 +48,11 @@ export class StevoApiEventosService {
       case 'message.received':
         return this.recebida(tenantId, ev);
       case 'message.sent':
+        // A Stevo emite a mensagem digitada no celular como `message.sent`
+        // com from_me+texto — não como `message.received`. Mensagens que o
+        // próprio KHUB enviou também chegam aqui, mas já existem no banco
+        // (provider_id) e são deduplicadas no receberHumano.
+        if (ev.fromMe && (ev.texto?.trim() || ev.midia)) return this.recebida(tenantId, ev);
         return this.atualizarStatus(tenantId, ev.messageId ? [ev.messageId] : [], 'sent');
       case 'message.delivered':
         return this.atualizarStatus(tenantId, ev.messageIds, 'delivered');
