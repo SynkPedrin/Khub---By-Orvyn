@@ -72,6 +72,25 @@ CLS dentro do orçamento (≤ 0,05) em todas. **LCP acima da meta de 2,0 s nas r
 
 **Screenshots depois**: `docs/brand/depois/` (mesmo grid de 136 do antes).
 
+**Testes**: `scripts/brand-fluxos.mjs` — 6/6 PASS (login, criar lead abre modal, pipeline renderiza colunas, mover mostra toast, Desfazer reverte, busca global abre).
+
+## 8. Notas (0–10, antes → depois)
+
+| Critério | Antes | Depois | Justificativa (uma linha) |
+|---|---|---|---|
+| Identidade de marca | 4 | 8 | Antes: marca só no login e 3 limes divergentes; depois: lime=sinal/violeta=IA consistentes nas telas migradas, aurora rara, logo sem caixa |
+| Estética | 5 | 8 | Antes: glass+glow em tudo, "SaaS amador"; depois: superfícies quietas, display font, hierarquia por espaço (diretriz do dono aplicada) |
+| Profissionalismo | 5 | 8 | Antes: wallpaper WhatsApp, bolhas hardcoded, env vars na UI; depois: tokens em todo chrome, densidade Linear-like |
+| Consistência | 4 | 7 | Antes: 3 brand, raios/glows livres; depois: tokens + aliases unificam o legado, mas telas não migradas ainda convivem (aliases temporários) |
+| Hierarquia visual | 5 | 8 | Antes: cards para tudo, glow decorativo; depois: cor com função aprendível, um gradiente por tela, foco lime visível |
+| Facilidade de uso | 6 | 8 | Antes: toolbar B1, grupos vazios B5, sem Desfazer; depois: toolbar limpa, chips, Desfazer no pipeline, loading em 22 rotas |
+| Responsividade | 6 | 7 | Antes/depois verificados em 390/768/1280/1440; pendente: thread do Inbox estreita em exatamente 1440px (pré-existente, follow-up registrado) |
+| Acessibilidade | 6 | 8 | Antes: texto branco sobre lime (~20 lugares), foco inconsistente; depois: `.text-on-brand`, 27/27 pares AA, aria mantido; auditoria leitor de tela não refeita |
+| Performance | 6 | 7 | CLS 0,001–0,020 (meta ≤0,05), bundle sem deps novas (+0 kB runtime); LCP preso à API local lenta (shell 0,06 s) — re-medir em produção |
+| Qualidade técnica | 6 | 8 | Tokens + aliases com estratégia de remoção, zero deps de runtime, typecheck/lint verdes, testes de fumaça 6/6; dívida: burn-down de valores arbitrários |
+
+**Médias: 5,3 → 7,6.**
+
 ## 7. Riscos e pendências conhecidas
 
 - **Working tree compartilhada**: trabalho alheio (genna/onboarding/Carol) com arquivos untracked e erros de typecheck pré-existentes em `components/agency/onboarding/*` — não tocados; alertar o dono antes de qualquer build de produção (o build pode falhar por causa deles, não do redesign).
