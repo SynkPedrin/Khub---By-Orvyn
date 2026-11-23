@@ -251,7 +251,7 @@
   --radius-sm: var(--r-lg);
   --radius-xs: var(--r-md);
   --font-apple: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue';
-  --font-display: var(--font-sans), var(--font-apple), ui-sans-serif, system-ui, sans-serif;
+  /* --font-display agora vem do next/font (Space Grotesk) no layout.tsx — v2 */
 }
 
 /* ---------------------------------------------------------------------

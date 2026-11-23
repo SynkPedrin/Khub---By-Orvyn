@@ -5,9 +5,14 @@
    REMOVER ESTE ARQUIVO ao fim da migração (Fase 4.5) e apontar os
    consumidores diretamente para os tokens novos.
    Carregar DEPOIS de globals.css e tokens.css.
+
+   Seletores com a MESMA especificidade dos blocos de globals.css
+   (:root[data-theme='dark'] / :root[data-theme='light']) — como este
+   arquivo vem depois na cascata, os aliases vencem.
    ========================================================================== */
 
-:root {
+:root[data-theme='dark'],
+:root:not([data-theme]) {
   /* Superfícies */
   --base-2: var(--bg-0);      /* fundo mais profundo */
   --base-1: var(--bg-1);      /* fundo */
@@ -15,7 +20,6 @@
   --base-3: var(--surface-3); /* elevada */
   --bg: var(--bg-0);
   --surface: var(--surface-1);
-  --surface-2-alias: var(--surface-2); /* placeholder: --surface já existia; ver abaixo */
   --muted: var(--fg-3);
 
   /* Texto */
@@ -29,7 +33,7 @@
   --border: var(--line-1);
   --border-strong: var(--line-2);
 
-  /* Marca — UM lime só, em todos os contextos (mata #9bee45 e o violeta do light) */
+  /* Marca — UM lime só (mata o #9bee45 do :root default) */
   --brand: var(--lime-500);
   --brand-2: var(--lime-400);
   --brand-highlight: var(--lime-300);
@@ -50,15 +54,7 @@
   /* Violeta = inteligência (agora existe em todo contexto) */
   --violet: var(--violet-400);
   --violet-glow: var(--violet-300);
-  --violet-soft-legacy: var(--violet-soft);
   --lilac: var(--violet-300);
-  --amethyst: var(--violet-400);
-  --amethyst-deep: var(--violet-600);
-  --amethyst-glow: var(--violet-300);
-  --amethyst-highlight: var(--violet-300);
-  --amethyst-soft: var(--violet-soft);
-  --amethyst-softer: var(--violet-950);
-  --amethyst-border: var(--violet-border);
 
   /* Dados — nova ordem fixa de séries */
   --cat-1: var(--data-1);
@@ -77,13 +73,67 @@
 
   /* Foco */
   --ring: var(--lime-500);
-}
 
-/* Chat: o papel de parede do WhatsApp sai na migração do Inbox (4.4);
-   aqui apenas alinhamos os tokens ao tema (sem inverter claro/escuro). */
-:root {
+  /* Chat: papel de parede do WhatsApp sai na migração do Inbox (4.4);
+     aqui os tokens já seguem o tema (sem inverter claro/escuro). */
   --chat-bg: var(--bg-0);
 }
-[data-theme='light'] {
+
+:root[data-theme='light'] {
+  --base-2: var(--bg-0);
+  --base-1: var(--bg-1);
+  --base-0: var(--surface-1);
+  --base-3: var(--surface-3);
+  --bg: var(--bg-0);
+  --surface: var(--surface-1);
+  --muted: var(--fg-3);
+
+  --text: var(--fg-1);
+  --text-2: var(--fg-2);
+  --text-3: var(--fg-3);
+
+  --edge: var(--line-1);
+  --edge-hover: var(--line-2);
+  --border: var(--line-1);
+  --border-strong: var(--line-2);
+
+  /* No claro, lime #B6FF00 como TEXTO falha contraste (1.05:1). Até as telas
+     serem migradas (quando fills passam a usar --lime-500 + --lime-ink),
+     --brand mapeia para o verde acessível #4c7a00. */
+  --brand: var(--lime-300);
+  --brand-2: #3f6600;
+  --brand-highlight: var(--lime-300);
+  --brand-deep: var(--lime-300);
+  --brand-soft: var(--lime-900);
+  --brand-softer: var(--lime-950);
+  --brand-border: var(--lime-border);
+  --khub-lime: var(--lime-300);
+  --khub-lime-2: #3f6600;
+  --khub-lime-soft: var(--lime-900);
+  --khub-lime-border: var(--lime-border);
+  --khub-lime-ink: var(--lime-300);
+  --lime: var(--lime-300);
+  --lime-edge: #3f6600;
+  --brand-bright: var(--lime-300);
+  --lime-leak: transparent;
+
+  --violet: var(--violet-400);
+  --violet-glow: var(--violet-300);
+  --lilac: var(--violet-300);
+
+  --cat-1: var(--data-1);
+  --cat-2: var(--data-2);
+  --cat-3: var(--data-3);
+  --cat-4: var(--data-4);
+
+  --r-sm: var(--r-control);
+  --r-md: var(--r-card);
+  --r-lg: var(--r-overlay);
+  --r-xl: var(--r-overlay);
+  --r-2xl: var(--r-overlay);
+  --radius: var(--r-card);
+  --radius-lg: var(--r-overlay);
+
+  --ring: var(--lime-500);
   --chat-bg: var(--bg-0);
 }

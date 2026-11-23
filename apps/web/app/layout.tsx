@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import localFont from 'next/font/local';
 import './globals.css';
+import '../styles/tokens.css';
+import '../styles/aliases-v1.css';
 import { AuthProvider } from '@/lib/auth';
 import { LocaleProvider } from '@/lib/locale';
 import { AgencyProvider } from '@/components/agency/AgencyProvider';
@@ -10,8 +12,11 @@ import { GlassLight } from '@/components/shell/GlassLight';
  * Identidade Kroma (ADR-0043): Manrope na interface inteira e Instrument
  * Serif itálica só como acento editorial (uma palavra por título). Arquivos
  * locais em /public/fonts (OFL): o build de deploy não baixa nada.
+ * v2: Space Grotesk (display de marca) e JetBrains Mono (dados tabulares).
  */
 const sans = localFont({ src: '../public/fonts/manrope-latin-variable.woff2', weight: '200 800', variable: '--font-sans', display: 'swap' });
+const display = localFont({ src: '../public/fonts/space-grotesk-latin-variable.woff2', weight: '300 700', variable: '--font-display', display: 'swap' });
+const mono = localFont({ src: '../public/fonts/jetbrains-mono-latin-variable.woff2', weight: '100 800', variable: '--font-mono', display: 'swap' });
 const serif = localFont({
   src: [
     { path: '../public/fonts/instrument-serif-latin-italic.woff2', weight: '400', style: 'italic' },
@@ -45,7 +50,7 @@ const TEMA_ANTES_DE_PINTAR = `(function(){try{var p=location.pathname;if(/^\\/(l
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" data-theme="dark" className={`${sans.variable} ${serif.variable}`} suppressHydrationWarning>
+    <html lang="pt-BR" data-theme="dark" className={`${sans.variable} ${display.variable} ${mono.variable} ${serif.variable}`} suppressHydrationWarning>
       <head>
         {/* Pinta o tema claro antes do primeiro frame (sem piscar escuro) na
             área logada. Login, cadastro e LP ficam sempre escuros. A fonte
