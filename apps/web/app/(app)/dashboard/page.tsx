@@ -451,11 +451,16 @@ function CardEtapa({ etapa }: { etapa: Overview['funil'][number] }) {
   );
 }
 
-/** "Desempenho Geral": delta em destaque + curva diária de receita do período. */
+/** "Desempenho Geral": delta em destaque + curva diária de receita do período.
+    Sem venda fechada, cai para a série REAL de conversas (WhatsApp) — a operação
+    viva aparece mesmo antes da primeira receita registrada (B14). */
 function CardDesempenho({ overview }: { overview: Overview }) {
   const receita = overview.kpis.receita;
+  const conversas = overview.kpis.conversas;
   const serie = overview.receitaSerie ?? [];
   const temReceita = serie.some((p) => p.valor > 0);
+  const serieConversas = conversas?.serie ?? [];
+  const temConversas = serieConversas.some((p) => p.valor > 0);
 
   return (
     <div className="flex h-full flex-col">
@@ -480,6 +485,18 @@ function CardDesempenho({ overview }: { overview: Overview }) {
             dados={serie.map((p) => ({ rotulo: `${p.dia.slice(8, 10)}/${p.dia.slice(5, 7)}`, valor: p.valor }))}
             altura={190}
           />
+        ) : temConversas ? (
+          <>
+            <p className="mb-2 flex items-center gap-1.5 text-xs text-muted">
+              <Icon name="chat" size={13} />
+              Sem receita registrada ainda — mostrando a atividade real: <strong className="text-fg">{numero(conversas?.noPeriodo ?? 0)} conversas no período</strong>
+            </p>
+            <AreaReceita
+              dados={serieConversas.map((p) => ({ rotulo: `${p.dia.slice(8, 10)}/${p.dia.slice(5, 7)}`, valor: p.valor }))}
+              altura={190}
+            />
+            <p className="mt-2 text-xs text-faint">Marque negócios como ganhos no pipeline e a curva de receita volta a aparecer aqui.</p>
+          </>
         ) : (
           <EmptyState
             icon="chart"
