@@ -106,7 +106,7 @@ export default function AvaliacaoPublicaPage() {
                   aria-label={`${n}: ${ROTULO_NOTA[n - 1]}`}
                   disabled={ocupado}
                   onClick={() => void escolher(n)}
-                  className={cx('grid h-12 w-12 place-items-center rounded-xl border text-base font-semibold tabular transition-colors', nota !== null && n <= nota ? 'border-brand bg-brand text-white' : 'border-line text-fg hover:border-brand')}
+                  className={cx('grid h-12 w-12 place-items-center rounded-xl border text-base font-semibold tabular transition-colors', nota !== null && n <= nota ? 'border-brand bg-brand text-on-brand' : 'border-line text-fg hover:border-brand')}
                 >
                   {n}
                 </button>

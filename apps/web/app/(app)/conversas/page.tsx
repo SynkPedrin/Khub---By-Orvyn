@@ -220,7 +220,7 @@ function Inbox() {
                         </span>
                       ))}
                       {c.naoLidas > 0 && (
-                        <span className="ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand px-1 text-[10.5px] font-bold text-white">
+                        <span className="ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand px-1 text-[10.5px] font-bold text-on-brand">
                           {c.naoLidas}
                         </span>
                       )}

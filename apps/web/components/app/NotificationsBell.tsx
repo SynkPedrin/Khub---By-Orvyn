@@ -105,7 +105,7 @@ export function NotificationsBell() {
       >
         <Icon name="bell" size={19} />
         {naoLidas > 0 && (
-          <span className="absolute right-1 top-1 grid h-4 min-w-4 place-items-center rounded-full bg-brand px-1 text-2xs font-semibold text-white tabular" aria-hidden>
+          <span className="absolute right-1 top-1 grid h-4 min-w-4 place-items-center rounded-full bg-brand px-1 text-2xs font-semibold text-on-brand tabular" aria-hidden>
             {naoLidas > 9 ? '9+' : naoLidas}
           </span>
         )}

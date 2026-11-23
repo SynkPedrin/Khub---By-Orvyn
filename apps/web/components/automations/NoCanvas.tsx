@@ -76,9 +76,10 @@ export const ICONE: Record<string, IconName> = {
   'acao.atualizar_negocio': 'briefcase',
 };
 
-// Gatilho verde · controle roxo · ação azul, só como acento (o corpo é o card).
-// Tokens semânticos do tema (ADR-0036): seguem claro/escuro sem cor literal.
-export const ACENTO: Record<string, string> = { gatilho: 'var(--success)', controle: 'var(--brand)', acao: 'var(--info)' };
+// v2 "Signal + Intelligence": gatilho = lime (sinal/evento), controle e
+// ações comuns = neutros, ação de IA = violeta (inteligência). Só acento.
+export const ACENTO: Record<string, string> = { gatilho: 'var(--lime-500)', controle: 'var(--fg-3)', acao: 'var(--fg-3)' };
+const ACOES_IA = new Set(['acao.ia', 'acao.ativar_ia']);
 
 const HANDLE = '!h-2.5 !w-2.5 !border-2 !border-surface !bg-brand';
 
@@ -94,7 +95,7 @@ const PEDE_CONFIG = /^(defina|escolha|escreva|configure|informe)\b/i;
 export const NoCanvas = memo(({ data, selected }: NodeProps<DadosNo>) => {
   const ehGatilho = data.categoria === 'gatilho';
   const ramos = data.ramos ?? [];
-  const acento = ACENTO[data.categoria] ?? 'var(--brand)';
+  const acento = ACOES_IA.has(data.tipo ?? '') ? 'var(--violet-400)' : (ACENTO[data.categoria] ?? 'var(--fg-3)');
   const s = data.stats;
 
   const categoria = data.categoria === 'gatilho' ? 'Quando' : data.categoria === 'controle' ? 'Fluxo' : 'Faz';

@@ -327,7 +327,9 @@ export function TarefasView({ escopo }: { escopo: 'minhas' | 'todas' }) {
 function agruparTarefas(tarefas: Tarefa[], por: Agrupar, eu?: string): Grupo[] {
   if (por === 'nenhum') return [{ chave: 'todas', rotulo: 'Todas as tarefas', tarefas, padrao: {} }];
   if (por === 'status') {
-    return STATUS_ORDEM.map((s) => ({ chave: s, rotulo: STATUS[s].label, tom: STATUS[s].tom, tarefas: tarefas.filter((t) => t.status === s), padrao: { status: s }, recolhido: s === 'concluida' }));
+    // B5 (docs/brand/bugs.md): grupos vazios não renderizam — antes cada
+    // status sem tarefa aparecia como seção com "Nada aqui." cru.
+    return STATUS_ORDEM.map((s) => ({ chave: s, rotulo: STATUS[s].label, tom: STATUS[s].tom, tarefas: tarefas.filter((t) => t.status === s), padrao: { status: s }, recolhido: s === 'concluida' })).filter((g) => g.tarefas.length);
   }
   if (por === 'prioridade') {
     return PRIORIDADE_ORDEM.map((p) => ({ chave: p, rotulo: PRIORIDADE[p].label, tom: PRIORIDADE[p].tom, tarefas: tarefas.filter((t) => t.prioridade === p), padrao: { prioridade: p } })).filter((g) => g.tarefas.length);

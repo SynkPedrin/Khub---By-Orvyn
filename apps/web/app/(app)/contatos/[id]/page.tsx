@@ -279,7 +279,7 @@ export default function Contato360Page() {
             <div className="space-y-1.5">
               {c.tarefas.map((t) => (
                 <button key={t.id} onClick={() => toggleTarefa(t.id)} className="flex w-full items-start gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-surface2">
-                  <span className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded border ${t.status === 'concluida' ? 'border-brand bg-brand text-white' : 'border-line'}`}>
+                  <span className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded border ${t.status === 'concluida' ? 'border-brand bg-brand text-on-brand' : 'border-line'}`}>
                     {t.status === 'concluida' && <Icon name="check" size={11} />}
                   </span>
                   <span className="min-w-0 flex-1">
@@ -307,7 +307,7 @@ export default function Contato360Page() {
                     <span className="block truncate text-xs font-semibold text-fg">{cv.canal}</span>
                     <span className="block truncate text-[11px] text-muted">{cv.ultimaPrevia ?? '-'}</span>
                   </span>
-                  {cv.naoLidas > 0 && <span className="shrink-0 rounded-full bg-brand px-1.5 text-2xs font-bold text-white">{cv.naoLidas}</span>}
+                  {cv.naoLidas > 0 && <span className="shrink-0 rounded-full bg-brand px-1.5 text-2xs font-bold text-on-brand">{cv.naoLidas}</span>}
                 </Link>
               ))}
             </div>

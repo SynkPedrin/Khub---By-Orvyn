@@ -687,7 +687,7 @@ function DashboardComDados() {
                 <span
                   className={cx(
                     'mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border',
-                    t.concluida ? 'border-brand bg-brand text-white' : 'border-line-strong',
+                    t.concluida ? 'border-brand bg-brand text-on-brand' : 'border-line-strong',
                   )}
                   aria-hidden
                 >

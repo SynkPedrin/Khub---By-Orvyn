@@ -256,7 +256,7 @@ export default function ImportacaoPage() {
             disabled={busy || lendo}
             onChange={(e) => e.target.files?.[0] && lerArquivo(e.target.files[0])}
             aria-label="Arquivo da planilha"
-            className="block w-full text-sm text-muted file:mr-4 file:rounded-xl file:border-0 file:bg-brand file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:opacity-90"
+            className="block w-full text-sm text-muted file:mr-4 file:rounded-xl file:border-0 file:bg-brand file:px-4 file:py-2 file:text-sm file:font-semibold file:text-black hover:file:opacity-90"
           />
         </div>
         {lendo && <p className="mt-3 text-sm text-muted">Lendo o arquivo…</p>}

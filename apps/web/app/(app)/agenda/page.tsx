@@ -232,7 +232,7 @@ function GradeSemana({
                 <p
                   className={cx(
                     'mx-auto mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-[14px] font-semibold',
-                    ehHoje ? 'bg-brand text-white' : 'text-fg',
+                    ehHoje ? 'bg-brand text-on-brand' : 'text-fg',
                   )}
                 >
                   {d.getDate()}
@@ -383,7 +383,7 @@ function MiniCalendario({ hoje }: { hoje: Date }) {
                     <span
                       className={cx(
                         'mx-auto flex h-7 w-7 items-center justify-center rounded-full text-[12.5px] tabular',
-                        dia === hoje.getDate() ? 'bg-brand font-semibold text-white' : 'text-fg hover:bg-surface2',
+                        dia === hoje.getDate() ? 'bg-brand font-semibold text-on-brand' : 'text-fg hover:bg-surface2',
                       )}
                       aria-current={dia === hoje.getDate() ? 'date' : undefined}
                     >

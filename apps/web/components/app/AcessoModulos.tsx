@@ -71,7 +71,7 @@ function Bloco({ ligado, onClick, disabled, icone, nome, descricao, destaque }: 
         destaque && 'py-3',
       )}
     >
-      <span className={cx('grid h-8 w-8 shrink-0 place-items-center rounded-xl', ligado ? 'bg-brand text-white' : 'bg-[var(--fill-3)] text-muted')}>
+      <span className={cx('grid h-8 w-8 shrink-0 place-items-center rounded-xl', ligado ? 'bg-brand text-on-brand' : 'bg-[var(--fill-3)] text-muted')}>
         <Icon name={icone} size={16} />
       </span>
       <span className="min-w-0 flex-1">

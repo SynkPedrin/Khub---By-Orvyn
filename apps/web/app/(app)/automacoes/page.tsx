@@ -218,7 +218,7 @@ export default function AutomacoesPage() {
           )}
           <div className="flex items-center gap-1 rounded-full border border-line bg-surface2 p-1">
             {(['todos', 'ativo', 'pausado', 'rascunho'] as const).map((s) => (
-              <button key={s} type="button" aria-pressed={fStatus === s} onClick={() => setFStatus(s)} className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${fStatus === s ? 'bg-brand text-white' : 'text-muted hover:text-fg'}`}>{s === 'todos' ? 'Todos' : STATUS[s].rotulo}</button>
+              <button key={s} type="button" aria-pressed={fStatus === s} onClick={() => setFStatus(s)} className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${fStatus === s ? 'bg-brand text-on-brand' : 'text-muted hover:text-fg'}`}>{s === 'todos' ? 'Todos' : STATUS[s].rotulo}</button>
             ))}
           </div>
           {temFiltro && <button onClick={() => { setBusca(''); setFStatus('todos'); setFTag(null); setFPasta(''); }} className="text-xs font-semibold text-brand hover:underline">Limpar</button>}

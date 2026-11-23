@@ -226,7 +226,7 @@ export function ConfigFluxo(p: Props) {
                           aria-pressed={on}
                           aria-label={d.nome}
                           onClick={() => alternarDia(d.n)}
-                          className={cx('h-8 w-8 rounded-lg text-xs font-semibold transition-colors', on ? 'bg-brand text-white' : 'bg-surface2 text-muted hover:text-fg')}
+                          className={cx('h-8 w-8 rounded-lg text-xs font-semibold transition-colors', on ? 'bg-brand text-on-brand' : 'bg-surface2 text-muted hover:text-fg')}
                         >
                           {d.l}
                         </button>

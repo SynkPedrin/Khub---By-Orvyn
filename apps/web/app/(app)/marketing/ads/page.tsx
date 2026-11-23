@@ -170,7 +170,7 @@ export default function AdsPage() {
                       )}
                       <div className="absolute left-2 top-2 flex flex-col gap-1">
                         {cr.melhorCpl && (
-                          <span className="rounded-full bg-brand px-2 py-0.5 text-2xs font-bold text-white shadow">★ Melhor CPL</span>
+                          <span className="rounded-full bg-brand px-2 py-0.5 text-2xs font-bold text-on-brand shadow">★ Melhor CPL</span>
                         )}
                         {cr.maiorReceita && (
                           <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-2xs font-bold text-white shadow">★ Maior receita atribuída</span>

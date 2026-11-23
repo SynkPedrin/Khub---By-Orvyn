@@ -98,7 +98,7 @@ export function ModoSimples({ workflowId, passosNoCanvas, onMontado }: {
           )}
           {conversa.map((m, i) => (
             <div key={i} className={cx('flex', m.autor === 'usuario' ? 'justify-end' : 'justify-start')}>
-              <p className={cx('max-w-[85%] whitespace-pre-line rounded-2xl px-3.5 py-2 text-sm', m.autor === 'usuario' ? 'bg-brand text-white' : 'bg-surface2 text-fg')}>
+              <p className={cx('max-w-[85%] whitespace-pre-line rounded-2xl px-3.5 py-2 text-sm', m.autor === 'usuario' ? 'bg-brand text-on-brand' : 'bg-surface2 text-fg')}>
                 {m.texto}
               </p>
             </div>

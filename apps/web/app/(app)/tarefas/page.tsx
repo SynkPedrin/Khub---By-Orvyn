@@ -80,7 +80,7 @@ export default function TarefasPage() {
           <button
             key={f.key}
             onClick={() => setFiltro(f.key)}
-            className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${filtro === f.key ? 'bg-brand text-white' : 'bg-surface2 text-muted hover:text-fg'}`}
+            className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${filtro === f.key ? 'bg-brand text-on-brand' : 'bg-surface2 text-muted hover:text-fg'}`}
           >
             {f.label}
           </button>
@@ -97,7 +97,7 @@ export default function TarefasPage() {
         )}
         {pg.fatia?.map((t) => (
           <div key={t.id} className="group flex items-start gap-3 rounded-xl px-3 py-2.5 hover:bg-surface2">
-            <button aria-label={`${t.status === 'concluida' ? 'Reabrir' : 'Concluir'} tarefa ${t.titulo}`} onClick={() => toggle(t.id)} className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded border ${t.status === 'concluida' ? 'border-brand bg-brand text-white' : 'border-line hover:border-brand'}`}>
+            <button aria-label={`${t.status === 'concluida' ? 'Reabrir' : 'Concluir'} tarefa ${t.titulo}`} onClick={() => toggle(t.id)} className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded border ${t.status === 'concluida' ? 'border-brand bg-brand text-on-brand' : 'border-line hover:border-brand'}`}>
               {t.status === 'concluida' && <Icon name="check" size={12} />}
             </button>
             <div className="min-w-0 flex-1">

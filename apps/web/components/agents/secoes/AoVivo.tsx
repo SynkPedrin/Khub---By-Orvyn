@@ -305,7 +305,7 @@ export function AoVivo({ agente, onAtualizado }: SecaoProps) {
                 <div key={m.id} className={cx('flex', minha ? 'justify-end' : 'justify-start')}>
                   <div className={cx('max-w-[85%] rounded-2xl px-3 py-2 text-[13px] leading-relaxed shadow-sm',
                     !minha && 'rounded-bl-md border border-line bg-[var(--base-0)] text-fg',
-                    minha && !ia && 'rounded-br-md bg-brand text-white',
+                    minha && !ia && 'rounded-br-md bg-brand text-on-brand',
                     ia && 'rounded-br-md border border-[color-mix(in_srgb,var(--brand)_18%,transparent)] bg-brand-soft text-fg')}>
                     {ia && <p className="mb-0.5 flex items-center gap-1 text-[10.5px] font-semibold text-brand"><Icon name="sparkles" size={10} /> {agente.nome}</p>}
                     <span className="whitespace-pre-wrap break-words">{m.texto}</span>

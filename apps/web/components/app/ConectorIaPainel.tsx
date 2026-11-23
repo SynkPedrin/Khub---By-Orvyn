@@ -123,7 +123,7 @@ export function ConectorIaPainel() {
           <div>
             <div className="flex gap-1.5">
               {(['claude', 'chatgpt'] as const).map((k) => (
-                <button key={k} onClick={() => setAba(k)} className={cx('rounded-full px-3 py-1 text-xs font-semibold transition-colors', aba === k ? 'bg-brand text-white' : 'border border-line text-fg hover:bg-surface2')}>
+                <button key={k} onClick={() => setAba(k)} className={cx('rounded-full px-3 py-1 text-xs font-semibold transition-colors', aba === k ? 'bg-brand text-on-brand' : 'border border-line text-fg hover:bg-surface2')}>
                   {k === 'claude' ? 'Claude' : 'ChatGPT'}
                 </button>
               ))}

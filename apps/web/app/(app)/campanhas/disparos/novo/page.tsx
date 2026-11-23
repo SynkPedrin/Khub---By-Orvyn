@@ -197,7 +197,7 @@ function Assistente() {
               className={cx('flex w-full items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-sm transition-colors',
                 i === passo ? 'border-brand bg-brand-soft font-semibold text-fg' : i < passo ? 'border-line text-fg hover:bg-surface2' : 'border-line text-muted')}
             >
-              <span className={cx('grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs tabular', i < passo ? 'bg-brand text-white' : 'bg-surface3')}>
+              <span className={cx('grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs tabular', i < passo ? 'bg-brand text-on-brand' : 'bg-surface3')}>
                 {i < passo ? <Icon name="check" size={13} /> : i + 1}
               </span>
               {p}

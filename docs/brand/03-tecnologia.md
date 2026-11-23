@@ -13,7 +13,7 @@ Data: 2026-11-22 · Stack real confirmada: **Next.js 14.2.35 (App Router) · Tai
 | **Container queries** | Cards/painéis responsivos (Inbox, Kanban, Dashboard) | Nativo. |
 | **`:has()`** | Estados de form e linhas selecionadas sem JS | Nativo. |
 | **`text-wrap: balance/pretty`, `tabular-nums`, `scrollbar-gutter`** | Polish tipográfico | Nativo, custo zero. |
-| **framer-motion 11 (já instalada)** | Kanban DnD/reordenação, entrada de painéis, indicador ativo da sidebar (já usa `layoutId`) | Sem custo novo. `useReducedMotion` obrigatório. Substitui o DnD nativo HTML5 do pipeline por motion acessível **mantendo a alternativa por teclado existente**. |
+| **framer-motion 11 (já instalada)** | Entrada de painéis, indicador ativo da sidebar (já usa `layoutId`), transições sutis | Sem custo novo. `useReducedMotion` obrigatório (o shell já usa `MotionConfig reducedMotion="user"`). **Kanban: decisão final — DnD nativo HTML5 MANTIDO** (mover negócio é fluxo de aceite; a reescrita com framer-motion foi avaliada e recusada por risco/benefício; a alternativa por teclado já existe e o movimento ganhou Desfazer via toast). |
 | **`loading.tsx` por rota + skeletons do kit** | 0 → todas as rotas principais | Convenção do App Router; reusa `.skeleton` existente. |
 | **playwright-core (devDependency, root)** | Screenshots de auditoria, testes visuais e fluxos da seção 10 | +~3 MB dev only, usa o Chrome do sistema (sem download de browser). |
 

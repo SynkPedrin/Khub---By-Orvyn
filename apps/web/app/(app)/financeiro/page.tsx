@@ -54,7 +54,8 @@ function Financeiro() {
                 <button type="button" onClick={() => setPeriodo(navegarMes(periodo, -1))} className="btn btn-ghost btn-icon btn-sm h-7 w-7" aria-label="Mês anterior">
                   <Icon name="arrowLeft" size={14} />
                 </button>
-                <span className="min-w-[150px] text-center text-sm font-semibold capitalize text-fg" aria-live="polite">
+                {/* B6: sem classe `capitalize` (ela title-casava o "de" → "Novembro De 2026"); maiúscula só na primeira letra. */}
+                <span className="min-w-[150px] text-center text-sm font-semibold text-fg first-letter:uppercase" aria-live="polite">
                   {rotuloMes(periodo)}
                 </span>
                 <button type="button" onClick={() => setPeriodo(navegarMes(periodo, 1))} className="btn btn-ghost btn-icon btn-sm h-7 w-7" aria-label="Próximo mês">

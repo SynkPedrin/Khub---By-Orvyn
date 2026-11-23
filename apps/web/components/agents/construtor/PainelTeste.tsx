@@ -90,7 +90,7 @@ export function PainelTeste({ agente, className }: { agente: Agente; className?:
             <p key={i} className="mx-auto max-w-[90%] rounded-xl bg-warning-soft px-3 py-1.5 text-center text-xs text-warning">{b.texto}</p>
           ) : (
             <div key={i} className={cx('flex', b.de === 'contato' ? 'justify-end' : 'justify-start')}>
-              <p className={cx('max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-sm', b.de === 'contato' ? 'rounded-br-md bg-brand text-white' : 'rounded-bl-md border border-line bg-surface text-fg')}>
+              <p className={cx('max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-sm', b.de === 'contato' ? 'rounded-br-md bg-brand text-on-brand' : 'rounded-bl-md border border-line bg-surface text-fg')}>
                 {b.texto}
               </p>
             </div>

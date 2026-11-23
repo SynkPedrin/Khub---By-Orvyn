@@ -714,7 +714,7 @@ function GradeHorarios({
                 <div key={chaveDia(d)} className="border-l border-line py-2 text-center">
                   <p className="text-xs text-muted">{DIAS_CURTOS[(d.getDay() + 6) % 7]}</p>
                   <p
-                    className={cx('mx-auto mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-base font-semibold tabular', hoje ? 'bg-brand text-white' : 'text-fg')}
+                    className={cx('mx-auto mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-base font-semibold tabular', hoje ? 'bg-brand text-on-brand' : 'text-fg')}
                     aria-current={hoje ? 'date' : undefined}
                   >
                     {d.getDate()}
@@ -892,7 +892,7 @@ function GradeMes({
                 onClick={() => onDia(d)}
                 className={cx(
                   'mb-1 flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold tabular',
-                  hoje ? 'bg-brand text-white' : foraDoMes ? 'text-faint hover:bg-surface3' : 'text-fg hover:bg-surface3',
+                  hoje ? 'bg-brand text-on-brand' : foraDoMes ? 'text-faint hover:bg-surface3' : 'text-fg hover:bg-surface3',
                 )}
                 aria-label={`Abrir ${rotuloDia(d)}`}
                 aria-current={hoje ? 'date' : undefined}

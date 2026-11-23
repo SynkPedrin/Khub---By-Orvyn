@@ -96,7 +96,7 @@ export function PainelNoMotor({ no, set, outrosFluxos }: {
                   return (
                     <button key={d} type="button" aria-pressed={on}
                       onClick={() => set({ diasSemana: on ? (cfg.diasSemana ?? [1]).filter((x: number) => x !== i) : [...(cfg.diasSemana ?? [1]), i].sort() })}
-                      className={on ? 'rounded-lg bg-brand px-2 py-1 text-xs font-semibold text-white' : 'rounded-lg border border-line px-2 py-1 text-xs text-muted hover:text-fg'}>
+                      className={on ? 'rounded-lg bg-brand px-2 py-1 text-xs font-semibold text-on-brand' : 'rounded-lg border border-line px-2 py-1 text-xs text-muted hover:text-fg'}>
                       {d}
                     </button>
                   );

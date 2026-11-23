@@ -139,11 +139,11 @@ export function IntegrationsMarketplace() {
     <div className="space-y-5">
       {/* Resumo + filtro por categoria */}
       <div className="flex flex-wrap items-center gap-2">
-        <button onClick={() => setCat('todas')} className={cx('rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors', cat === 'todas' ? 'bg-brand text-white shadow-brand' : 'border border-line text-fg hover:bg-surface2')}>
+        <button onClick={() => setCat('todas')} className={cx('rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors', cat === 'todas' ? 'bg-brand text-on-brand shadow-brand' : 'border border-line text-fg hover:bg-surface2')}>
           Todas
         </button>
         {CATS.map((c) => (
-          <button key={c.key} onClick={() => setCat(c.key)} className={cx('flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors', cat === c.key ? 'bg-brand text-white shadow-brand' : 'border border-line text-fg hover:bg-surface2')}>
+          <button key={c.key} onClick={() => setCat(c.key)} className={cx('flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors', cat === c.key ? 'bg-brand text-on-brand shadow-brand' : 'border border-line text-fg hover:bg-surface2')}>
             <Icon name={c.icon} size={13} /> {c.label}
           </button>
         ))}

@@ -44,9 +44,10 @@
   --base-1: #0b0b0f;
   --base-2: #060607;
 
-  /* Fundo do chat (Inbox/WhatsApp): padrão CLARO no tema escuro (escolha do dono) */
-  --chat-bg: url('/whatsapp/fundo-claro.jpg');
-  --chat-bg-cor: #efe9e1;
+  /* Fundo do chat (Inbox): superfície do tema, sem papel de parede do
+     WhatsApp (Fase 4.4 — B9). Textura violeta quase imperceptível. */
+  --chat-bg: radial-gradient(120% 90% at 85% 0%, color-mix(in oklab, var(--violet-600) 3%, transparent), transparent 55%);
+  --chat-bg-cor: var(--bg-0);
   --base-3: #1c1c22;
 
   /* ---------- COLOR: label ---------- */
@@ -379,9 +380,9 @@
   --violet-soft: #f3ecff;
   --violet-border: #dccbff;
 
-  /* Fundo do chat: padrão ESCURO no tema claro (escolha do dono) */
-  --chat-bg: url('/whatsapp/fundo-escuro.jpg');
-  --chat-bg-cor: #0e0e12;
+  /* Fundo do chat: mesma lógica do escuro — superfície do tema (Fase 4.4 — B9) */
+  --chat-bg: radial-gradient(120% 90% at 85% 0%, color-mix(in oklab, var(--violet-600) 3%, transparent), transparent 55%);
+  --chat-bg-cor: var(--bg-0);
 
   --base-0: #ffffff;
   --base-1: #f7f7f9;
@@ -692,6 +693,15 @@ a {
 }
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* Texto sobre preenchimento de marca: tinta escura sobre o lime (dark);
+   branco sobre o verde acessível #4c7a00 que --brand assume no claro. */
+.text-on-brand {
+  color: var(--lime-ink);
+}
+:root[data-theme='light'] .text-on-brand {
+  color: #ffffff;
 }
 
 .text-muted {
@@ -1438,7 +1448,7 @@ a {
     border-color: var(--border-strong);
   }
 
-  /* ADR-0036: foco roxo (borda + anel). */
+  /* Foco com anel lime (sinal): --ring/--brand mapeiam para o lime via aliases-v1.css. */
   .input:focus,
   .select:focus,
   .textarea:focus {
@@ -1705,6 +1715,7 @@ a {
     cursor: pointer;
     background: transparent;
     border: 0;
+    white-space: nowrap;
     transition:
       background var(--dur) var(--ease),
       color var(--dur) var(--ease),
@@ -2130,124 +2141,105 @@ a {
 
 
 /* =====================================================================
-   AUTH — superfície off-white premium, escopada a login/cadastro.
+   AUTH — v2 "Signal + Intelligence", escopada a login/cadastro.
    ---------------------------------------------------------------------
-   O painel direito do AuthShell NÃO tem vídeo atrás (ver componente):
-   fundo sólido #F8F6F2 + este card claro translúcido por cima. Nomes
-   escopados (`.auth-card`) de propósito — não usar fora do AuthShell.
+   O card usa `.glass` (tokens.css) para o material; `.auth-card` só fixa
+   raio, respiro e os estados dos controles. Nomes escopados de propósito
+   — não usar fora do AuthShell.
    ===================================================================== */
 .auth-card {
   position: relative;
-  border-radius: var(--r-2xl);
-  padding: 34px 34px 30px;
-  background: rgba(19, 19, 25, 0.72);
-  backdrop-filter: blur(28px) saturate(160%);
-  -webkit-backdrop-filter: blur(28px) saturate(160%);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  /* Mesmo aro de luz do Liquid Glass do app (ver --lg-highlight). */
-  box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.14),
-    inset 0 0 24px 0 rgba(255, 255, 255, 0.04),
-    0 24px 70px rgba(0, 0, 0, 0.5),
-    0 4px 18px rgba(0, 0, 0, 0.35),
-    0 0 80px rgba(150, 62, 255, 0.12);
-  color: #f5f5f7;
+  border-radius: var(--r-overlay);
+  padding: 32px;
+  color: var(--fg-1);
 }
 
 .auth-card .input,
 .auth-card .select {
-  height: 48px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.14);
-  color: #f5f5f7;
+  height: 44px;
+  border-radius: var(--r-card);
+  background: var(--surface-3);
+  border-color: var(--line-1);
+  color: var(--fg-1);
 }
 .auth-card .input::placeholder {
-  color: #8e8e96;
+  color: var(--fg-4);
 }
 .auth-card .input:hover,
 .auth-card .select:hover {
-  border-color: rgba(255, 255, 255, 0.24);
+  border-color: var(--line-2);
 }
+/* Foco = sinal (lime), coerente com `.signal-ring`. */
 .auth-card .input:focus,
 .auth-card .select:focus {
-  border-color: rgba(168, 85, 247, 0.65);
-  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--lime-500);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--lime-500) 20%, transparent);
+  background: var(--surface-3);
 }
 
-/* Foco ametista controlado + validação só depois que o usuário digitou
-   (nunca vermelho num campo obrigatório ainda vazio, recém-aberto). */
+/* Validação só depois que o usuário digitou (nunca vermelho num campo
+   obrigatório ainda vazio, recém-aberto). */
 .auth-card .input:not(:placeholder-shown):invalid {
-  border-color: #ff453a;
+  border-color: var(--danger);
 }
 .auth-card .input:not(:placeholder-shown):invalid:focus {
-  box-shadow: 0 0 0 3px rgba(255, 69, 58, 0.2);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--danger) 22%, transparent);
 }
 
-/* Autofill do navegador herdando a superfície clara do card, não o
-   amarelo padrão do navegador. */
+/* Autofill do navegador herdando a superfície do card, não o amarelo
+   padrão do navegador. */
 .auth-card .input:-webkit-autofill,
 .auth-card .input:-webkit-autofill:hover,
 .auth-card .input:-webkit-autofill:focus {
-  -webkit-text-fill-color: #f5f5f7;
-  -webkit-box-shadow: 0 0 0 1000px rgba(19, 19, 25, 0.95) inset;
+  -webkit-text-fill-color: var(--fg-1);
+  -webkit-box-shadow: 0 0 0 1000px var(--surface-1) inset;
   transition: background-color 9999s ease-in-out 0s;
 }
 
 .auth-card .btn-ghost {
   height: 44px;
-  border-radius: var(--r-full);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: #f5f5f7;
+  border-radius: var(--r-control);
+  border: 1px solid var(--line-2);
+  background: var(--surface-3);
+  color: var(--fg-1);
   transition:
     background var(--dur) var(--ease),
-    border-color var(--dur) var(--ease),
-    transform var(--dur) var(--ease);
+    border-color var(--dur) var(--ease);
 }
 .auth-card .btn-ghost:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(168, 85, 247, 0.45);
-  transform: translateY(-1px);
+  background: var(--fill-3);
+  border-color: var(--line-2);
 }
 
-/* CTA principal do auth: gradiente + glow ametista, elevação no hover,
-   leve encolhimento no press — classe própria, sem alterar `.btn-primary`
-   global (usado em ~200 lugares no resto do produto). */
+/* CTA principal do auth: lime flat (sinal), sem gradiente e sem glow —
+   classe própria, sem alterar `.btn-primary` global. */
 .btn-auth-primary {
-  height: 48px;
-  border-radius: var(--r-full);
-  background: linear-gradient(135deg, #b8f95e, #8fd42a);
+  height: 44px;
+  border-radius: var(--r-control);
+  background: var(--lime-500);
   border-color: transparent;
-  color: #0e1a04;
+  color: var(--lime-ink);
   font-weight: 600;
-  box-shadow: 0 8px 24px rgba(155, 238, 69, 0.3);
+  box-shadow: none;
+  /* O brilho especular do `.btn` não entra no flat. */
+  --lg-specular: transparent;
   transition:
-    transform var(--dur) var(--ease),
-    box-shadow var(--dur) var(--ease);
+    background var(--dur) var(--ease),
+    transform var(--dur-fast) var(--ease);
 }
 .btn-auth-primary:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 12px 30px rgba(155, 238, 69, 0.35);
+  background: var(--lime-400);
 }
 .btn-auth-primary:active:not(:disabled) {
-  transform: translateY(0) scale(0.99);
+  transform: scale(0.99);
 }
 
-/* ---------------------------------------------------------------------
-   Fora de `@layer` de propósito: precisa vencer as utilitárias do
-   Tailwind (`.text-brand`, usada em LoginForm/SignupForm para o link
-   "Esqueci a senha"/"Criar conta" e o acento do título) para bater o hex
-   exato pedido — `.text-fg`/`.text-muted`/`.bg-line` já resolvem certo
-   sozinhas agora que o card voltou a ser claro (usam os tokens padrão do
-   tema, que já são pensados pra superfície branca).
-   --------------------------------------------------------------------- */
+/* Links de marca dentro do card (acento lime de texto no escuro). */
 .auth-card .text-brand {
-  color: #c2f970;
+  color: var(--lime-400);
 }
 .auth-card .text-brand:hover {
-  color: #d6ff8f;
+  color: var(--lime-300);
 }
 
 @keyframes auth-card-in {
@@ -2261,7 +2253,7 @@ a {
   }
 }
 .animate-auth-in {
-  animation: auth-card-in 450ms cubic-bezier(0.2, 0, 0.2, 1) both;
+  animation: auth-card-in var(--dur-slow) var(--ease-khub, cubic-bezier(0.2, 0, 0.2, 1)) both;
 }
 
 /* =====================================================================
@@ -2658,16 +2650,6 @@ a {
   }
 }
 
-/* Login: mesma linguagem do produto — vidro escuro, aro luminoso. */
-.auth-card {
-  border-color: rgba(255, 255, 255, 0.12);
-  box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.14),
-    0 0 0 1px rgba(255, 255, 255, 0.05),
-    0 24px 64px rgba(0, 0, 0, 0.5),
-    0 4px 16px rgba(0, 0, 0, 0.35);
-}
-
 /* Rótulo de grupo da sidebar (ADR-0036): hierarquia sem peso visual. */
 @layer components {
   .nav-grupo {
@@ -2965,27 +2947,12 @@ a {
   }
 }
 
-/* ---------- Fundo do chat do WhatsApp (Inbox) ----------
-   Padrão "doodle" por tema (escuro no escuro, claro no claro), igual ao
-   app de verdade. Os balões continuam com a superfície do tema por cima. */
+/* ---------- Fundo do chat (Inbox) ----------
+   Superfície do tema com textura violeta quase imperceptível (Fase 4.4 — B9).
+   O papel de parede "doodle" do WhatsApp saiu; os assets seguem em public/. */
 .chat-fundo {
   background-color: var(--chat-bg-cor);
   background-image: var(--chat-bg);
-  background-repeat: repeat;
-  background-size: 836px auto;
-}
-
-/* ---------- Fundo do chat do Instagram (DM roxa) ----------
-   Conversas do canal Instagram não usam o doodle do WhatsApp: a DM real é um
-   degradê roxo/azul — aqui em véus radiais sobre a base do tema (funciona
-   nos dois temas). O balão da conta segue o gradiente oficial da DM. */
-.chat-fundo-insta {
-  background:
-    radial-gradient(130% 100% at 0% 0%, color-mix(in srgb, #c13584 26%, transparent), transparent 55%),
-    radial-gradient(130% 110% at 100% 100%, color-mix(in srgb, #5851db 30%, transparent), transparent 60%),
-    var(--base-2);
-}
-.bolha-insta {
-  background-image: linear-gradient(135deg, #833ab4 0%, #c13584 55%, #e1306c 100%);
-  color: #fff;
+  background-repeat: no-repeat;
+  background-size: cover;
 }

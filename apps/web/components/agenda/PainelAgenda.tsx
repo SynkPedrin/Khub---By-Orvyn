@@ -90,7 +90,7 @@ function MiniCalendario({ dia, agora, onDia }: { dia: Date; agora: Date; onDia: 
               aria-label={d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
               className={cx(
                 'mx-auto flex h-7 w-7 items-center justify-center rounded-md text-xs tabular-nums transition-colors',
-                sel ? 'bg-brand font-bold text-white dark:text-[#0e1a04]' : hoje ? 'font-bold text-brand ring-1 ring-brand' : fora ? 'text-faint hover:bg-surface2' : 'text-fg hover:bg-surface2',
+                sel ? 'bg-brand font-bold text-on-brand' : hoje ? 'font-bold text-brand ring-1 ring-brand' : fora ? 'text-faint hover:bg-surface2' : 'text-fg hover:bg-surface2',
               )}
             >
               {d.getDate()}

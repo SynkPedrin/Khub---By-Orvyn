@@ -221,7 +221,7 @@ export function DealDrawer({ dealId, stages, onClose, onChanged }: Props) {
               {d.tarefas.length === 0 && <p className="py-2 text-center text-xs text-muted">Nenhuma tarefa.</p>}
               {d.tarefas.map((t) => (
                 <button key={t.id} onClick={() => toggleTarefa(t.id)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-surface2">
-                  <span className={`grid h-4 w-4 shrink-0 place-items-center rounded border ${t.status === 'concluida' ? 'border-brand bg-brand text-white' : 'border-line'}`}>
+                  <span className={`grid h-4 w-4 shrink-0 place-items-center rounded border ${t.status === 'concluida' ? 'border-brand bg-brand text-on-brand' : 'border-line'}`}>
                     {t.status === 'concluida' && <Icon name="check" size={11} />}
                   </span>
                   <span className={`flex-1 text-sm ${t.status === 'concluida' ? 'text-muted line-through' : 'text-fg'}`}>{t.titulo}</span>
