@@ -76,6 +76,15 @@ export class StevoApiEventosService {
    */
   private async recebida(tenantId: string, ev: EventoStevoApi): Promise<DesfechoEvento> {
     if (ev.isGroup) return 'ignorado';
+    // Mensagem chegando = instância viva. Se um `instance.disconnected` ficou
+    // sem o `connected` de volta (reconexão silenciosa da Stevo), o painel
+    // ficaria "desconectado" para sempre — auto-cura aqui (no-op se já ok).
+    void this.prisma.withTenant(tenantId, (tx) =>
+      tx.integration.updateMany({
+        where: { provider: 'stevo_api', externalBusinessId: ev.instanciaId, status: 'disconnected' },
+        data: { status: 'connected', health: 'ok', erro: null, lastSyncAt: new Date(), updatedAt: new Date() },
+      }),
+    ).catch((e: Error) => this.log.warn(`auto-cura da integração falhou: ${e.message.slice(0, 120)}`));
     const numero = numeroDoJid(ev.chat) ?? numeroDoJid(ev.from);
     if (!numero) return 'ignorado';
     const midia = ev.midia ?? null;
