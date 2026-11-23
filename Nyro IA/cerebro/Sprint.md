@@ -463,3 +463,4 @@ Conectar uma conta **real** exige `META_APP_ID/SECRET` + permissões `ads_read`/
 **Pendente:** o Pedro mandar mensagem no WhatsApp para validar a resposta da Ritinha ao vivo; decidir sobre a automação "Novo Lead 🚀" (pausada — plugar nó Ativar IA e reativar?); remover o workflow de teste depois; sprint seguinte: base de conhecimento (reimportar trechos GHL) e ícones/auto-layout do editor.
 
 - 2026-11-23 (2): from_me chegava como `message.sent` (nao `message.received`) — deploy anterior nao tinha efeito. Corrigido: message.sent com from_me+texto → inbox como humano; dedupe por provider_id evita duplicar envios do proprio KHUB. jest 1745, deploy live.
+- selo 'Equipe · pelo WhatsApp' (idempotencyKey celular: + badge no front; backfill de 55 msgs) + auto-cura status instancia; deploys Render/Vercel live.
