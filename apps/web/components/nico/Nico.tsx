@@ -2,15 +2,17 @@ import Image from 'next/image';
 import { cx } from '@/components/ui';
 
 /**
- * Identidade da NICO (ADR-0040).
+ * Identidade da NICO — v2 "Signal + Intelligence" (22/11/2026, revoga o
+ * ADR-0040 original que separava NICO=lime / Agentes=violeta).
+ *
+ * Nova semântica única aprovada pelo dono: VIOLETA = INTELIGÊNCIA — tudo que
+ * é IA no produto (NICO, Agentes, sugestões, automações rodando) fala na mesma
+ * cor, e o usuário aprende "violeta = a IA está agindo". O lime fica 100%
+ * reservado a SINAL/ação do usuário.
  *
  * A NICO é a agente INTERNA de marketing: trabalha com a equipe dentro do
  * KHUB, analisa, sugere e executa ações com as permissões de quem pede.
  * Não confundir com os Agentes de IA, que atendem os CLIENTES no WhatsApp.
- *
- * Para as duas nunca se confundirem na interface: a NICO tem rosto próprio
- * (a estrela cromada roxa e verde da marca) e o verde-limão como cor de
- * presença (status, selo de autoria); os Agentes de IA ficam no roxo.
  */
 
 export const NICO = {
@@ -29,12 +31,12 @@ export function NicoAvatar({ tamanho = 40, estado, className }: { tamanho?: numb
   const ponto = Math.max(8, Math.round(tamanho * 0.24));
   return (
     <span className={cx('relative inline-flex shrink-0', className)} style={{ width: tamanho, height: tamanho }}>
-      {/* Halo goo atrás da orbe */}
+      {/* Halo goo atrás da orbe — violeta = inteligência */}
       <span
         className="nico-orbe-halo absolute -inset-[22%] rounded-full"
         style={{
           background:
-            'radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--khub-lime) 55%, transparent), color-mix(in srgb, var(--brand) 38%, transparent) 62%, transparent 78%)',
+            'radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--violet-600) 55%, transparent), color-mix(in srgb, var(--violet-400) 38%, transparent) 62%, transparent 78%)',
           filter: 'blur(6px)',
         }}
         aria-hidden
@@ -43,8 +45,8 @@ export function NicoAvatar({ tamanho = 40, estado, className }: { tamanho?: numb
         className="nico-orbe relative flex h-full w-full items-center justify-center overflow-hidden"
         style={{
           background:
-            'radial-gradient(circle at 30% 25%, var(--base-0), var(--khub-lime-soft) 62%, color-mix(in srgb, var(--brand-soft) 70%, var(--khub-lime-soft)))',
-          boxShadow: 'inset 0 0 0 1px var(--khub-lime-border), 0 4px 14px -6px color-mix(in srgb, var(--brand) 35%, transparent)',
+            'radial-gradient(circle at 30% 25%, var(--base-0), var(--violet-950) 62%, var(--violet-900))',
+          boxShadow: 'inset 0 0 0 1px var(--violet-border), 0 4px 14px -6px color-mix(in srgb, var(--violet-600) 35%, transparent)',
         }}
       >
         <Image src="/nico-avatar.png" alt="" width={256} height={256} unoptimized className="nico-orbe-estrela h-[78%] w-[78%] object-contain" />
@@ -52,7 +54,7 @@ export function NicoAvatar({ tamanho = 40, estado, className }: { tamanho?: numb
       {estado && (
         <span
           className={cx('absolute bottom-0 right-0 rounded-full ring-2 ring-[var(--base-0)]', estado === 'pensando' && 'animate-pulse')}
-          style={{ width: ponto, height: ponto, background: estado === 'configurar' ? 'var(--warning)' : 'var(--lime-edge)' }}
+          style={{ width: ponto, height: ponto, background: estado === 'configurar' ? 'var(--warning)' : 'var(--violet-400)' }}
           aria-hidden
         />
       )}
@@ -64,8 +66,8 @@ export function NicoAvatar({ tamanho = 40, estado, className }: { tamanho?: numb
 export function NicoStatus({ estado }: { estado: EstadoNico }) {
   const rotulo = estado === 'configurar' ? 'Precisa de configuração' : estado === 'pensando' ? 'Pensando…' : 'Online';
   return (
-    <span className={cx('inline-flex items-center gap-1.5 text-[12px] font-medium', estado === 'configurar' ? 'text-warning' : 'text-lime-ink')}>
-      <span className="h-1.5 w-1.5 rounded-full" style={{ background: estado === 'configurar' ? 'var(--warning)' : 'var(--lime-edge)' }} aria-hidden />
+    <span className={cx('inline-flex items-center gap-1.5 text-[12px] font-medium', estado === 'configurar' ? 'text-warning' : 'text-violet-300')}>
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: estado === 'configurar' ? 'var(--warning)' : 'var(--violet-400)' }} aria-hidden />
       {rotulo}
     </span>
   );

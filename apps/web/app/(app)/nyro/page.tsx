@@ -140,7 +140,7 @@ export default function NicoPage() {
             <div className="min-w-0 flex-1">
               <p className="flex items-center gap-2.5">
                 <Image src="/nico-logo.png" alt={NICO.nome} width={2172} height={724} unoptimized priority className="h-11 w-auto object-contain" />
-                <span className="rounded-full bg-lime-soft px-2 py-0.5 text-[11px] font-semibold text-lime-ink">Equipe interna</span>
+                <span className="rounded-full border border-violet-border bg-violet-soft px-2 py-0.5 text-[11px] font-semibold text-violet-300">Equipe interna</span>
               </p>
               <p className="text-[13px] text-muted">{NICO.papel}</p>
             </div>
@@ -378,7 +378,7 @@ export default function NicoPage() {
               <ul className="mt-3 space-y-2.5">
                 {status.capacidades.map((cap) => ({ ...cap, ...capacidadeHumana(cap) })).map((c) => (
                   <li key={c.nome} className="flex gap-2.5">
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-lime-soft text-lime-ink">
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-soft text-violet-300">
                       <Icon name={c.precisaAprovacao ? 'lock' : 'check'} size={11} />
                     </span>
                     <span className="min-w-0">
