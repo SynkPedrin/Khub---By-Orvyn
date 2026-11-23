@@ -203,7 +203,22 @@ function PipelineReal({
       if (opts.focar) setFocar(dealId);
       try {
         await crm.moveDeal(dealId, destinoId);
-        toast.success(`Movido para ${destino.nome}.`);
+        // v2: mover é reversível — o toast oferece Desfazer (volta o card
+        // para a etapa de origem pela mesma API, sem regra nova).
+        toast.success(`Movido para ${destino.nome}.`, {
+          action: {
+            label: 'Desfazer',
+            onClick: () => {
+              void crm
+                .moveDeal(dealId, origem.id)
+                .then(() => {
+                  toast.info('Movimento desfeito.');
+                  carregar();
+                })
+                .catch(() => toast.error('Não consegui desfazer. Atualize a página.'));
+            },
+          },
+        });
       } catch {
         // Rollback: falhou no servidor, o card volta pra onde estava. Nunca mente sobre o estado real.
         toast.error('Não foi possível mover.', { description: 'O negócio voltou para a etapa anterior. Tente novamente.' });
