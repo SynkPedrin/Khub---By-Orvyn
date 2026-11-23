@@ -4,7 +4,7 @@ Regra: bugs não são maquiados com visual. Esta lista é viva; cada item marca 
 
 | # | Bug | Evidência | Status |
 |---|---|---|---|
-| B1 | Toolbar de Leads com controles espremidos/sobrepostos em larguras intermediárias | `components/crm/leads/ListaLeads.tsx:242` | **em correção** (migração Leads v2) |
+| B1 | Toolbar de Leads com controles espremidos/sobrepostos em larguras intermediárias | `components/crm/leads/ListaLeads.tsx:242` | **corrigido** (toolbar reestruturada; causa raiz: `btn-icon` do kit nos gatilhos de Menu) |
 | B2 | Seletor de conta desincronizado — dois switchers com `clienteAtivo` derivado de JWT + `agency.seletor()` | auditado 22/11 | mitigado: ambos consomem o memo único do `AgencyProvider`; transição por reload completo mantida por ADR. Monitorar na 4.5 |
 | B3 | Dashboard: agendamentos > leads (suspeita de métrica) | reportado | aberto (backend, fora do escopo visual) |
 | B4 | Página Google exibe nomes de env vars | `ConfigRequired.tsx` | **won't fix (contratual)** — `docs/ENV.md` define que a UI mostra exatamente as variáveis para quem configura. Polimento visual herdado do EmptyState |
