@@ -111,7 +111,7 @@ export function Sidebar({
           href="/dashboard"
           onClick={onNavigate}
           aria-label="KHUB, ir para o Dashboard"
-          className="flex w-full items-center"
+          className="flex w-full items-center justify-center"
         >
           {curta ? (
             <Image src="/khub-mark.png" alt="KHUB" width={330} height={330} unoptimized priority className="h-9 w-9 object-contain" />
