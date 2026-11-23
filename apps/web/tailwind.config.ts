@@ -56,6 +56,35 @@ const config: Config = {
           linkedin: 'var(--ch-linkedin)',
           site: 'var(--ch-site)',
         },
+        // v2 "Signal + Intelligence" — escalas novas (styles/tokens.css)
+        lime2: {
+          300: 'var(--lime-300)',
+          400: 'var(--lime-400)',
+          500: 'var(--lime-500)',
+          900: 'var(--lime-900)',
+          950: 'var(--lime-950)',
+          ink: 'var(--lime-ink)',
+        },
+        violet: {
+          300: 'var(--violet-300)',
+          400: 'var(--violet-400)',
+          600: 'var(--violet-600)',
+          700: 'var(--violet-700)',
+          800: 'var(--violet-800)',
+          900: 'var(--violet-900)',
+          950: 'var(--violet-950)',
+          soft: 'var(--violet-soft)',
+          border: 'var(--violet-border)',
+        },
+        data: {
+          1: 'var(--data-1)',
+          2: 'var(--data-2)',
+          3: 'var(--data-3)',
+          4: 'var(--data-4)',
+          5: 'var(--data-5)',
+          6: 'var(--data-6)',
+          grid: 'var(--data-grid)',
+        },
         // LP marketing ("/") — variante clara de marca usada só na landing
         // e nas telas de auth (mesmo hex de --brand, ver globals.css).
         offwhite: 'var(--offwhite)',
@@ -73,9 +102,12 @@ const config: Config = {
       fontFamily: {
         // Manrope (next/font/local) em todas as plataformas; SF Pro só como reserva (ADR-0043).
         sans: ['var(--font-sans)', '-apple-system', 'BlinkMacSystemFont', '"SF Pro Text"', 'ui-sans-serif', 'system-ui', 'Segoe UI', 'Roboto', 'sans-serif'],
+        // Space Grotesk (v2): display de marca — títulos de página, números-chave, hero, NICO.
+        display: ['var(--font-display)', 'var(--font-sans)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         // Instrument Serif itálica: acento editorial da identidade Kroma, nunca texto corrido.
         serif: ['var(--font-serif)', 'ui-serif', 'Georgia', 'serif'],
-        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+        // JetBrains Mono (v2): IDs, chaves, horários e valores tabulares.
+        mono: ['var(--font-mono)', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       fontSize: {
         // Escala compacta B2B: densidade alta sem perder legibilidade
@@ -89,9 +121,14 @@ const config: Config = {
         '2xl': ['24px', { lineHeight: '1.25' }],
         '3xl': ['30px', { lineHeight: '1.15' }],
         '4xl': ['34px', { lineHeight: '1.15' }],
+        // v2: só login/hero de marca
+        hero: ['40px', { lineHeight: '1.1', letterSpacing: '-0.025em' }],
+        'hero-lg': ['56px', { lineHeight: '1.05', letterSpacing: '-0.03em' }],
       },
       // Radius concêntrico (Liquid Glass): 8 / 12 / 16 / 22. Controles são
       // cápsulas (`rounded-full`); sheets/shell usam --r-2xl (28) via CSS.
+      // v2: escala fechada (badge 4 / controle 6 / card 10 / overlay 14)
+      // disponível como rounded-badge/control/card/overlay nas telas migradas.
       borderRadius: {
         sm: 'var(--r-sm)',
         DEFAULT: 'var(--r-md)',
@@ -99,6 +136,10 @@ const config: Config = {
         lg: 'var(--r-lg)',
         xl: 'var(--r-xl)',
         full: 'var(--r-full)',
+        badge: 'var(--r-badge)',
+        control: 'var(--r-control)',
+        card: 'var(--r-card)',
+        overlay: 'var(--r-overlay)',
       },
       boxShadow: {
         xs: 'var(--sh-xs)',
