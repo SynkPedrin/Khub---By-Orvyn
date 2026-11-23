@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth';
 import { useAgency } from '@/components/agency/AgencyProvider';
 import { NotificationsBell } from '@/components/app/NotificationsBell';
 import { usePersonalization } from '@/components/app/PersonalizationProvider';
+import { podeVer } from '@/lib/modulos';
 
 /**
  * Topbar global: busca à esquerda, notificações e conta à direita.
@@ -48,11 +49,28 @@ export function Topbar() {
       <SearchTrigger />
 
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        <AskNico />
         <ThemeToggle />
         <NotificationsBell />
         <AccountMenu />
       </div>
     </header>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Perguntar à NICO — violeta = inteligência (v2)                       */
+/* ------------------------------------------------------------------ */
+
+/** Atalho para a NICO (antes: balão flutuante). Só aparece para quem tem o módulo IA. */
+function AskNico() {
+  const { user } = useAuth();
+  if (!podeVer(user?.modulos, '/nyro')) return null;
+  return (
+    <Link href="/nyro" className="btn btn-ai btn-sm" title="Perguntar à NICO">
+      <Icon name="sparkles" size={15} />
+      <span className="hidden md:inline">Perguntar à NICO</span>
+    </Link>
   );
 }
 

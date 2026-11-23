@@ -6,15 +6,11 @@ import { MotionConfig } from 'framer-motion';
 import { Sidebar } from '@/components/shell/Sidebar';
 import { BottomNav } from '@/components/shell/BottomNav';
 import { Topbar } from '@/components/shell/Topbar';
-import { BrandSignature } from '@/components/shell/BrandMark';
 import { AmbientBackground } from '@/components/shell/AmbientBackground';
 import { PageTransition } from '@/components/shell/PageTransition';
 import { PersonalizationProvider } from '@/components/app/PersonalizationProvider';
 import { CommandBar } from '@/components/app/CommandBar';
-import { NyroDock } from '@/components/app/NyroDock';
 import { PortaoDeModulo } from '@/components/app/PortaoDeModulo';
-import { useAuth } from '@/lib/auth';
-import { podeVer } from '@/lib/modulos';
 import { Icon } from '@/components/icons';
 import { ToastProvider, useFocusTrap, useScrollLock } from '@/components/kit';
 
@@ -30,9 +26,6 @@ import { ToastProvider, useFocusTrap, useScrollLock } from '@/components/kit';
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [drawer, setDrawer] = useState(false);
   const pathname = usePathname();
-  // Acesso por módulo (ADR-0045): sem o módulo IA, o balão da NICO nem aparece.
-  const { user } = useAuth();
-  const veIa = podeVer(user?.modulos, '/nyro');
 
   // Navegar fecha o drawer — inclusive quando a navegação parte de um link
   // dentro do conteúdo, não só da sidebar.
@@ -73,13 +66,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {/* pb extra no mobile: o conteúdo rola por baixo da barra inferior
               flutuante (mesma ideia da topbar) sem ficar escondido atrás dela. */}
           <main id="conteudo" tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto scrollbar-thin max-lg:pb-[calc(7rem+env(safe-area-inset-bottom))]">
-            {/* Assinatura sempre no pé: em página curta não flutua no meio (ADR-0036). */}
-            <div className="flex min-h-full flex-col">
-              <div className="flex-1">
-                <PageTransition><PortaoDeModulo>{children}</PortaoDeModulo></PageTransition>
-              </div>
-              <BrandSignature className="border-t border-line" />
-            </div>
+            {/* v2: sem rodapé de slogan — a assinatura da marca vive nos
+                momentos definidos (login, boas-vindas, NICO), não em toda página. */}
+            <PageTransition><PortaoDeModulo>{children}</PortaoDeModulo></PageTransition>
           </main>
         </div>
 
@@ -117,8 +106,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <CommandBar />
         {/* Navegação inferior — mobile/tablet; "Menu" abre a gaveta completa. */}
         <BottomNav onMenu={() => setDrawer(true)} />
-        {/* NICO, a agente interna de marketing, à mão em qualquer tela (ADR-0040). */}
-        {veIa && <NyroDock />}
+        {/* v2: o balão flutuante da NICO sai; o acesso a ela fica na topbar
+            ("Perguntar à NICO") e na rota /nyro — mesma funcionalidade. */}
       </div>
     </PersonalizationProvider>
     </ToastProvider>

@@ -105,8 +105,8 @@ export function Sidebar({
         className,
       )}
     >
-      {/* Marca — logo colorida de ponta a ponta (K colorido quando recolhida). A sidebar é escura nos dois temas e só este topo é uma caixa branca (globals.css, `.sidebar-shell`). */}
-      <div className={cx('sidebar-brand sidebar-hairline flex shrink-0 items-center border-b', curta ? 'h-topbar justify-center px-2' : 'px-4 py-5')}>
+      {/* Marca — v2: logo branca direto sobre o vidro escuro, sem caixa. A sidebar é escura nos dois temas. */}
+      <div className={cx('sidebar-brand sidebar-hairline flex shrink-0 items-center border-b', curta ? 'h-topbar justify-center px-2' : 'px-5 py-4')}>
         <Link
           href="/dashboard"
           onClick={onNavigate}
@@ -117,13 +117,13 @@ export function Sidebar({
             <Image src="/khub-mark.png" alt="KHUB" width={330} height={330} unoptimized priority className="h-9 w-9 object-contain" />
           ) : (
             <Image
-              src="/khub-logo.png"
+              src="/khub-logo-white.png"
               alt="KHUB"
               width={711}
               height={261}
               unoptimized
               priority
-              className="h-auto w-full object-contain"
+              className="h-auto w-full max-w-[150px] object-contain"
             />
           )}
         </Link>
@@ -157,7 +157,7 @@ export function Sidebar({
                       {isActive && (
                         <motion.span
                           layoutId="active-nav-indicator"
-                          className="glass-accent absolute inset-0 rounded-[inherit]"
+                          className="absolute inset-0 rounded-[inherit] bg-[var(--lime-950)]"
                           transition={motionTokens.spring.responsive}
                           aria-hidden
                         />
