@@ -855,8 +855,10 @@ export function InboxAtendimento() {
                             <p className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold text-[var(--lime-300)]">
                               {/* Mensagens antigas (importadas antes da migration 036) não
                                   têm autor gravado — o histórico do WhatsApp não traz isso.
-                                  Caem no rótulo genérico "Equipe" em vez de ficar sem origem. */}
-                              <Icon name="users" size={11} /> {m.enviadoPorNome ?? 'Equipe'}
+                                  Caem no rótulo genérico "Equipe" em vez de ficar sem origem.
+                                  `peloCelular` = digitada no WhatsApp do celular (não dá para
+                                  saber quem da equipe — o número é um só). */}
+                              <Icon name={m.peloCelular ? 'whatsapp' : 'users'} size={11} /> {m.peloCelular ? 'Equipe · pelo WhatsApp' : (m.enviadoPorNome ?? 'Equipe')}
                             </p>
                           )}
                           {m.anexo ? (

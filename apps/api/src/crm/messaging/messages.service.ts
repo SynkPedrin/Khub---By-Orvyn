@@ -246,7 +246,7 @@ export class MessagesService {
       } else {
         conv = await tx.conversation.update({ where: { id: conv.id }, data: { ultimaPrevia: input.texto.slice(0, 140), ultimaHora: hora, status: 'aberta', updatedAt: new Date() } });
       }
-      const msg = await tx.message.create({ data: { tenantId: input.tenantId, conversationId: conv.id, autorTipo: 'humano', corpo: input.texto, hora }, select: { id: true } });
+      const msg = await tx.message.create({ data: { tenantId: input.tenantId, conversationId: conv.id, autorTipo: 'humano', corpo: input.texto, hora, idempotencyKey: `celular:${input.providerMessageId}` }, select: { id: true } });
       return { deduped: false as const, conversationId: conv.id, messageId: msg.id, hora };
     });
     if (!r.deduped) {
