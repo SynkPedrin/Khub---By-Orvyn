@@ -1,9 +1,5 @@
 import { BadRequestException, ForbiddenException, HttpException } from '@nestjs/common';
-<<<<<<< HEAD
 import { CaixaService, normalizarPagamento } from './caixa.service';
-=======
-import { normalizarPagamento } from './caixa.service';
->>>>>>> producao/main
 import { FinanceiroSenhaService, conferirHash, gerarHash } from './senha.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { ConfigService } from '../config/config.service';
@@ -75,7 +71,6 @@ describe('senha do financeiro', () => {
     await expect(s.definir(T, { identityId: U, role: 'owner' }, { senhaAtual: '@Senha123', novaSenha: 'outra1' })).resolves.toEqual({ ok: true });
   });
 });
-<<<<<<< HEAD
 
 describe('caixa do período (mensal por padrão)', () => {
   function caixaCom(linhas: Record<string, bigint | string | null>[][]) {
@@ -119,5 +114,3 @@ describe('caixa do período (mensal por padrão)', () => {
     await expect(caixa.caixaAtual(T, new Date('2026-11-18T15:00:00Z'), { de: '2026-11-20', ate: '2026-11-10' })).rejects.toBeInstanceOf(BadRequestException);
   });
 });
-=======
->>>>>>> producao/main

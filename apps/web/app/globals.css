@@ -503,17 +503,8 @@
   }
 }
 
-<<<<<<< HEAD
 /* Sidebar sempre escura nos dois temas. v2: sem caixa branca — a logo
    branca flutua direto sobre o vidro escuro (`.sidebar-brand` transparente). */
-=======
-/* Sidebar sempre escura (logo colorida, 17/11/2026): nos dois temas ela é
-   escura e só o topo (`.sidebar-brand`) é uma caixa branca com a logo. No
-   claro as cores escuras vêm do bloco DARK acima, que também mira
-   `:root[data-theme='light'] .sidebar-shell`. Aqui se recalculam os
-   apelidos que o :root resolve uma vez (senão herdariam o valor do tema
-   da página) e o fundo é o mesmo escuro quase opaco nos dois temas. */
->>>>>>> producao/main
 .sidebar-shell {
   --lg-surface: rgba(11, 11, 15, 0.94);
   --lime: var(--khub-lime);
@@ -533,7 +524,6 @@
   --muted: var(--text-2);
   --brand-bright: var(--brand-2);
   --lilac: var(--brand-2);
-<<<<<<< HEAD
   /* v2: a sidebar é escura nos dois temas — os limes não podem herdar os
      valores claros de [data-theme='light'] do tokens.css */
   --lime-500: #b6ff00;
@@ -547,20 +537,6 @@
   /* v2: logo sem caixa — só o link sobre o fundo da sidebar */
   background: transparent;
   box-shadow: none;
-=======
-  color: var(--text);
-}
-:root[data-theme] .sidebar-brand {
-  margin: 8px 8px 0;
-  border-bottom: 0;
-  border-radius: var(--r-xl);
-  background:
-    radial-gradient(120% 140% at 0% 0%, rgba(166, 107, 255, 0.16), transparent 60%),
-    #ffffff;
-  box-shadow:
-    inset 0 0 0 1px rgba(17, 17, 24, 0.06),
-    0 10px 24px -14px rgba(76, 29, 149, 0.55);
->>>>>>> producao/main
 }
 
 /* =====================================================================
