@@ -8,11 +8,11 @@ import { Icon } from '../icons';
 import { IconInput } from './IconInput';
 import { PasswordInput } from './PasswordInput';
 
-const titulo = { fontSize: 30, fontWeight: 650, letterSpacing: '-0.035em' } as const;
+const titulo = 'font-display text-3xl tracking-tight text-fg';
 
 function Erro({ children }: { children: React.ReactNode }) {
   return (
-    <p className="flex items-start gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600" role="alert">
+    <p className="flex items-start gap-2 rounded-card bg-danger-soft px-3 py-2 text-sm text-danger" role="alert">
       <Icon name="alert" size={15} className="mt-0.5 shrink-0" />
       {children}
     </p>
@@ -50,12 +50,12 @@ export function EsqueciSenhaForm() {
 
   return (
     <div>
-      <h1 className="text-fg" style={titulo}>Esqueceu a <span className="text-brand">senha?</span></h1>
-      <p className="mt-1.5 text-[13.5px] text-muted">Informe o e-mail da sua conta. Enviamos um link para você criar uma senha nova.</p>
+      <h1 className={titulo}>Esqueceu a <span className="text-brand">senha?</span></h1>
+      <p className="mt-1.5 text-sm text-muted">Informe o e-mail da sua conta. Enviamos um link para você criar uma senha nova.</p>
 
       {enviado ? (
         <div className="mt-6 space-y-4">
-          <p className="flex items-start gap-2 rounded-lg bg-emerald-500/10 px-3 py-3 text-sm text-emerald-700 dark:text-emerald-400" role="status">
+          <p className="flex items-start gap-2 rounded-card bg-success-soft px-3 py-3 text-sm text-success" role="status">
             <Icon name="mail" size={16} className="mt-0.5 shrink-0" />
             <span>Se existir uma conta com <strong>{email.trim()}</strong>, o link chega em alguns minutos. Ele vale por 60 minutos e só pode ser usado uma vez. Confira também o spam.</span>
           </p>
@@ -64,7 +64,7 @@ export function EsqueciSenhaForm() {
       ) : (
         <form onSubmit={submit} className="mt-6 space-y-4">
           {disponivel === false && (
-            <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-[13px] text-amber-700 dark:text-amber-400" role="status">
+            <p className="rounded-card bg-warning-soft px-3 py-2 text-sm text-warning" role="status">
               O envio de e-mail ainda não está configurado nesta instalação. Peça ao administrador da sua conta para redefinir a sua senha.
             </p>
           )}
@@ -122,8 +122,8 @@ export function RedefinirSenhaForm() {
   if (!token) {
     return (
       <div>
-        <h1 className="text-fg" style={titulo}>Link incompleto</h1>
-        <p className="mt-2 text-[13.5px] text-muted">Abra o link exatamente como chegou no e-mail, ou peça um novo.</p>
+        <h1 className={titulo}>Link incompleto</h1>
+        <p className="mt-2 text-sm text-muted">Abra o link exatamente como chegou no e-mail, ou peça um novo.</p>
         <Link href="/esqueci-senha" className="mt-6 inline-block font-semibold text-brand hover:underline">Pedir um novo link</Link>
       </div>
     );
@@ -131,11 +131,11 @@ export function RedefinirSenhaForm() {
 
   return (
     <div>
-      <h1 className="text-fg" style={titulo}>Crie sua <span className="text-brand">nova senha.</span></h1>
-      <p className="mt-1.5 text-[13.5px] text-muted">Ao salvar, todas as sessões abertas da sua conta são encerradas por segurança.</p>
+      <h1 className={titulo}>Crie sua <span className="text-brand">nova senha.</span></h1>
+      <p className="mt-1.5 text-sm text-muted">Ao salvar, todas as sessões abertas da sua conta são encerradas por segurança.</p>
 
       {ok ? (
-        <p className="mt-6 flex items-start gap-2 rounded-lg bg-emerald-500/10 px-3 py-3 text-sm text-emerald-700 dark:text-emerald-400" role="status">
+        <p className="mt-6 flex items-start gap-2 rounded-card bg-success-soft px-3 py-3 text-sm text-success" role="status">
           <Icon name="check" size={16} className="mt-0.5 shrink-0" />
           Senha alterada. Levando você para o login…
         </p>

@@ -67,10 +67,10 @@ export function SignupForm() {
 
   return (
     <div>
-      <h1 className="text-fg" style={{ fontSize: 30, fontWeight: 650, letterSpacing: '-0.035em' }}>
-        {invite ? 'Você foi convidado 🎉' : <>Crie <span className="whitespace-nowrap text-brand">sua conta.</span></>}
+      <h1 className="font-display text-3xl tracking-tight text-fg">
+        {invite ? 'Você foi convidado' : <>Crie <span className="whitespace-nowrap text-brand">sua conta.</span></>}
       </h1>
-      <p className="mt-1.5 text-[13.5px] text-muted">
+      <p className="mt-1.5 text-sm text-muted">
         {invite ? 'Defina seu nome e uma senha para entrar na equipe.' : 'Comece sua operação com o KHUB.'}
       </p>
 
@@ -126,14 +126,14 @@ export function SignupForm() {
         )}
 
         {erro && (
-          <p className="flex items-start gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600">
+          <p className="flex items-start gap-2 rounded-card bg-danger-soft px-3 py-2 text-sm text-danger">
             <Icon name="alert" size={15} className="mt-0.5 shrink-0" />
             {erro}
           </p>
         )}
 
         {!invite && (
-          <label className="flex items-start gap-2.5 text-[13px] text-muted">
+          <label className="flex items-start gap-2.5 text-sm text-muted">
             {/* Sem `required` de propósito: a validação nativa do navegador
                 bloquearia o submit ANTES do handler rodar, escondendo esse
                 caso atrás de um tooltip nativo em vez da mensagem de erro
@@ -151,7 +151,7 @@ export function SignupForm() {
         )}
 
         <Button type="submit" className="btn-auth-primary w-full" disabled={loading}>
-          {loading && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden />}
+          {loading && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden />}
           {loading ? (invite ? 'Entrando…' : 'Criando…') : invite ? 'Aceitar convite e entrar' : 'Criar conta'}
           {!loading && <Icon name="arrowRight" size={16} />}
         </Button>

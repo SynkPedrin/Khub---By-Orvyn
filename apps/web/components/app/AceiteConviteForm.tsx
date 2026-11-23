@@ -11,7 +11,7 @@ import { useAuth } from '@/lib/auth';
 
 interface Preview { email: string; empresa: string; papel: string; contaExistente: boolean; expiraEm: string }
 
-const titulo = { fontSize: 30, fontWeight: 650, letterSpacing: '-0.035em' } as const;
+const titulo = 'font-display text-3xl tracking-tight text-fg';
 
 /** Copia texto com fallback (navegadores antigos / contexto sem clipboard API). */
 async function copiar(texto: string): Promise<boolean> {
@@ -89,8 +89,8 @@ export function AceiteConviteForm({ token }: { token: string }) {
   if (invalido) {
     return (
       <div>
-        <h1 className="text-fg" style={titulo}>Convite indisponível</h1>
-        <p className="mt-2 text-[13.5px] text-muted">Este link é inválido, expirou ou já foi usado. Peça a quem te convidou para gerar um novo link.</p>
+        <h1 className={titulo}>Convite indisponível</h1>
+        <p className="mt-2 text-sm text-muted">Este link é inválido, expirou ou já foi usado. Peça a quem te convidou para gerar um novo link.</p>
         <p className="mt-6 text-sm text-muted">Já criou sua senha? <Link href="/login" className="font-semibold text-brand hover:underline">Entrar</Link></p>
       </div>
     );
@@ -101,8 +101,8 @@ export function AceiteConviteForm({ token }: { token: string }) {
 
   return (
     <div>
-      <h1 className="text-fg" style={titulo}>Você foi <span className="text-brand">convidado.</span></h1>
-      <p className="mt-1.5 text-[13.5px] text-muted">
+      <h1 className={titulo}>Você foi <span className="text-brand">convidado.</span></h1>
+      <p className="mt-1.5 text-sm text-muted">
         Acesso à <strong className="text-fg">{preview.empresa}</strong> no KHUB.{' '}
         {preview.contaExistente ? 'Este e-mail já tem conta: confirme a sua senha atual.' : 'Escolha a sua senha para entrar.'}
       </p>
@@ -128,7 +128,7 @@ export function AceiteConviteForm({ token }: { token: string }) {
           </Field>
         )}
         {erro && (
-          <p className="flex items-start gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600" role="alert">
+          <p className="flex items-start gap-2 rounded-card bg-danger-soft px-3 py-2 text-sm text-danger" role="alert">
             <Icon name="alert" size={15} className="mt-0.5 shrink-0" />
             {erro}
           </p>
@@ -150,9 +150,9 @@ export function AceiteConviteForm({ token }: { token: string }) {
         {credenciais && (
           <div className="space-y-3">
             <div className="rounded-xl border border-line bg-surface2 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Login</p>
+              <p className="text-2xs font-semibold uppercase tracking-wide text-muted">Login</p>
               <p className="mt-0.5 break-all font-semibold text-fg" data-testid="credencial-email">{credenciais.email}</p>
-              <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-muted">Senha</p>
+              <p className="mt-3 text-2xs font-semibold uppercase tracking-wide text-muted">Senha</p>
               <p className="mt-0.5 break-all font-mono font-semibold text-fg" data-testid="credencial-senha">{credenciais.senha}</p>
             </div>
             <button

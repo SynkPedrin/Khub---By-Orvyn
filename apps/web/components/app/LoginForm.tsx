@@ -50,10 +50,10 @@ export function LoginForm() {
 
   return (
     <div>
-      <h1 className="text-fg" style={{ fontSize: 30, fontWeight: 650, letterSpacing: '-0.035em' }}>
+      <h1 className="font-display text-3xl tracking-tight text-fg">
         Bem-vindo <span className="whitespace-nowrap text-brand">de volta.</span>
       </h1>
-      <p className="mt-1.5 text-[13.5px] text-muted">Entre para continuar sua operação.</p>
+      <p className="mt-1.5 text-sm text-muted">Entre para continuar sua operação.</p>
 
       <div className="mt-6">
         <SocialAuth label="Entrar" />
@@ -71,7 +71,7 @@ export function LoginForm() {
           <PasswordInput placeholder="••••••••" value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="current-password" required />
         </Field>
         {erro && (
-          <p className="flex items-start gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600">
+          <p className="flex items-start gap-2 rounded-card bg-danger-soft px-3 py-2 text-sm text-danger">
             <Icon name="alert" size={15} className="mt-0.5 shrink-0" />
             {erro}
           </p>
@@ -81,7 +81,7 @@ export function LoginForm() {
           <Link href={`/esqueci-senha${email ? `?email=${encodeURIComponent(email)}` : ''}`} className="font-medium text-brand hover:underline">Esqueci a senha</Link>
         </div>
         <Button type="submit" className="btn-auth-primary w-full" disabled={loading}>
-          {loading && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden />}
+          {loading && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden />}
           {loading ? 'Entrando…' : 'Entrar no KHUB'}
           {!loading && <Icon name="arrowRight" size={16} />}
         </Button>
