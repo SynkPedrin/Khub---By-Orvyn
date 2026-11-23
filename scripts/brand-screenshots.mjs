@@ -9,7 +9,7 @@ const { chromium } = require('playwright-core');
 
 const WEB = process.env.WEB ?? 'http://localhost:3210';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = resolve(ROOT, 'docs/brand/antes');
+const OUT = resolve(ROOT, process.env.OUT_DIR ?? 'docs/brand/antes');
 mkdirSync(OUT, { recursive: true });
 
 const CONTAS = {
