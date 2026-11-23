@@ -10,6 +10,16 @@ Data: 2026-11-22 · Base: `01-auditoria-identidade.md` · Status: aprovada por m
 4. **Violetas do código ≠ violetas do logo.** O sistema usa os violetas do logo (#331177–#5511CC família), não os #7b2eff/#a855f7 atuais.
 5. **Dois limes morrem.** `--brand` vira um só (#B6FF00) em todos os contextos dark; o #9bee45 do :root default é alinhado.
 
+## Diretriz do dono (22/11, após ver o app ao vivo)
+
+> "Mais clean e profissional; melhor para o uso das pessoas; hoje está bom, mas ainda com cara de SaaS amador."
+
+Tradução operacional (vale para todas as fases):
+1. **Clean acima de tudo** — menos glow, menos borda colorida, menos card-aninhado; hierarquia por espaço, peso tipográfico e cor com função, não por enfeite.
+2. **Profissional = denso e preciso** (régua Linear/Vercel): alinhamento rigoroso, números tabulares, controles compactos e previsíveis, zero elementos "soltos".
+3. **Usabilidade primeiro** — quando "mais bonito" competir com "mais claro para trabalhar", ganha o mais claro; depois fica bonito (já era a regra do brief §12, agora reforçada).
+4. Aurora/glass/gradiente assinatura ficam **ainda mais raros**: só onde a Fase 2 permite, e sempre discretos.
+
 ## Conceito
 
 O KHUB é uma **central de comando noturna**. Dark-first: o tema escuro recebe o melhor acabamento; o claro é projetado, não invertido. Duas cores com função, nunca decoração:
