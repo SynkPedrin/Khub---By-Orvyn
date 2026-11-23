@@ -14,6 +14,9 @@ export function permissionFor(controller: string, route: string, method: string)
   }
   // Presença Google (GTM, Search Console, Meu Negócio): ler é de manager+; conectar e escrever no Google é de owner/admin.
   if (controller === 'google') return read && route !== 'auth-url' ? 'google.view' : 'integrations.manage';
+  // Genna (ADR-0053): ver o painel e consultar métricas/conteúdos é leitura de marketing
+  // (mesma régua das Redes); conectar, desconectar e criar/publicar é de owner/admin.
+  if (controller === 'genna') return (read && route !== 'auth-url') || route.startsWith('consultar') ? 'contacts.read' : 'integrations.manage';
   if (controller.includes('integration') || controller.includes('ads')) return 'integrations.manage';
   if (controller === 'operations') return 'organization.manage';
   // Marcar/remarcar compromisso é operação de atendente, não configuração da

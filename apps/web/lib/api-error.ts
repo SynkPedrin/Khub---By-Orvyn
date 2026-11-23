@@ -42,6 +42,7 @@ export const PROVIDER_LABEL: Record<string, string> = {
   storage: 'Armazenamento de arquivos',
   youtube: 'YouTube (Google)',
   google_presenca: 'Google (Tag Manager, Search Console e Meu Negócio)',
+  genna: 'Genna (Instagram)',
   ollama: 'Ollama (IA local)',
   openai: 'OpenAI',
 };
