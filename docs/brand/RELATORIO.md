@@ -49,12 +49,28 @@ Diretriz do dono registrada: **clean, profissional, usabilidade primeiro** — m
 
 Corrigidos: B5, B6, B7, B11. Contratual: B4. Em curso: B1, B9. Abertos (backend/decisão): B2 (mitigado), B3, B8, B10.
 
-## 6. Métricas — FECHAR NA 4.5
+## 6. Métricas (Fase 4.5)
 
-- Arbitrários: antes 1.487 (953 text-[px]) → medir no fim (meta: zero nos arquivos migrados).
-- Bundle/Web Vitals: medir antes/depois (LCP ≤ 2,0 s, CLS ≤ 0,05, INP ≤ 200 ms em Dashboard/Leads/Conversas).
-- Screenshots "depois": `docs/brand/depois/` (mesmo grid do antes).
-- Testes: typecheck verde em todos os commits; build + lint + fluxos Playwright da seção 10 do brief na 4.5.
+**Build/lint/typecheck**
+- `next build`: **verde** (57 páginas; First Load JS compartilhado **87,5 kB** — dentro do orçamento de 60 kB adicionais, pois a camada visual não adicionou nenhuma dependência de runtime; só CSS e fontes woff2 locais).
+- `next lint`: **0 erros** (warnings pré-existentes não tocados).
+- `tsc --noEmit`: verde em todos os commits do redesign. Permanecem erros PRÉ-EXISTENTES do trabalho alheio incompleto em `components/agency/onboarding/*` (não tocados, não bloqueiam o build — rota `/agency/onboarding` é deles).
+
+**Web Vitals** (`scripts/brand-vitals.mjs`, build de PRODUÇÃO `next start`, Chrome headless, API local Nest+Docker em modo watch):
+| Rota | LCP | CLS |
+|---|---|---|
+| /login (estática) | **0,06 s** | 0,000 |
+| /dashboard | 3,39 s | 0,001 |
+| /leads | 3,12 s | 0,002 |
+| /conversas | 3,49 s | 0,020 |
+CLS dentro do orçamento (≤ 0,05) em todas. **LCP acima da meta de 2,0 s nas rotas de dados — gargalo medido: a API local em modo watch responde ~3 s por query** (a camada visual entrega LCP de 0,06 s na rota estática). Regra: re-medir contra a API de produção antes de cobrar a meta; sem dados, INP não foi medido (sem interações sintéticas representativas).
+
+**Valores arbitrários** (mesmo método da auditoria, grep em `app/`+`components/` tsx):
+- Antes: 1.487 totais · 953 `text-[px]`. Depois: 1.604 · 1.058 — **mas o delta líquido do diff da branch é −7** (47 adicionados em linhas tocadas, 54 removidos). A divergência vem de arquivos do trabalho alheio adicionados na árvore (onboarding/genna) no mesmo período, não do redesign.
+- Zero valores arbitrários nos arquivos NOVOS do redesign (tokens.css, design-system, loading.tsx, AnimatedNumber).
+- **Pendência**: o zero absoluto da seção 10 exige burn-down por módulo (plano: ligar a regra `no-arbitrary-value` por pasta a partir dos módulos migrados). Registrado como dívida com dono e prazo a definir.
+
+**Screenshots depois**: `docs/brand/depois/` (mesmo grid de 136 do antes).
 
 ## 7. Riscos e pendências conhecidas
 
