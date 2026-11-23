@@ -4,6 +4,17 @@
 
 ---
 
+## ✅ SPRINT ONBOARDING-KROMA — Implantação inteligente de clientes da agência *(CONCLUÍDA — 2026-11-22)*
+> Prompt master "ONBOARDING KROMA" do product owner (2026-11-22): sistema interno de implantação de clientes da agência KROMA — visão exclusiva da agência (NÃO é portal do cliente). Escopo autorizado: auditoria + implementação full-stack integrada ao KHUB existente. Decisão: [[Arquitetura|ADR-0054]]. Task: [[Tasks|ONB-KROMA]].
+
+- **Banco:** `db/078_onboarding_kroma.sql` (10 tabelas agency-scoped, sem tenant_id/RLS — isolamento no service) **aplicada no dev** pelo runner. Unique parcial = 1 onboarding não-finalizado por subconta.
+- **API:** módulo `onboarding` (`/v1/agency/onboarding/*`, 18 rotas) — orquestrador completo: iniciar (409 em duplicidade), visão executiva com filtros/contadores, conhecimento em 7 seções com histórico e "pendente nunca presumido", imersão com pauta adaptada ao escopo, geração de tarefas no **Daily** (`agency_tasks`) filtrada por escopo com dedupe, relatórios Genna (só tools de leitura; 409 `genna_nao_conectado` sem simular nada), spec do agente de IA com 11 cenários (aprovação derivada), aprovações (escopo por member vira pendente; decisão só owner/admin), **finalização transacional com FOR UPDATE revalidando todos os critérios obrigatórios do escopo** (409 com pendências; idempotente; `completion_locked`).
+- **Web:** `/agency/onboarding` (visão executiva) + `/agency/onboarding/[id]` (10 abas: visão geral, imersão, dados do negócio, inteligência, Genna, agente IA, tarefas, evidências, **conferência final** com botão "Finalizar onboarding" bloqueado até zerar pendências, histórico). Item no `AGENCY_NAV`. Genna CTA chama o OAuth real (`lib/genna.ts`); ferramentas vêm só de `GET /v1/genna/ferramentas` (nada inventado).
+- **Gates:** jest API **1731 verdes** (37 novos) · vitest web **270** (14 novos) · tsc API+web limpos · lint sem avisos novos · **E2E real `scripts/qa/onboarding-e2e.mjs` 33/33** (API :3333 + Postgres dev): fluxo completo iniciar→coletar→tarefas→homologar→finalizar, duplicidade, isolamento (outra agência 404, member restrito 404, viewer 403, member não finaliza).
+- **Pendências reais:** conectar a Genna por OAuth (credencial do tenant) para a descoberta real das ferramentas e relatórios ao vivo; criar o agente no tenant do cliente a partir da spec (hoje `agent_id` é referência); aplicar `db/078` no QA/Neon no deploy; validação visual no navegador logado não feita nesta sessão.
+
+---
+
 ## ✅ SPRINT CAROL — Agente comercial do Instituto Bárbara Lopes *(ENTREGUE EM DEV — 2026-11-16; go-live aguarda homologação)*
 > Prompt master "CAROL AI". Escopo autorizado: auditar, configurar em rascunho na subconta correta, implementar/testar o que faltar — **sem** publicar produção, sem tocar a Studio da Beleza, sem mensagens reais.
 

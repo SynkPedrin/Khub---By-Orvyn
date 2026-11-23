@@ -47,6 +47,8 @@ export const PRIMARY_NAV: NavItem[] = [
   { href: '/redes', label: 'Redes sociais', icon: 'instagram', grupo: 'Crescimento' },
   // Presença Google da subconta: Tag Manager, Search Console e Meu Negócio.
   { href: '/marketing/google', label: 'Google', icon: 'google', grupo: 'Crescimento' },
+  // Instagram do cliente pelo Genna: métricas, conteúdos, criação e publicação com aprovação (ADR-0053).
+  { href: '/marketing/genna', label: 'Genna', icon: 'instagram', grupo: 'Crescimento' },
   // Captura de leads por link/embed (Q4.1).
   { href: '/formularios', label: 'Formulários', icon: 'file', grupo: 'Crescimento' },
   { href: '/analytics', label: 'Analytics', icon: 'trend', grupo: 'Crescimento' },
@@ -62,6 +64,8 @@ export const PRIMARY_NAV: NavItem[] = [
 export const AGENCY_NAV: NavItem[] = [
   { href: '/agency', label: 'Visão geral', icon: 'grid', grupo: 'Agência' },
   { href: '/agency/clients', label: 'Clientes', icon: 'building', grupo: 'Agência' },
+  // Onboarding KROMA (db/078): condução rastreável da entrada de cada subconta.
+  { href: '/agency/onboarding', label: 'Onboarding', icon: 'target', grupo: 'Agência' },
   { href: '/agency/equipe', label: 'Equipe', icon: 'users', grupo: 'Agência' },
   // Daily da agência (ADR-0050): o dia a dia da equipe, acima das subcontas.
   { href: '/agency/tarefas/minhas', label: 'Minhas tarefas', icon: 'check2', grupo: 'Daily' },

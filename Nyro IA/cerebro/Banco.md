@@ -65,6 +65,7 @@ audit_logs(id, tenant_id, actor, acao, payload, ts)
 
 ## 2.3 Roteamento de webhook sem tenant (`db/008`, `db/009`)
 Webhook público chega **sem tenant** e a app roda como `khub_app` (NOBYPASSRLS): um SELECT direto devolveria 0 linhas. Duas funções **SECURITY DEFINER** (owner `khub_service`) expõem **somente o `tenant_id` de roteamento** — nenhum dado de negócio atravessa, e logo depois a app entra em `withTenant()` e tudo volta para a RLS:
+- `integrations(provider='genna')` (ADR-0053): credencial do Genna por subconta (access/refresh token, validade, escopos, `client_id` do cadastro dinâmico) cifrada em `credentials_encrypted`; sem tabela nova.
 - `resolve_tenant_by_stevo_instance(text)` — via `integrations(provider='stevo', external_business_id=instância, status='connected')`, com unique index parcial garantindo instância→1 tenant.
 - `resolve_tenant_by_meta_page(text)` — via `meta_pages(page_id UNIQUE)`, populada no OAuth (`listPages`).
 Ambas cobertas pelo teste `002` (roteia certo **e** a linha do outro tenant continua invisível). Ver ADR-0008 e ADR-0010.
@@ -185,3 +186,6 @@ SET LOCAL app.tenant_id = '<uuid-do-tenant>';
 - Retenção configurável de conversas/gravações; anonimização após encerramento de conta ([[PRD]] §14 / [[RegrasNegocio]]).
 
 > ⚠️ LACUNA: janelas de retenção específicas (dias), política de storage de mídia do WhatsApp e custo — não definidos no PRD (melhoria proposta #5). Registrar quando abordado.
+
+## 8. Onboarding KROMA (db/078, ADR-0054)
+Tabelas **agency-scoped** (sem `tenant_id`/RLS — isolamento no service, padrão db/026/074): `agency_onboardings` (status coleta→imersao→implantacao→homologacao→pronto|bloqueado; escopo jsonb; `completion_locked`; índice único parcial = 1 não-finalizado por subconta) · `agency_onboarding_knowledge` (+`_hist`, 7 seções, nunca presumir) · `agency_onboarding_meetings` (imersão: pauta/decisões/pendências) · `agency_onboarding_reports` (Genna/manual; `bruto` = dado não-confiável) · `agency_onboarding_agents` (spec + 11 cenários de teste; `agent_id` referencia agente do tenant, sem FK) · `agency_onboarding_tasks` (vínculo com `agency_tasks` + critério de aceite + evidências) · `agency_onboarding_verifications` (critérios de homologação, `escopo_key` condiciona ao contrato) · `agency_onboarding_approvals` (ações sensíveis) · `agency_onboarding_events` (histórico).

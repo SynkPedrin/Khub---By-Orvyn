@@ -32,13 +32,15 @@ import { AvaliacoesModule } from './avaliacoes/avaliacoes.module';
 import { FormsModule } from './forms/forms.module';
 import { BookingModule } from './booking/booking.module';
 import { GooglePresencaModule } from './integrations/google/google.module';
+import { GennaModule } from './integrations/genna/genna.module';
 import { RedesModule } from './redes/redes.module';
 import { McpModule } from './mcp/mcp.module';
+import { OnboardingModule } from './onboarding/onboarding.module';
 import { PermissionsGuard } from './auth/permissions.guard';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 
 @Module({
-  imports: [OperationsModule, ConfigModule, CommonModule, AiModule, PrismaModule, AuthModule, TenantsModule, RealtimeModule, EventsModule, RagModule, CrmModule, AutomationsModule, MarketplaceModule, BlueprintModule, NyroModule, IntegrationsModule, SettingsModule, FinanceiroModule, BillingModule, AgendaModule, AnalyticsModule, AgencyModule, AgentsModule, DisparosModule, AvaliacoesModule, FormsModule, BookingModule, GooglePresencaModule, RedesModule, McpModule],
+  imports: [OperationsModule, ConfigModule, CommonModule, AiModule, PrismaModule, AuthModule, TenantsModule, RealtimeModule, EventsModule, RagModule, CrmModule, AutomationsModule, MarketplaceModule, BlueprintModule, NyroModule, IntegrationsModule, SettingsModule, FinanceiroModule, BillingModule, AgendaModule, AnalyticsModule, AgencyModule, AgentsModule, DisparosModule, AvaliacoesModule, FormsModule, BookingModule, GooglePresencaModule, GennaModule, RedesModule, McpModule, OnboardingModule],
   controllers: [HealthController],
   providers: [
     // Ordem importa: autentica (seta req.user) → rate limit por tenant → auditoria.

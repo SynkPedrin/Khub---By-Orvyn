@@ -201,6 +201,20 @@ Fora do `/v1` (raiz do host da API):
 
 Sob `/v1/conector-ia` (sessão do KHUB): `GET info` (URL + ferramentas), `GET pedido/:pedido` (tela de consentimento; inclui URL de negar), `POST decidir {pedido, aprovar}` (dono/admin) → `{ redirect }`, `GET conexoes`, `DELETE conexoes/:id`.
 
+### 5.2 Genna — Instagram do cliente ([[Arquitetura|ADR-0053]])
+Sob `/v1/genna` (sessão do KHUB, tenant do token):
+| Rota | Papel | Uso |
+|---|---|---|
+| `GET status` | leitura | `{configurado, missing, conectado, status, erro, conectadoEm, escopos, podePublicar}` |
+| `GET auth-url` | dono/admin | `{url}` de autorização no Genna (cadastro dinâmico + PKCE). Sem `INTEGRATIONS_ENCRYPTION_KEY` → 501 `config_required` |
+| `POST callback {code, state}` | pública | o web (`/api/integrations/genna/callback`) repassa o retorno; grava a credencial cifrada |
+| `DELETE conexao` | dono/admin | apaga a credencial (`status='revoked'`) |
+| `GET ferramentas[?renovar=1]` | leitura | `[{nome, titulo, descricao, classe: leitura\|escrita\|publicacao, parametros (JSON Schema)}]` |
+| `POST consultar/:nome {argumentos?}` | leitura | só ferramenta `leitura` (senão 403) → `{ferramenta, classe, ok, texto, dados, imagens, links}` |
+| `POST executar/:nome {argumentos?, confirmar: true}` | dono/admin | criação roda na hora (mesmo formato); publicação → `{aprovacao: {id, resumo}}` em NICO > Aprovações |
+
+Erros: 409 `genna_nao_conectado` (sem conexão ou acesso expirado), 403 `genna_sem_permissao`, 429 `genna_limite`, 502 `genna_indisponivel`.
+
 > ⚠️ LACUNA: TTL do access/refresh token, formato/algoritmo de assinatura JWT (HS256 vs RS256), rotação de refresh e revogação não estão no PRD. Definir no Bloco 3 e registrar ADR se estrutural.
 
 ---
@@ -217,3 +231,7 @@ Canais ([[PRD]] §10.3): inbox, Kanban, execução de automação ao vivo.
 - **Ordem:** publicação sempre **após o commit** — quem recebe o evento e consulta a API tem que encontrar o dado.
 - **Escala:** `RedisIoAdapter` (`@socket.io/redis-adapter`) — com 2+ instâncias, o socket está numa e o `emit` na outra; sem barramento o evento se perde. Sem Redis, degrada para memória com aviso.
 - **Front:** `useRealtime()` (`lib/realtime.ts`) devolve `conectado`; inbox e pipeline mostram um ponto verde/âmbar e **caem para polling (5s)** se o socket cair — a tela nunca congela em silêncio.
+
+## Onboarding KROMA — `/v1/agency/onboarding` (ADR-0054)
+Autenticado (membro de agência); controller `@SkipAudit` com auditoria manual; erros RFC 7807 (`onboarding_duplicado` 409 · `onboarding_pendencias` 409 com lista · `genna_nao_conectado` 409).
+`GET /` visão executiva (filtros: status, etapa, responsavelId, cliente, de/ate, prioridade) · `POST /` iniciar `{clientAccountId, escopo, responsavelId?}` · `GET/PATCH /:id` (escopo por member → aprovação pendente) · `PUT /:id/conhecimento/:secao` + `GET .../historico` · `POST/PATCH /:id/reunioes[/:mid]` · `POST /:id/tarefas/gerar` `{atribuicoes:{papel:memberId}}` · `POST /:id/relatorios/genna` `{perfil, ferramenta, argumentos?}` + `GET /:id/relatorios` · `PUT /:id/agente` + `POST /:id/agente/testes` (um cenário por chamada) · `GET /:id/conferencia` · `POST /:id/verificacoes/:chave` `{status, evidencias?, semEvidencia?}` · `POST /:id/aprovacoes` + `POST .../aprovacoes/:aid/decisao` · `POST /:id/finalizar` (só owner/admin; transacional; idempotente).

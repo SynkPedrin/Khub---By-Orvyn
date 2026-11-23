@@ -331,6 +331,35 @@ export const TOOLS: Tool[] = [
     'sensivel',
     (a) => `${a.status === 'ativo' ? 'ATIVAR' : 'PAUSAR'} uma automação`,
   ),
+  // ---------------- Onboarding de clientes da agência (ADR-0054) ----------------
+  // O dispatch fica no OnboardingModule (registrarHandler): a NICO não importa o módulo.
+  t(
+    'andamento_onboarding',
+    'Andamento da implantação (onboarding) dos clientes da agência: status, progresso da homologação e tarefas atrasadas. Use quando o usuário perguntar como está a implantação de um cliente ou dos clientes em geral.',
+    z.object({ nomeCliente: z.string().min(2).max(120).optional() }),
+    'leitura',
+    (a) => `ver o andamento do onboarding${a.nomeCliente ? ` de "${a.nomeCliente}"` : ''}`,
+  ),
+  t(
+    'iniciar_onboarding',
+    'Inicia a implantação (onboarding) de um cliente novo da agência. Use SEMPRE que o usuário avisar que entrou/fechou um cliente novo na agência (ex.: "entrou mais um cliente na KROMA"). Se a subconta não existir, a tool pergunta se deve criar — não invente nome nem escopo.',
+    z.object({
+      nomeCliente: z.string().min(2).max(120),
+      escopo: z
+        .object({
+          trafego: z.boolean(),
+          social: z.boolean(),
+          audiovisual: z.boolean(),
+          agente_ia: z.boolean(),
+          branding: z.boolean(),
+        })
+        .partial()
+        .optional(),
+      criarSubconta: z.boolean().optional(),
+    }),
+    'escrita',
+    (a) => `iniciar o onboarding de "${a.nomeCliente}"`,
+  ),
 ];
 
 export const TOOLS_POR_NOME = new Map(TOOLS.map((x) => [x.nome, x]));

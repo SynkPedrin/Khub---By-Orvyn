@@ -78,6 +78,19 @@ export class ToolExecutorService {
     this.extras.set(tool.nome, { tool, executar });
   }
 
+  /**
+   * Handler de tool do CATÁLOGO cujo dispatch mora em outro módulo (ADR-0054:
+   * `iniciar_onboarding`/`andamento_onboarding` são visíveis ao modelo, mas quem
+   * executa é o OnboardingModule — sem import circular com o NyroModule).
+   */
+  private readonly handlers = new Map<string, (args: Record<string, unknown>, ctx: ContextoNyro) => Promise<unknown>>();
+
+  registrarHandler(nome: string, executar: (args: Record<string, unknown>, ctx: ContextoNyro) => Promise<unknown>): void {
+    if (!TOOLS_POR_NOME.has(nome)) throw new Error(`tool ${nome} não existe no catálogo da NICO`);
+    if (this.handlers.has(nome)) throw new Error(`handler da tool ${nome} já registrado`);
+    this.handlers.set(nome, executar);
+  }
+
   async executar(nome: string, argsBrutos: Record<string, unknown>, ctx: ContextoNyro): Promise<ResultadoTool> {
     const tool = TOOLS_POR_NOME.get(nome) ?? this.extras.get(nome)?.tool;
     // modelo alucinou nome de tool: recusa em vez de tentar adivinhar
@@ -104,6 +117,8 @@ export class ToolExecutorService {
 
   /* eslint-disable @typescript-eslint/no-explicit-any */
   private async despachar(nome: string, a: any, ctx: ContextoNyro): Promise<unknown> {
+    const handler = this.handlers.get(nome);
+    if (handler) return handler(a, ctx);
     switch (nome) {
       // ---------------- leitura ----------------
       case 'buscar_conhecimento': {

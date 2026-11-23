@@ -2328,3 +2328,176 @@ model McpToken {
 
   @@map("mcp_tokens")
 }
+
+// ==================== Onboarding KROMA (migration 078) ====================
+// Escopo = agency_id, sem tenant_id e sem RLS (mesmo padrão de db/026 e
+// db/074): o OnboardingService resolve a agência pela identidade da sessão.
+// Colunas que apontam para agency_members/agency_tasks ficam como escalares
+// (sem relation) — o service resolve nomes e junta tarefas em consultas
+// separadas, como WorkflowSchedule faz.
+
+/// Onboarding de uma subconta da agência. Um não-finalizado por subconta
+/// (índice único parcial no SQL, não representável aqui).
+model AgencyOnboarding {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  agencyId        String    @map("agency_id") @db.Uuid
+  clientAccountId String    @map("client_account_id") @db.Uuid
+  responsavelId   String?   @map("responsavel_id") @db.Uuid
+  status          String    @default("coleta")
+  etapaAtual      String?   @map("etapa_atual")
+  escopo          Json      @default("{}")
+  completionLocked Boolean  @default(true) @map("completion_locked")
+  aprovadoPor     String?   @map("aprovado_por") @db.Uuid
+  aprovadoEm      DateTime? @map("aprovado_em") @db.Timestamptz(6)
+  startedAt       DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  completedAt     DateTime? @map("completed_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("agency_onboardings")
+}
+
+/// Conhecimento coletado do cliente, uma linha por seção.
+model AgencyOnboardingKnowledge {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  onboardingId  String    @map("onboarding_id") @db.Uuid
+  secao         String
+  dados         Json      @default("{}")
+  pendente      Boolean   @default(true)
+  confirmadoPor String?   @map("confirmado_por") @db.Uuid
+  confirmadoEm  DateTime? @map("confirmado_em") @db.Timestamptz(6)
+  atualizadoPor String?   @map("atualizado_por") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([onboardingId, secao])
+  @@map("agency_onboarding_knowledge")
+}
+
+/// Snapshot do conteúdo anterior a cada update de knowledge.
+model AgencyOnboardingKnowledgeHist {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  knowledgeId String   @map("knowledge_id") @db.Uuid
+  dados       Json
+  alteradoPor String?  @map("alterado_por") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("agency_onboarding_knowledge_hist")
+}
+
+/// Reunião do onboarding (imersão e afins).
+model AgencyOnboardingMeeting {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  onboardingId  String   @map("onboarding_id") @db.Uuid
+  tipo          String   @default("imersao")
+  data          DateTime? @db.Timestamptz(6)
+  participantes Json     @default("[]")
+  pauta         Json     @default("[]")
+  resumo        String?
+  decisoes      Json     @default("[]")
+  pendencias    Json     @default("[]")
+  criadoPor     String?  @map("criado_por") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("agency_onboarding_meetings")
+}
+
+/// Relatório de análise (Genna/manual/web). `bruto` é dado não confiável.
+model AgencyOnboardingReport {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  onboardingId    String   @map("onboarding_id") @db.Uuid
+  fonte           String   @default("genna")
+  perfilAnalisado String?  @map("perfil_analisado")
+  ferramenta      String?
+  metricas        Json     @default("{}")
+  achados         Json     @default("[]")
+  recomendacoes   Json     @default("[]")
+  limitacoes      String?
+  bruto           Json?
+  criadoPor       String?  @map("criado_por") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("agency_onboarding_reports")
+}
+
+/// Especificação do agente de IA do cliente (um por onboarding). `agentId`
+/// aponta para o agente criado no tenant do cliente numa etapa futura.
+model AgencyOnboardingAgent {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  onboardingId   String   @unique @map("onboarding_id") @db.Uuid
+  agentId        String?  @map("agent_id") @db.Uuid
+  nome           String?
+  especificacao  Json     @default("{}")
+  systemPrompt   String?  @map("system_prompt")
+  testes         Json     @default("[]")
+  approvalStatus String   @default("rascunho") @map("approval_status")
+  atualizadoPor  String?  @map("atualizado_por") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("agency_onboarding_agents")
+}
+
+/// Vínculo entre o onboarding e as tarefas reais do Daily (db/074).
+model AgencyOnboardingTask {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  onboardingId   String   @map("onboarding_id") @db.Uuid
+  taskId         String   @map("task_id") @db.Uuid
+  secao          String?
+  criterioAceite String?  @map("criterio_aceite")
+  evidencias     Json     @default("[]")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([onboardingId, taskId])
+  @@map("agency_onboarding_tasks")
+}
+
+/// Item do checklist de homologação. `escopoKey`: NULL = sempre exigido.
+model AgencyOnboardingVerification {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  onboardingId  String    @map("onboarding_id") @db.Uuid
+  chave         String
+  rotulo        String
+  secao         String
+  status        String    @default("pendente")
+  obrigatorio   Boolean   @default(true)
+  escopoKey     String?   @map("escopo_key")
+  evidencias    Json      @default("[]")
+  taskId        String?   @map("task_id") @db.Uuid
+  verificadoPor String?   @map("verificado_por") @db.Uuid
+  verificadoEm  DateTime? @map("verificado_em") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([onboardingId, chave])
+  @@map("agency_onboarding_verifications")
+}
+
+/// Ação pendente de decisão de owner/admin da agência.
+model AgencyOnboardingApproval {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  onboardingId  String    @map("onboarding_id") @db.Uuid
+  acao          String
+  payload       Json      @default("{}")
+  solicitadoPor String    @map("solicitado_por") @db.Uuid
+  status        String    @default("pendente")
+  decididoPor   String?   @map("decidido_por") @db.Uuid
+  justificativa String?
+  decididoEm    DateTime? @map("decidido_em") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("agency_onboarding_approvals")
+}
+
+/// Linha do tempo do onboarding.
+model AgencyOnboardingEvent {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  onboardingId String   @map("onboarding_id") @db.Uuid
+  tipo         String
+  dados        Json     @default("{}")
+  ator         String   @default("usuario")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("agency_onboarding_events")
+}
