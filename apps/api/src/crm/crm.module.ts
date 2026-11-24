@@ -3,6 +3,9 @@ import { RealtimeModule } from '../realtime/realtime.module';
 import { CrmService } from './crm.service';
 import { OrigemFotoController } from './origem-foto.controller';
 import { AtribuicaoService } from './atribuicao.service';
+import { AtribuicaoController } from './atribuicao.controller';
+import { LinksRastreadosController } from './links-rastreados.controller';
+import { LinksRastreadosService } from './links-rastreados.service';
 import { CrmController } from './crm.controller';
 import { ContatosController } from './contatos.controller';
 import { ContatosMassaService } from './contatos-massa.service';
@@ -50,10 +53,11 @@ import { MetaCanaisHttp, YoutubeHttp } from './messaging/canais/canais.http';
 
 @Module({
   imports: [RealtimeModule],
-  controllers: [ContatosController, NegociosController, LostReasonsController, CrmController, CrmF2Controller, CustomFieldsController, PipelinesController, ComercialController, OrigemFotoController, StevoWebhookController, StevoApiWebhookController, EvolutionWebhookController, WhatsAppController, InboxController, CanaisController],
+  controllers: [ContatosController, NegociosController, LostReasonsController, CrmController, CrmF2Controller, CustomFieldsController, PipelinesController, ComercialController, OrigemFotoController, LinksRastreadosController, AtribuicaoController, StevoWebhookController, StevoApiWebhookController, EvolutionWebhookController, WhatsAppController, InboxController, CanaisController],
   providers: [
     CrmService,
     AtribuicaoService,
+    LinksRastreadosService,
     ContatosMassaService,
     ContatosMesclaService,
     ContatosViewsService,

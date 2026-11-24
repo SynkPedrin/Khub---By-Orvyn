@@ -1,9 +1,19 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CryptoService } from '../integrations/crypto.service';
 import type { StoredCredentials } from '../integrations/ads-connector';
-import { lerAtribuicao, mesclarAtribuicao, origemAtualizada, toqueInferido, type Toque } from './atribuicao';
+import { agregarCampanhas, lerAtribuicao, mesclarAtribuicao, origemAtualizada, toqueInferido, type LinhaCampanha, type Toque } from './atribuicao';
+import { diaSP, somarDias } from './dashboard';
+
+const DIA = /^\d{4}-\d{2}-\d{2}$/;
+
+/** 'YYYY-MM-DD' ou 400; ausente → null (o padrão é decidido pelo chamador). */
+function validarDia(v: string | undefined): string | null {
+  if (v === undefined || v === '') return null;
+  if (!DIA.test(v)) throw new BadRequestException('data inválida: use YYYY-MM-DD');
+  return v;
+}
 
 interface AnuncioMeta { anuncio?: string; campanhaId?: string; campanha?: string; conjunto?: string; criativoId?: string; criativo?: string; criativoThumb?: string }
 
@@ -81,6 +91,24 @@ export class AtribuicaoService {
     }
     this.cache.set(chave, { em: Date.now(), v });
     return v;
+  }
+
+  /**
+   * Métricas por campanha (db/066 + db/080): contatos NOVOS no período
+   * agrupados por fonte × campanha, com o recorte de confiança separado.
+   * Padrão: últimos 30 dias terminando hoje (America/Sao_Paulo, como o dashboard).
+   */
+  async campanhas(tenantId: string, de?: string, ate?: string) {
+    const ateDia = validarDia(ate) ?? diaSP(new Date());
+    const deDia = validarDia(de) ?? somarDias(ateDia, -29);
+    if (deDia > ateDia) throw new BadRequestException('período inválido: "de" depois de "ate"');
+    const rows = await this.prisma.withTenant(tenantId, (tx) => tx.$queryRaw<LinhaCampanha[]>`
+      SELECT atribuicao->>'fonte' AS fonte, atribuicao->>'campanha' AS campanha, atribuicao->>'confianca' AS confianca, count(*)::int AS total
+      FROM contacts
+      WHERE created_at >= ${deDia}::date AND created_at < (${ateDia}::date + 1)
+      GROUP BY 1, 2, 3`);
+    const campanhas = agregarCampanhas(rows);
+    return { de: deDia, ate: ateDia, total: campanhas.reduce((s, c) => s + c.total, 0), campanhas };
   }
 
   /**

@@ -13,6 +13,8 @@ import type { MidiaSaida } from './provider.contract';
 import { CanaisService } from './canais/canais.service';
 import { horaCurta } from '../../common/hora';
 import { ehPedidoDeOptOut } from '../../common/optout';
+import { AtribuicaoService } from '../atribuicao.service';
+import { casarLink, toqueDeLink, type LinkParaMatch } from '../links-rastreados';
 
 /**
  * Autoria do envio. `humano` com `identityId` = alguém digitou no Inbox (e por
@@ -40,6 +42,12 @@ export interface InboundInput {
   fromName?: string;
   text: string;
   providerMessageId: string;
+  /**
+   * A mensagem veio com referral de anúncio (CTWA): a atribuição quem grava é
+   * o caller (toqueDeReferralWhatsApp) e o casamento de link rastreado (db/080)
+   * NÃO roda — o anúncio é evidência mais forte que o texto.
+   */
+  referral?: boolean;
 }
 
 @Injectable()
@@ -54,8 +62,9 @@ export class MessagesService {
     private readonly eventos: DomainEventsService,
     private readonly atendimento: AtendimentoService,
     private readonly stevoApi: StevoApiProvider,
-    // Opcional só para os testes antigos que montam o serviço à mão; no Nest sempre existe.
+    // Opcionais só para os testes antigos que montam o serviço à mão; no Nest sempre existem.
     @Optional() private readonly canais?: CanaisService,
+    @Optional() private readonly atribuicao?: AtribuicaoService,
   ) {}
 
   /** Implementação por nome (o nome é decidido POR TENANT dentro da transação). */
@@ -207,6 +216,12 @@ export class MessagesService {
   /** Recebe mensagem de entrada (webhook STEVO): dedup + acha/cria contato+conversa. */
   async receiveInbound(input: InboundInput) {
     const r = await this.entrada(input);
+    // Lead novo cuja 1ª mensagem casa com um link rastreado (db/080): a origem
+    // é gravada ANTES do contact.created, para quem consome o evento já ler a
+    // atribuição. `registrar` nunca lança — a entrada nunca falha por isso.
+    if (!r.deduped && r.contatoNovo && r.link) {
+      await this.atribuicao?.registrar(input.tenantId, r.contactId!, toqueDeLink(r.link));
+    }
     // Mensagem que chega é o evento mais sensível a atraso do inbox: publica assim
     // que o commit passou. Evento duplicado não é emitido — o dedupe sai antes.
     if (!r.deduped && r.conversationId) {
@@ -273,6 +288,17 @@ export class MessagesService {
         // nula e o outbox (db/050, que lê `contacts.origem`) publicava "Manual".
         contact = await tx.contact.create({ data: { tenantId: input.tenantId, nome: input.fromName || input.fromNumber, telefone: input.fromNumber, tag: 'Lead', origem: 'WhatsApp', ultimoContatoAt: new Date() } });
       }
+      // Link rastreado (db/080): só para CONTATO NOVO sem referral — 1 query
+      // extra nesse caso, zero para contato existente. O `?.` protege os specs
+      // antigos, cujo tx falso não tem `linkRastreado`.
+      let link: LinkParaMatch | null = null;
+      if (contatoNovo && this.atribuicao && !input.referral) {
+        const ativos = ((await tx.linkRastreado?.findMany({
+          where: { ativo: true },
+          select: { codigo: true, campanha: true, fonte: true, conjunto: true, criativo: true, textoInicial: true },
+        })) ?? []) as LinkParaMatch[];
+        link = casarLink(ativos, input.text);
+      }
       await tx.$queryRaw`SELECT id FROM contacts WHERE id=${contact.id}::uuid FOR UPDATE`;
       const optout=ehPedidoDeOptOut(input.text);
       await tx.contact.update({where:{id:contact.id,tenantId:input.tenantId},data:{lastInboundAt:new Date(),...(optout?{optedOutAt:new Date()}: {})}});
@@ -297,6 +323,7 @@ export class MessagesService {
         contatoNovo,
         contactId: contact.id,
         contactNome: contact.nome,
+        link,
       };
     });
   }

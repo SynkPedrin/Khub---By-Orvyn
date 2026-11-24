@@ -106,6 +106,9 @@ export class StevoApiEventosService {
       text: texto.slice(0, 4000),
       // id do WhatsApp quando houver; senão o event_id (único e estável em retries).
       providerMessageId: `stevo_api:${ev.messageId ?? ev.eventId}`,
+      // Com referral de anúncio (CTWA), a atribuição é do anúncio — o casamento
+      // de link rastreado (db/080) não roda nessa mensagem.
+      ...(ev.referral && (ev.referral.adId || ev.referral.cliqueId) ? { referral: true } : {}),
     });
     if ('conversationId' in r && r.conversationId) {
       // Depois da mensagem já estar na tela: foto do contato e mídia, sem atrasar o texto.

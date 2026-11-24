@@ -132,3 +132,47 @@ export function origemAtualizada(atual: string | null, nova: Atribuicao): string
   if (!atual) return ROTULO_FONTE[nova.fonte];
   return ROTULOS_GENERICOS.has(atual) && nova.confianca !== 'desconhecida' ? ROTULO_FONTE[nova.fonte] : undefined;
 }
+
+/* ------------------------------------------------------------------ */
+/* Métricas por campanha (db/066 + db/080)                             */
+/* ------------------------------------------------------------------ */
+
+export interface LinhaCampanha {
+  fonte: string | null;
+  campanha: string | null;
+  confianca: string | null;
+  total: number;
+}
+
+export interface MetricaCampanha {
+  fonte: string;
+  campanha: string | null;
+  total: number;
+  confirmada: number;
+  provavel: number;
+  desconhecida: number;
+}
+
+/**
+ * Agrega linhas do GROUP BY (fonte × campanha × confiança) em uma linha por
+ * fonte+campanha, com o recorte de confiança separado. Pura — o serviço só
+ * busca as linhas. Sem fonte gravada = 'desconhecida' (rótulo honesto).
+ * Ordenada por total desc, depois fonte e campanha (estável para a tela).
+ */
+export function agregarCampanhas(rows: LinhaCampanha[]): MetricaCampanha[] {
+  const porChave = new Map<string, MetricaCampanha>();
+  for (const r of rows) {
+    const fonte = r.fonte || 'desconhecida';
+    const chave = `${fonte}::${r.campanha ?? ''}`;
+    let m = porChave.get(chave);
+    if (!m) {
+      m = { fonte, campanha: r.campanha ?? null, total: 0, confirmada: 0, provavel: 0, desconhecida: 0 };
+      porChave.set(chave, m);
+    }
+    m.total += r.total;
+    if (r.confianca === 'confirmada') m.confirmada += r.total;
+    else if (r.confianca === 'provavel') m.provavel += r.total;
+    else m.desconhecida += r.total;
+  }
+  return [...porChave.values()].sort((a, b) => b.total - a.total || a.fonte.localeCompare(b.fonte) || (a.campanha ?? '').localeCompare(b.campanha ?? ''));
+}

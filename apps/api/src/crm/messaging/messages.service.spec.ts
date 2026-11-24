@@ -15,7 +15,7 @@ const TENANT = '11111111-1111-1111-1111-111111111111';
  * BUG-011 (evento não publicado) e BUG-012 (contato duplicado). A Agenda vai
  * usá-lo para confirmação e lembrete, então a rede vem antes.
  */
-function ambiente(opts: { contatos?: any[]; conversas?: any[]; dedupe?: boolean; agentePadrao?: string; stevoApi?: { externalBusinessId: string; status: string } } = {}) {
+function ambiente(opts: { contatos?: any[]; conversas?: any[]; dedupe?: boolean; agentePadrao?: string; stevoApi?: { externalBusinessId: string; status: string }; links?: any[] } = {}) {
   const contatos = opts.contatos ?? ((opts.conversas ?? [])
     .filter((c) => c.contactId && c.contact)
     .map((c) => ({ id: c.contactId, ...c.contact })));
@@ -76,6 +76,7 @@ function ambiente(opts: { contatos?: any[]; conversas?: any[]; dedupe?: boolean;
       return 1;
     }),
     integration: { findFirst: jest.fn(async ({ where }: any) => (where.provider === 'stevo_api' ? opts.stevoApi ?? null : null)) },
+    linkRastreado: { findMany: jest.fn(async () => opts.links ?? []) },
   };
 
   const prisma = { withTenant: jest.fn(async (_t: string, work: (tx: unknown) => Promise<unknown>) => work(tx)) } as unknown as PrismaService;
@@ -419,5 +420,73 @@ describe('MessagesService — mídia de saída (Q2.5)', () => {
       .send(TENANT, 'conv1', '📎 Imagem: foto.png', 'chave-midia-evo-00001', undefined, { tipo: 'humano' }, { tipo: 'imagem', mime: 'image/png', nome: 'foto.png', tamanho: 10, base64: 'iVBORw0K' });
     expect(r.status).toBe('sent');
     expect(sendMedia).toHaveBeenCalledWith(NUMERO_TESTE, expect.objectContaining({ base64: 'iVBORw0K' }), 'khub-t', 'chave-midia-evo-00001');
+  });
+});
+
+describe('MessagesService.receiveInbound — link rastreado de campanha (db/080)', () => {
+  const LINK = { codigo: 'botox-sp', campanha: 'Botox SP', fonte: 'google_ads', conjunto: null, criativo: null, textoInicial: 'Quero saber o preço da botox' };
+  const entrada = (text: string, extra: Record<string, unknown> = {}) => ({ tenantId: TENANT, fromNumber: '5511977776666', fromName: 'Lead Novo', text, providerMessageId: `wamid-${text.length}-${Object.keys(extra).length}`, ...extra });
+  const atribuicao = () => ({ registrar: jest.fn(async () => undefined) });
+
+  it('lead novo com match EXATO do texto inicial: atribuição confirmada com o código do link', async () => {
+    const a = ambiente({ links: [LINK] });
+    const at = atribuicao();
+    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi, undefined, at as never)
+      .receiveInbound(entrada('quero saber o preço da botox'));
+    expect(at.registrar).toHaveBeenCalledWith(TENANT, expect.any(String), expect.objectContaining({
+      fonte: 'google_ads', canal: 'WhatsApp', confianca: 'confirmada',
+      campanha: 'Botox SP', cliqueId: 'botox-sp', sinal: 'link_rastreado',
+    }));
+  });
+
+  it('match por PREFIXO (o lead completou a frase) também atribui', async () => {
+    const a = ambiente({ links: [LINK] });
+    const at = atribuicao();
+    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi, undefined, at as never)
+      .receiveInbound(entrada('Quero saber o preço da botox, sou a Maria'));
+    expect(at.registrar).toHaveBeenCalledWith(TENANT, expect.any(String), expect.objectContaining({ cliqueId: 'botox-sp' }));
+  });
+
+  it('lead novo SEM link casado: nenhuma atribuição é gravada', async () => {
+    const a = ambiente({ links: [LINK] });
+    const at = atribuicao();
+    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi, undefined, at as never)
+      .receiveInbound(entrada('oi, tudo bem?'));
+    expect(at.registrar).not.toHaveBeenCalled();
+  });
+
+  it('contato EXISTENTE não reatribui e não paga nem a query de links', async () => {
+    const a = ambiente({ contatos: [{ id: 'c1', nome: 'Marina', telefone: '+55 11 97777-6666' }], links: [LINK] });
+    const at = atribuicao();
+    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi, undefined, at as never)
+      .receiveInbound(entrada('Quero saber o preço da botox'));
+    expect(a.tx.linkRastreado.findMany).not.toHaveBeenCalled();
+    expect(at.registrar).not.toHaveBeenCalled();
+  });
+
+  it('mensagem com referral de anúncio (CTWA): o link não é consultado — o anúncio é evidência mais forte', async () => {
+    const a = ambiente({ links: [LINK] });
+    const at = atribuicao();
+    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi, undefined, at as never)
+      .receiveInbound(entrada('Quero saber o preço da botox', { referral: true }));
+    expect(a.tx.linkRastreado.findMany).not.toHaveBeenCalled();
+    expect(at.registrar).not.toHaveBeenCalled();
+  });
+
+  it('link inativo não casa (a query só pede ativos)', async () => {
+    const a = ambiente({ links: [] }); // a tabela tem o link, mas inativo: o banco nem devolve
+    const at = atribuicao();
+    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi, undefined, at as never)
+      .receiveInbound(entrada('Quero saber o preço da botox'));
+    expect(a.tx.linkRastreado.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { ativo: true } }));
+    expect(at.registrar).not.toHaveBeenCalled();
+  });
+
+  it('sem AtribuicaoService injetado (specs antigos): a entrada segue normal, sem query de links', async () => {
+    const a = ambiente({ links: [LINK] });
+    await new MessagesService(a.prisma, stevo(true), evolutionDesligada(), new ConfigService(), a.eventos, a.atendimento, a.stevoApi)
+      .receiveInbound(entrada('Quero saber o preço da botox'));
+    expect(a.tx.linkRastreado.findMany).not.toHaveBeenCalled();
+    expect(a.contatos).toHaveLength(1);
   });
 });

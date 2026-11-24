@@ -18,6 +18,7 @@ import { BrandLogo } from '@/components/brand/BrandLogo';
 import type { Campanha } from '@/lib/revenue/types';
 import { Tabs, TabPanel } from '@/components/kit';
 import { ListaDisparos } from '@/components/disparos/ListaDisparos';
+import { LinksRastreados } from '@/components/campanhas/LinksRastreados';
 import { AdsSimulador } from '@/components/app/AdsSimulador';
 
 /**
@@ -455,13 +456,15 @@ function PainelCampanha({ campanha }: { campanha: Campanha }) {
  * Marketing → Ads; esta seção é a vitrine do que já está rodando.
  */
 /**
- * Modo real: três abas. "Disparos" é o disparo em massa por segmento (Q4.3),
+ * Modo real: quatro abas. "Disparos" é o disparo em massa por segmento (Q4.3),
  * com aprovação, lotes, janela e opt-out; "Anúncios" mantém os dados da Meta
- * Ads; "Simulação" projeta a campanha antes de gastar (posts do Instagram,
- * biblioteca de anúncios, ROI em leads qualificados e relatório final).
+ * Ads; "Links rastreados" é o CRUD dos links wa.me por campanha (db/080) com
+ * as métricas de atribuição (db/066); "Simulação" projeta a campanha antes de
+ * gastar (posts do Instagram, biblioteca de anúncios, ROI em leads
+ * qualificados e relatório final).
  */
 function CampanhasReais() {
-  const [aba, setAba] = useState<'disparos' | 'anuncios' | 'simulacao'>('disparos');
+  const [aba, setAba] = useState<'disparos' | 'anuncios' | 'links' | 'simulacao'>('disparos');
   return (
     <div className="space-y-4">
       <Tabs
@@ -469,13 +472,16 @@ function CampanhasReais() {
         label="Tipo de campanha"
         value={aba}
         onChange={setAba}
-        items={[{ value: 'disparos', label: 'Disparos' }, { value: 'anuncios', label: 'Anúncios (Meta Ads)' }, { value: 'simulacao', label: 'Simulação de campanha' }]}
+        items={[{ value: 'disparos', label: 'Disparos' }, { value: 'anuncios', label: 'Anúncios (Meta Ads)' }, { value: 'links', label: 'Links rastreados' }, { value: 'simulacao', label: 'Simulação de campanha' }]}
       />
       <TabPanel idBase="campanhas-abas" value="disparos" active={aba === 'disparos'}>
         <ListaDisparos />
       </TabPanel>
       <TabPanel idBase="campanhas-abas" value="anuncios" active={aba === 'anuncios'}>
         <AnunciosReais />
+      </TabPanel>
+      <TabPanel idBase="campanhas-abas" value="links" active={aba === 'links'}>
+        <LinksRastreados />
       </TabPanel>
       <TabPanel idBase="campanhas-abas" value="simulacao" active={aba === 'simulacao'}>
         <AdsSimulador />

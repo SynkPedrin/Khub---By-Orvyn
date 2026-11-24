@@ -587,6 +587,27 @@ model LostReason {
   @@map("lost_reasons")
 }
 
+/// Link rastreado de WhatsApp por campanha (db/080): a 1ª mensagem de um
+/// contato NOVO que casa com `textoInicial` grava a atribuição (db/066) com
+/// sinal 'link_rastreado'. RLS tenant_rw. `updatedAt` é gerenciado em código.
+model LinkRastreado {
+  id           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  codigo       String
+  campanha     String
+  fonte        String
+  conjunto     String?
+  criativo     String?
+  textoInicial String   @map("texto_inicial")
+  ativo        Boolean  @default(true)
+  createdBy    String?  @map("created_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([tenantId, codigo], map: "uq_links_rastreados_codigo")
+  @@map("links_rastreados")
+}
+
 model Conversation {
   id           String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   tenantId     String    @map("tenant_id") @db.Uuid
