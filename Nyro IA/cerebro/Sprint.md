@@ -465,3 +465,4 @@ Conectar uma conta **real** exige `META_APP_ID/SECRET` + permissões `ads_read`/
 - 2026-11-23 (2): from_me chegava como `message.sent` (nao `message.received`) — deploy anterior nao tinha efeito. Corrigido: message.sent com from_me+texto → inbox como humano; dedupe por provider_id evita duplicar envios do proprio KHUB. jest 1745, deploy live.
 - selo 'Equipe · pelo WhatsApp' (idempotencyKey celular: + badge no front; backfill de 55 msgs) + auto-cura status instancia; deploys Render/Vercel live.
 - 2026-11-24: AGENDA-GRUPOS em produção (db/079 no Neon; Render+Vercel live; smoke E2E real no Studio: 201/409/lista/cancela; fixtures removidos).
+- 2026-11-24: LINKS RASTREADOS (db/080) em produção — origem confirmada por campanha p/ anúncios não-CTWA (Google Ads); aba em Campanhas + métricas fonte×campanha. E2E dev: CRUD+slug+aviso honesto+desativar+excluir.
