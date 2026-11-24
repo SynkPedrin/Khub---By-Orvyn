@@ -63,7 +63,15 @@ export function PainelNoMotor({ no, set, outrosFluxos }: {
     || ((t === 'controle.meta' || (t === 'controle.esperar_ate' && cfg.modo === 'evento')) && cfg.evento === 'etapa_mudou');
   const precisaForms = t === 'gatilho.formulario_enviado' || ((t === 'controle.meta' || t === 'controle.esperar_ate') && cfg.evento === 'formulario_enviado');
   const membros = useLista<Responsavel>(precisaMembros, motorApi.responsaveis);
-  const agentes = useLista<{ id: string; nome: string; status: string }>(t === 'acao.ativar_ia', () => agentesApi.listar().then((l) => l.filter((a) => a.status === 'ativo')));
+  // Todos os agentes da conta (menos arquivados), com o status à vista: antes só
+  // os ativos apareciam e um agente pausado simplesmente sumia da lista.
+  const agentes = useLista<{ id: string; nome: string; status: string; padrao: boolean; canais: string[] }>(
+    t === 'acao.ativar_ia',
+    () => agentesApi.listar().then((l) => l
+      .filter((a) => a.status !== 'arquivado')
+      .sort((a, b) => Number(b.status === 'ativo') - Number(a.status === 'ativo') || a.nome.localeCompare(b.nome))
+      .map((a) => ({ id: a.id, nome: a.nome, status: a.status, padrao: a.padrao, canais: a.canais }))),
+  );
   const etapas = useLista<{ id: string; nome: string }>(precisaEtapas, () => crm.pipeline().then((p: PipelineData) => p.stages.map((s) => ({ id: s.id, nome: s.nome }))));
   const forms = useLista<FormularioResumo>(precisaForms, motorApi.formularios);
   const camposContato = useLista<CampoDef>(['acao.atualizar_contato', 'gatilho.data_contato', 'controle.esperar_ate'].includes(t), () => customFields.list('contact').then((l) => l.filter((c) => !c.arquivado)));
@@ -365,19 +373,40 @@ export function PainelNoMotor({ no, set, outrosFluxos }: {
         </>
       );
 
-    case 'acao.ativar_ia':
+    case 'acao.ativar_ia': {
+      const escolhido = agentes.itens.find((a) => a.id === cfg.agentId);
+      const padrao = agentes.itens.find((a) => a.padrao && a.status === 'ativo');
+      const rotuloStatus = (st: string) => (st === 'ativo' ? '' : st === 'pausado' ? ' (pausado)' : st === 'rascunho' ? ' (rascunho, não publicado)' : ` (${st})`);
       return (
         <>
           <FalhaLista lista={agentes} oque="os agentes" />
-          <Field label="Agente">
+          <Field label="Agente" hint={agentes.carregando ? 'Carregando agentes…' : undefined}>
             <select className="input" value={cfg.agentId ?? ''} onChange={(e) => set({ agentId: e.target.value || undefined })}>
-              <option value="">Agente padrão do canal</option>
-              {agentes.itens.map((a) => <option key={a.id} value={a.id}>{a.nome}</option>)}
+              <option value="">{padrao ? `Agente padrão do canal (hoje: ${padrao.nome})` : 'Agente padrão do canal (nenhum ativo)'}</option>
+              {agentes.itens.map((a) => (
+                <option key={a.id} value={a.id}>{a.nome}{a.padrao ? ' · padrão' : ''}{rotuloStatus(a.status)}</option>
+              ))}
             </select>
           </Field>
-          <Aviso>Liga a IA na conversa do contato: a partir da próxima mensagem, quem responde é o agente. Se ele estiver pausado, o passo falha e cai na fila de erros.</Aviso>
+          {!agentes.carregando && !agentes.erro && agentes.itens.length === 0 && (
+            <Aviso tom="erro">Esta conta ainda não tem agente de IA. Crie um em <a href="/agentes" className="font-semibold underline">Agentes de IA</a>.</Aviso>
+          )}
+          {escolhido && escolhido.status !== 'ativo' && (
+            <Aviso tom="erro">
+              {escolhido.nome} está {escolhido.status === 'pausado' ? 'pausado' : 'sem versão ativa'}: enquanto não for ativado, este passo falha e vai para a fila de erros.{' '}
+              <a href={`/agentes/${escolhido.id}`} className="font-semibold underline">Abrir agente</a>
+            </Aviso>
+          )}
+          {escolhido && escolhido.status === 'ativo' && !escolhido.canais.includes('WhatsApp') && (
+            <Aviso tom="erro">{escolhido.nome} não atende WhatsApp: em conversa de WhatsApp este passo falha. Ligue o canal no agente.</Aviso>
+          )}
+          {!cfg.agentId && !padrao && !agentes.carregando && agentes.itens.length > 0 && (
+            <Aviso tom="erro">Não há agente padrão ativo. Escolha um agente acima ou marque um como padrão e ative em <a href="/agentes" className="font-semibold underline">Agentes de IA</a>.</Aviso>
+          )}
+          <Aviso>Liga a IA na conversa do contato: a partir da próxima mensagem, quem responde é o agente escolhido.</Aviso>
         </>
       );
+    }
 
     case 'acao.passar_humano':
       return (

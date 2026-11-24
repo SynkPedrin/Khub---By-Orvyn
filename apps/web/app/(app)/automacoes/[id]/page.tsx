@@ -830,7 +830,12 @@ function EditorInterno() {
   /** Liga o nó novo no que está selecionado ou, na falta, no último passo. */
   const ultimoNoId = (): string | undefined => (selecionado && passos.some((n) => n.id === selecionado) ? selecionado : passos[passos.length - 1]?.id);
   const pastas = Array.from(new Set(fluxos.map((f) => f.pasta).filter((p): p is string => !!p))).sort((a, b) => a.localeCompare(b));
-  const problemasGerais = problemas.filter((p) => !p.noId);
+  // Avisos gerais da última validação que o canvas já resolveu somem na hora
+  // (ex.: "precisa de pelo menos um gatilho" ficava na tela depois de pôr o gatilho).
+  const temPasso = passos.some((n) => n.data.categoria !== 'gatilho');
+  const problemasGerais = problemas.filter(
+    (p) => !p.noId && !(temGatilho && /pelo menos um gatilho/.test(p.problema)) && !(temPasso && /não faz nada/.test(p.problema)),
+  );
   const st = STATUS_FLUXO[status] ?? STATUS_FLUXO.rascunho;
 
   if (erroCarga) {
@@ -857,7 +862,7 @@ function EditorInterno() {
     // Ocupa a área de conteúdo (z entre a topbar e os menus/gavetas do kit).
     // No desktop a sidebar fica visível, recolhida no quadrado do KHUB
     // (76px + 12px de cada lado = 100px); no celular, tela cheia.
-    <div className="fixed inset-y-0 left-0 right-0 z-[45] flex flex-col bg-bg lg:left-[100px]">
+    <div className="editor-automacoes fixed inset-y-0 left-0 right-0 z-[45] flex flex-col bg-bg lg:left-[100px]">
       {/* Barra superior */}
       <header className="shrink-0 px-3 pt-3">
         <div className="glass crystal-edge flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl px-3 py-2">
@@ -1049,7 +1054,7 @@ function EditorInterno() {
               defaultEdgeOptions={{ type: 'khub' }}
               connectionLineStyle={{ stroke: 'var(--brand)', strokeWidth: 2 }}
             >
-              <Background gap={18} size={1.4} color="color-mix(in srgb, var(--brand) 22%, transparent)" />
+              <Background gap={20} size={1.6} color="color-mix(in srgb, var(--text) 16%, transparent)" />
               <Controls showInteractive={false} position="bottom-left" className="overflow-hidden !rounded-xl !border !border-line !shadow-sm" />
               <MiniMap
                 pannable
@@ -1090,6 +1095,7 @@ function EditorInterno() {
         {/* Painel do nó */}
         {noSelecionado && (
           <PainelNo
+            key={noSelecionado.no.id}
             no={noSelecionado.no}
             meta={noSelecionado.meta}
             onMudar={mudarConfig}

@@ -4,7 +4,7 @@ import { memo } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
 import { Icon, type IconName } from '@/components/icons';
 import type { EstatisticaNo, Ramo } from '@/lib/automations';
-import { SeloNo } from './marcas';
+import { SeloNo, acentoDoNo } from './marcas';
 
 export interface DadosNo {
   tipo: string;
@@ -76,12 +76,12 @@ export const ICONE: Record<string, IconName> = {
   'acao.atualizar_negocio': 'briefcase',
 };
 
-// v2 "Signal + Intelligence": gatilho = lime (sinal/evento), controle e
-// ações comuns = neutros, ação de IA = violeta (inteligência). Só acento.
-export const ACENTO: Record<string, string> = { gatilho: 'var(--lime-500)', controle: 'var(--fg-3)', acao: 'var(--fg-3)' };
-const ACOES_IA = new Set(['acao.ia', 'acao.ativar_ia']);
+// Acento por CATEGORIA (títulos da paleta e da lista). No tema claro o lime
+// some no branco, então o gatilho usa a cor da marca do tema (violeta no
+// claro, lime no escuro). O acento de cada NÓ vem da família (marcas.tsx).
+export const ACENTO: Record<string, string> = { gatilho: 'var(--brand)', controle: 'var(--fg-2)', acao: 'var(--fg-2)' };
 
-const HANDLE = '!h-2.5 !w-2.5 !border-2 !border-surface !bg-brand';
+const HANDLE = 'alca-no';
 
 /** Resumo que ainda pede configuração ("defina a tag", "escolha a etapa"…). */
 const PEDE_CONFIG = /^(defina|escolha|escreva|configure|informe)\b/i;
@@ -91,40 +91,46 @@ const PEDE_CONFIG = /^(defina|escolha|escreva|configure|informe)\b/i;
  * do GHL: entrada à esquerda, saída à direita. Gatilho não recebe conexão;
  * nó ramificado tem uma saída por ramo, empilhadas na lateral direita, na
  * ordem em que os ramos foram declarados (a de cima é o primeiro ramo).
+ *
+ * Visual (estilos em globals.css › "Editor de automações"): cartão com borda
+ * marcada nos dois temas, faixa no topo na cor da família do passo, entrada
+ * animada, elevação no hover e anel na seleção. Tudo respeita
+ * `prefers-reduced-motion`.
  */
 export const NoCanvas = memo(({ data, selected }: NodeProps<DadosNo>) => {
   const ehGatilho = data.categoria === 'gatilho';
   const ramos = data.ramos ?? [];
-  const acento = ACOES_IA.has(data.tipo ?? '') ? 'var(--violet-400)' : (ACENTO[data.categoria] ?? 'var(--fg-3)');
+  const acento = acentoDoNo(data.tipo ?? '');
   const s = data.stats;
 
   const categoria = data.categoria === 'gatilho' ? 'Quando' : data.categoria === 'controle' ? 'Fluxo' : 'Faz';
   const oQueFaz = data.resumo || data.descricao || '';
   const incompleto = !data.problema && PEDE_CONFIG.test(data.resumo);
+  const estado = data.problema ? 'erro' : selected ? 'selecionado' : incompleto ? 'incompleto' : 'ok';
+  // O último rodapé do cartão arredonda os cantos de baixo (o cartão não corta
+  // o conteúdo porque as alças de conexão ficam para fora da borda).
+  const ultimo = ramos.length ? 'ramos' : s ? 'stats' : incompleto ? 'incompleto' : data.problema ? 'problema' : null;
+  const fim = (k: string) => (ultimo === k ? ' no-automacao-ultimo' : '');
 
   return (
     <div
-      className="w-60 rounded-[18px] border bg-surface transition-shadow"
+      className="no-automacao w-64"
+      data-estado={estado}
+      data-categoria={data.categoria}
       title={data.descricao}
-      style={{
-        borderColor: data.problema ? 'var(--danger)' : selected ? 'var(--brand)' : incompleto ? 'var(--warning-border)' : 'var(--border)',
-        boxShadow: data.problema
-          ? '0 0 0 1px var(--danger), 0 8px 26px -12px color-mix(in srgb, var(--danger) 50%, transparent)'
-          : selected
-            ? '0 0 0 1px var(--brand), 0 12px 32px -12px color-mix(in srgb, var(--brand) 45%, transparent)'
-            : 'var(--sh-sm)',
-      }}
+      style={{ ['--acento' as string]: acento }}
     >
+      <span className="no-automacao-faixa" aria-hidden />
       {!ehGatilho && <Handle type="target" position={Position.Left} className={HANDLE} />}
 
-      <div className="flex items-start gap-3 p-3">
-        <SeloNo tipo={data.tipo} config={data.config} icone={ICONE[data.tipo] ?? 'sparkles'} acento={acento} tamanho={38} />
+      <div className="flex items-start gap-3 p-3 pt-3.5">
+        <SeloNo tipo={data.tipo} config={data.config} tamanho={40} />
         <div className="min-w-0 flex-1">
-          <span className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wider text-faint">
-            <span className="h-1.5 w-1.5 rounded-full" style={{ background: acento }} aria-hidden />
+          <span className="no-automacao-categoria">
+            <span className={ehGatilho ? 'no-automacao-pulso' : 'no-automacao-ponto'} aria-hidden />
             {categoria}
           </span>
-          <p className="truncate text-sm font-semibold leading-tight text-fg">{data.nome}</p>
+          <p className="mt-0.5 truncate text-sm font-semibold leading-tight text-fg">{data.nome}</p>
           {oQueFaz && (
             <p className={`mt-1 line-clamp-2 text-2xs leading-snug ${data.resumo ? 'text-muted' : 'text-faint'}`}>{oQueFaz}</p>
           )}
@@ -132,18 +138,18 @@ export const NoCanvas = memo(({ data, selected }: NodeProps<DadosNo>) => {
       </div>
 
       {data.problema && (
-        <p className="border-t border-danger-border bg-danger-soft px-3 py-1.5 text-2xs font-medium text-danger">
-          {data.problema}
+        <p className={`flex items-start gap-1.5 border-t border-danger-border bg-danger-soft px-3 py-1.5 text-2xs font-medium text-danger${fim('problema')}`}>
+          <Icon name="alert" size={12} className="mt-px shrink-0" /> {data.problema}
         </p>
       )}
       {incompleto && (
-        <p className="flex items-center gap-1.5 border-t border-warning-border bg-warning-soft px-3 py-1.5 text-2xs font-medium text-warning">
+        <p className={`flex items-center gap-1.5 border-t border-warning-border bg-warning-soft px-3 py-1.5 text-2xs font-semibold text-warning${fim('incompleto')}`}>
           <Icon name="alert" size={12} /> Falta configurar: clique para abrir
         </p>
       )}
 
       {s && (
-        <div className="flex items-center gap-3 border-t border-line px-3 py-1.5 text-2xs tabular" aria-label={`${s.concluidos} concluídos, ${s.esperando} esperando, ${s.erros} com erro`}>
+        <div className={`flex items-center gap-3 border-t border-line px-3 py-1.5 text-2xs tabular${fim('stats')}`} aria-label={`${s.concluidos} concluídos, ${s.esperando} esperando, ${s.erros} com erro`}>
           <span className="inline-flex items-center gap-1 text-success" title="Passaram por aqui com sucesso no período">
             <Icon name="check" size={12} /> {s.concluidos}
           </span>
@@ -158,7 +164,7 @@ export const NoCanvas = memo(({ data, selected }: NodeProps<DadosNo>) => {
 
       {/* Nó ramificado: uma saída por ramo, rotulada, empilhada na lateral direita */}
       {ramos.length > 0 ? (
-        <div className="divide-y divide-line border-t border-line">
+        <div className={`divide-y divide-line border-t border-line${fim('ramos')}`}>
           {ramos.map((r, i) => (
             <div key={r.id} className="relative flex items-center justify-end gap-1.5 py-1.5 pl-3 pr-4 text-2xs">
               <span className="min-w-0 truncate font-medium text-fg">{r.rotulo || `Ramo ${i + 1}`}</span>

@@ -22,11 +22,12 @@ export const ArestaInserir = memo(function ArestaInserir({
         id={id}
         path={caminho}
         markerEnd={markerEnd}
-        style={{
-          stroke: selected ? 'var(--brand)' : 'color-mix(in srgb, var(--brand) 55%, var(--border))',
-          strokeWidth: selected ? 2.4 : 1.8,
-        }}
+        style={{ strokeWidth: selected ? 2.6 : 2, stroke: selected ? 'var(--brand)' : undefined }}
       />
+      {/* Fluxo animado por cima da linha: tracejado correndo + pulso de luz
+          viajando da saída para a entrada (globals.css › Editor de automações). */}
+      <path d={caminho} className="aresta-fluxo" fill="none" aria-hidden />
+      <circle r={3.2} className="aresta-pulso" style={{ offsetPath: `path('${caminho}')` }} aria-hidden />
       {!somenteLeitura && (
         <EdgeLabelRenderer>
           <div

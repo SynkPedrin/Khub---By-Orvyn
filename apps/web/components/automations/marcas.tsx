@@ -1,21 +1,16 @@
-import { Icon, type IconName } from '@/components/icons';
+import type { IconName } from '@/components/icons';
 import { cx } from '@/components/ui';
+import { COR_FAMILIA, SimboloNo, familiaDoTipo } from './IconeNo';
 
 /**
- * Logo real de cada nó de automação: o canal ou o sistema que faz o passo.
- * Um lugar só, usado no canvas, na paleta, na lista e no modo simples.
- *
- * - WhatsApp: tudo que fala com o contato ou a equipe pelo WhatsApp.
- * - Instagram / Meta / TikTok / Google: quando a config diz o canal ou a origem.
- * - NICO: o nó de IA.
- * - KHUB: o que acontece dentro do CRM (tag, oportunidade, tarefa, nota…).
- * Sem marca (esperar, condição, agenda): fica o ícone.
+ * Selo de cada nó de automação: a logo PRÓPRIA do passo (símbolo desenhado
+ * sobre o bloco da cor da família, ver IconeNo.tsx) e, quando o passo usa um
+ * canal ou sistema externo, o selinho da marca no canto (WhatsApp, Instagram,
+ * Meta, TikTok, Google, NICO). Um lugar só: canvas, paleta, lista, modo simples.
  */
 export interface Marca {
   src: string;
   nome: string;
-  /** A logo é branca (KHUB): precisa de fundo escuro para aparecer no tema claro. */
-  escura?: boolean;
 }
 
 const WHATSAPP: Marca = { src: '/logos/whatsapp.webp', nome: 'WhatsApp' };
@@ -24,14 +19,6 @@ const META: Marca = { src: '/logos/meta.webp', nome: 'Meta' };
 const TIKTOK: Marca = { src: '/logos/tiktok.webp', nome: 'TikTok' };
 const GOOGLE: Marca = { src: '/logos/google-ads.webp', nome: 'Google' };
 const NICO: Marca = { src: '/nico-avatar.png', nome: 'NICO' };
-const KHUB: Marca = { src: '/khub-mark.png', nome: 'KHUB CRM', escura: true };
-
-const DO_CRM = new Set([
-  'gatilho.contato_criado', 'gatilho.tag_adicionada', 'gatilho.negocio_criado', 'gatilho.etapa_mudou', 'gatilho.negocio_status',
-  'acao.adicionar_tag', 'acao.remover_tag', 'acao.atualizar_contato', 'acao.atribuir_usuario', 'acao.ativar_ia', 'acao.passar_humano', 'acao.nao_perturbe',
-  'acao.criar_oportunidade', 'acao.mover_etapa', 'acao.atualizar_negocio', 'acao.criar_tarefa', 'acao.criar_nota',
-  'acao.chamar_workflow', 'acao.remover_de_fluxo',
-]);
 
 function porOrigem(origem: unknown): Marca | null {
   const o = String(origem ?? '').toLowerCase();
@@ -44,6 +31,7 @@ function porOrigem(origem: unknown): Marca | null {
   return null;
 }
 
+/** Canal/sistema externo do passo (vira o selinho no canto da logo). */
 export function marcaDoNo(tipo: string, config: Record<string, unknown> = {}): Marca | null {
   switch (tipo) {
     case 'acao.enviar_sms':
@@ -55,54 +43,57 @@ export function marcaDoNo(tipo: string, config: Record<string, unknown> = {}): M
     case 'gatilho.mensagem_recebida':
       return porOrigem(config.canal) ?? WHATSAPP;
     case 'gatilho.contato_criado':
-      return porOrigem(config.origem) ?? KHUB;
+      return porOrigem(config.origem);
     case 'acao.ia':
       return NICO;
     default:
-      return DO_CRM.has(tipo) ? KHUB : null;
+      return null;
   }
 }
 
+/** Cor de acento do nó (faixa do topo, ponto da categoria, alças): a da família. */
+export function acentoDoNo(tipo: string): string {
+  return COR_FAMILIA[familiaDoTipo(tipo)].base;
+}
+
 /**
- * Quadradinho do nó: a logo real quando existe, senão o ícone na cor da
- * categoria. `tamanho` em px (o canvas usa 36, a lista 22).
+ * Quadradinho do nó. `tamanho` em px (canvas 40, paleta 30, lista 22–26).
+ * `icone`/`acento` ficam aceitos por compatibilidade com quem já chama.
  */
-export function SeloNo({ tipo, config, icone, acento, tamanho = 36, className }: {
+export function SeloNo({ tipo, config, tamanho = 36, className }: {
   tipo: string;
   config?: Record<string, unknown>;
-  icone: IconName;
-  acento: string;
+  icone?: IconName;
+  acento?: string;
   tamanho?: number;
   className?: string;
 }) {
+  const fam = COR_FAMILIA[familiaDoTipo(tipo)];
   const marca = marcaDoNo(tipo, config);
   const raio = Math.round(tamanho * 0.3);
-  if (marca) {
-    return (
-      <span
-        className={cx('grid shrink-0 place-items-center overflow-hidden', className)}
-        style={{
-          width: tamanho, height: tamanho, borderRadius: raio,
-          background: marca.escura ? '#0b0b0f' : 'var(--base-0)',
-          boxShadow: 'inset 0 0 0 1px var(--border)',
-        }}
-        title={marca.nome}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={marca.src} alt={marca.nome} className="object-contain" style={{ width: tamanho * 0.66, height: tamanho * 0.66 }} draggable={false} />
-      </span>
-    );
-  }
+  const selo = Math.max(12, Math.round(tamanho * 0.42));
   return (
-    <span
-      className={cx('grid shrink-0 place-items-center', className)}
-      style={{
-        width: tamanho, height: tamanho, borderRadius: raio, color: acento,
-        background: `color-mix(in srgb, ${acento} 14%, transparent)`,
-        boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${acento} 30%, transparent)`,
-      }}
-    >
-      <Icon name={icone} size={Math.round(tamanho * 0.45)} />
+    <span className={cx('selo-no relative inline-grid shrink-0', className)} style={{ width: tamanho, height: tamanho }} title={marca ? `${fam.nome} · ${marca.nome}` : fam.nome}>
+      <span
+        className="grid h-full w-full place-items-center"
+        style={{
+          borderRadius: raio,
+          background: `linear-gradient(145deg, ${fam.claro} -20%, ${fam.base} 62%)`,
+          boxShadow: `inset 0 1px 0 rgba(255,255,255,.28), inset 0 0 0 1px color-mix(in srgb, ${fam.base} 70%, #000), 0 2px 6px -2px color-mix(in srgb, ${fam.base} 60%, transparent)`,
+        }}
+      >
+        <SimboloNo tipo={tipo} tamanho={Math.round(tamanho * 0.56)} cor="#ffffff" />
+      </span>
+      {marca && (
+        <span
+          className="absolute grid place-items-center overflow-hidden rounded-full bg-white"
+          style={{ width: selo, height: selo, right: -selo * 0.28, bottom: -selo * 0.28, boxShadow: '0 0 0 2px var(--surface, #fff), 0 1px 3px rgba(0,0,0,.25)' }}
+          aria-hidden
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={marca.src} alt="" className="object-contain" style={{ width: selo * 0.78, height: selo * 0.78 }} draggable={false} />
+        </span>
+      )}
     </span>
   );
 }

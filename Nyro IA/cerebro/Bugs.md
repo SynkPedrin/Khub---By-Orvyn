@@ -9,6 +9,15 @@ Status: `aberto` · `em correção` · `corrigido` · `não reproduz`.
 
 ## Abertos
 
+### BUG-051 — Nó "Ativar IA na conversa" não mostrava os agentes da conta (S2) — corrigido 2026-11-24
+- **Reprodução:** editor de automações › Ativar IA na conversa › Agente: só aparecia "Agente padrão do canal". A Ritinha (pausada, não padrão) sumia da lista.
+- **Causa raiz:** o painel filtrava `status === 'ativo'` antes de listar. Com o único agente pausado, a lista ficava vazia e o fluxo falhava em produção sem aviso (o backend exige agente ativo, e o "padrão" exige um agente padrão ativo).
+- **Correção:** `PainelNoMotor.tsx` lista todos os agentes não arquivados com status e marca de padrão; o "padrão" mostra qual agente é hoje (ou "nenhum ativo"); aviso vermelho quando o escolhido está pausado, sem versão ativa ou sem WhatsApp, com link para o agente.
+
+### BUG-052 — Aviso "o fluxo precisa de pelo menos um gatilho" ficava na tela com o gatilho já no canvas (S3) — corrigido 2026-11-24
+- **Causa raiz:** os avisos gerais da última validação ficavam guardados até a próxima validação.
+- **Correção:** a página do editor esconde na hora os avisos gerais que o canvas já resolveu (tem gatilho / tem passo).
+
 ### BUG-050 — Ritinha marcava em cima de horário já ocupado no Avec (S1) — corrigido 2026-11-19 (ADR-0052, db/077)
 - **Reprodução (17/11, 14:12–19:07):** a IA fez 21 reservas pelo WhatsApp; conferidas contra a agenda AO VIVO do Avec em 19/11: 15 caíam em cima de atendimento ou bloqueio, 2 eram de clientes que já tinham horário em outro momento no Avec, 3 estavam livres mas não foram lançadas no Avec e 1 a equipe já tinha lançado.
 - **Causa raiz:** a IA só enxergava a agenda do KHUB, uma cópia da exportação do Avec de 14/11 e 18/11. A equipe continuou marcando no Avec (é o sistema do salão), então o KHUB não via nada novo. O expediente era deduzido do histórico, e bloqueios e folgas do Avec não existiam no KHUB.

@@ -5,6 +5,7 @@ import { Button, Field, Input } from '@/components/ui';
 import { Icon } from '@/components/icons';
 import { OPERADORES, type MetaNo, type NoGrafo, type Ramo } from '@/lib/automations';
 import { crm, type Contato, type PipelineData } from '@/lib/crm';
+import { settingsApi } from '@/lib/settings';
 import { FiltroGatilhoAgenda, ehGatilhoAgenda } from '@/components/agenda/FiltroGatilhoAgenda';
 import { PainelNoMotor, TIPOS_MOTOR, useCamposCondicao } from './PainelNoMotor';
 
@@ -21,10 +22,32 @@ interface Props {
 
 const rid = () => Math.random().toString(36).slice(2, 9);
 
+/**
+ * Origens que o rastreio de leads grava no contato (apps/api/src/crm/atribuicao.ts
+ * › ROTULO_FONTE): referral de anúncio Meta (CTWA), Lead Ads, links rastreados,
+ * UTM do Google. O gatilho compara sem acento/caixa/hífen.
+ */
+const ORIGENS_LEAD = ['Meta Ads', 'Google Ads', 'TikTok Ads', 'Instagram direto', 'Messenger direto', 'WhatsApp direto', 'Formulário', 'Indicação', 'Importação', 'Cadastro manual'];
+const TIPOS_COM_TAG = new Set(['gatilho.tag_adicionada', 'acao.adicionar_tag', 'acao.remover_tag']);
+
+/** Tags que já existem na conta, para sugerir no campo (digitar uma nova continua valendo). */
+function SugestoesTag({ id, ativo }: { id: string; ativo: boolean }) {
+  const [tags, setTags] = useState<string[]>([]);
+  useEffect(() => {
+    if (!ativo) return;
+    let vivo = true;
+    settingsApi.tags().then((l) => vivo && setTags(l.sort((a, b) => b.usos - a.usos).map((t) => t.name))).catch(() => vivo && setTags([]));
+    return () => { vivo = false; };
+  }, [ativo]);
+  return <datalist id={id}>{tags.map((t) => <option key={t} value={t} />)}</datalist>;
+}
+
 /** Configura o nó selecionado. Cada tipo mostra só o que faz sentido para ele. */
 export function PainelNo({ no, meta, onMudar, onExcluir, onFechar, outrosNos, outrosFluxos = [] }: Props) {
   const [stages, setStages] = useState<{ id: string; nome: string }[]>([]);
   const cfg = no.config as Record<string, any>;
+  // Origem fora da lista (gravada antes ou digitada) abre o campo livre.
+  const [origemOutra, setOrigemOutra] = useState(() => !!cfg.origem && !ORIGENS_LEAD.includes(String(cfg.origem)));
 
   useEffect(() => {
     if (['acao.criar_oportunidade', 'acao.mover_etapa', 'gatilho.etapa_mudou', 'gatilho.negocio_criado'].includes(no.tipo)) {
@@ -45,15 +68,35 @@ export function PainelNo({ no, meta, onMudar, onExcluir, onFechar, outrosNos, ou
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4 scrollbar-thin">
+        <SugestoesTag id="sugestoes-tag" ativo={TIPOS_COM_TAG.has(no.tipo)} />
         <Field label="Rótulo no canvas">
           <Input value={no.rotulo ?? ''} onChange={(e) => onMudar(cfg, { rotulo: e.target.value })} placeholder={meta.nome} />
         </Field>
 
         {/* ---------------- Gatilhos ---------------- */}
         {no.tipo === 'gatilho.contato_criado' && (
-          <Field label="Só quando a origem for" hint="Vazio = qualquer origem.">
-            <Input value={cfg.origem ?? ''} onChange={(e) => set({ origem: e.target.value || undefined })} placeholder="Meta Lead Ads, WhatsApp…" />
-          </Field>
+          <>
+            <Field label="Só quando a origem for" hint="Vazio = qualquer origem. A origem vem do rastreio de leads: anúncio Meta (clique para WhatsApp e Lead Ads), links rastreados e UTM do Google.">
+              <select
+                className="input"
+                value={origemOutra ? '__outra' : (cfg.origem ?? '')}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setOrigemOutra(v === '__outra');
+                  if (v !== '__outra') set({ origem: v || undefined });
+                }}
+              >
+                <option value="">Qualquer origem</option>
+                {ORIGENS_LEAD.map((o) => <option key={o} value={o}>{o}</option>)}
+                <option value="__outra">Outra (digitar)…</option>
+              </select>
+            </Field>
+            {origemOutra && (
+              <Field label="Origem personalizada">
+                <Input value={cfg.origem ?? ''} onChange={(e) => set({ origem: e.target.value || undefined })} placeholder="Ex.: Feira de noivas" autoFocus />
+              </Field>
+            )}
+          </>
         )}
         {no.tipo === 'gatilho.etapa_mudou' && (
           <Field label="Etapa de destino" hint="Vazio = qualquer etapa.">
@@ -69,8 +112,8 @@ export function PainelNo({ no, meta, onMudar, onExcluir, onFechar, outrosNos, ou
           </Field>
         )}
         {no.tipo === 'gatilho.tag_adicionada' && (
-          <Field label="Tag">
-            <Input value={cfg.tag ?? ''} onChange={(e) => set({ tag: e.target.value })} placeholder="metaads" />
+          <Field label="Tag" hint="Escolha uma tag da conta ou digite uma nova.">
+            <Input list="sugestoes-tag" value={cfg.tag ?? ''} onChange={(e) => set({ tag: e.target.value })} placeholder="Ex.: metaads" />
           </Field>
         )}
 
@@ -213,7 +256,7 @@ export function PainelNo({ no, meta, onMudar, onExcluir, onFechar, outrosNos, ou
           </>
         )}
         {(no.tipo === 'acao.adicionar_tag' || no.tipo === 'acao.remover_tag') && (
-          <Field label="Tag"><Input value={cfg.tag ?? ''} onChange={(e) => set({ tag: e.target.value })} placeholder="cliente-vip" /></Field>
+          <Field label="Tag" hint="Escolha uma tag da conta ou digite uma nova."><Input list="sugestoes-tag" value={cfg.tag ?? ''} onChange={(e) => set({ tag: e.target.value })} placeholder="Ex.: cliente-vip" /></Field>
         )}
         {/* Q3.1/Q3.2: nós e gatilhos novos (e o "Atualizar contato" com campos personalizados e tags) */}
         {TIPOS_MOTOR.has(no.tipo) && <PainelNoMotor no={no} set={set} outrosFluxos={outrosFluxos} />}

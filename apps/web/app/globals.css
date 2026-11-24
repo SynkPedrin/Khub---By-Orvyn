@@ -2956,3 +2956,171 @@ a {
   background-repeat: no-repeat;
   background-size: cover;
 }
+
+/* =====================================================================
+   Editor de automações — canvas, nós, conexões e paleta.
+   Borda marcada nos dois temas (o tema claro antes sumia no branco), faixa
+   na cor da família do passo, entrada animada, fluxo correndo nas conexões.
+   Tudo para com prefers-reduced-motion.
+   ===================================================================== */
+.no-automacao {
+  position: relative;
+  border-radius: 18px;
+  background: var(--surface);
+  border: 1.5px solid color-mix(in srgb, var(--text) 17%, transparent);
+  box-shadow: 0 1px 2px rgba(12, 12, 20, 0.06), 0 8px 22px -12px rgba(12, 12, 20, 0.32);
+  transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.18s ease, border-color 0.18s ease;
+  animation: no-automacao-entra 0.34s cubic-bezier(0.2, 0.9, 0.25, 1.12) backwards;
+}
+.no-automacao:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--acento) 55%, color-mix(in srgb, var(--text) 25%, transparent));
+  box-shadow: 0 2px 4px rgba(12, 12, 20, 0.06), 0 16px 32px -14px color-mix(in srgb, var(--acento) 45%, rgba(12, 12, 20, 0.4));
+}
+.no-automacao[data-estado='selecionado'] {
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3.5px color-mix(in srgb, var(--acento) 24%, transparent), 0 18px 36px -16px color-mix(in srgb, var(--acento) 55%, transparent);
+}
+.no-automacao[data-estado='incompleto'] { border-color: color-mix(in srgb, var(--warning) 70%, transparent); }
+.no-automacao[data-estado='erro'] {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 18%, transparent), 0 10px 26px -14px color-mix(in srgb, var(--danger) 50%, transparent);
+}
+.no-automacao .no-automacao-ultimo { border-bottom-left-radius: 16.5px; border-bottom-right-radius: 16.5px; }
+
+.no-automacao-faixa {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  border-radius: 16.5px 16.5px 0 0;
+  background: linear-gradient(90deg, var(--acento), color-mix(in srgb, var(--acento) 25%, transparent));
+}
+.no-automacao-categoria {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--acento) 72%, var(--text));
+}
+.no-automacao-ponto,
+.no-automacao-pulso {
+  position: relative;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--acento);
+}
+/* Gatilho: ponto "ao vivo" pulsando (é por aqui que o fluxo começa). */
+.no-automacao-pulso::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--acento);
+  animation: no-automacao-pulso 1.8s ease-out infinite;
+}
+
+/* Alças de conexão: maiores, na cor da família, crescem no hover. */
+.react-flow .react-flow__handle.alca-no {
+  width: 13px;
+  height: 13px;
+  background: var(--surface);
+  border: 2.5px solid var(--acento, var(--brand));
+  transition: scale 0.15s ease, background-color 0.15s ease;
+}
+.react-flow .react-flow__handle.alca-no:hover,
+.react-flow .react-flow__handle.alca-no.connectingfrom,
+.react-flow .react-flow__handle.alca-no.valid {
+  scale: 1.35;
+  background: var(--acento, var(--brand));
+}
+
+/* Conexões: linha base nítida + fluxo animado por cima. */
+.editor-automacoes .react-flow__edge:not(.selected) .react-flow__edge-path {
+  stroke: color-mix(in srgb, var(--brand) 45%, color-mix(in srgb, var(--text) 30%, transparent));
+}
+.aresta-fluxo {
+  stroke: var(--brand);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 3 15;
+  opacity: 0.85;
+  pointer-events: none;
+  animation: aresta-corre 1s linear infinite;
+}
+.react-flow__edge.selected .aresta-fluxo { stroke-width: 2.6; opacity: 1; animation-duration: 0.6s; }
+.aresta-pulso {
+  fill: var(--brand);
+  filter: drop-shadow(0 0 4px var(--brand));
+  pointer-events: none;
+  offset-rotate: 0deg;
+  animation: aresta-viaja 2.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+/* Paleta: itens com borda definida e elevação no hover. */
+.item-paleta {
+  border: 1.5px solid color-mix(in srgb, var(--text) 11%, transparent);
+  background: var(--surface);
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.item-paleta:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--brand) 55%, transparent);
+  box-shadow: 0 8px 18px -12px color-mix(in srgb, var(--brand) 60%, transparent);
+}
+
+/* Moldura do editor no tema claro: painéis e controles com contorno visível
+   e texto escuro no botão lime (branco no lime era ilegível). */
+:root[data-theme='light'] .editor-automacoes .btn-primary { color: #0b0b0f; }
+:root[data-theme='light'] .editor-automacoes .glass {
+  border: 1px solid color-mix(in srgb, var(--text) 13%, transparent);
+  box-shadow: 0 1px 2px rgba(12, 12, 20, 0.05), 0 10px 30px -18px rgba(12, 12, 20, 0.3);
+}
+.editor-automacoes .react-flow__controls,
+.editor-automacoes .react-flow__minimap {
+  border: 1.5px solid color-mix(in srgb, var(--text) 13%, transparent) !important;
+  border-radius: 14px !important;
+  overflow: hidden;
+}
+.editor-automacoes .react-flow__controls-button {
+  background: var(--surface);
+  border-bottom-color: color-mix(in srgb, var(--text) 10%, transparent);
+  color: var(--text);
+}
+.editor-automacoes .react-flow__controls-button svg { fill: currentColor; }
+
+@keyframes no-automacao-entra {
+  from { opacity: 0; transform: translateY(6px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes no-automacao-pulso {
+  from { transform: scale(1); opacity: 0.55; }
+  to { transform: scale(3.2); opacity: 0; }
+}
+@keyframes aresta-corre { to { stroke-dashoffset: -18; } }
+@keyframes aresta-viaja {
+  0% { offset-distance: 0%; opacity: 0; }
+  12% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .no-automacao, .no-automacao-pulso::after, .aresta-fluxo { animation: none; }
+  .no-automacao:hover { transform: none; }
+  .aresta-pulso { display: none; }
+}
+/* Tema claro: a marca vira verde-oliva (#4c7a00, contraste em texto). Na
+   linha ela ficava apagada; base neutra escura + pulso lime com contorno. */
+:root[data-theme='light'] .editor-automacoes .react-flow__edge:not(.selected) .react-flow__edge-path {
+  stroke: color-mix(in srgb, var(--text) 32%, transparent);
+}
+:root[data-theme='light'] .aresta-fluxo { stroke: var(--brand); opacity: 1; }
+:root[data-theme='light'] .aresta-pulso {
+  fill: var(--lime-500);
+  stroke: #111114;
+  stroke-width: 1.2;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--lime-500) 80%, transparent));
+}

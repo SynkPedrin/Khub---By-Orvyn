@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { Icon } from '@/components/icons';
 import { Tooltip } from '@/components/kit';
 import { cx } from '@/components/ui';
-import { ICONE, ACENTO } from '@/components/automations/NoCanvas';
+import { ACENTO } from '@/components/automations/NoCanvas';
 import { SeloNo } from '@/components/automations/marcas';
 import type { MetaNo } from '@/lib/automations';
 
@@ -92,7 +92,7 @@ export function PaletaNos({ catalogo, aberta, onAlternar, onEscolher, onNota, de
           if (!lista.length) return null;
           return (
             <div key={cat.id}>
-              <p className="mb-1.5 px-1 text-2xs font-semibold uppercase tracking-wide" style={{ color: ACENTO[cat.id] }}>{cat.titulo}</p>
+              <p className="mb-1.5 flex items-center gap-1.5 px-1 text-2xs font-bold uppercase tracking-wider" style={{ color: ACENTO[cat.id] }}><Icon name={cat.icone} size={12} />{cat.titulo}<span className="ml-auto rounded-full bg-surface2 px-1.5 py-px text-[10px] font-semibold text-muted">{lista.length}</span></p>
               <div className="space-y-1">
                 {lista.map((m) => (
                   <button
@@ -106,12 +106,12 @@ export function PaletaNos({ catalogo, aberta, onAlternar, onEscolher, onNota, de
                     }}
                     onClick={() => onEscolher(m.tipo)}
                     title={m.descricao}
-                    className="group flex w-full cursor-grab items-center gap-2.5 rounded-xl border border-line bg-surface px-2.5 py-2 text-left text-xs text-fg transition hover:border-brand-border hover:bg-brand-softer active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50"
+                    className="item-paleta group flex w-full cursor-grab items-center gap-2.5 rounded-[14px] px-2.5 py-2 text-left text-xs text-fg active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <SeloNo tipo={m.tipo} icone={ICONE[m.tipo] ?? 'sparkles'} acento={ACENTO[cat.id]} tamanho={30} />
+                    <SeloNo tipo={m.tipo} tamanho={32} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-medium">{m.nome}</span>
-                      <span className="block truncate text-2xs text-faint">{m.descricao}</span>
+                      <span className="block truncate text-2xs text-muted">{m.descricao}</span>
                     </span>
                   </button>
                 ))}
@@ -132,7 +132,7 @@ export function PaletaNos({ catalogo, aberta, onAlternar, onEscolher, onNota, de
               e.dataTransfer.effectAllowed = 'move';
             }}
             onClick={onNota}
-            className={cx('flex w-full cursor-grab items-center gap-2.5 rounded-xl border border-dashed border-line px-2.5 py-2 text-left text-xs font-medium text-fg transition hover:bg-surface2 disabled:opacity-50')}
+            className={cx('flex w-full cursor-grab items-center gap-2.5 rounded-[14px] border-[1.5px] border-dashed border-line-strong px-2.5 py-2 text-left text-xs font-medium text-fg transition hover:bg-surface2 disabled:opacity-50')}
           >
             <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-surface2 text-muted"><Icon name="note" size={14} /></span>
             <span className="min-w-0 flex-1">
