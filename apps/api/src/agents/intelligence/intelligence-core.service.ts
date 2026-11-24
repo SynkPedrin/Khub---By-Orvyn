@@ -20,7 +20,7 @@ import type { ContextoMemoria } from './memory.service';
 import { contextoDinamico, promptAnalise, promptEstavel } from './prompt';
 
 /** Ferramentas que MARCAM horário de fato (clínica e salão). */
-const FERRAMENTAS_QUE_AGENDAM = ['solicitar_agendamento', 'reservar_horario_salao', 'remarcar_agendamento'];
+const FERRAMENTAS_QUE_AGENDAM = ['solicitar_agendamento', 'reservar_horario_salao', 'reservar_combo_salao', 'remarcar_agendamento'];
 /** Ferramentas que CONSULTAM a agenda real (clínica e salão). */
 const FERRAMENTAS_QUE_CONSULTAM_AGENDA = ['ver_agendamentos', 'ver_horarios_salao'];
 

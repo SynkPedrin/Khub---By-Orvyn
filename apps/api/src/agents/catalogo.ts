@@ -236,9 +236,25 @@ export const FERRAMENTAS: FerramentaAgente[] = [
   {
     nome: 'solicitar_agendamento',
     rotulo: 'Solicitar agendamento',
-    descricao: 'Reserva um horário na agenda para o contato (recusa choque de horário).',
-    instrucaoModelo: 'Agenda um compromisso para o contato. Use SOMENTE um horário que o contato confirmou e que apareceu livre em ver_agendamentos. `inicio` em ISO 8601 com fuso.',
-    schema: z.object({ inicio: z.string().datetime({ offset: true }), duracaoMin: z.number().int().min(15).max(240).optional(), titulo: z.string().min(3).max(120).optional() }).strict(),
+    descricao: 'Reserva um horário na agenda para o contato (recusa choque de horário). Com `itens`, agenda vários serviços da mesma visita em grupo.',
+    instrucaoModelo:
+      'Agenda um compromisso para o contato. Use SOMENTE um horário que o contato confirmou e que apareceu livre em ver_agendamentos. `inicio` em ISO 8601 com fuso. Para VÁRIOS atendimentos na mesma visita, envie `itens` (2 a 4, cada um com `inicio` e `duracaoMin`/`titulo` opcionais) em vez de `inicio` solto: vira um agendamento multi-serviço em grupo, e cada item precisa ter aparecido livre em ver_agendamentos.',
+    schema: z
+      .object({
+        inicio: z.string().datetime({ offset: true }).optional(),
+        duracaoMin: z.number().int().min(15).max(240).optional(),
+        titulo: z.string().min(3).max(120).optional(),
+        itens: z
+          .array(
+            z
+              .object({ inicio: z.string().datetime({ offset: true }), duracaoMin: z.number().int().min(15).max(240).optional(), titulo: z.string().min(3).max(120).optional() })
+              .strict(),
+          )
+          .min(2)
+          .max(4)
+          .optional(),
+      })
+      .strict(),
     grupo: 'agenda',
     tipo: 'escrita',
     critica: true,
@@ -271,6 +287,31 @@ export const FERRAMENTAS: FerramentaAgente[] = [
         servico: z.string().min(2).max(120),
         profissional: z.string().min(2).max(80),
         inicio: z.string().datetime({ offset: true }),
+      })
+      .strict(),
+    grupo: 'agenda',
+    tipo: 'escrita',
+  },
+  {
+    nome: 'reservar_combo_salao',
+    rotulo: 'Reservar combo no salão',
+    descricao: 'Reserva vários serviços da mesma visita (combo) em grupo e avisa a equipe no WhatsApp uma vez.',
+    instrucaoModelo:
+      'Reserva na agenda do salão MAIS DE UM serviço na mesma visita (ex.: escova + mão), quando a cliente confirmou cada um. Use quando a cliente quer mais de um serviço; para um só, use reservar_horario_salao. Cada item de `itens` (2 a 4) precisa ter saído de ver_horarios_salao: informe `servico`, `profissional` (nome como veio na consulta) e `inicio` (ISO 8601 com fuso, ex.: 2026-11-18T14:00:00-03:00). Itens com a MESMA profissional não podem se sobrepor no horário. A ferramenta confere de novo todos os horários, grava tudo em grupo e avisa a equipe no WhatsApp uma única vez com o resumo. Depois, confirme para a cliente a lista de serviços com o dia e a hora de cada um. Se a ferramenta recusar, consulte de novo e ofereça outros horários.',
+    schema: z
+      .object({
+        itens: z
+          .array(
+            z
+              .object({
+                servico: z.string().min(2).max(120),
+                profissional: z.string().min(2).max(80),
+                inicio: z.string().datetime({ offset: true }),
+              })
+              .strict(),
+          )
+          .min(2)
+          .max(4),
       })
       .strict(),
     grupo: 'agenda',
@@ -388,13 +429,20 @@ export function paraJsonSchema(schema: z.ZodTypeAny): Record<string, unknown> {
   const required: string[] = [];
   for (const [chave, campo] of Object.entries(shape)) {
     const opcional = campo instanceof z.ZodOptional || campo instanceof z.ZodDefault;
-    const base = campo instanceof z.ZodOptional ? campo.unwrap() : campo instanceof z.ZodDefault ? campo._def.innerType : campo;
-    if (base instanceof z.ZodEnum) properties[chave] = { type: 'string', enum: base.options };
-    else if (base instanceof z.ZodNumber) properties[chave] = { type: base.isInt ? 'integer' : 'number' };
-    else properties[chave] = { type: 'string' };
+    properties[chave] = campoParaJsonSchema(campo);
     if (!opcional) required.push(chave);
   }
   return { type: 'object', properties, required, additionalProperties: false };
+}
+
+/** Um campo do schema: desembrulha optional/default e trata enum, número, array e objeto aninhado (ex.: `itens` do combo). */
+function campoParaJsonSchema(campo: z.ZodTypeAny): Record<string, unknown> {
+  const base = campo instanceof z.ZodOptional ? campo.unwrap() : campo instanceof z.ZodDefault ? campo._def.innerType : campo;
+  if (base instanceof z.ZodEnum) return { type: 'string', enum: base.options };
+  if (base instanceof z.ZodNumber) return { type: base.isInt ? 'integer' : 'number' };
+  if (base instanceof z.ZodArray) return { type: 'array', items: campoParaJsonSchema(base.element) };
+  if (base instanceof z.ZodObject) return paraJsonSchema(base);
+  return { type: 'string' };
 }
 
 /** Definições de tool no formato da Messages API. */

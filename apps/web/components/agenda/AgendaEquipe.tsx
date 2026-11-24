@@ -254,6 +254,7 @@ function BlocoAtendimento({
         <span className="flex items-baseline gap-1 pr-3">
           <span className="shrink-0 text-2xs font-bold tabular-nums">{hora(e.inicio)}</span>
           <span className="truncate text-xs">{cliente ?? 'Sem cliente'}</span>
+          {e.grupoId && <Icon name="link" size={10} className="shrink-0 self-center text-faint" aria-hidden />}
         </span>
         {alto >= 34 && <span className="block truncate text-xs font-bold">{proc}</span>}
       </span>

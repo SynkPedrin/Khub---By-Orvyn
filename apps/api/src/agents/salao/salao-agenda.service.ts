@@ -1,4 +1,6 @@
+import { randomUUID } from 'crypto';
 import { Injectable, Logger } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MessagesService } from '../../crm/messaging/messages.service';
 import { AvecAgendaService } from '../../integrations/avec/avec-agenda.service';
@@ -26,6 +28,11 @@ const JANELA_HISTORICO_DIAS = 120;
 const CACHE_MS = 10 * 60_000;
 const DIAS_SEMANA = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
 
+/** "HH:MM" de um horário local (mensagens de orientação). */
+function horaLocal(local: { minutos: number }): string {
+  return `${String(Math.floor(local.minutos / 60)).padStart(2, '0')}:${String(local.minutos % 60).padStart(2, '0')}`;
+}
+
 export interface PedidoHorarios {
   servico: string;
   data: string;
@@ -37,6 +44,11 @@ export interface PedidoReserva {
   servico: string;
   profissional: string;
   inicio: string;
+}
+
+/** Combo (db/079): vários serviços da mesma visita, 2 a 4 itens. */
+export interface PedidoCombo {
+  itens: PedidoReserva[];
 }
 
 interface Base {
@@ -237,14 +249,8 @@ export class SalaoAgendaService {
     if (avecFora) {
       throw new OrientacaoAgente('não consegui confirmar na agenda oficial do salão agora: NÃO confirme o horário; diga que a equipe vai confirmar em instantes e use notificar_equipe com o pedido');
     }
-    const jornadas = await this.jornadasDoDia(tenantId, local.data);
-    const janela = jornadas.has(prof.id) ? jornadas.get(prof.id) : base.expedientes.get(prof.id)?.get(local.diaSemana);
-    const hora = `${String(Math.floor(local.minutos / 60)).padStart(2, '0')}:${String(local.minutos % 60).padStart(2, '0')}`;
-    const livres = janela ? horariosLivres({ data: local.data, janela, duracaoMin: servico.duracaoMin, ocupados: [], fuso, agora }) : [];
-    if (!livres.includes(+inicio)) {
-      throw new OrientacaoAgente(`${hora} de ${local.data} não é um horário oferecido para ${prof.nome}; consulte ver_horarios_salao e ofereça um horário da lista`);
-    }
-    const fim = new Date(+inicio + servico.duracaoMin * 60_000);
+    const hora = horaLocal(local);
+    const fim = await this.validarSlot(tenantId, base, prof, servico, inicio, local, fuso, agora);
 
     const { compromisso, contato } = await this.prisma.withTenant(tenantId, async (tx) => {
       // Mesma trava da AgendaService: reserva e agenda manual não se cruzam.
@@ -254,19 +260,7 @@ export class SalaoAgendaService {
         select: { id: true },
       });
       if (choque) throw new OrientacaoAgente(`${prof.nome} acabou de ser reservada às ${hora}; consulte ver_horarios_salao de novo e ofereça outro horário`);
-      // A cliente já tem esse serviço marcado (pelo Avec, pela equipe ou pela IA): não duplica.
-      const jaTem = await tx.agendaCompromisso.findFirst({
-        where: { contactId: ctx.contactId, servicoId: servico.id, status: { in: ATIVOS }, inicio: { gt: new Date(agora) } },
-        orderBy: { inicio: 'asc' },
-        select: { inicio: true, profissionalId: true },
-      });
-      if (jaTem) {
-        const quandoJa = new Intl.DateTimeFormat('pt-BR', { timeZone: fuso, weekday: 'long', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(jaTem.inicio);
-        const comQuem = base.profissionais.find((x) => x.id === jaTem.profissionalId)?.nome;
-        throw new OrientacaoAgente(
-          `a cliente JÁ TEM ${servico.nome} marcado ${quandoJa}${comQuem ? ` com ${comQuem}` : ''}: não marque de novo; confirme com ela se mantém esse horário. Se quiser trocar, é remarcação: use notificar_equipe`,
-        );
-      }
+      await this.garantirClienteSemServico(tx, ctx.contactId, servico, base, fuso, agora);
       const contato = await tx.contact.findUnique({ where: { id: ctx.contactId }, select: { nome: true, telefone: true } });
       const c = await tx.agendaCompromisso.create({
         data: {
@@ -308,6 +302,158 @@ export class SalaoAgendaService {
       profissional: prof.nome,
       quando,
       duracaoMin: servico.duracaoMin,
+      equipeAvisada: aviso.ok,
+      ...(aviso.ok ? {} : { avisoEquipe: aviso.motivo }),
+    };
+  }
+
+  /** O início é um horário oferecido para a profissional (jornada do Avec ou expediente deduzido)? Devolve o fim. */
+  private async validarSlot(
+    tenantId: string,
+    base: Base,
+    prof: ProfissionalCatalogo,
+    servico: ServicoCatalogo,
+    inicio: Date,
+    local: { data: string; diaSemana: number; minutos: number },
+    fuso: string,
+    agora: number,
+  ): Promise<Date> {
+    const jornadas = await this.jornadasDoDia(tenantId, local.data);
+    const janela = jornadas.has(prof.id) ? jornadas.get(prof.id) : base.expedientes.get(prof.id)?.get(local.diaSemana);
+    const livres = janela ? horariosLivres({ data: local.data, janela, duracaoMin: servico.duracaoMin, ocupados: [], fuso, agora }) : [];
+    if (!livres.includes(+inicio)) {
+      throw new OrientacaoAgente(`${horaLocal(local)} de ${local.data} não é um horário oferecido para ${prof.nome}; consulte ver_horarios_salao e ofereça um horário da lista`);
+    }
+    return new Date(+inicio + servico.duracaoMin * 60_000);
+  }
+
+  /** A cliente já tem esse serviço marcado (pelo Avec, pela equipe ou pela IA): não duplica. */
+  private async garantirClienteSemServico(tx: Prisma.TransactionClient, contactId: string, servico: ServicoCatalogo, base: Base, fuso: string, agora: number): Promise<void> {
+    const jaTem = await tx.agendaCompromisso.findFirst({
+      where: { contactId, servicoId: servico.id, status: { in: ATIVOS }, inicio: { gt: new Date(agora) } },
+      orderBy: { inicio: 'asc' },
+      select: { inicio: true, profissionalId: true },
+    });
+    if (jaTem) {
+      const quandoJa = new Intl.DateTimeFormat('pt-BR', { timeZone: fuso, weekday: 'long', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(jaTem.inicio);
+      const comQuem = base.profissionais.find((x) => x.id === jaTem.profissionalId)?.nome;
+      throw new OrientacaoAgente(
+        `a cliente JÁ TEM ${servico.nome} marcado ${quandoJa}${comQuem ? ` com ${comQuem}` : ''}: não marque de novo; confirme com ela se mantém esse horário. Se quiser trocar, é remarcação: use notificar_equipe`,
+      );
+    }
+  }
+
+  /**
+   * Combo (db/079): 2 a 4 serviços da mesma visita, cada um um compromisso
+   * individual com o MESMO grupo_id. Mesmas validações da reserva individual
+   * (catálogo, janela/jornada, dia fechado, Avec ao vivo — uma chamada por
+   * data), choque sob a mesma advisory lock da agenda e choque intra-grupo
+   * (a mesma profissional não atende duas coisas ao mesmo tempo). Criação
+   * atômica em UMA transação e a equipe avisada UMA vez, com o resumo.
+   */
+  async reservarCombo(
+    tenantId: string,
+    ctx: { agentId: string | null; agentNome: string; contactId: string },
+    pedido: PedidoCombo,
+    fuso: string,
+    agora = Date.now(),
+    fechado: (data: string) => boolean = () => false,
+  ) {
+    if (!Array.isArray(pedido.itens) || pedido.itens.length < 2 || pedido.itens.length > 4) {
+      throw new OrientacaoAgente('o combo precisa de 2 a 4 serviços; para um só, use reservar_horario_salao');
+    }
+    const base = await this.base(tenantId, fuso);
+    const itens = pedido.itens.map((p) => {
+      const servico = this.resolverServico(base, p.servico);
+      const prof = acharProfissional(base.profissionais, p.profissional);
+      if (!prof) throw new OrientacaoAgente(`profissional "${p.profissional}" não encontrada; use um nome que veio em ver_horarios_salao`);
+      const inicio = new Date(p.inicio);
+      if (Number.isNaN(+inicio)) throw new OrientacaoAgente(`horário inválido para ${servico.nome}`);
+      const local = partesLocais(+inicio, fuso);
+      if (fechado(local.data)) {
+        throw new OrientacaoAgente(`o salão não atende ${DIAS_SEMANA[local.diaSemana]} (${local.data}); consulte ver_horarios_salao e ofereça outro dia`);
+      }
+      return { servico, prof, inicio, local, fim: null as Date | null };
+    });
+    // Avec: relê o dia AO VIVO (uma chamada por data — o combo pode cruzar dias); sem confirmação da agenda oficial não reserva.
+    for (const data of [...new Set(itens.map((i) => i.local.data))]) {
+      const avecFora = await this.atualizarDoAvec(tenantId, data, true);
+      if (avecFora) {
+        throw new OrientacaoAgente('não consegui confirmar na agenda oficial do salão agora: NÃO confirme o horário; diga que a equipe vai confirmar em instantes e use notificar_equipe com o pedido');
+      }
+    }
+    for (const it of itens) it.fim = await this.validarSlot(tenantId, base, it.prof, it.servico, it.inicio, it.local, fuso, agora);
+    // Choque intra-grupo: a mesma profissional não atende duas coisas ao mesmo tempo.
+    for (let i = 0; i < itens.length; i++) {
+      for (let j = i + 1; j < itens.length; j++) {
+        const a = itens[i];
+        const b = itens[j];
+        if (a.prof.id === b.prof.id && a.inicio < b.fim! && a.fim! > b.inicio) {
+          throw new OrientacaoAgente(
+            `${a.prof.nome} não consegue fazer ${a.servico.nome} e ${b.servico.nome} ao mesmo tempo; escolha horários que não se sobreponham para ela em ver_horarios_salao`,
+          );
+        }
+      }
+    }
+    const grupoId = randomUUID();
+    const { compromissos, contato } = await this.prisma.withTenant(tenantId, async (tx) => {
+      // Mesma trava da AgendaService: reserva e agenda manual não se cruzam.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`agenda:${tenantId}`}, 0))`;
+      for (const it of itens) {
+        const choque = await tx.agendaCompromisso.findFirst({
+          where: { profissionalId: it.prof.id, status: { in: ATIVOS }, inicio: { lt: it.fim! }, fim: { gt: it.inicio } },
+          select: { id: true },
+        });
+        if (choque) throw new OrientacaoAgente(`${it.prof.nome} acabou de ser reservada às ${horaLocal(it.local)}; consulte ver_horarios_salao de novo e ofereça outro horário`);
+        await this.garantirClienteSemServico(tx, ctx.contactId, it.servico, base, fuso, agora);
+      }
+      const contato = await tx.contact.findUnique({ where: { id: ctx.contactId }, select: { nome: true, telefone: true } });
+      const criados = [];
+      for (const it of itens) {
+        const c = await tx.agendaCompromisso.create({
+          data: {
+            tenantId,
+            titulo: `${it.servico.nome} — ${contato?.nome ?? 'Cliente'}`.slice(0, 120),
+            inicio: it.inicio,
+            fim: it.fim!,
+            contactId: ctx.contactId,
+            servicoId: it.servico.id,
+            profissionalId: it.prof.id,
+            tipo: 'outro',
+            status: 'agendado',
+            valorCentavos: it.servico.precoCentavos || null,
+            notas: `Reservado pela ${ctx.agentNome} no WhatsApp (combo).`,
+            createdBy: null,
+            grupoId,
+          },
+        });
+        await tx.$executeRaw`INSERT INTO audit_logs (tenant_id, actor_type, actor_id, acao, entidade, entidade_id)
+          VALUES (${tenantId}::uuid, 'nyro', ${ctx.agentId ?? 'agente'}, 'compromisso.criado', 'agenda_compromisso', ${c.id})`;
+        criados.push(c);
+      }
+      return { compromissos: criados, contato };
+    });
+    this.cache.delete(tenantId);
+
+    const quando = (d: Date) => new Intl.DateTimeFormat('pt-BR', { timeZone: fuso, weekday: 'long', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(d);
+    const aviso = await this.avisarEquipe(tenantId, compromissos[0].id, [
+      `📅 NOVO COMBO PELA ${ctx.agentNome.toUpperCase()} (${compromissos.length} SERVIÇOS)`,
+      '',
+      `CLIENTE: ${contato?.nome ?? '-'}`,
+      `TELEFONE: ${contato?.telefone ?? '-'}`,
+      ...itens.map((it) => `• ${it.servico.nome} com ${it.prof.nome} — ${quando(it.inicio)}`),
+      '',
+      '*Conferir e confirmar com a cliente (e o sinal, se houver).*',
+    ].join('\n'));
+    return {
+      grupoId,
+      itens: compromissos.map((c, i) => ({
+        compromissoId: c.id,
+        servico: itens[i].servico.nome,
+        profissional: itens[i].prof.nome,
+        quando: quando(itens[i].inicio),
+        duracaoMin: itens[i].servico.duracaoMin,
+      })),
       equipeAvisada: aviso.ok,
       ...(aviso.ok ? {} : { avisoEquipe: aviso.motivo }),
     };

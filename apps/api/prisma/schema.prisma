@@ -1145,6 +1145,8 @@ model AgendaCompromisso {
   canceladoEm   DateTime? @map("cancelado_em") @db.Timestamptz(6)
   /// Quando a varredura D-1 disparou o lembrete (gera appointment.reminder_due).
   lembreteEnviadoEm DateTime? @map("lembrete_enviado_em") @db.Timestamptz(6)
+  /// db/079: vínculo de agendamento multi-serviço (cada item é um compromisso; o grupo os une). NULL = agendamento simples.
+  grupoId        String?   @map("grupo_id") @db.Uuid
   /// db/077: a linha veio de outro sistema ('avec') e a chave dela lá. NULL = nasceu no KHUB.
   origem         String?
   externoId      String?   @map("externo_id")

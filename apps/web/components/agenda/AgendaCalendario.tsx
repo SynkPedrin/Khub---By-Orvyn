@@ -6,6 +6,7 @@ import { Icon } from '@/components/icons';
 import { cx } from '@/components/ui';
 import { EmptyState, ErrorState } from '@/components/revenue/States';
 import { agenda, type Compromisso, type ProfissionalAgenda, type StatusAgenda } from '@/lib/agenda';
+import { detalheChoque } from '@/lib/agenda-grupo';
 import { ApiError } from '@/lib/api-error';
 import { useAuth } from '@/lib/auth';
 import { crm } from '@/lib/crm';
@@ -305,6 +306,29 @@ export function AgendaCalendario() {
     }
   };
 
+  // Multi-serviço: cancelar/reagendar o grupo inteiro (itens saem/andam juntos).
+  const statusGrupo = async (grupoId: string, s: StatusAgenda) => {
+    try {
+      await agenda.statusGrupo(grupoId, s);
+      setAberto(null);
+      void carregar(true);
+      toast.success(s === 'cancelado' ? 'Agendamento inteiro cancelado' : 'Agendamento atualizado');
+    } catch (e) {
+      toast.error('Não foi possível atualizar o agendamento', { description: mensagemErro(e, 'atualizar o agendamento') });
+    }
+  };
+
+  const reagendarGrupo = async (grupoId: string, deltaMinutos: number) => {
+    try {
+      await agenda.reagendarGrupo(grupoId, deltaMinutos);
+      setAberto(null);
+      void carregar(true);
+      toast.success('Agendamento reagendado', { description: 'Todos os serviços foram movidos juntos.' });
+    } catch (e) {
+      toast.error('Não foi possível reagendar', { description: detalheChoque(e) ?? mensagemErro(e, 'reagendar o agendamento') });
+    }
+  };
+
   const sincronizar = async (c: Compromisso): Promise<'ok' | 'conectar' | 'erro'> => {
     try {
       const r = await agenda.sincronizar(c.id);
@@ -578,6 +602,8 @@ export function AgendaCalendario() {
             },
             onExcluir: excluir,
             onSincronizar: sincronizar,
+            onStatusGrupo: statusGrupo,
+            onReagendarGrupo: reagendarGrupo,
           }}
         />
       )}
@@ -806,6 +832,7 @@ function GradeHorarios({
                             {!cor && <Icon name={tom.icone} size={11} className="shrink-0 self-center opacity-70" />}
                             <span className="shrink-0 text-2xs font-bold tabular leading-tight">{hora(c.inicio)}</span>
                             <span className="truncate text-xs font-bold leading-tight">{procedimento(c)}</span>
+                            {c.grupoId && <Icon name="link" size={10} className="shrink-0 self-center text-faint" aria-hidden />}
                             {cor && MARCA_STATUS[c.status].icone && (
                               <Icon name={MARCA_STATUS[c.status].icone!} size={11} className={cx('ml-auto shrink-0 self-center', MARCA_STATUS[c.status].iconeCor)} />
                             )}
@@ -914,6 +941,7 @@ function GradeMes({
                       <span className={cx('h-1.5 w-1.5 shrink-0 rounded-full', corDe ? corDe(c.profissionalId).faixa : (TIPO_TOM[c.tipo] ?? TIPO_TOM.outro).ponto)} aria-hidden />
                       <span className="font-semibold tabular text-fg">{hora(c.inicio)}</span>
                       <span className="shrink-0 font-bold text-fg">{procedimento(c)}</span>
+                      {c.grupoId && <Icon name="link" size={10} className="shrink-0 text-faint" aria-hidden />}
                       {nomeCliente(c, nomes) && <span className="truncate text-muted">· {nomeCliente(c, nomes)}</span>}
                     </button>
                   </li>
@@ -1014,6 +1042,7 @@ function Lista({
                         </span>
                       </span>
                     )}
+                    {c.grupoId && <Icon name="link" size={13} className="shrink-0 self-center text-faint" aria-hidden />}
                     <span className={cx(STATUS_PILL[c.status], 'shrink-0')}>{STATUS_LABEL[c.status]}</span>
                   </button>
                 </li>

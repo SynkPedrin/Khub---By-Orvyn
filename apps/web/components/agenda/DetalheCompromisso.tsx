@@ -1,20 +1,25 @@
 'use client';
 
 import Link from 'next/link';
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Button, Confirm, useFocusTrap } from '@/components/kit';
 import { Icon, type IconName } from '@/components/icons';
 import { cx } from '@/components/ui';
-import type { Compromisso, StatusAgenda } from '@/lib/agenda';
-import { duracao, hora } from '@/lib/format';
-import { STATUS_LABEL, STATUS_PILL, TIPO_LABEL, TIPO_TOM, chaveDia, ehLink, rotuloDia } from './agenda-utils';
+import { agenda, type Compromisso, type StatusAgenda } from '@/lib/agenda';
+import { deltaReagendamento } from '@/lib/agenda-grupo';
+import { duracao, hora, moeda } from '@/lib/format';
+import { STATUS_ATIVOS, STATUS_LABEL, STATUS_PILL, TIPO_LABEL, TIPO_TOM, chaveDia, ehLink, horaInput, montarData, rotuloDia } from './agenda-utils';
 
 export interface AcoesDetalhe {
   onStatus: (c: Compromisso, s: StatusAgenda) => Promise<void>;
   onReagendar: (c: Compromisso) => void;
   onExcluir: (c: Compromisso) => Promise<void>;
   onSincronizar: (c: Compromisso) => Promise<'ok' | 'conectar' | 'erro'>;
+  /** Multi-serviço: status de todos os itens do grupo de uma vez. */
+  onStatusGrupo?: (grupoId: string, s: StatusAgenda) => Promise<void>;
+  /** Multi-serviço: desloca os itens ativos do grupo (reagendar tudo). */
+  onReagendarGrupo?: (grupoId: string, deltaMinutos: number) => Promise<void>;
 }
 
 /** Âncora: o retângulo do evento clicado (posiciona o cartão ao lado dele). */
@@ -36,9 +41,29 @@ export function DetalheCompromisso({
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const [ocupado, setOcupado] = useState<string | null>(null);
-  const [confirmar, setConfirmar] = useState<'cancelar' | 'excluir' | null>(null);
+  const [confirmar, setConfirmar] = useState<'cancelar' | 'excluir' | 'cancelarGrupo' | null>(null);
   const [conectar, setConectar] = useState(false);
+  // Multi-serviço: itens do grupo (carregados sob demanda) e o painel de reagendar tudo.
+  const [itensGrupo, setItensGrupo] = useState<Compromisso[] | null>(null);
+  const [reagendando, setReagendando] = useState(false);
+  const [diaNovo, setDiaNovo] = useState('');
+  const [horaNova, setHoraNova] = useState('');
   useFocusTrap(ref, !confirmar, { onEsc: onFechar });
+
+  useEffect(() => {
+    if (!c.grupoId) {
+      setItensGrupo(null);
+      return;
+    }
+    let vivo = true;
+    agenda
+      .compromissos({ grupoId: c.grupoId })
+      .then((l) => vivo && setItensGrupo([...l].sort((a, b) => +new Date(a.inicio) - +new Date(b.inicio))))
+      .catch(() => vivo && setItensGrupo([]));
+    return () => {
+      vivo = false;
+    };
+  }, [c.grupoId, c.id]);
 
   // Lado do evento que tiver espaço; no celular vira folha inferior (CSS).
   useLayoutEffect(() => {
@@ -75,6 +100,32 @@ export function DetalheCompromisso({
   };
 
   const status = (s: StatusAgenda) => executar(s, () => acoes.onStatus(c, s));
+
+  // Primeiro item ativo do grupo: a âncora do "reagendar tudo" (delta aplicado a todos).
+  const primeiroAtivo = itensGrupo?.find((g) => STATUS_ATIVOS.includes(g.status)) ?? null;
+
+  const alternarReagendar = () => {
+    if (!reagendando && primeiroAtivo) {
+      const d = new Date(primeiroAtivo.inicio);
+      setDiaNovo(chaveDia(d));
+      setHoraNova(horaInput(d));
+    }
+    setReagendando((v) => !v);
+  };
+
+  const reagendarTudo = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!c.grupoId || !acoes.onReagendarGrupo || !primeiroAtivo || ocupado) return;
+    const novo = montarData(diaNovo, horaNova);
+    if (!novo) return;
+    const delta = deltaReagendamento(primeiroAtivo.inicio, novo);
+    if (delta === 0) {
+      setReagendando(false);
+      return;
+    }
+    await executar('reagendarGrupo', () => acoes.onReagendarGrupo!(c.grupoId as string, delta));
+    setReagendando(false);
+  };
 
   if (typeof document === 'undefined') return null;
   return createPortal(
@@ -142,6 +193,39 @@ export function DetalheCompromisso({
             <p className="text-xs text-muted">{c.profissionalNome ? 'Profissional' : 'Responsável'}: {nomeResponsavel ?? 'agenda geral'}</p>
           </Linha>
 
+          {c.grupoId && (
+            <Linha icone="link">
+              <p className="text-sm font-medium text-fg">{itensGrupo && itensGrupo.length > 0 ? `Agendamento com ${itensGrupo.length} serviços` : 'Agendamento com vários serviços'}</p>
+              {itensGrupo === null ? (
+                <div className="mt-1.5 space-y-1.5" aria-busy="true">
+                  <span className="skeleton block h-7 w-full rounded-md" />
+                  <span className="skeleton block h-7 w-4/5 rounded-md" />
+                </div>
+              ) : itensGrupo.length === 0 ? (
+                <p className="text-xs text-muted">Não foi possível carregar os serviços deste agendamento.</p>
+              ) : (
+                <ul className="mt-1.5 space-y-1.5">
+                  {itensGrupo.map((g) => (
+                    <li key={g.id} className="flex items-center gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className={cx('truncate text-sm', g.status === 'cancelado' ? 'text-muted line-through' : 'text-fg')}>
+                          {g.servicoNome ?? g.titulo}
+                          {g.id === c.id && <span className="text-muted"> (este)</span>}
+                        </p>
+                        <p className="truncate text-xs tabular text-muted">
+                          {hora(g.inicio)}–{hora(g.fim)}
+                          {g.profissionalNome ? ` · ${g.profissionalNome}` : ''}
+                          {g.valorCentavos ? ` · ${moeda(g.valorCentavos / 100, true)}` : ''}
+                        </p>
+                      </div>
+                      <span className={cx(STATUS_PILL[g.status], 'shrink-0')}>{STATUS_LABEL[g.status]}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Linha>
+          )}
+
           {(c.lembreteEnviadoEm || c.confirmadoEm || c.faltouEm) && (
             <Linha icone="bell">
               {c.lembreteEnviadoEm && <p className="text-xs text-muted">Lembrete disparado em {rotuloCurto(c.lembreteEnviadoEm)}</p>}
@@ -163,6 +247,43 @@ export function DetalheCompromisso({
         </div>
 
         <div className="space-y-2 border-t border-line p-3">
+          {c.grupoId && (acoes.onStatusGrupo ?? acoes.onReagendarGrupo) && primeiroAtivo && (
+            <div className="space-y-2 rounded-md border border-line p-2.5">
+              <p className="text-xs font-medium text-muted">Agendamento inteiro ({itensGrupo?.length ?? '…'} serviços)</p>
+              <div className="flex flex-wrap gap-2">
+                {acoes.onReagendarGrupo && (
+                  <Button size="sm" variant="soft" icon="calendar" aria-expanded={reagendando} onClick={alternarReagendar}>
+                    Reagendar tudo
+                  </Button>
+                )}
+                {acoes.onStatusGrupo && (
+                  <Button size="sm" variant="ghost" loading={ocupado === 'cancelarGrupo'} onClick={() => setConfirmar('cancelarGrupo')}>
+                    Cancelar agendamento inteiro
+                  </Button>
+                )}
+              </div>
+              {reagendando && (
+                <form onSubmit={(e) => void reagendarTudo(e)} className="flex flex-wrap items-end gap-2">
+                  <div>
+                    <label htmlFor="dg-dia" className="mb-1 block text-xs text-muted">
+                      Novo início do 1º serviço
+                    </label>
+                    <input id="dg-dia" type="date" className="input h-8 text-sm" value={diaNovo} onChange={(e) => setDiaNovo(e.target.value)} />
+                  </div>
+                  <div>
+                    <label htmlFor="dg-hora" className="mb-1 block text-xs text-muted">
+                      Horário
+                    </label>
+                    <input id="dg-hora" type="time" step={300} className="input h-8 text-sm" value={horaNova} onChange={(e) => setHoraNova(e.target.value)} />
+                  </div>
+                  <Button size="sm" variant="primary" type="submit" loading={ocupado === 'reagendarGrupo'} disabled={!diaNovo || !horaNova}>
+                    Mover tudo
+                  </Button>
+                </form>
+              )}
+              {reagendando && <p className="text-xs text-muted">Os demais serviços andam junto, mantendo a ordem e os intervalos.</p>}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-2">
             {c.status === 'agendado' && (
               <Button size="sm" variant="primary" icon="check" loading={ocupado === 'confirmado'} onClick={() => void status('confirmado')}>
@@ -212,7 +333,7 @@ export function DetalheCompromisso({
             <div className="flex gap-1">
               {ativo && (
                 <Button size="sm" variant="ghost" onClick={() => setConfirmar('cancelar')}>
-                  Cancelar
+                  {c.grupoId ? 'Cancelar este serviço' : 'Cancelar'}
                 </Button>
               )}
               <Button size="sm" variant="ghost" icon="trash" iconOnly aria-label="Excluir compromisso" onClick={() => setConfirmar('excluir')} />
@@ -228,9 +349,21 @@ export function DetalheCompromisso({
           await acoes.onStatus(c, 'cancelado');
           setConfirmar(null);
         }}
-        title="Cancelar este compromisso?"
-        description="O horário fica livre e o gatilho Agendamento cancelado dispara as automações ligadas a ele."
-        confirmLabel="Cancelar compromisso"
+        title={c.grupoId ? 'Cancelar só este serviço?' : 'Cancelar este compromisso?'}
+        description={c.grupoId ? 'Os outros serviços do agendamento continuam marcados. Para cancelar todos, use "Cancelar agendamento inteiro".' : 'O horário fica livre e o gatilho Agendamento cancelado dispara as automações ligadas a ele.'}
+        confirmLabel={c.grupoId ? 'Cancelar este serviço' : 'Cancelar compromisso'}
+        cancelLabel="Manter"
+      />
+      <Confirm
+        open={confirmar === 'cancelarGrupo'}
+        onClose={() => setConfirmar(null)}
+        onConfirm={async () => {
+          await acoes.onStatusGrupo?.(c.grupoId as string, 'cancelado');
+          setConfirmar(null);
+        }}
+        title="Cancelar o agendamento inteiro?"
+        description={`Todos os ${itensGrupo?.length ?? ''} serviços serão cancelados de uma vez e os horários ficam livres.`}
+        confirmLabel="Cancelar tudo"
         cancelLabel="Manter"
       />
       <Confirm

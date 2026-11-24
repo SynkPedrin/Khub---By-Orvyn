@@ -373,6 +373,45 @@ export class AgentToolsService {
       }
       case 'solicitar_agendamento': {
         const id = this.exigirContato(ctx);
+        // Multi-serviço (db/079): `itens` (2 a 4) cria um grupo; cada item segue
+        // a mesma validação de slot do agendamento único.
+        const itens = Array.isArray(a.itens) ? (a.itens as { inicio: unknown; duracaoMin?: unknown; titulo?: unknown }[]) : null;
+        if (itens?.length) {
+          const durPadrao = await this.duracaoConsultaConservadora(ctx.tenantId);
+          const preparados = itens.map((it, idx) => {
+            const ini = new Date(String(it.inicio));
+            if (isNaN(+ini)) throw new Error(`item ${idx + 1}: horário inválido`);
+            if (ini.getTime() < Date.now()) throw new Error(`item ${idx + 1}: horário no passado`);
+            return { inicio: ini, dur: typeof it.duracaoMin === 'number' ? it.duracaoMin : durPadrao, titulo: typeof it.titulo === 'string' ? it.titulo : undefined };
+          });
+          if (ctx.horario) {
+            for (const it of preparados) {
+              const data = dataNoFuso(+it.inicio, ctx.horario.fuso);
+              const slots = await this.slotsDoDia(ctx, data, it.dur);
+              if (!slots.some((s) => +new Date(s.inicio) === +it.inicio)) {
+                throw new Error('horário fora da disponibilidade: escolha um dos horários livres oferecidos');
+              }
+            }
+          }
+          const g = await this.agenda.criarGrupo(ctx.tenantId, ctx.agentId ?? '', {
+            contactId: id,
+            notas: `Solicitado pelo agente ${ctx.agentNome} durante a conversa.`,
+            itens: preparados.map((it) => ({
+              titulo: (it.titulo ?? `Atendimento — agendado por ${ctx.agentNome}`).slice(0, 120),
+              inicio: it.inicio.toISOString(),
+              fim: new Date(it.inicio.getTime() + it.dur * 60_000).toISOString(),
+            })),
+          }, 'nyro');
+          const primeiro = [...(g.itens as { id: string; inicio: Date | string }[])].sort((x, y) => +new Date(x.inicio) - +new Date(y.inicio))[0];
+          await this.gravarCampos(ctx, id, {
+            carol_agendamento_id: primeiro.id,
+            carol_agendamento_inicio: new Date(primeiro.inicio).toISOString(),
+            carol_agendamento_status: 'agendado',
+            carol_agendamento_grupo_id: g.grupoId,
+          });
+          return { ok: true, dados: { grupoId: g.grupoId, compromissos: g.itens } };
+        }
+        if (typeof a.inicio !== 'string' || !a.inicio) throw new Error('informe o início do agendamento');
         const inicio = new Date(String(a.inicio));
         if (isNaN(+inicio)) throw new Error('horário inválido');
         if (inicio.getTime() < Date.now()) throw new Error('horário no passado');
@@ -419,6 +458,24 @@ export class AgentToolsService {
           ctx.tenantId,
           { agentId: ctx.agentId, agentNome: ctx.agentNome, contactId: id },
           { servico: String(a.servico), profissional: String(a.profissional), inicio: String(a.inicio) },
+          ctx.horario?.fuso ?? fusoPadrao(),
+          Date.now(),
+          (d) => diaFechado(d, ctx.horario),
+        );
+        return { ok: true, dados };
+      }
+      case 'reservar_combo_salao': {
+        const id = this.exigirContato(ctx);
+        const dados = await this.salao.reservarCombo(
+          ctx.tenantId,
+          { agentId: ctx.agentId, agentNome: ctx.agentNome, contactId: id },
+          {
+            itens: (a.itens as { servico: unknown; profissional: unknown; inicio: unknown }[]).map((i) => ({
+              servico: String(i.servico),
+              profissional: String(i.profissional),
+              inicio: String(i.inicio),
+            })),
+          },
           ctx.horario?.fuso ?? fusoPadrao(),
           Date.now(),
           (d) => diaFechado(d, ctx.horario),

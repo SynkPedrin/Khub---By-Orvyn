@@ -5,6 +5,7 @@ import { Button, Modal, Select } from '@/components/kit';
 import { Icon } from '@/components/icons';
 import { cx } from '@/components/ui';
 import { agenda, type Compromisso, type ProfissionalAgenda, type ServicoAgenda, type TipoAgenda } from '@/lib/agenda';
+import { MAX_ITENS_GRUPO, detalheChoque, erroDasLinhas, montarItensGrupo, sugerirInicioEncadeado, type LinhaGrupo } from '@/lib/agenda-grupo';
 import { crm, type Contato } from '@/lib/crm';
 import type { Member } from '@/lib/settings';
 import { duracao as formatarDuracao, hora } from '@/lib/format';
@@ -14,6 +15,16 @@ import { TIPO_LABEL, TIPO_ORDEM, chaveDia, horaInput, mensagemErro, montarData }
 const DURACOES = [15, 30, 45, 60, 90, 120, 180, 240];
 
 type Erros = Partial<Record<'titulo' | 'dia' | 'horario' | 'valor', string>>;
+
+/** Serviço extra do agendamento multi-serviço (o 1º fica nos campos de sempre). */
+interface LinhaExtra {
+  servicoId: string;
+  profissionalId: string;
+  dia: string;
+  horario: string;
+  minutos: number;
+  valor: string;
+}
 
 export interface ModalCompromissoProps {
   open: boolean;
@@ -66,6 +77,8 @@ export function CompromissoModal({ open, onClose, onSaved, compromisso, inicioSu
   const [servicos, setServicos] = useState<ServicoAgenda[]>([]);
   const [profissionalId, setProfissionalId] = useState('');
   const [servicoId, setServicoId] = useState('');
+  // Multi-serviço: serviços 2..N (o 1º usa os campos acima). Vazio = fluxo único de sempre.
+  const [linhas, setLinhas] = useState<LinhaExtra[]>([]);
   const [erros, setErros] = useState<Erros>({});
   const [erroApi, setErroApi] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -86,6 +99,7 @@ export function CompromissoModal({ open, onClose, onSaved, compromisso, inicioSu
     setValor(compromisso?.valorCentavos ? valorParaCampo(compromisso.valorCentavos) : '');
     setProfissionalId(compromisso ? compromisso.profissionalId ?? '' : profissionalSugerido ?? '');
     setServicoId(compromisso?.servicoId ?? '');
+    setLinhas([]);
     setErros({});
     setErroApi(null);
     setSalvando(false);
@@ -113,6 +127,25 @@ export function CompromissoModal({ open, onClose, onSaved, compromisso, inicioSu
     if (sv.precoCentavos > 0) setValor(valorParaCampo(sv.precoCentavos));
     const automatico = !titulo.trim() || (anterior && titulo.startsWith(anterior.nome));
     if (automatico) setTitulo(contato ? `${sv.nome} — ${contato.nome}` : sv.nome);
+  };
+
+  // -------------------------------------------------- multi-serviço (grupo)
+  const atualizarLinha = (i: number, patch: Partial<LinhaExtra>) => setLinhas((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+
+  /** Escolher o serviço da linha preenche duração e valor sugerido do catálogo. */
+  const escolherServicoLinha = (i: number, id: string) => {
+    const sv = servicos.find((x) => x.id === id);
+    atualizarLinha(i, { servicoId: id, ...(sv ? { minutos: sv.duracaoMin, valor: sv.precoCentavos > 0 ? valorParaCampo(sv.precoCentavos) : '' } : {}) });
+  };
+
+  /** Nova linha com início sugerido = fim da anterior (encadeamento, editável). */
+  const adicionarLinha = () => {
+    const inicioAtual = montarData(dia, horario);
+    const sugestao = sugerirInicioEncadeado([
+      { inicio: inicioAtual, duracaoMin: minutos },
+      ...linhas.map((l) => ({ inicio: montarData(l.dia, l.horario), duracaoMin: l.minutos })),
+    ]);
+    setLinhas((ls) => [...ls, { servicoId: '', profissionalId: '', dia: sugestao ? chaveDia(sugestao) : dia, horario: sugestao ? horaInput(sugestao) : horario, minutos: 60, valor: '' }]);
   };
 
   // Horários livres do dia escolhido, para a duração e o responsável atuais.
@@ -146,6 +179,45 @@ export function CompromissoModal({ open, onClose, onSaved, compromisso, inicioSu
     setErros(novos);
     setErroApi(null);
     if (Object.keys(novos).length > 0 || !inicio || !fim) return;
+
+    // Multi-serviço: 2+ linhas viram um grupo (POST /agenda/grupos). Com uma só,
+    // segue o fluxo único de sempre, abaixo, sem nenhuma mudança.
+    if (!editando && linhas.length > 0) {
+      const valorInvalido = linhas.findIndex((l) => l.valor.trim() && lerValor(l.valor) === null);
+      const linhasGrupo: LinhaGrupo[] = [
+        { titulo: titulo.trim(), servicoId, profissionalId, inicio, duracaoMin: minutos, valorCentavos: valorCentavos && valorCentavos > 0 ? valorCentavos : null },
+        ...linhas.map((l) => {
+          const sv = servicos.find((x) => x.id === l.servicoId);
+          const v = l.valor.trim() ? lerValor(l.valor) : null;
+          return { titulo: sv?.nome, servicoId: l.servicoId, profissionalId: l.profissionalId, inicio: montarData(l.dia, l.horario), duracaoMin: l.minutos, valorCentavos: v && v > 0 ? v : null };
+        }),
+      ];
+      const erroLinhas = erroDasLinhas(linhasGrupo);
+      if (valorInvalido >= 0 || erroLinhas) {
+        setErroApi(valorInvalido >= 0 ? `Valor inválido no serviço ${valorInvalido + 2}. Use o formato 120,00.` : erroLinhas);
+        return;
+      }
+      setSalvando(true);
+      try {
+        const grupo = await agenda.criarGrupo({
+          ...(contato ? { contactId: contato.id } : {}),
+          ...(notas.trim() ? { notas: notas.trim() } : {}),
+          tipo,
+          itens: montarItensGrupo(linhasGrupo),
+        });
+        const primeiro = grupo.itens[0];
+        if (primeiro) {
+          onSaved(primeiro, 'criado');
+        } else {
+          onClose();
+          setSalvando(false);
+        }
+      } catch (err) {
+        setErroApi(detalheChoque(err) ?? mensagemErro(err, 'criar os atendimentos'));
+        setSalvando(false);
+      }
+      return;
+    }
 
     setSalvando(true);
     try {
@@ -188,7 +260,7 @@ export function CompromissoModal({ open, onClose, onSaved, compromisso, inicioSu
             Cancelar
           </Button>
           <Button variant="primary" type="submit" form="form-compromisso" loading={salvando}>
-            {editando ? 'Salvar' : 'Criar compromisso'}
+            {editando ? 'Salvar' : linhas.length > 0 ? `Criar agendamento com ${linhas.length + 1} serviços` : 'Criar compromisso'}
           </Button>
         </>
       }
@@ -254,8 +326,79 @@ export function CompromissoModal({ open, onClose, onSaved, compromisso, inicioSu
         </div>
         {inicio && fim && (
           <p className="-mt-2 text-xs text-muted">
-            {chaveDia(fim) === chaveDia(inicio) ? `Das ${hora(inicio)} às ${hora(fim)}` : `Das ${hora(inicio)} às ${hora(fim)} do dia seguinte`}
+            {linhas.length > 0 ? `Serviço 1 · das ${hora(inicio)} às ${hora(fim)}` : chaveDia(fim) === chaveDia(inicio) ? `Das ${hora(inicio)} às ${hora(fim)}` : `Das ${hora(inicio)} às ${hora(fim)} do dia seguinte`}
           </p>
+        )}
+
+        {salao && !editando && linhas.map((l, i) => {
+          const iniL = montarData(l.dia, l.horario);
+          const fimL = iniL ? new Date(iniL.getTime() + l.minutos * 60_000) : null;
+          return (
+            <div key={i} role="group" aria-label={`Serviço ${i + 2}`} className="space-y-3 rounded-md border border-line p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="flex items-center gap-1.5 text-sm font-medium text-fg" aria-hidden>
+                  <Icon name="link" size={13} className="text-faint" />
+                  Serviço {i + 2}
+                </p>
+                <button type="button" className="btn btn-ghost btn-icon btn-sm h-7 w-7" onClick={() => setLinhas((ls) => ls.filter((_, j) => j !== i))} aria-label={`Remover serviço ${i + 2}`}>
+                  <Icon name="close" size={14} />
+                </button>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Campo id={`cm-l${i}-servico`} label="Serviço">
+                  <Select
+                    id={`cm-l${i}-servico`}
+                    value={l.servicoId}
+                    onChange={(id) => escolherServicoLinha(i, id)}
+                    placeholder="Escolha o serviço"
+                    options={servicos.map((x) => ({ value: x.id, label: `${x.nome} · ${formatarDuracao(x.duracaoMin)}` }))}
+                  />
+                </Campo>
+                <Campo id={`cm-l${i}-profissional`} label="Profissional">
+                  <Select
+                    id={`cm-l${i}-profissional`}
+                    value={l.profissionalId}
+                    onChange={(id) => atualizarLinha(i, { profissionalId: id })}
+                    placeholder="Escolha a profissional"
+                    options={profissionais.map((p) => ({ value: p.id, label: p.nome }))}
+                  />
+                </Campo>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)]">
+                <Campo id={`cm-l${i}-dia`} label="Data">
+                  <input id={`cm-l${i}-dia`} type="date" className="input" value={l.dia} onChange={(e) => atualizarLinha(i, { dia: e.target.value })} />
+                </Campo>
+                <Campo id={`cm-l${i}-horario`} label="Início">
+                  <input id={`cm-l${i}-horario`} type="time" step={300} className="input" value={l.horario} onChange={(e) => atualizarLinha(i, { horario: e.target.value })} />
+                </Campo>
+                <Campo id={`cm-l${i}-duracao`} label="Duração">
+                  <Select
+                    id={`cm-l${i}-duracao`}
+                    value={String(l.minutos)}
+                    onChange={(v) => atualizarLinha(i, { minutos: Number(v) })}
+                    options={[...new Set([...DURACOES, l.minutos])].sort((a, b) => a - b).map((m) => ({ value: String(m), label: formatarDuracao(m) }))}
+                  />
+                </Campo>
+                <Campo id={`cm-l${i}-valor`} label="Valor">
+                  <input id={`cm-l${i}-valor`} className="input" value={l.valor} onChange={(e) => atualizarLinha(i, { valor: e.target.value })} placeholder="0,00" inputMode="decimal" />
+                </Campo>
+              </div>
+              {iniL && fimL && (
+                <p className="text-xs text-muted">
+                  {chaveDia(fimL) === chaveDia(iniL) ? `Das ${hora(iniL)} às ${hora(fimL)}` : `Das ${hora(iniL)} às ${hora(fimL)} do dia seguinte`}
+                </p>
+              )}
+            </div>
+          );
+        })}
+
+        {salao && !editando && linhas.length < MAX_ITENS_GRUPO - 1 && (
+          <div>
+            <Button type="button" size="sm" variant="soft" icon="plus" onClick={adicionarLinha}>
+              Adicionar serviço
+            </Button>
+            {linhas.length > 0 && <p className="mt-1.5 text-xs text-muted">Os serviços ficam ligados num agendamento só: dá para cancelar ou reagendar todos juntos depois.</p>}
+          </div>
         )}
 
         {salao && profissionalId ? (

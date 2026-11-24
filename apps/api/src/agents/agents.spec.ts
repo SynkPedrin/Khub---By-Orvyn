@@ -135,6 +135,10 @@ function ferramentas(contato: Record<string, unknown> | null = { nome: 'Marina',
   const tarefas = { create: jest.fn(async () => ({ id: 't1' })), update: jest.fn(async () => ({ ok: true })) } as unknown as TasksService;
   const agenda = {
     criar: jest.fn(async (_t: string, _i: string, dto: { inicio: string }) => ({ id: 'cp1', inicio: new Date(dto.inicio) })),
+    criarGrupo: jest.fn(async (_t: string, _i: string, dto: { itens: { inicio: string }[] }) => ({
+      grupoId: 'g1',
+      itens: dto.itens.map((it, i) => ({ id: `g-cp${i + 1}`, inicio: new Date(it.inicio) })),
+    })),
     sugerirHorarios: jest.fn(async () => []),
     listar: jest.fn(async () => []),
     atualizar: jest.fn(async (_t: string, _i: string, _id: string, dto: { inicio: string }) => ({ id: 'cp1', inicio: new Date(dto.inicio), status: 'agendado' })),
@@ -143,7 +147,7 @@ function ferramentas(contato: Record<string, unknown> | null = { nome: 'Marina',
   const workflows = { dispararPorAgente: jest.fn(async () => ({ runId: 'r1' })) } as unknown as WorkflowsService;
   const rag = { searchAgente: jest.fn(async () => []) } as unknown as RetrievalService;
   const financeiro = { criar: jest.fn(async (_t: string, _i: string, dto: Record<string, unknown>) => ({ id: 'cb1', ...dto })) } as unknown as FinanceiroService;
-  const salao = { horarios: jest.fn(), reservar: jest.fn() } as unknown as SalaoAgendaService;
+  const salao = { horarios: jest.fn(), reservar: jest.fn(), reservarCombo: jest.fn(async () => ({ grupoId: 'g1', itens: [], equipeAvisada: true })) } as unknown as SalaoAgendaService;
   return { svc: new AgentToolsService(prisma, crm, notas, tarefas, agenda, workflows, rag, financeiro, salao), tx, crm, notas, tarefas, workflows, rag, agenda, financeiro, salao };
 }
 
@@ -613,5 +617,136 @@ describe('sinal Pix — registrar e verificar (sem gateway: conciliação autori
     const r = await f.svc.executar('verificar_sinal', {}, CTX, TODAS);
     expect(r.dados).toMatchObject({ status: 'paga', saldoNoDiaCentavos: 20000 }); // convênio 300,00 − 100,00
     expect(f.crm.updateContact).toHaveBeenCalledWith(TENANT, 'c1', expect.objectContaining({ camposCustom: expect.objectContaining({ carol_sinal_status: 'confirmado' }) }));
+  });
+});
+
+// ------------------------------------------------------------------ combo de salão e agendamento em grupo (db/079)
+
+describe('reservar_combo_salao — registro e roteamento', () => {
+  it('está no catálogo como escrita de agenda, exigindo 2 a 4 itens', () => {
+    const def = FERRAMENTAS_POR_NOME.get('reservar_combo_salao')!;
+    expect(def).toMatchObject({ nome: 'reservar_combo_salao', tipo: 'escrita', grupo: 'agenda' });
+    expect(def.schema.safeParse({ itens: [{ servico: 'Escova', profissional: 'Rita', inicio: '2026-11-27T14:00:00-03:00' }] }).success).toBe(false);
+    expect(
+      def.schema.safeParse({
+        itens: [
+          { servico: 'Escova', profissional: 'Rita', inicio: '2026-11-27T14:00:00-03:00' },
+          { servico: 'Mão', profissional: 'Bia', inicio: '2026-11-27T14:30:00-03:00' },
+        ],
+      }).success,
+    ).toBe(true);
+    // contactId no payload é rejeitado (o contato vem só da conversa)
+    expect(
+      def.schema.safeParse({
+        contactId: 'c1',
+        itens: [
+          { servico: 'Escova', profissional: 'Rita', inicio: '2026-11-27T14:00:00-03:00' },
+          { servico: 'Mão', profissional: 'Bia', inicio: '2026-11-27T14:30:00-03:00' },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('JSON Schema expõe itens como array de objetos (não string)', () => {
+    const s = paraJsonSchema(FERRAMENTAS_POR_NOME.get('reservar_combo_salao')!.schema) as {
+      properties: { itens: { type: string; items: { type: string; required: string[] } } };
+      required: string[];
+    };
+    expect(s.required).toEqual(['itens']);
+    expect(s.properties.itens.type).toBe('array');
+    expect(s.properties.itens.items).toMatchObject({ type: 'object', required: ['servico', 'profissional', 'inicio'] });
+  });
+
+  it('roteia para salao.reservarCombo com o contato da conversa', async () => {
+    const f = ferramentas();
+    const args = {
+      itens: [
+        { servico: 'Escova', profissional: 'Rita', inicio: '2026-11-27T14:00:00-03:00' },
+        { servico: 'Mão', profissional: 'Bia', inicio: '2026-11-27T14:30:00-03:00' },
+      ],
+    };
+    const r = await f.svc.executar('reservar_combo_salao', args, CTX, TODAS);
+    expect(r.ok).toBe(true);
+    expect(f.salao.reservarCombo).toHaveBeenCalledWith(
+      TENANT,
+      { agentId: 'ag1', agentNome: 'Lia', contactId: 'c1' },
+      { itens: args.itens },
+      expect.any(String),
+      expect.any(Number),
+      expect.any(Function),
+    );
+  });
+
+  it('não liberada para o agente → recusada (não chama o salão)', async () => {
+    const f = ferramentas();
+    const r = await f.svc.executar('reservar_combo_salao', { itens: [] }, CTX, new Set(['ver_horarios_salao']));
+    expect(r.ok).toBe(false);
+    expect(f.salao.reservarCombo).not.toHaveBeenCalled();
+  });
+});
+
+describe('solicitar_agendamento com itens — agendamento multi-serviço em grupo', () => {
+  it('com itens válidos cria o grupo pela AgendaService e grava o grupoId no contato', async () => {
+    const f = ferramentas();
+    const data = proximoDiaDaSemana(1);
+    const ini1 = new Date(instanteLocal(data, 9 * 60, SP)).toISOString();
+    const ini2 = new Date(instanteLocal(data, 14 * 60, SP)).toISOString();
+    const r = await f.svc.executar(
+      'solicitar_agendamento',
+      { itens: [{ inicio: ini1, duracaoMin: 60 }, { inicio: ini2, duracaoMin: 60, titulo: 'Retorno' }] },
+      { ...CTX, horario: horarioPadrao() },
+      TODAS,
+    );
+    expect(r.ok).toBe(true);
+    expect(f.agenda.criarGrupo).toHaveBeenCalledWith(
+      TENANT,
+      'ag1',
+      expect.objectContaining({
+        contactId: 'c1',
+        itens: [
+          expect.objectContaining({ inicio: ini1, fim: new Date(+new Date(ini1) + 60 * 60_000).toISOString() }),
+          expect.objectContaining({ inicio: ini2, titulo: 'Retorno' }),
+        ],
+      }),
+      'nyro',
+    );
+    expect((f.agenda.criar as jest.Mock)).not.toHaveBeenCalled();
+    expect((r.dados as { grupoId: string }).grupoId).toBe('g1');
+    expect(f.crm.updateContact).toHaveBeenCalledWith(
+      TENANT,
+      'c1',
+      expect.objectContaining({ camposCustom: expect.objectContaining({ carol_agendamento_grupo_id: 'g1', carol_agendamento_status: 'agendado' }) }),
+    );
+  });
+
+  it('item fora da disponibilidade recusa o grupo inteiro (nada é gravado)', async () => {
+    const f = ferramentas();
+    const data = proximoDiaDaSemana(1);
+    const ini1 = new Date(instanteLocal(data, 9 * 60, SP)).toISOString();
+    const ini2 = new Date(instanteLocal(data, 7 * 60, SP)).toISOString(); // antes de abrir
+    const r = await f.svc.executar(
+      'solicitar_agendamento',
+      { itens: [{ inicio: ini1, duracaoMin: 60 }, { inicio: ini2, duracaoMin: 60 }] },
+      { ...CTX, horario: horarioPadrao() },
+      TODAS,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.erro).toContain('disponibilidade');
+    expect(f.agenda.criarGrupo).not.toHaveBeenCalled();
+  });
+
+  it('sem itens, o comportamento é o de sempre (compromisso único)', async () => {
+    const f = ferramentas();
+    const data = proximoDiaDaSemana(1);
+    const inicio = new Date(instanteLocal(data, 9 * 60, SP)).toISOString();
+    const r = await f.svc.executar('solicitar_agendamento', { inicio, duracaoMin: 60 }, { ...CTX, horario: horarioPadrao() }, TODAS);
+    expect(r.ok).toBe(true);
+    expect(f.agenda.criar).toHaveBeenCalledWith(TENANT, 'ag1', expect.objectContaining({ inicio }), 'nyro');
+    expect(f.agenda.criarGrupo).not.toHaveBeenCalled();
+    expect(f.crm.updateContact).toHaveBeenCalledWith(
+      TENANT,
+      'c1',
+      expect.objectContaining({ camposCustom: expect.objectContaining({ carol_agendamento_id: 'cp1' }) }),
+    );
   });
 });

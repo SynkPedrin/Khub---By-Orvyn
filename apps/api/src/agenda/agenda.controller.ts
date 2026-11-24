@@ -46,6 +46,26 @@ class ImportarAgendaDto {
 class StatusDto {
   @IsIn([...STATUS_AGENDA]) status!: StatusAgenda;
 }
+/** Um serviço do agendamento multi-serviço (db/079). */
+class ItemGrupoDto {
+  @IsOptional() @IsString() @MaxLength(200) titulo?: string;
+  @IsUUID() servicoId!: string;
+  @IsUUID() profissionalId!: string;
+  @IsISO8601() inicio!: string;
+  /** Ausente = inicio + duracaoMin do catálogo. */
+  @IsOptional() @IsISO8601() fim?: string;
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsInt() @Min(0) valorCentavos?: number | null;
+}
+class CriarGrupoDto {
+  @IsOptional() @IsUUID() contactId?: string;
+  @IsOptional() @IsString() @MaxLength(1000) notas?: string;
+  @IsOptional() @IsIn([...TIPOS_AGENDA]) tipo?: TipoAgenda;
+  @IsArray() @ArrayMinSize(2) @ArrayMaxSize(8) @ValidateNested({ each: true }) @Type(() => ItemGrupoDto) itens!: ItemGrupoDto[];
+}
+class ReagendarGrupoDto {
+  /** Minutos para deslocar o grupo inteiro (≠ 0, até 7 dias). */
+  @IsInt() deltaMinutos!: number;
+}
 
 /** `?status=agendado,confirmado` → lista validada. */
 function statusDaQuery(q?: string): StatusAgenda[] | undefined {
@@ -70,10 +90,26 @@ export class AgendaController {
     @Query('responsavelId') responsavelId?: string,
     @Query('status') status?: string,
     @Query('profissionalId') profissionalId?: string,
+    @Query('grupoId') grupoId?: string,
   ) {
     if (responsavelId && !UUID_RE.test(responsavelId)) throw new BadRequestException('responsavelId inválido');
     if (profissionalId && !UUID_RE.test(profissionalId)) throw new BadRequestException('profissionalId inválido');
-    return this.agenda.listar(t, { de, ate, responsavelId, profissionalId, status: statusDaQuery(status) });
+    if (grupoId && !UUID_RE.test(grupoId)) throw new BadRequestException('grupoId inválido');
+    return this.agenda.listar(t, { de, ate, responsavelId, profissionalId, grupoId, status: statusDaQuery(status) });
+  }
+
+  /** Agendamento multi-serviço (db/079): 2 a 8 serviços da mesma visita, mesmo grupoId. */
+  @Post('grupos')
+  criarGrupo(@TenantId() t: string, @CurrentUser() u: AuthUser, @Body() dto: CriarGrupoDto) {
+    return this.agenda.criarGrupo(t, u.identityId, dto);
+  }
+  @Post('grupos/:grupoId/status')
+  statusGrupo(@TenantId() t: string, @CurrentUser() u: AuthUser, @Param('grupoId', ParseUUIDPipe) grupoId: string, @Body() dto: StatusDto) {
+    return this.agenda.atualizarStatusGrupo(t, u.identityId, grupoId, dto.status);
+  }
+  @Patch('grupos/:grupoId')
+  reagendarGrupo(@TenantId() t: string, @CurrentUser() u: AuthUser, @Param('grupoId', ParseUUIDPipe) grupoId: string, @Body() dto: ReagendarGrupoDto) {
+    return this.agenda.reagendarGrupo(t, u.identityId, grupoId, dto.deltaMinutos);
   }
 
   /** Profissionais do catálogo (quem atende; não precisa ser usuário) para a agenda por profissional. */

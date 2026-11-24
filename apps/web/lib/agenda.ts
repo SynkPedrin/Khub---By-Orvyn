@@ -42,6 +42,8 @@ export interface Compromisso {
   contatoTelefone?: string | null;
   profissionalNome?: string | null;
   servicoNome?: string | null;
+  /** Agendamento multi-serviço: id do grupo ou null em compromisso avulso. */
+  grupoId?: string | null;
 }
 
 export interface ProfissionalAgenda {
@@ -65,6 +67,29 @@ export interface NovoCompromisso {
   servicoId?: string | null;
 }
 
+/** Item do agendamento multi-serviço (`POST /agenda/grupos`). */
+export interface ItemGrupo {
+  titulo?: string;
+  servicoId: string;
+  profissionalId: string;
+  inicio: string;
+  fim?: string;
+  valorCentavos?: number;
+}
+
+export interface NovoGrupo {
+  contactId?: string;
+  notas?: string;
+  tipo?: TipoAgenda;
+  /** 2 a 8 serviços encadeados ou não. */
+  itens: ItemGrupo[];
+}
+
+export interface GrupoCriado {
+  grupoId: string;
+  itens: Compromisso[];
+}
+
 export interface ServicoAgenda {
   id: string;
   nome: string;
@@ -83,13 +108,14 @@ export type PatchCompromisso = Partial<Omit<NovoCompromisso, 'contactId' | 'loca
 export const agenda = {
   profissionais: () => req<ProfissionalAgenda[]>('profissionais'),
   servicos: () => req<ServicoAgenda[]>('servicos'),
-  compromissos: (filtro?: { de?: string; ate?: string; responsavelId?: string; profissionalId?: string; status?: StatusAgenda[] }) => {
+  compromissos: (filtro?: { de?: string; ate?: string; responsavelId?: string; profissionalId?: string; status?: StatusAgenda[]; grupoId?: string }) => {
     const qs = new URLSearchParams();
     if (filtro?.de) qs.set('de', filtro.de);
     if (filtro?.ate) qs.set('ate', filtro.ate);
     if (filtro?.responsavelId) qs.set('responsavelId', filtro.responsavelId);
     if (filtro?.profissionalId) qs.set('profissionalId', filtro.profissionalId);
     if (filtro?.status?.length) qs.set('status', filtro.status.join(','));
+    if (filtro?.grupoId) qs.set('grupoId', filtro.grupoId);
     return req<Compromisso[]>(`compromissos${qs.toString() ? `?${qs}` : ''}`);
   },
   horarios: (data: string, duracao = 60, responsavelId?: string | null) =>
@@ -100,6 +126,12 @@ export const agenda = {
     req<Compromisso>(`compromissos/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) }),
   sincronizar: (id: string) => req<{ googleEventId: string }>(`compromissos/${id}/sincronizar`, { method: 'POST' }),
   remover: (id: string) => req<{ ok: boolean }>(`compromissos/${id}`, { method: 'DELETE' }),
+  /** Multi-serviço: cria 2–8 compromissos ligados por um grupoId. 409 = choque (a mensagem diz qual profissional/horário). */
+  criarGrupo: (d: NovoGrupo) => req<GrupoCriado>('grupos', { method: 'POST', body: JSON.stringify(d) }),
+  /** Muda o status de todos os itens do grupo de uma vez. */
+  statusGrupo: (grupoId: string, status: StatusAgenda) => req<{ ok: boolean }>(`grupos/${grupoId}/status`, { method: 'POST', body: JSON.stringify({ status }) }),
+  /** Desloca os itens ativos do grupo em `deltaMinutos` (reagendar tudo). */
+  reagendarGrupo: (grupoId: string, deltaMinutos: number) => req<{ ok: boolean }>(`grupos/${grupoId}`, { method: 'PATCH', body: JSON.stringify({ deltaMinutos }) }),
   /** Importação em lote (planilha do Avec): máx. 500 linhas por chamada; manager+. */
   importar: (linhas: Record<string, unknown>[], opcoes: { gerarComissoes?: boolean }, linhaInicial: number) =>
     req<ResultadoImportacao>('importar', { method: 'POST', body: JSON.stringify({ linhas, opcoes, linhaInicial }) }),

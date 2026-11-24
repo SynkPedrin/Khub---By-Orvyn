@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -130,6 +131,35 @@ export interface FiltroAgenda {
   responsavelId?: string;
   profissionalId?: string;
   status?: StatusAgenda[];
+  /** Só os itens de um agendamento multi-serviço (db/079). */
+  grupoId?: string;
+}
+
+/** Um serviço de um agendamento multi-serviço (db/079). Cada item vira um compromisso individual. */
+export interface ItemGrupoInput {
+  /** Omitido = nome do serviço do catálogo (ou "Atendimento" sem serviço). */
+  titulo?: string;
+  servicoId?: string;
+  profissionalId?: string;
+  inicio: string; // ISO
+  /** ISO; ausente = inicio + duracaoMin do catálogo (exige servicoId). */
+  fim?: string;
+  valorCentavos?: number | null;
+}
+
+export interface GrupoInput {
+  contactId?: string | null;
+  notas?: string | null;
+  tipo?: TipoAgenda;
+  itens: ItemGrupoInput[];
+}
+
+/** Delta máximo de um reagendamento em grupo: 7 dias, em minutos. */
+export const MAX_DELTA_GRUPO_MIN = 7 * 24 * 60;
+
+/** Horário legível nas mensagens de conflito (determinístico: UTC ISO curto). */
+function horarioCurto(d: Date): string {
+  return d.toISOString().slice(0, 16).replace('T', ' ');
 }
 
 /** Compromisso da lista com o que a tela mostra sem N+1 (cliente, profissional, serviço). */
@@ -165,6 +195,7 @@ export class AgendaService {
     if (de) where.fim = { gte: de };
     if (filtro.responsavelId) where.responsavelId = filtro.responsavelId;
     if (filtro.profissionalId) where.profissionalId = filtro.profissionalId;
+    if (filtro.grupoId) where.grupoId = filtro.grupoId;
     if (filtro.status?.length) where.status = { in: filtro.status };
     return this.prisma.withTenant(tenantId, async (tx) => {
       const itens = await tx.agendaCompromisso.findMany({ where, orderBy: { inicio: 'asc' } });
@@ -213,13 +244,13 @@ export class AgendaService {
    * (sem responsável, ex.: o que a IA marca) bloqueia todo mundo, e quem tem
    * responsável também bloqueia a agenda geral. Conservador de propósito.
    */
-  private async choca(tx: Prisma.TransactionClient, inicio: Date, fim: Date, responsavelId: string | null, ignorarId?: string, profissionalId?: string | null): Promise<boolean> {
+  private async choca(tx: Prisma.TransactionClient, inicio: Date, fim: Date, responsavelId: string | null, ignorarId?: string, profissionalId?: string | null, ignorarIds?: string[]): Promise<boolean> {
     const conflito = await tx.agendaCompromisso.findFirst({
       where: {
         status: { in: ATIVOS },
         inicio: { lt: fim },
         fim: { gt: inicio },
-        ...(ignorarId ? { id: { not: ignorarId } } : {}),
+        ...(ignorarIds?.length ? { id: { notIn: ignorarIds } } : ignorarId ? { id: { not: ignorarId } } : {}),
         // Salão: cada profissional tem a própria agenda (atendimentos em paralelo
         // são normais). Sem profissional, atendimentos de profissional não contam
         // (o import do Avec não tem responsável e travava a agenda inteira).
@@ -338,23 +369,155 @@ export class AgendaService {
 
   async atualizarStatus(tenantId: string, identityId: string, id: string, status: string, actorType: AtorAgenda = 'humano') {
     if (!(STATUS_AGENDA as readonly string[]).includes(status)) throw new BadRequestException('status inválido');
+    return this.prisma.withTenant(tenantId, (tx) => this.aplicarStatus(tx, tenantId, identityId, id, status, actorType));
+  }
+
+  /** Corpo do atualizarStatus, reusado item a item pelo grupo (mesma transação do chamador). */
+  private async aplicarStatus(tx: Prisma.TransactionClient, tenantId: string, identityId: string, id: string, status: string, actorType: AtorAgenda) {
+    const atual = await tx.agendaCompromisso.findFirst({ where: { id }, select: { id: true, status: true, inicio: true, fim: true, responsavelId: true, profissionalId: true } });
+    if (!atual) throw new NotFoundException('compromisso inexistente');
+    // Reativar (cancelado/faltou → agendado/confirmado) não pode atropelar
+    // quem ocupou o horário nesse meio-tempo.
+    if (ATIVOS.includes(status) && !ATIVOS.includes(atual.status) && (await this.choca(tx, atual.inicio, atual.fim, atual.responsavelId, id, atual.profissionalId))) {
+      throw new ConflictException('o horário já foi ocupado por outro compromisso');
+    }
+    // Timestamps (confirmado_em, faltou_em...) e o evento de outbox saem dos
+    // triggers da migration 054, para valer em qualquer caminho de escrita.
+    const c = await tx.agendaCompromisso.update({ where: { id }, data: { status } });
+    // Concluído com valor → entrada no caixa + comissão do responsável;
+    // saiu de concluído → a entrada automática sai (comissão paga trava: 409).
+    // Mesma transação; idempotente (concluir duas vezes não duplica).
+    await this.caixa.sincronizarCompromisso(tx, tenantId, c);
+    await audit(tx, tenantId, identityId, `compromisso.${status}`, id, actorType);
+    return c;
+  }
+
+  /**
+   * Agendamento multi-serviço (db/079): 2 a 8 serviços da mesma visita, cada um
+   * um compromisso individual (lembretes, caixa e sync Avec seguem 1:1), todos
+   * com o MESMO `grupoId`. Uma transação, uma trava de agenda, um audit.
+   */
+  async criarGrupo(tenantId: string, identityId: string, dto: GrupoInput, actorType: AtorAgenda = 'humano'): Promise<{ grupoId: string; itens: unknown[] }> {
+    if (!Array.isArray(dto.itens) || dto.itens.length < 2 || dto.itens.length > 8) {
+      throw new BadRequestException('um agendamento multi-serviço precisa de 2 a 8 itens');
+    }
     return this.prisma.withTenant(tenantId, async (tx) => {
-      const atual = await tx.agendaCompromisso.findFirst({ where: { id }, select: { id: true, status: true, inicio: true, fim: true, responsavelId: true, profissionalId: true } });
-      if (!atual) throw new NotFoundException('compromisso inexistente');
-      // Reativar (cancelado/faltou → agendado/confirmado) não pode atropelar
-      // quem ocupou o horário nesse meio-tempo.
-      if (ATIVOS.includes(status) && !ATIVOS.includes(atual.status) && (await this.choca(tx, atual.inicio, atual.fim, atual.responsavelId, id, atual.profissionalId))) {
-        throw new ConflictException('o horário já foi ocupado por outro compromisso');
+      // Catálogo de cada item: mesma validação do compromisso individual.
+      for (const it of dto.itens) await this.validarCatalogo(tx, it.profissionalId, it.servicoId);
+      const servicoIds = [...new Set(dto.itens.map((i) => i.servicoId).filter((x): x is string => !!x))];
+      const profIds = [...new Set(dto.itens.map((i) => i.profissionalId).filter((x): x is string => !!x))];
+      const [servicos, profissionais] = await Promise.all([
+        servicoIds.length ? tx.servico.findMany({ where: { id: { in: servicoIds } }, select: { id: true, nome: true, duracaoMin: true } }) : [],
+        profIds.length ? tx.profissional.findMany({ where: { id: { in: profIds } }, select: { id: true, nome: true } }) : [],
+      ]);
+      const sv = new Map(servicos.map((s) => [s.id, s]));
+      const pr = new Map(profissionais.map((p) => [p.id, p.nome]));
+      // Mesma validação de datas do compromisso individual; sem `fim`, manda a duração do catálogo.
+      const itens = dto.itens.map((it, idx) => {
+        const servico = it.servicoId ? sv.get(it.servicoId) : undefined;
+        let fimIso = it.fim;
+        if (!fimIso) {
+          if (!servico) throw new BadRequestException(`item ${idx + 1}: sem serviço do catálogo, informe o fim`);
+          const inicioMs = +new Date(it.inicio);
+          if (isNaN(inicioMs)) throw new BadRequestException('datas inválidas');
+          fimIso = new Date(inicioMs + servico.duracaoMin * 60_000).toISOString();
+        }
+        const { inicio, fim } = this.datas(it.inicio, fimIso);
+        const titulo = (it.titulo ?? '').trim() || servico?.nome || 'Atendimento';
+        return { ...it, inicio, fim, titulo: titulo.slice(0, 200) };
+      });
+      await this.travarAgenda(tx, tenantId);
+      // Choque com a agenda existente: por profissional (sem profissional = agenda geral).
+      for (const it of itens) {
+        if (await this.choca(tx, it.inicio, it.fim, null, undefined, it.profissionalId ?? null)) {
+          const quem = it.profissionalId ? (pr.get(it.profissionalId) ?? 'o profissional') : 'a agenda';
+          throw new ConflictException(`${quem} já tem compromisso entre ${horarioCurto(it.inicio)} e ${horarioCurto(it.fim)}`);
+        }
       }
-      // Timestamps (confirmado_em, faltou_em...) e o evento de outbox saem dos
-      // triggers da migration 054, para valer em qualquer caminho de escrita.
-      const c = await tx.agendaCompromisso.update({ where: { id }, data: { status } });
-      // Concluído com valor → entrada no caixa + comissão do responsável;
-      // saiu de concluído → a entrada automática sai (comissão paga trava: 409).
-      // Mesma transação; idempotente (concluir duas vezes não duplica).
-      await this.caixa.sincronizarCompromisso(tx, tenantId, c);
-      await audit(tx, tenantId, identityId, `compromisso.${status}`, id, actorType);
-      return c;
+      // Choque intra-grupo: a mesma profissional não atende duas coisas ao mesmo
+      // tempo (profissionais diferentes podem; sem profissional, a agenda geral é uma só).
+      for (let i = 0; i < itens.length; i++) {
+        for (let j = i + 1; j < itens.length; j++) {
+          const a = itens[i];
+          const b = itens[j];
+          if ((a.profissionalId ?? null) === (b.profissionalId ?? null) && a.inicio < b.fim && a.fim > b.inicio) {
+            const quem = a.profissionalId ? (pr.get(a.profissionalId) ?? 'o profissional') : 'a agenda';
+            throw new ConflictException(`${quem} não atende dois serviços ao mesmo tempo (${horarioCurto(a.inicio)} e ${horarioCurto(b.inicio)})`);
+          }
+        }
+      }
+      const grupoId = randomUUID();
+      const criados = [];
+      for (const it of itens) {
+        criados.push(
+          await tx.agendaCompromisso.create({
+            data: {
+              tenantId, titulo: it.titulo, inicio: it.inicio, fim: it.fim,
+              contactId: dto.contactId ?? null, notas: dto.notas ?? null, tipo: dto.tipo ?? 'outro',
+              // O dono do horário é a profissional (como nas reservas da IA); sem ela, agenda geral.
+              responsavelId: null, createdBy: actorType === 'humano' ? identityId : null, grupoId,
+              ...(it.valorCentavos != null ? { valorCentavos: it.valorCentavos } : {}),
+              ...(it.profissionalId ? { profissionalId: it.profissionalId } : {}),
+              ...(it.servicoId ? { servicoId: it.servicoId } : {}),
+            },
+          }),
+        );
+      }
+      await audit(tx, tenantId, identityId, 'compromisso.grupo_criado', grupoId, actorType);
+      return { grupoId, itens: criados };
+    });
+  }
+
+  /**
+   * Status de TODOS os itens do grupo (ex.: cancelar a visita inteira), numa
+   * transação: cada item passa pelo mesmo fluxo do status individual — choque
+   * ao reativar, triggers de timestamp e os efeitos de caixa por atendimento.
+   */
+  async atualizarStatusGrupo(tenantId: string, identityId: string, grupoId: string, status: string, actorType: AtorAgenda = 'humano') {
+    if (!(STATUS_AGENDA as readonly string[]).includes(status)) throw new BadRequestException('status inválido');
+    return this.prisma.withTenant(tenantId, async (tx) => {
+      const itens = await tx.agendaCompromisso.findMany({ where: { grupoId }, orderBy: { inicio: 'asc' }, select: { id: true } });
+      if (!itens.length) throw new NotFoundException('grupo inexistente');
+      const atualizados = [];
+      for (const it of itens) atualizados.push(await this.aplicarStatus(tx, tenantId, identityId, it.id, status, actorType));
+      return { grupoId, itens: atualizados };
+    });
+  }
+
+  /**
+   * Desloca o grupo inteiro pelo mesmo delta (a cliente remarcou a visita).
+   * Só os itens ATIVOS movem — concluído/cancelado fica no histórico. Choque
+   * revalidado por profissional na nova janela, ignorando os itens do grupo.
+   */
+  async reagendarGrupo(tenantId: string, identityId: string, grupoId: string, deltaMinutos: number, actorType: AtorAgenda = 'humano') {
+    if (!Number.isInteger(deltaMinutos) || deltaMinutos === 0 || Math.abs(deltaMinutos) > MAX_DELTA_GRUPO_MIN) {
+      throw new BadRequestException(`deltaMinutos deve ser um inteiro diferente de zero, de até ${MAX_DELTA_GRUPO_MIN} minutos (7 dias)`);
+    }
+    return this.prisma.withTenant(tenantId, async (tx) => {
+      const itens = await tx.agendaCompromisso.findMany({ where: { grupoId }, orderBy: { inicio: 'asc' } });
+      if (!itens.length) throw new NotFoundException('grupo inexistente');
+      const ativos = itens.filter((i) => ATIVOS.includes(i.status));
+      const deltaMs = deltaMinutos * 60_000;
+      const ids = itens.map((i) => i.id);
+      await this.travarAgenda(tx, tenantId);
+      for (const it of ativos) {
+        const inicio = new Date(+it.inicio + deltaMs);
+        const fim = new Date(+it.fim + deltaMs);
+        if (await this.choca(tx, inicio, fim, it.responsavelId, undefined, it.profissionalId, ids)) {
+          throw new ConflictException(`"${it.titulo}" chocaria com outro compromisso no novo horário (${horarioCurto(inicio)}–${horarioCurto(fim)})`);
+        }
+      }
+      const movidos = [];
+      for (const it of ativos) {
+        movidos.push(
+          await tx.agendaCompromisso.update({
+            where: { id: it.id },
+            data: { inicio: new Date(+it.inicio + deltaMs), fim: new Date(+it.fim + deltaMs) },
+          }),
+        );
+      }
+      await audit(tx, tenantId, identityId, 'compromisso.grupo_reagendado', grupoId, actorType);
+      return { grupoId, movidos: movidos.length, itens: movidos };
     });
   }
 
