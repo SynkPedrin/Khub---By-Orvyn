@@ -10,6 +10,7 @@ import { StevoApiEventosService } from '../crm/messaging/stevo-api-eventos.servi
 import type { EventoStevoApi } from '../crm/messaging/stevo-api-webhook.controller';
 import { GatilhoJob } from '../events/domain-events.service';
 import { isWorker } from '../common/queue-connection';
+import { OpenWaEventosService, type EventoOpenWa } from '../crm/messaging/openwa/openwa-eventos.service';
 import { ATRASO_RESPOSTA_MS, FILA_AGENTES, type AgenteJob } from '../agents/agent-runtime.service';
 import { AgendaService } from '../agenda/agenda.service';
 import { AgendadorService } from '../automations/agendador.service';
@@ -25,6 +26,7 @@ export class OperationsService implements OnModuleInit {
  private readonly log = new Logger('Operations');
  constructor(private readonly db: PrismaService, private readonly triggers: TriggersService,
    private readonly meta: MetaLeadsService, private readonly messages: MessagesService, private readonly stevoApi: StevoApiEventosService,
+   private readonly openwa: OpenWaEventosService,
    @InjectQueue('khub-maintenance') private readonly queue: Queue,
    @InjectQueue('automation-steps') private readonly steps: Queue<PassoJob>,
    @InjectQueue(FILA_AGENTES) private readonly agentes: Queue<AgenteJob>,
@@ -92,6 +94,8 @@ export class OperationsService implements OnModuleInit {
      if(e.kind==='stevo.inbound' || e.kind==='evolution.inbound') await this.messages.receiveInbound(e.payload as unknown as InboundInput);
      // Webhook de conta da Stevo (API de gestão): mensagem, recibo ou estado da instância.
      else if(e.kind==='stevo_api.event') await this.stevoApi.processar(tenantId,e.payload as unknown as EventoStevoApi);
+     // Gateway open-wa (WhatsApp por QR Code próprio, ADR-0058).
+     else if(e.kind==='openwa.event') await this.openwa.processar(tenantId,e.payload as unknown as EventoOpenWa);
      else if(e.kind==='meta.lead') {
        const result=await this.meta.processar(e.payload as unknown as Parameters<MetaLeadsService['processar']>[0]);
        if(!result.ok) throw new Error(result.motivo ?? 'meta processing failed');

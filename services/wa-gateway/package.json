@@ -1,0 +1,23 @@
+{
+  "name": "khub-wa-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Gateway WhatsApp Web (open-wa) multi-sessão para o KHUB",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test test/*.test.js",
+    "check": "node --check src/index.js && for f in src/*.js test/*.js; do node --check \"$f\" || exit 1; done"
+  },
+  "dependencies": {
+    "@open-wa/client": "5.12.1",
+    "@open-wa/core": "5.12.1",
+    "@open-wa/driver-puppeteer": "5.12.1",
+    "@open-wa/logger": "5.12.1",
+    "qrcode": "1.5.4"
+  }
+}

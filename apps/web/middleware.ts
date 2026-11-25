@@ -11,7 +11,7 @@ import { ACCESS, API, REFRESH, clearSession, setSession } from './lib/server-aut
 // mora em "/dashboard" (protegido, como qualquer outra rota fora de PUBLIC).
 // "/f" (formulário público, Q4.1) e "/b" (agendamento público, Q4.2) são
 // páginas que o VISITANTE do cliente abre sem conta; o tenant sai do slug.
-const PUBLIC = ['/', '/login', '/signup', '/agency-invite', '/esqueci-senha', '/redefinir-senha', '/termos', '/privacidade', '/f', '/b', '/r'];
+const PUBLIC = ['/', '/login', '/signup', '/agency-invite', '/esqueci-senha', '/redefinir-senha', '/termos', '/privacidade', '/f', '/b', '/r', '/w'];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

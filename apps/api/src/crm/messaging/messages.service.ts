@@ -9,6 +9,8 @@ import { DeliveryError } from './stevo.provider';
 import { acharContatoPorTelefone } from '../telefone';
 import { AtendimentoService, type EstadoAtendimento } from './atendimento.service';
 import { StevoApiProvider } from './stevo-api.provider';
+import { OpenWaProvider } from './openwa/openwa.provider';
+import type { Prisma } from '@prisma/client';
 import type { MidiaSaida } from './provider.contract';
 import { CanaisService } from './canais/canais.service';
 import { horaCurta } from '../../common/hora';
@@ -35,6 +37,8 @@ export interface MidiaEnvio extends MidiaSaida {
   /** Variáveis que faltam ao storage — para o 501 dizer o que configurar. */
   storageFaltando?: string[];
 }
+
+export type ProvedorNome = 'openwa' | 'stevo_api' | 'evolution' | 'stevo';
 
 export interface InboundInput {
   tenantId: string;
@@ -65,11 +69,31 @@ export class MessagesService {
     // Opcionais só para os testes antigos que montam o serviço à mão; no Nest sempre existem.
     @Optional() private readonly canais?: CanaisService,
     @Optional() private readonly atribuicao?: AtribuicaoService,
+    @Optional() private readonly openwa?: OpenWaProvider,
   ) {}
 
   /** Implementação por nome (o nome é decidido POR TENANT dentro da transação). */
-  private impl(nome: 'stevo_api' | 'evolution' | 'stevo'): MessagingProvider {
+  private impl(nome: ProvedorNome): MessagingProvider {
+    if (nome === 'openwa' && this.openwa) return this.openwa;
     return nome === 'stevo_api' ? this.stevoApi : nome === 'evolution' ? this.evolution : this.stevo;
+  }
+
+  /**
+   * Provedor de WhatsApp DO TENANT (ADR-0031/0057), decidido dentro da transação:
+   *  1. open-wa (QR Code próprio) conectado → ele;
+   *  2. instância Stevo vinculada → ela (desconectada = `canal_desconectado`);
+   *  3. open-wa vinculado mas caído (sem Stevo) → `canal_desconectado`;
+   *  4. senão o comportamento anterior (Evolution global → Stevo legado).
+   */
+  private async escolherProvedor(tx: Prisma.TransactionClient, tenantId: string): Promise<{ providerNome: ProvedorNome; integration: { externalBusinessId: string | null } | null; desconectado: boolean }> {
+    const openwa = this.openwa ? await tx.integration.findFirst({ where: { tenantId, provider: 'openwa', status: { not: 'revoked' } }, select: { externalBusinessId: true, status: true } }) : null;
+    if (openwa?.status === 'connected') return { providerNome: 'openwa', integration: openwa, desconectado: false };
+    const stevoApi = await tx.integration.findFirst({ where: { tenantId, provider: 'stevo_api', status: { not: 'revoked' } }, select: { externalBusinessId: true, status: true } });
+    if (stevoApi) return { providerNome: 'stevo_api', integration: stevoApi.status === 'connected' ? stevoApi : null, desconectado: stevoApi.status !== 'connected' };
+    if (openwa) return { providerNome: 'openwa', integration: null, desconectado: true };
+    const providerNome = this.provider().nome;
+    const integration = await tx.integration.findFirst({ where: { tenantId, provider: providerNome, status: 'connected' }, select: { externalBusinessId: true } });
+    return { providerNome, integration, desconectado: false };
   }
 
   /**
@@ -102,12 +126,10 @@ export class MessagesService {
       const nova = await tx.$executeRaw`INSERT INTO webhook_events(tenant_id,provider,event_id,payload,processed_at)
         VALUES(${tenantId}::uuid,'notificacao_equipe',${tenantId + ':' + idempotencyKey},'{}',now()) ON CONFLICT(provider,event_id) DO NOTHING`;
       if (!nova) return null;
-      const stevoApi = await tx.integration.findFirst({ where: { tenantId, provider: 'stevo_api', status: { not: 'revoked' } }, select: { externalBusinessId: true, status: true } });
-      const providerNome: 'stevo_api' | 'evolution' | 'stevo' = stevoApi ? 'stevo_api' : this.provider().nome;
-      const integration = stevoApi?.status === 'connected' ? stevoApi : stevoApi ? null : await tx.integration.findFirst({ where: { tenantId, provider: providerNome, status: 'connected' }, select: { externalBusinessId: true } });
+      const { providerNome, integration, desconectado } = await this.escolherProvedor(tx, tenantId);
       let status = 'sending';
-      if (!this.impl(providerNome).configured() || (process.env.NODE_ENV === 'production' && !integration?.externalBusinessId)) status = 'config_required';
-      if (status === 'sending' && stevoApi && stevoApi.status !== 'connected') status = 'canal_desconectado';
+      if (!this.impl(providerNome).configured() || ((process.env.NODE_ENV === 'production' || providerNome === 'openwa') && !integration?.externalBusinessId && !desconectado)) status = 'config_required';
+      if (status === 'sending' && desconectado) status = 'canal_desconectado';
       if (status === 'sending' && !this.emProducao() && !this.config.get('STEVO_TEST_NUMBER')) status = 'bloqueado_dev';
       await tx.$executeRaw`INSERT INTO audit_logs(tenant_id,actor_type,actor_id,acao,entidade,entidade_id) VALUES(${tenantId}::uuid,'sistema','automacao','equipe.notificacao','webhook_event',${idempotencyKey})`;
       return { status, providerNome, instance: integration?.externalBusinessId ?? undefined };
@@ -144,19 +166,18 @@ export class MessagesService {
       if (!conv) throw new NotFoundException('conversa inexistente');
       const previous = await tx.message.findUnique({where:{tenantId_idempotencyKey:{tenantId,idempotencyKey}}});
       if (previous && (previous.corpo!==texto || previous.conversationId!==conversationId)) throw new ConflictException('chave de idempotência já usada com outro conteúdo');
-      if (previous && previous.deliveryStatus!=='pending') return {msg:previous,send:false,phone:null,instance:undefined,providerNome:this.provider().nome as 'stevo_api'|'evolution'|'stevo',gateStorage:false};
+      if (previous && previous.deliveryStatus!=='pending') return {msg:previous,send:false,phone:null,instance:undefined,providerNome:this.provider().nome as ProvedorNome,gateStorage:false};
       if (conv.contactId) await tx.$queryRaw`SELECT id FROM contacts WHERE id=${conv.contactId}::uuid AND tenant_id=${tenantId}::uuid FOR UPDATE`;
       const contact=conv.contactId ? await tx.contact.findUnique({where:{id:conv.contactId,tenantId}}) : null;
       // Provedor POR TENANT (doc 18 / ADR-0031): instância Stevo vinculada ao
       // tenant vence; sem ela, o comportamento anterior (Evolution global → Stevo legado).
-      const stevoApi=await tx.integration.findFirst({where:{tenantId,provider:'stevo_api',status:{not:'revoked'}},select:{externalBusinessId:true,status:true}});
-      const providerNome:'stevo_api'|'evolution'|'stevo'=stevoApi ? 'stevo_api' : this.provider().nome;
-      const integration=stevoApi?.status==='connected' ? stevoApi : stevoApi ? null : await tx.integration.findFirst({where:{tenantId,provider:providerNome,status:'connected'},select:{externalBusinessId:true}});
+      const {providerNome,integration,desconectado}=await this.escolherProvedor(tx,tenantId);
       let status='sending';
       if (!contact?.telefone) status='sem_telefone';
-      if (!this.impl(providerNome).configured() || (process.env.NODE_ENV==='production' && !integration?.externalBusinessId)) status='config_required';
-      // Instância Stevo vinculada mas desconectada: não tenta (a Stevo responderia not_ready).
-      if (status==='sending' && stevoApi && stevoApi.status!=='connected') status='canal_desconectado';
+      // open-wa sempre precisa da sessão do tenant (não há instância global de dev).
+      if (!this.impl(providerNome).configured() || ((process.env.NODE_ENV==='production' || providerNome==='openwa') && !integration?.externalBusinessId && !desconectado)) status='config_required';
+      // Canal vinculado mas desconectado (Stevo ou open-wa): não tenta.
+      if (status==='sending' && desconectado) status='canal_desconectado';
       // Cancelado de propósito: o contato pediu para sair, ou RESPONDEU depois que a automação começou
       // (follow-up não vai para quem acabou de falar). O motivo fica gravado (auditoria 16/11).
       const motivoCancelado=contact?.optedOutAt ? 'contato_optou_por_sair' : (runStartedAt && contact?.lastInboundAt && contact.lastInboundAt >= new Date(runStartedAt)) ? 'contato_respondeu_depois_do_inicio' : null;
@@ -247,7 +268,7 @@ export class MessagesService {
       if (!inserted) return { deduped: true as const };
       // Mensagem que o próprio KHUB enviou (API) também dispara message.sent
       // com from_me — já está no banco com provider_id = id do provedor.
-      const provedorId = input.providerMessageId.replace(/^stevo_api:/, '');
+      const provedorId = input.providerMessageId.replace(/^(stevo_api|openwa):/, '');
       const jaEnviada = await tx.message.findFirst({ where: { tenantId: input.tenantId, providerId: provedorId }, select: { id: true } });
       if (jaEnviada) return { deduped: true as const };
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${input.tenantId + ':' + input.numeroContato},0))`;
@@ -259,6 +280,17 @@ export class MessagesService {
       if (!conv) {
         conv = await tx.conversation.create({ data: { tenantId: input.tenantId, contactId: contact.id, nome: contact.nome, canal: 'WhatsApp', ultimaPrevia: input.texto.slice(0, 140), ultimaHora: hora, atendimento: 'humano' } });
       } else {
+        // Eco do que o PRÓPRIO KHUB acabou de enviar e cujo provider_id ainda não
+        // foi gravado (o webhook chegou antes da resposta do envio): mesmo texto,
+        // saído daqui há menos de 2 min, sem id do provedor → é a mesma mensagem.
+        const eco = await tx.message.findFirst({
+          where: { conversationId: conv.id, corpo: input.texto, autorTipo: { in: ['humano', 'ia', 'automacao'] }, providerId: null, idempotencyKey: { not: { startsWith: 'celular:' } }, createdAt: { gte: new Date(Date.now() - 120_000) } },
+          select: { id: true },
+        });
+        if (eco) {
+          await tx.message.update({ where: { id: eco.id }, data: { providerId: provedorId } });
+          return { deduped: true as const };
+        }
         conv = await tx.conversation.update({ where: { id: conv.id }, data: { ultimaPrevia: input.texto.slice(0, 140), ultimaHora: hora, status: 'aberta', updatedAt: new Date() } });
       }
       const msg = await tx.message.create({ data: { tenantId: input.tenantId, conversationId: conv.id, autorTipo: 'humano', corpo: input.texto, hora, idempotencyKey: `celular:${input.providerMessageId}` }, select: { id: true } });

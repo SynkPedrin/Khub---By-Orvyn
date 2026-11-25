@@ -117,8 +117,9 @@ export class StevoApiEventosService {
     return 'entrada';
   }
 
-  /** Foto de perfil (se ausente/vencida) e mídia recebida guardada no anexo da mensagem. */
-  private async depoisDaEntrada(tenantId: string, conversationId: string, texto: string, midia: MidiaEntrada | null, referral: ReferralWhatsApp | null = null) {
+  /** Foto de perfil (se ausente/vencida) e mídia recebida guardada no anexo da mensagem.
+   *  Público: o open-wa (ADR-0058) reaproveita o mesmo pós-entrada. */
+  async depoisDaEntrada(tenantId: string, conversationId: string, texto: string, midia: MidiaEntrada | null, referral: ReferralWhatsApp | null = null) {
     const alvo = await this.prisma.withTenant(tenantId, async (tx) => {
       const conv = await tx.conversation.findUnique({ where: { id: conversationId }, select: { contact: { select: { id: true, fotoEm: true, fotoUrl: true } } } });
       const msg = midia

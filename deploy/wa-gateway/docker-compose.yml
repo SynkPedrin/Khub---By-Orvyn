@@ -1,0 +1,47 @@
+# wa-gateway do KHUB + Caddy (HTTPS automático com Let's Encrypt).
+# Uso (na VPS, dentro desta pasta):  cp exemplo.env .env  → edite → docker compose up -d
+# Memória: cada número conectado é um Chromium (~500 MB). Ajuste GATEWAY_MEM_LIMIT
+# e MAX_SESSOES juntos (ex.: 4 GB de RAM → MAX_SESSOES=5 e GATEWAY_MEM_LIMIT=3g).
+
+services:
+  gateway:
+    build: ../../services/wa-gateway
+    image: khub-wa-gateway:latest
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+      PORT: "8080"
+    volumes:
+      - wa-data:/data
+    shm_size: "1gb"
+    mem_limit: ${GATEWAY_MEM_LIMIT:-3g}
+    # sem "ports": o gateway só é acessível pelo Caddy (HTTPS)
+    expose:
+      - "8080"
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  caddy:
+    image: caddy:2.8.4-alpine
+    restart: unless-stopped
+    depends_on:
+      - gateway
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      WA_DOMINIO: "${WA_DOMINIO:?defina WA_DOMINIO no arquivo .env}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  wa-data:
+  caddy-data:
+  caddy-config:

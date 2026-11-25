@@ -29,6 +29,7 @@ export class ApiError extends Error {
 export const PROVIDER_LABEL: Record<string, string> = {
   stevo: 'STEVO (WhatsApp, legado)',
   evolution: 'Evolution API (WhatsApp)',
+  openwa: 'servidor de WhatsApp por QR Code (open-wa)',
   meta: 'Meta Ads',
   google_ads: 'Google Ads',
   tiktok: 'TikTok Ads',

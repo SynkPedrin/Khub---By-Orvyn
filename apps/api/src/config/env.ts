@@ -82,6 +82,12 @@ const schema = z.object({
   STEVO_WEBHOOK_SECRET: z.string().optional(),
   STEVO_WEBHOOK_SECRET_PREVIOUS: z.string().optional(),
 
+  // Gateway open-wa (services/wa-gateway, ADR-0058): URL https da VPS, chave que
+  // o KHUB manda em `x-gateway-key` e segredo do HMAC do webhook que ele manda.
+  OPENWA_GATEWAY_URL: z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), z.string().url().optional()),
+  OPENWA_GATEWAY_KEY: z.string().optional(),
+  OPENWA_WEBHOOK_SECRET: z.string().optional(),
+
   // Storage S3-compatible (R2/AWS/MinIO): anexos do Inbox. Sem as quatro
   // primeiras, envio de mídia > 5 MB (ou pela Stevo, que só aceita URL)
   // responde config_required. Endpoint path-style: https://<conta>.r2.cloudflarestorage.com

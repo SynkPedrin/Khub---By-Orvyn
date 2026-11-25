@@ -2,6 +2,7 @@ import { ConflictException, Injectable, Logger, NotFoundException, Optional } fr
 import { PrismaService } from '../prisma/prisma.service';
 import { StevoApiProvider } from './messaging/stevo-api.provider';
 import { EvolutionProvider } from './messaging/evolution.provider';
+import { OpenWaProvider } from './messaging/openwa/openwa.provider';
 import {
   limparOpcional, montarUrlWhatsapp, slugCodigo, validarCampanha, validarCodigo, validarFonte, validarTextoInicial,
   type FonteLink,
@@ -76,6 +77,7 @@ export class LinksRastreadosService {
     // Opcionais para os specs montarem o serviço à mão; no Nest sempre existem.
     @Optional() private readonly stevoApi?: StevoApiProvider,
     @Optional() private readonly evolution?: EvolutionProvider,
+    @Optional() private readonly openwa?: OpenWaProvider,
   ) {}
 
   async listar(tenantId: string): Promise<LinkRastreadoDto[]> {
@@ -160,13 +162,18 @@ export class LinksRastreadosService {
   private async numeroDoTenant(tenantId: string): Promise<{ numero: string | null; aviso: string | null }> {
     try {
       const integ = await this.prisma.withTenant(tenantId, async (tx) => {
+        // Mesma ordem do envio (ADR-0058): open-wa conectado → Stevo → Evolution.
+        const openwa = await tx.integration.findFirst({ where: { provider: 'openwa', status: 'connected' }, select: { provider: true, externalBusinessId: true } });
+        if (openwa) return openwa;
         const stevo = await tx.integration.findFirst({ where: { provider: 'stevo_api', status: 'connected' }, select: { provider: true, externalBusinessId: true } });
         return stevo ?? tx.integration.findFirst({ where: { provider: 'evolution', status: 'connected' }, select: { provider: true, externalBusinessId: true } });
       });
       if (!integ?.externalBusinessId) {
         return { numero: null, aviso: 'nenhum WhatsApp conectado nesta subconta — conecte uma instância para o link wa.me ser montado' };
       }
-      const numero = integ.provider === 'stevo_api'
+      const numero = integ.provider === 'openwa'
+        ? (await this.openwa?.estado(integ.externalBusinessId))?.numero ?? null
+        : integ.provider === 'stevo_api'
         ? (await this.stevoApi?.conexao(integ.externalBusinessId))?.phone_number ?? null
         : (await this.evolution?.getConnectionState(integ.externalBusinessId))?.numero ?? null;
       return numero

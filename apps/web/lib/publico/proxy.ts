@@ -1,7 +1,7 @@
 import { API } from '@/lib/server-auth';
 
 /**
- * Ponte do web para a API pública (/v1/public/*) das páginas /f e /b.
+ * Ponte do web para a API pública (/v1/public/*) das páginas /f, /b e /w (link de conexão do WhatsApp).
  *
  * O navegador do visitante só fala com o domínio do web; a API vê o servidor
  * do web como origem. Para o rate limit por IP valer para o VISITANTE, o IP
@@ -11,7 +11,7 @@ import { API } from '@/lib/server-auth';
  */
 
 /** Recursos públicos que o proxy repassa. Qualquer outro caminho é 404. */
-const PERMITIDOS = /^(forms\/[a-z0-9-]{4,64}(\/submit)?|booking\/[a-z0-9-]{4,64}(\/(slots|book))?|reservas\/[A-Za-z0-9_-]{43}(\/(cancelar|remarcar|ics))?)$/;
+const PERMITIDOS = /^(forms\/[a-z0-9-]{4,64}(\/submit)?|booking\/[a-z0-9-]{4,64}(\/(slots|book))?|reservas\/[A-Za-z0-9_-]{43}(\/(cancelar|remarcar|ics))?|whatsapp\/[A-Za-z0-9_-]{43}(\/novo-qr)?)$/;
 
 export function caminhoPublicoPermitido(caminho: string): boolean {
   return PERMITIDOS.test(caminho);

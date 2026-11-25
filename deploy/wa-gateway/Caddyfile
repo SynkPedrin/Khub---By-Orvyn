@@ -1,0 +1,17 @@
+# Caddy pega o certificado HTTPS sozinho para o domínio em WA_DOMINIO.
+{$WA_DOMINIO} {
+	encode gzip
+	request_body {
+		max_size 40MB
+	}
+	reverse_proxy gateway:8080 {
+		transport http {
+			read_timeout 180s
+			write_timeout 180s
+		}
+	}
+	log {
+		output stdout
+		format console
+	}
+}

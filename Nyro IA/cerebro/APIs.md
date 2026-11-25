@@ -233,6 +233,21 @@ Erros: 409 `genna_nao_conectado` (sem conexão ou acesso expirado), 403 `genna_s
 
 Evento `conversation.updated` com `excluida: true` fecha a conversa nas telas abertas. 409 = banco sem db/081.
 
+### 5.5 WhatsApp por QR Code — open-wa ([[Arquitetura|ADR-0058]])
+| Rota | Papel | Uso |
+|---|---|---|
+| `GET /v1/integrations/whatsapp-qr` | owner/admin | painel: `{configurado, faltando, gatewayOk, estado, qr, numero, nome, fotoUrl, historico, links}` |
+| `POST /v1/integrations/whatsapp-qr/conectar` | owner/admin | inicia a sessão no gateway (QR em seguida no painel) |
+| `POST /v1/integrations/whatsapp-qr/desconectar` | owner/admin | logout + integração `revoked` + links ativos revogados |
+| `POST /v1/integrations/whatsapp-qr/historico` | owner/admin | `{dias 1–365}` → 202 `{loteId}` |
+| `POST /v1/integrations/whatsapp-qr/links` | owner/admin | `{id, url, expiraEm}` — o token só aparece aqui |
+| `DELETE /v1/integrations/whatsapp-qr/links/:id` | owner/admin | cancela o link |
+| `GET /v1/public/whatsapp/:token` | público (90/min por IP) | `{empresa, expiraEm, estado, qr, numero(mascarado)}`; 404 inválido, 410 expirado/cancelado |
+| `POST /v1/public/whatsapp/:token/novo-qr` | público (10/10 min por IP) | reinicia a sessão |
+| `POST /v1/webhooks/openwa` | gateway (HMAC) | eventos do CONTRATO.md §2 |
+
+Tempo real: `whatsapp.estado` `{estado, numero?, historico?}`. Variáveis na API: `OPENWA_GATEWAY_URL`, `OPENWA_GATEWAY_KEY`, `OPENWA_WEBHOOK_SECRET`.
+
 > ⚠️ LACUNA: TTL do access/refresh token, formato/algoritmo de assinatura JWT (HS256 vs RS256), rotação de refresh e revogação não estão no PRD. Definir no Bloco 3 e registrar ADR se estrutural.
 
 ---

@@ -4,7 +4,7 @@ import { HttpException, Injectable, Logger } from '@nestjs/common';
 export type Provider =
   | 'stevo' | 'stevo_api' | 'stevo_webhook' | 'evolution' | 'meta' | 'google_ads' | 'tiktok' | 'stripe'
   | 'voyage' | 'anthropic' | 'email' | 'oauth_google' | 'oauth_github'
-  | 'google_calendar' | 'integrations_crypto' | 'storage' | 'youtube' | 'firecrawl' | 'google_presenca';
+  | 'google_calendar' | 'integrations_crypto' | 'storage' | 'youtube' | 'firecrawl' | 'google_presenca' | 'openwa';
 
 /** Variáveis obrigatórias por provedor (Seção 2 do Brief-Finalizacao). */
 const REQUIRED: Record<Provider, string[]> = {
@@ -16,6 +16,8 @@ const REQUIRED: Record<Provider, string[]> = {
   // do servidor Evolution — não confundir com o token por-instância que a
   // Evolution devolve em /instance/create (esse fica cifrado no banco).
   evolution: ['EVOLUTION_BASE_URL', 'EVOLUTION_API_KEY'],
+  // WhatsApp por QR Code próprio: gateway open-wa na VPS (ADR-0058, services/wa-gateway).
+  openwa: ['OPENWA_GATEWAY_URL', 'OPENWA_GATEWAY_KEY', 'OPENWA_WEBHOOK_SECRET'],
   meta: ['META_APP_ID', 'META_APP_SECRET'],
   google_ads: ['GOOGLE_ADS_DEVELOPER_TOKEN', 'GOOGLE_ADS_CLIENT_ID', 'GOOGLE_ADS_CLIENT_SECRET'],
   tiktok: ['TIKTOK_APP_ID', 'TIKTOK_APP_SECRET'],

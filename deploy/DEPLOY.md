@@ -102,6 +102,21 @@ A Vercel emite o certificado HTTPS sozinha assim que o CNAME propagar.
 
 Nunca deixe o worker do Mac e o da produção ligados ao mesmo tempo: os dois responderiam o mesmo cliente.
 
+## 5. WhatsApp por QR Code (open-wa, ADR-0058)
+
+Roda numa VPS própria, separada do Render (cada número conectado é um Chrome, uns 500 MB de RAM).
+
+1. Suba o gateway na VPS seguindo `deploy/wa-gateway/README.md` (Docker + HTTPS automático). Gere a chave e o segredo com `openssl rand -hex 32`.
+2. No Render (serviço `khub-api` → Environment), crie as três variáveis com os MESMOS valores da VPS e salve:
+   - `OPENWA_GATEWAY_URL` = `https://wa.<seu-domínio>`
+   - `OPENWA_GATEWAY_KEY`
+   - `OPENWA_WEBHOOK_SECRET`
+   Na VPS, `KHUB_WEBHOOK_URL` = `https://<api>/v1/webhooks/openwa`.
+3. Banco: aplique `db/081` e `db/083` no Neon (sem isso o histórico acionaria a IA em mensagens antigas).
+4. Em Configurações › Integrações › WhatsApp por QR Code: **Conectar aqui** ou **Gerar link para o cliente (7 dias)**.
+
+Um cliente que já usa a Stevo continua nela até conectar pelo QR Code: com o open-wa conectado, o envio passa a sair por ele. Depois disso, desvincule a instância da Stevo para o mesmo número não chegar em dobro.
+
 ## Conferência rápida depois do deploy
 
 - `/` abre a LP do KHUB; `/login` abre o login.

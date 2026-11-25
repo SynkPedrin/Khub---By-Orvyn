@@ -50,10 +50,16 @@ import { CanaisController } from './messaging/canais/canais.controller';
 import { CanaisService } from './messaging/canais/canais.service';
 import { CanaisIngestaoService } from './messaging/canais/canais-ingestao.service';
 import { MetaCanaisHttp, YoutubeHttp } from './messaging/canais/canais.http';
+import { OpenWaProvider } from './messaging/openwa/openwa.provider';
+import { OpenWaEventosService } from './messaging/openwa/openwa-eventos.service';
+import { OpenWaHistoricoService } from './messaging/openwa/openwa-historico.service';
+import { OpenWaConexaoService } from './messaging/openwa/openwa-conexao.service';
+import { OpenWaController, OpenWaWebhookController, PublicOpenWaController } from './messaging/openwa/openwa.controllers';
+import { PublicRateLimiter } from '../common/public-request';
 
 @Module({
   imports: [RealtimeModule],
-  controllers: [ContatosController, NegociosController, LostReasonsController, CrmController, CrmF2Controller, CustomFieldsController, PipelinesController, ComercialController, OrigemFotoController, LinksRastreadosController, AtribuicaoController, StevoWebhookController, StevoApiWebhookController, EvolutionWebhookController, WhatsAppController, InboxController, CanaisController],
+  controllers: [ContatosController, NegociosController, LostReasonsController, CrmController, CrmF2Controller, CustomFieldsController, PipelinesController, ComercialController, OrigemFotoController, LinksRastreadosController, AtribuicaoController, StevoWebhookController, StevoApiWebhookController, EvolutionWebhookController, WhatsAppController, InboxController, CanaisController, OpenWaWebhookController, OpenWaController, PublicOpenWaController],
   providers: [
     CrmService,
     AtribuicaoService,
@@ -89,12 +95,18 @@ import { MetaCanaisHttp, YoutubeHttp } from './messaging/canais/canais.http';
     CanaisIngestaoService,
     MetaCanaisHttp,
     YoutubeHttp,
+    // WhatsApp por QR Code próprio (open-wa na VPS, ADR-0058).
+    OpenWaProvider,
+    OpenWaEventosService,
+    OpenWaHistoricoService,
+    OpenWaConexaoService,
+    PublicRateLimiter,
     // Instância própria (stateless, só depende de ConfigService) — evita
     // ciclo de import com IntegrationsModule, que é quem importa CrmModule.
     CryptoService,
   ],
   // superfície pública do CRM: quem age em nome do usuário (automations,
   // integrations, e a Nyro em F) entra por aqui — nunca no banco direto.
-  exports: [CrmService, AtribuicaoService, AvatarContatoService, MessagesService, CanaisIngestaoService, AtendimentoService, StevoApiProvider, StevoApiEventosService, StevoApiVinculoService, LeadsService, TasksService, CompaniesService, NotesService, CustomFieldsService],
+  exports: [CrmService, AtribuicaoService, AvatarContatoService, MessagesService, CanaisIngestaoService, AtendimentoService, StevoApiProvider, StevoApiEventosService, StevoApiVinculoService, OpenWaEventosService, LeadsService, TasksService, CompaniesService, NotesService, CustomFieldsService],
 })
 export class CrmModule {}

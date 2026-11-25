@@ -7,6 +7,7 @@ import { BrandLogo, type BrandKey } from '@/components/brand/BrandLogo';
 import { ConfigRequired } from '@/components/app/ConfigRequired';
 import { WhatsAppConnectModal } from '@/components/app/WhatsAppConnectModal';
 import { ConectorIaPainel } from '@/components/app/ConectorIaPainel';
+import { WhatsAppQrPainel } from '@/components/app/WhatsAppQrPainel';
 import { ApiError } from '@/lib/api-error';
 import { ads } from '@/lib/ads';
 import { settingsApi } from '@/lib/settings';
@@ -160,6 +161,9 @@ export function IntegrationsMarketplace() {
       )}
 
       {/* Conector MCP: Claude e ChatGPT operando o KHUB (ADR-0049) */}
+      {/* WhatsApp por QR Code próprio (open-wa, ADR-0058): QR, link de 7 dias e histórico */}
+      {(cat === 'todas' || cat === 'mensageria') && <WhatsAppQrPainel />}
+
       {(cat === 'todas' || cat === 'ia') && <ConectorIaPainel />}
 
       {/* Grade de apps */}

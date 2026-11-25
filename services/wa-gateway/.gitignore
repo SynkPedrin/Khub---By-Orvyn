@@ -1,0 +1,4 @@
+# dados locais de teste (sessões do WhatsApp = credenciais!)
+data/
+.open-wa/
+*.data.json

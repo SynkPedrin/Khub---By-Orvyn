@@ -91,6 +91,8 @@ export interface RealtimeEvents {
   /** Status do negócio mudou (ganho/perdido/aberto) — gatilho de pós-venda/reativação. */
   'deal.status_changed': { id: string; status: string; contactId: string | null };
   'contact.created': { id: string; nome: string; origem: string };
+  /** WhatsApp por QR Code próprio (open-wa, ADR-0058): sessão mudou de estado ou o histórico avançou. */
+  'whatsapp.estado': { estado: 'iniciando' | 'aguardando_qr' | 'conectado' | 'desconectado' | 'erro'; numero?: string | null; historico?: { conversas: number; mensagens: number; concluido: boolean } };
   'contact.tagged': { id: string; tag: string };
   /** Estrutura do funil mudou (funil/etapa criada, renomeada, reordenada ou apagada). */
   'pipeline.updated': { id: string };

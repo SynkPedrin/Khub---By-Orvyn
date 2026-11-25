@@ -104,7 +104,7 @@ export class CanaisService {
         orderBy: { createdAt: 'asc' },
         select: { id: true, rede: true, nome: true, externalId: true, status: true, erro: true, ultimaSyncAt: true },
       }),
-      whats: await tx.integration.findMany({ where: { provider: { in: ['stevo_api', 'evolution'] } }, select: { provider: true, status: true, externalBusinessId: true } }),
+      whats: await tx.integration.findMany({ where: { provider: { in: ['stevo_api', 'evolution', 'openwa'] } }, select: { provider: true, status: true, externalBusinessId: true } }),
     }));
     const contas = (rede: Rede) =>
       conexoes.filter((c) => c.rede === rede).map((c) => ({ id: c.id, nome: c.nome, externalId: c.externalId, status: c.status, erro: c.erro, ultimaSyncAt: c.ultimaSyncAt?.toISOString() ?? null }));
@@ -115,7 +115,7 @@ export class CanaisService {
     };
 
     const whatsConectado = whats.some((w) => w.status === 'connected');
-    const temStevo = whats.some((w) => w.provider === 'stevo_api' && w.status !== 'revoked');
+    const temStevo = whats.some((w) => (w.provider === 'stevo_api' || w.provider === 'openwa') && w.status !== 'revoked');
     const faltaEvolution = this.config.missingVars('evolution');
     const whatsGate = !whatsConectado && !temStevo && faltaEvolution.length ? { provider: 'evolution', missing: faltaEvolution } : null;
 
@@ -132,7 +132,7 @@ export class CanaisService {
           { rotulo: 'Mensagens diretas', disponivel: true },
           { rotulo: 'Arquivos e áudios', disponivel: true },
         ],
-        contas: whats.filter((w) => w.status === 'connected').map((w) => ({ id: w.provider, nome: w.externalBusinessId ?? 'WhatsApp', externalId: w.externalBusinessId ?? '', status: 'conectado', erro: null, ultimaSyncAt: null })),
+        contas: whats.filter((w) => w.status === 'connected').map((w) => ({ id: w.provider, nome: w.provider === 'openwa' ? 'WhatsApp por QR Code' : w.externalBusinessId ?? 'WhatsApp', externalId: w.externalBusinessId ?? '', status: 'conectado', erro: null, ultimaSyncAt: null })),
         docs: [],
       },
       {

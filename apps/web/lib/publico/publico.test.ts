@@ -9,8 +9,8 @@ import { mover } from '@/components/formularios/Construtor';
 const TOKEN = 'a'.repeat(43);
 
 describe('proxy público (/api/public)', () => {
-  it.each(['forms/contato-site', 'forms/contato-site/submit', 'booking/consulta-1', 'booking/consulta-1/slots', 'booking/consulta-1/book', `reservas/${TOKEN}`, `reservas/${TOKEN}/ics`, `reservas/${TOKEN}/cancelar`])('repassa %s', (c) => expect(caminhoPublicoPermitido(c)).toBe(true));
-  it.each(['forms', 'forms/../crm/contacts', 'crm/contacts', 'forms/x/submit', 'booking/consulta-1/admin', 'reservas/curto', 'forms/ABC-maiusculo'])('recusa %s', (c) => expect(caminhoPublicoPermitido(c)).toBe(false));
+  it.each(['forms/contato-site', 'forms/contato-site/submit', 'booking/consulta-1', 'booking/consulta-1/slots', 'booking/consulta-1/book', `reservas/${TOKEN}`, `reservas/${TOKEN}/ics`, `reservas/${TOKEN}/cancelar`, `whatsapp/${TOKEN}`, `whatsapp/${TOKEN}/novo-qr`])('repassa %s', (c) => expect(caminhoPublicoPermitido(c)).toBe(true));
+  it.each(['forms', 'forms/../crm/contacts', 'crm/contacts', 'forms/x/submit', 'booking/consulta-1/admin', 'reservas/curto', 'forms/ABC-maiusculo', 'whatsapp/curto', `whatsapp/${TOKEN}/start`])('recusa %s', (c) => expect(caminhoPublicoPermitido(c)).toBe(false));
 
   it('IP do visitante: primeiro do x-forwarded-for; lixo é ignorado', () => {
     expect(ipDoVisitante(new Headers({ 'x-forwarded-for': '200.1.2.3, 10.0.0.1' }))).toBe('200.1.2.3');

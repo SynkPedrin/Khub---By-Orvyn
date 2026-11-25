@@ -101,7 +101,7 @@ export class ConversasService {
         : [];
       const cor = new Map(cores.map((t) => [t.name.toLowerCase(), t.color]));
       const [whats, redes] = await Promise.all([
-        tx.integration.count({ where: { provider: { in: ['stevo_api', 'evolution'] }, status: 'connected' } }),
+        tx.integration.count({ where: { provider: { in: ['stevo_api', 'evolution', 'openwa'] }, status: 'connected' } }),
         tx.channelConnection.findMany({ where: { status: 'conectado' }, select: { rede: true }, distinct: ['rede'] }),
       ]);
       const canais: Record<string, number> = Object.fromEntries(CANAIS.map((c) => [c, 0]));
