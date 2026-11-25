@@ -52,6 +52,7 @@ function ambiente(o: {
   maisNova?: boolean;
   runExiste?: boolean;
   optout?: boolean;
+  tags?: string[];
   custoConversa?: number;
   core?: ResultadoCore | Error;
   horario?: Partial<ConfigHorario>;
@@ -65,7 +66,7 @@ function ambiente(o: {
     },
     conversation: { findUnique: jest.fn(async () => ({ id: 'cv1', atendimento: o.atendimento ?? 'ia', agentId: 'ag1', contactId: 'c1' })) },
     agent: { findUnique: jest.fn(async () => (o.agente === null ? null : { ...AGENTE, ...o.agente })) },
-    contact: { findUnique: jest.fn(async () => ({ nome: 'Marina', optedOutAt: o.optout ? new Date() : null })) },
+    contact: { findUnique: jest.fn(async () => ({ nome: 'Marina', optedOutAt: o.optout ? new Date() : null, tags: o.tags ?? [] })) },
     tenant: { findUnique: jest.fn(async () => ({ nome: 'Clínica Aurora', nicho: null, subespecialidade: null })) },
     agentIntentCategory: { findMany: jest.fn(async () => []) },
     agentFollowupRule: { findMany: jest.fn(async () => [{ id: 'regra-resp' }]) },
@@ -137,6 +138,27 @@ describe('AgentRuntimeService — orquestração do atendimento', () => {
     const a = ambiente({ agente: { status: 'pausado' } });
     expect(await a.svc.responder(JOB)).toBe('transferido');
     expect(a.atendimento.transferirParaHumano).toHaveBeenCalled();
+  });
+
+  it('público por tag (ADR-0059): contato sem a tag não recebe resposta nem gasta IA, conversa volta para a equipe', async () => {
+    const a = ambiente({ agente: { config: { publico: { tags: ['testia'] } } }, tags: ['agendart'] });
+    expect(await a.svc.responder(JOB)).toBe('ignorado');
+    expect(a.core.processar).not.toHaveBeenCalled();
+    expect(a.entregas.enfileirar).not.toHaveBeenCalled();
+    expect(a.atendimento.transferirParaHumano).toHaveBeenCalledWith(TENANT, 'cv1', expect.stringContaining('fora do público'), { tipo: 'ia', agentId: 'ag1' });
+  });
+
+  it('público por tag: contato com a tag é atendido normalmente', async () => {
+    const a = ambiente({ agente: { config: { publico: { tags: ['testia'] } } }, tags: ['TestIA'] });
+    expect(await a.svc.responder(JOB)).toBe('respondido');
+    expect(a.core.processar).toHaveBeenCalled();
+  });
+
+  it('público por tag: fora do público não recebe nem o aviso de fora do horário', async () => {
+    const a = ambiente({ agente: { config: { publico: { tags: ['testia'] } } }, tags: [], horario: { ativo: true, foraDoHorario: 'avisar_e_responder_na_abertura', dias: { dom: [], seg: [], ter: [], qua: [], qui: [], sex: [], sab: [] } } as never });
+    const r = await a.svc.responderOuAdiar(JOB);
+    expect(r.desfecho).toBe('ignorado');
+    expect(a.mensagens.send).not.toHaveBeenCalled();
   });
 
   it('opt-out → não responde', async () => {

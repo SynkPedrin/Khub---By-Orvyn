@@ -312,6 +312,11 @@ export const agentConfigSchema = z
   .object({
     /** Piloto automático ou sugestivo (ADR-0048, common/modo-agente.ts). */
     modo: z.enum(MODOS_AGENTE).default('automatico'),
+    /** Público por tag (ADR-0059, common/publico-agente.ts). Vazio = todos os contatos. */
+    publico: z
+      .object({ tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]) })
+      .strict()
+      .default({}),
     identidade: identidadeSchema.default({}),
     personalidade: personalidadeSchema.default({}),
     comportamento: comportamentoSchema.default({}),

@@ -388,6 +388,59 @@ function BlocoModo({ agente, catalogo, onAtualizado }: SecaoProps) {
           </div>
         )}
       </div>
+
+      <BlocoPublico agente={agente} onAtualizado={onAtualizado} />
+    </div>
+  );
+}
+
+/** Público por tag (ADR-0059): o agente só atende contatos com uma destas tags. */
+function BlocoPublico({ agente, onAtualizado }: Pick<SecaoProps, 'agente' | 'onAtualizado'>) {
+  const toast = useToast();
+  const salvo = agente.config.publico?.tags ?? [];
+  const [texto, setTexto] = useState(salvo.join(', '));
+  const [salvando, setSalvando] = useState(false);
+  useEffect(() => {
+    setTexto((agente.config.publico?.tags ?? []).join(', '));
+  }, [agente.updatedAt, agente.config.publico?.tags]);
+  const tags = [...new Set(texto.split(',').map((t) => t.trim()).filter(Boolean))];
+  const sujo = tags.join(',') !== salvo.join(',');
+
+  const salvar = async () => {
+    setSalvando(true);
+    try {
+      onAtualizado(await agentesApi.atualizar(agente.id, { config: { publico: { tags } } }));
+      toast('ok', tags.length ? `Agente só atende contatos com: ${tags.join(', ')}` : 'Agente atende todos os contatos');
+    } catch (e) {
+      toast('erro', mensagemDeErro(e));
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-line p-3">
+      <label htmlFor="publico-tags" className="block text-[13px] font-semibold text-fg">Só atender contatos com estas tags</label>
+      <p className="mt-0.5 text-xs text-muted">
+        Para testar sem falar com clientes reais. Preenchido, o agente ignora quem não tem a tag em qualquer modo, inclusive quando uma automação usa "Ativar IA". Vazio = todos os contatos.
+      </p>
+      <input
+        id="publico-tags"
+        className="input mt-2 w-full"
+        placeholder="ex.: testia"
+        value={texto}
+        maxLength={400}
+        onChange={(e) => setTexto(e.target.value)}
+      />
+      {salvo.length > 0 && !sujo && (
+        <p className="mt-2 text-xs font-medium text-brand">Restrito a: {salvo.join(', ')}</p>
+      )}
+      {sujo && (
+        <div className="mt-3 flex justify-end gap-2">
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setTexto(salvo.join(', '))}>Descartar</button>
+          <button type="button" className="btn btn-primary btn-sm" disabled={salvando} onClick={() => void salvar()}>{salvando ? 'Salvando…' : 'Salvar'}</button>
+        </div>
+      )}
     </div>
   );
 }

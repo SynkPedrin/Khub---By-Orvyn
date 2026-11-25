@@ -110,6 +110,8 @@ export interface AgentConfig {
    * Desativado não é modo: é `status !== 'ativo'`.
    */
   modo?: ModoAgente;
+  /** Público por tag (ADR-0059): só atende contatos com uma destas tags. Vazio = todos. */
+  publico?: { tags: string[] };
 }
 export type ModoAgente = 'automatico' | 'sugestivo';
 export type DiaSemanaAgente = 'dom' | 'seg' | 'ter' | 'qua' | 'qui' | 'sex' | 'sab';

@@ -4,6 +4,7 @@ import type { AtendimentoConversa } from '@khub/types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DomainEventsService } from '../../events/domain-events.service';
 import { modoDoAgente } from '../../common/modo-agente';
+import { contatoNoPublico, publicoDoAgente } from '../../common/publico-agente';
 
 type Tx = Prisma.TransactionClient;
 
@@ -42,7 +43,7 @@ export class AtendimentoService {
   ) {}
 
   /** Conversa nova: nasce com a IA se houver agente padrão ativo para o canal. */
-  async estadoInicial(tx: Tx, canal: string): Promise<{ atendimento: AtendimentoConversa; agentId: string | null }> {
+  async estadoInicial(tx: Tx, canal: string, tagsDoContato: readonly string[] | null = null): Promise<{ atendimento: AtendimentoConversa; agentId: string | null }> {
     const padrao = await tx.agent.findFirst({
       where: { padrao: true, status: 'ativo', canais: { has: canal } },
       select: { id: true, config: true },
@@ -50,6 +51,8 @@ export class AtendimentoService {
     // Modo sugestivo (ADR-0048): a conversa nasce com humano; a IA só entra
     // quando uma automação ("Ativar IA") ou alguém na conversa a ativar.
     if (!padrao || modoDoAgente(padrao.config) === 'sugestivo') return { atendimento: 'humano', agentId: null };
+    // Público por tag (ADR-0059): contato sem a tag nasce com a equipe.
+    if (!contatoNoPublico(tagsDoContato, publicoDoAgente(padrao.config))) return { atendimento: 'humano', agentId: null };
     return { atendimento: 'ia', agentId: padrao.id };
   }
 
@@ -114,15 +117,21 @@ export class AtendimentoService {
    */
   async ativarIaSistema(tenantId: string, conversationId: string, agentId?: string): Promise<EstadoAtendimento> {
     const estado = await this.prisma.withTenant(tenantId, async (tx) => {
-      const conv = await tx.conversation.findUnique({ where: { id: conversationId }, select: { id: true, canal: true } });
+      const conv = await tx.conversation.findUnique({ where: { id: conversationId }, select: { id: true, canal: true, contactId: true } });
       if (!conv) throw new NotFoundException('conversa inexistente');
       const agente = await tx.agent.findFirst({
         where: agentId
           ? { id: agentId, status: 'ativo', canais: { has: conv.canal } }
           : { padrao: true, status: 'ativo', canais: { has: conv.canal } },
-        select: { id: true },
+        select: { id: true, config: true },
       });
       if (!agente) throw new BadRequestException(agentId ? 'agente inexistente, inativo ou não atende este canal' : 'não há agente padrão ativo para este canal');
+      // Público por tag (ADR-0059): a automação não liga a IA para contato sem a tag.
+      const publico = publicoDoAgente(agente.config);
+      if (publico.length) {
+        const contato = conv.contactId ? await tx.contact.findUnique({ where: { id: conv.contactId }, select: { tags: true } }) : null;
+        if (!contatoNoPublico(contato?.tags, publico)) throw new BadRequestException(`contato fora do público do agente (precisa de uma destas tags: ${publico.join(', ')})`);
+      }
       return this.gravar(tx, tenantId, conversationId, { atendimento: 'ia', agentId: agente.id, assigneeId: null, handoffMotivo: null, handoffAt: null }, { tipo: 'sistema' }, 'conversa.devolvida_ia');
     });
     this.publicar(tenantId, estado);

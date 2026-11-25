@@ -37,6 +37,7 @@ import { PERSONAS } from './simulator/simulator.service';
 import { EvaluationService } from './evaluation/evaluation.service';
 import { hashSnapshot, snapshotDoAgente, type SnapshotAgente } from './versioning/versioning.service';
 import { modoDoAgente } from '../common/modo-agente';
+import { publicoDoAgente, variacoesDeTag } from '../common/publico-agente';
 
 /** Campos editáveis de um agente (o que a API aceita). */
 export interface AgenteInput {
@@ -430,12 +431,26 @@ export class AgentsService {
       if (r.count) await this.auditar(tx, tenantId, atorId, 'agente.modo_sugestivo', a.id, { conversasLiberadas: r.count });
       return;
     }
+    // Público por tag (ADR-0059): conversas da IA com contato fora do público
+    // voltam para a equipe na hora (vale em qualquer modo), e o piloto
+    // automático só assume conversas de contatos com a tag.
+    const publico = publicoDoAgente(a.config);
+    if (publico.length) {
+      const fora = await tx.conversation.updateMany({
+        where: { agentId: a.id, atendimento: 'ia', NOT: { contact: { tags: { hasSome: variacoesDeTag(publico) } } } },
+        data: { atendimento: 'humano', handoffMotivo: null, handoffAt: null },
+      });
+      if (fora.count) await this.auditar(tx, tenantId, atorId, 'agente.publico_restrito', a.id, { conversasLiberadas: fora.count, publicoTags: publico });
+    }
     if (modo !== 'automatico' || a.status !== 'ativo' || !a.padrao || !a.canais.length) return;
     const r = await tx.conversation.updateMany({
-      where: { atendimento: 'humano', assigneeId: null, handoffMotivo: null, status: { not: 'resolvida' }, canal: { in: a.canais } },
+      where: {
+        atendimento: 'humano', assigneeId: null, handoffMotivo: null, status: { not: 'resolvida' }, canal: { in: a.canais },
+        ...(publico.length ? { contact: { tags: { hasSome: variacoesDeTag(publico) } } } : {}),
+      },
       data: { atendimento: 'ia', agentId: a.id },
     });
-    if (r.count) await this.auditar(tx, tenantId, atorId, 'agente.piloto_automatico', a.id, { conversasAssumidas: r.count });
+    if (r.count) await this.auditar(tx, tenantId, atorId, 'agente.piloto_automatico', a.id, { conversasAssumidas: r.count, ...(publico.length ? { publicoTags: publico } : {}) });
   }
 
   private async auditar(tx: Tx, tenantId: string, actorId: string, acao: string, id: string, payload: Record<string, unknown>) {

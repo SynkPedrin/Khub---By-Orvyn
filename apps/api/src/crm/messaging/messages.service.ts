@@ -339,7 +339,7 @@ export class MessagesService {
       let conv = await tx.conversation.findFirst({ where: { contactId: contact.id, canal: 'WhatsApp' } });
       if (!conv) {
         // Conversa nova nasce com a IA se houver agente padrão ativo (ADR-0030).
-        const inicial = await this.atendimento.estadoInicial(tx, 'WhatsApp');
+        const inicial = await this.atendimento.estadoInicial(tx, 'WhatsApp', contact.tags);
         conv = await tx.conversation.create({ data: { tenantId: input.tenantId, contactId: contact.id, nome: contact.nome, canal: 'WhatsApp', ultimaPrevia: input.text.slice(0, 140), naoLidas: 1, ultimaHora: hora, ...inicial } });
       } else {
         // Mensagem nova reabre conversa resolvida ("Marcar como", db/063).

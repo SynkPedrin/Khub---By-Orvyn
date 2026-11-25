@@ -13,8 +13,10 @@ import { eventosDoTurno, LearningService } from './learning/learning.service';
 import { VersioningService } from './versioning/versioning.service';
 import { MessagesService } from '../crm/messaging/messages.service';
 import { avaliarHorario, mensagemForaDoHorario } from './config/horario';
+import { contatoNoPublico, publicoDoAgente } from '../common/publico-agente';
 
 export const FILA_AGENTES = 'agent-replies';
+export const MOTIVO_FORA_DO_PUBLICO = 'contato fora do público do agente (tags)';
 /**
  * Espera antes de responder: junta a rajada "oi / tudo bem? / queria saber…".
  * 4 s pegava só metade das rajadas reais (quem digita no celular leva 5–10 s
@@ -89,14 +91,18 @@ export class AgentRuntimeService {
     const pre = await this.prisma.withTenant(tenantId, async (tx) => {
       const alvo = await tx.message.findUnique({ where: { id: messageId }, select: { autorTipo: true, conversationId: true } });
       if (!alvo || alvo.autorTipo !== 'contato') return null;
-      const conv = await tx.conversation.findUnique({ where: { id: alvo.conversationId }, select: { id: true, atendimento: true, agentId: true } });
+      const conv = await tx.conversation.findUnique({ where: { id: alvo.conversationId }, select: { id: true, atendimento: true, agentId: true, contactId: true } });
       if (!conv || conv.atendimento !== 'ia' || !conv.agentId) return null;
       const agente = await tx.agent.findUnique({ where: { id: conv.agentId } });
       if (!agente || agente.status !== 'ativo') return null;
       const efetivo = await this.versoes.efetivo(tx, agente);
-      return { conv, agenteId: agente.id, horario: efetivo.config.horario };
+      // Público por tag (ADR-0059): fora do público não recebe nem aviso de horário;
+      // `responderAgora` devolve a conversa para a equipe sem falar nada.
+      const contato = conv.contactId ? await tx.contact.findUnique({ where: { id: conv.contactId }, select: { tags: true } }) : null;
+      const foraDoPublico = !contatoNoPublico(contato?.tags, this.publicoEfetivo(agente.config, efetivo.config));
+      return { conv, agenteId: agente.id, horario: efetivo.config.horario, foraDoPublico };
     });
-    if (pre?.horario?.ativo) {
+    if (pre?.horario?.ativo && !pre.foraDoPublico) {
       const agora = new Date();
       const estado = avaliarHorario(pre.horario, agora);
       if (!estado.aberto) {
@@ -155,7 +161,7 @@ export class AgentRuntimeService {
           agente,
           efetivo: agente ? await this.versoes.efetivo(tx, agente) : null,
           maisNova: await tx.message.findFirst({ where: { conversationId: conv.id, autorTipo: 'contato', createdAt: { gt: alvo.createdAt } }, select: { id: true } }),
-          contato: conv.contactId ? await tx.contact.findUnique({ where: { id: conv.contactId }, select: { nome: true, optedOutAt: true } }) : null,
+          contato: conv.contactId ? await tx.contact.findUnique({ where: { id: conv.contactId }, select: { nome: true, optedOutAt: true, tags: true } }) : null,
           respostasIa: await tx.agentRun.count({ where: { conversationId: conv.id, status: 'respondido' } }),
           tenant: await tx.tenant.findUnique({ where: { id: tenantId }, select: { nome: true, nicho: true, subespecialidade: true } }),
           historico: await tx.message.findMany({ where: { conversationId: conv.id, createdAt: { lte: alvo.createdAt } }, orderBy: { createdAt: 'desc' }, take: 80, select: { autorTipo: true, corpo: true } }),
@@ -170,6 +176,12 @@ export class AgentRuntimeService {
       const { agente, efetivo } = ctx;
       if (!agente || !efetivo || agente.status !== 'ativo') return this.paraHumano(tenantId, runId, conv.id, conv.agentId, 'agente indisponível (pausado ou arquivado)', t0);
       if (ctx.contato?.optedOutAt) return this.fechar(tenantId, runId, 'ignorado', 'contato optou por não receber mensagens', t0);
+      // Público por tag (ADR-0059): contato sem a tag não recebe resposta, a conversa
+      // volta para a equipe em silêncio e nenhuma chamada de IA é feita.
+      if (!contatoNoPublico(ctx.contato?.tags, this.publicoEfetivo(agente.config, efetivo.config))) {
+        await this.atendimento.transferirParaHumano(tenantId, conv.id, MOTIVO_FORA_DO_PUBLICO, { tipo: 'ia', agentId: agente.id });
+        return this.fechar(tenantId, runId, 'ignorado', MOTIVO_FORA_DO_PUBLICO, t0);
+      }
       if (ctx.respostasIa >= efetivo.maxRespostasConversa) {
         return this.paraHumano(tenantId, runId, conv.id, agente.id, `limite de ${efetivo.maxRespostasConversa} respostas da IA nesta conversa`, t0);
       }
@@ -286,6 +298,15 @@ export class AgentRuntimeService {
     } catch (e) {
       this.log.warn(`falha ao interromper pendências: ${(e as Error).message}`);
     }
+  }
+
+  /**
+   * Público valendo: o da configuração VIVA tem precedência (é trava de
+   * segurança, vale na hora sem publicar); sem ele, o da versão publicada.
+   */
+  private publicoEfetivo(configViva: unknown, configPublicada: unknown): string[] {
+    const vivo = publicoDoAgente(configViva);
+    return vivo.length ? vivo : publicoDoAgente(configPublicada);
   }
 
   /** Cria o run; `null` se esta mensagem já foi processada (idempotência). */
