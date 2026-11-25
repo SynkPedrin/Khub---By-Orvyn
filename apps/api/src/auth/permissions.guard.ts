@@ -11,6 +11,14 @@ export function permissionFor(controller: string, route: string, method: string)
     if (/^(profile|notifications|sessions)/.test(route)) return 'profile.read';
     if (/^(members|invites)/.test(route)) return 'users.manage';
     if (/^(business|api-keys|integrations|audit|email-status)/.test(route)) return 'organization.manage';
+    // Tags (ADR-0055): criar tag nova e sincronizar o catálogo é o mesmo que já
+    // acontece ao marcar um contato (contacts.write) — quem monta automação ou
+    // atende consegue criar a tag na hora. Renomear/excluir segue da conta.
+    if (route.startsWith('tags')) {
+      if (read) return 'contacts.read';
+      if (method === 'POST' && (route === 'tags' || route === 'tags/sincronizar')) return 'contacts.write';
+      return 'organization.manage';
+    }
   }
   // Presença Google (GTM, Search Console, Meu Negócio): ler é de manager+; conectar e escrever no Google é de owner/admin.
   if (controller === 'google') return read && route !== 'auth-url' ? 'google.view' : 'integrations.manage';

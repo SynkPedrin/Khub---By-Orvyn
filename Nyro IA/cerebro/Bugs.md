@@ -9,6 +9,11 @@ Status: `aberto` · `em correção` · `corrigido` · `não reproduz`.
 
 ## Abertos
 
+### BUG-053 — Tag criada em automação/importação não aparecia para marcar contato; contador de uso sempre 0 (S2) — corrigido 2026-11-24 (ADR-0055)
+- **Reprodução:** nó "Tag adicionada" com a tag `teste ia` (nova) → a tag não aparecia no editor de tags do contato nem em Configurações › Tags; importação trouxe `metaads`, `kroma-ads` etc. fora do catálogo; Configurações › Tags mostrava "0 uso(s)" em todas.
+- **Causa raiz:** só três caminhos gravavam no catálogo `crm_tags`; o nó de automação era texto livre e a importação gravava direto em `contacts.tags`; a coluna `usos` nunca era atualizada.
+- **Correção:** ver ADR-0055 (cria na hora no nó, garante na publicação e na importação, uso calculado ao vivo, análise e sincronização).
+
 ### BUG-051 — Nó "Ativar IA na conversa" não mostrava os agentes da conta (S2) — corrigido 2026-11-24
 - **Reprodução:** editor de automações › Ativar IA na conversa › Agente: só aparecia "Agente padrão do canal". A Ritinha (pausada, não padrão) sumia da lista.
 - **Causa raiz:** o painel filtrava `status === 'ativo'` antes de listar. Com o único agente pausado, a lista ficava vazia e o fluxo falhava em produção sem aviso (o backend exige agente ativo, e o "padrão" exige um agente padrão ativo).

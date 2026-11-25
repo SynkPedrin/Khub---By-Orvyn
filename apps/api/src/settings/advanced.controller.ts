@@ -37,6 +37,17 @@ export class AdvancedSettingsController {
   listTags(@TenantId() t: string) {
     return this.tags.listar(t);
   }
+  /** Análise completa: catálogo × contatos × automações (ADR-0055). */
+  @Get('tags/cruzamento')
+  cruzamentoTags(@TenantId() t: string) {
+    return this.tags.cruzamento(t);
+  }
+  /** Põe no catálogo toda tag que já existe em contato ou automação. */
+  @Post('tags/sincronizar')
+  @HttpCode(200)
+  sincronizarTags(@TenantId() t: string, @CurrentUser() u: AuthUser) {
+    return this.tags.sincronizar(t, u.identityId);
+  }
   @Post('tags')
   createTag(@TenantId() t: string, @CurrentUser() u: AuthUser, @Body() dto: CreateTagDto) {
     return this.tags.criar(t, u.identityId, dto);

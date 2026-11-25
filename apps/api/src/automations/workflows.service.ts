@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { garantirTagsNoCatalogo, tagsDoGrafo } from '../common/tags-catalogo';
 import { Prisma } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -340,6 +341,9 @@ export class WorkflowsService {
         throw new BadRequestException({ title: 'workflow inválido', problemas });
       }
 
+      // Tag citada no fluxo (gatilho, adicionar, condição…) passa a existir no
+      // catálogo: aparece para marcar contatos e em Configurações › Tags.
+      await garantirTagsNoCatalogo(tx, tenantId, tagsDoGrafo(grafo).map((u) => u.tag));
       await tx.workflowVersion.update({ where: { id: rascunho.id }, data: { publicadoEm: new Date(), publicadoPor: identityId } });
       await tx.workflow.update({ where: { id }, data: { versaoAtivaId: rascunho.id, status: 'ativo', updatedAt: new Date() } });
       // Gatilhos por tempo (db/057): a agenda segue a versão ativa

@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { DomainEventsService } from '../events/domain-events.service';
 import { acharContatoPorTelefone, soDigitos } from './telefone';
+import { garantirTagsNoCatalogo } from '../common/tags-catalogo';
 
 /** Linha já mapeada pelo front (coluna do CSV → campo do KHUB). Tudo texto. */
 export interface LinhaImportacao {
@@ -124,6 +125,8 @@ export class ImportacaoService {
       const etapa = opcoes.stageId ? await tx.stage.findUnique({ where: { id: opcoes.stageId }, select: { id: true, pipelineId: true } }) : null;
       if (opcoes.stageId && !etapa) throw new NotFoundException('etapa do funil inexistente');
 
+      // Toda tag que a planilha traz entra no catálogo (Configurações › Tags) no fim do lote.
+      const tagsDoLote = new Set<string>();
       for (let i = 0; i < linhas.length; i++) {
         const nLinha = linhaInicial + i;
         let dado: ReturnType<typeof normalizarLinha>;
@@ -135,6 +138,7 @@ export class ImportacaoService {
         }
         const tags = tagExtra && !dado.tags.some((t) => t.toLowerCase() === tagExtra.toLowerCase()) ? [...dado.tags, tagExtra] : dado.tags;
         const origem = dado.origem ?? origemPadrao;
+        for (const t of tags) tagsDoLote.add(t);
         try {
           const existenteId = (dado.email ? (await tx.contact.findFirst({ where: { email: { equals: dado.email, mode: 'insensitive' } }, select: { id: true } }))?.id : null)
             ?? (dado.telefone ? await acharContatoPorTelefone(tx, dado.telefone) : null);
@@ -183,6 +187,8 @@ export class ImportacaoService {
           throw Object.assign(new Error('linha_invalida'), { linha: nLinha, cause: e });
         }
       }
+
+      await garantirTagsNoCatalogo(tx, tenantId, tagsDoLote);
 
       if (!opcoes.dispararAutomacoes) {
         res.eventosNeutralizados = Number(await tx.$executeRaw`UPDATE outbox_events SET status = 'processed', processed_at = now(), last_error = 'importacao_csv: não dispara automação'

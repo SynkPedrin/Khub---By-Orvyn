@@ -215,6 +215,16 @@ Sob `/v1/genna` (sessão do KHUB, tenant do token):
 
 Erros: 409 `genna_nao_conectado` (sem conexão ou acesso expirado), 403 `genna_sem_permissao`, 429 `genna_limite`, 502 `genna_indisponivel`.
 
+### 5.3 Tags — catálogo e cruzamento ([[Arquitetura|ADR-0055]])
+| Rota | Papel | Uso |
+|---|---|---|
+| `GET /v1/settings/tags` | leitura | catálogo com `contatos` (ao vivo; `usos` = mesmo valor) e `automacoes: [{id, nome, status, papeis}]` |
+| `GET /v1/settings/tags/cruzamento` | leitura | `{totais, foraDoCatalogoEmContatos, foraDoCatalogoEmAutomacoes, parecidas, semUso, gatilhosSemOrigem, adicionaERemove}` |
+| `POST /v1/settings/tags` | contacts.write | cria (409 se já existe, sem diferenciar caixa) |
+| `POST /v1/settings/tags/sincronizar` | contacts.write | `{adicionadas}`: tags de contatos e automações que faltavam no catálogo |
+| `PATCH /v1/settings/tags/:id` | owner/admin | renomear propaga aos contatos → `+ {contatosAtualizados, automacoesParaRevisar}` |
+| `DELETE /v1/settings/tags/:id` | owner/admin | tira só do catálogo |
+
 > ⚠️ LACUNA: TTL do access/refresh token, formato/algoritmo de assinatura JWT (HS256 vs RS256), rotação de refresh e revogação não estão no PRD. Definir no Bloco 3 e registrar ADR se estrutural.
 
 ---

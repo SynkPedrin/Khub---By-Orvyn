@@ -5,6 +5,7 @@ import { Field, Input } from '@/components/ui';
 import { Icon } from '@/components/icons';
 import { CAMPOS_CONDICAO, type NoGrafo } from '@/lib/automations';
 import { agentesApi } from '@/lib/agents';
+import { CampoTag } from './CampoTag';
 import { crm, type PipelineData } from '@/lib/crm';
 import { customFields, type CampoDef } from '@/lib/custom-fields';
 import { pipelineApi, type MotivoPerda } from '@/lib/pipeline';
@@ -125,8 +126,8 @@ export function PainelNoMotor({ no, set, outrosFluxos }: {
           </Field>
           {cfg.alvo === 'segmento' && (
             <>
-              <Field label="Com alguma destas tags" hint="Separe por vírgula.">
-                <Input value={(cfg.tags ?? []).join(', ')} onChange={(e) => set({ tags: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })} placeholder="vip, cliente" />
+              <Field label="Com alguma destas tags" hint="Tag nova é criada no sistema na hora.">
+                <CampoTag multiplo value={cfg.tags ?? []} onChange={(v) => set({ tags: v ?? [] })} ariaLabel="Tags do segmento" />
               </Field>
               <Field label="Com negócio aberto na etapa">
                 <select className="input" value={cfg.stageId ?? ''} onChange={(e) => set({ stageId: e.target.value || undefined })}>
@@ -497,8 +498,8 @@ export function PainelNoMotor({ no, set, outrosFluxos }: {
           <EditorCampos campos={cfg.campos ?? []} defs={camposContato.itens} onMudar={(campos) => set({ campos })} />
           <FalhaLista lista={camposContato} oque="os campos do contato" />
           <div className="grid grid-cols-2 gap-2">
-            <Field label="Adicionar tags"><Input value={(cfg.tagsAdicionar ?? []).join(', ')} onChange={(e) => set({ tagsAdicionar: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })} placeholder="cliente, vip" /></Field>
-            <Field label="Remover tags"><Input value={(cfg.tagsRemover ?? []).join(', ')} onChange={(e) => set({ tagsRemover: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })} placeholder="lead" /></Field>
+            <Field label="Adicionar tags"><CampoTag multiplo value={cfg.tagsAdicionar ?? []} onChange={(v) => set({ tagsAdicionar: v ?? [] })} ariaLabel="Tags a adicionar" /></Field>
+            <Field label="Remover tags"><CampoTag multiplo value={cfg.tagsRemover ?? []} onChange={(v) => set({ tagsRemover: v ?? [] })} ariaLabel="Tags a remover" /></Field>
           </div>
         </>
       );
@@ -522,7 +523,7 @@ function FiltroEvento({ cfg, set, etapas, forms }: { cfg: Cfg; set: (p: Cfg) => 
         <Field label="Só se a mensagem contiver" hint="Vazio = qualquer resposta."><Input value={cfg.contem ?? ''} onChange={(e) => set({ contem: e.target.value || undefined })} placeholder="sim, confirmo" /></Field>
       )}
       {cfg.evento === 'tag_adicionada' && (
-        <Field label="Tag" hint="Vazio = qualquer tag."><Input value={cfg.tag ?? ''} onChange={(e) => set({ tag: e.target.value || undefined })} placeholder="pagou" /></Field>
+        <Field label="Tag" hint="Vazio = qualquer tag."><CampoTag value={cfg.tag} onChange={(v) => set({ tag: (v as string | undefined) || undefined })} /></Field>
       )}
       {cfg.evento === 'etapa_mudou' && (
         <Field label="Etapa">

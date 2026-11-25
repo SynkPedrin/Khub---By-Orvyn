@@ -24,7 +24,19 @@ export interface Invite { id: string; email: string; role: string; modulos: stri
 export interface AuditRow { id: string; actorType: string; actorId: string | null; acao: string; entidade: string | null; entidadeId: string | null; ts: string }
 
 export interface NotificationItem { id: string; tipo: 'mensagem' | 'integracao' | 'mencao' | 'disparo_aprovacao' | 'avaliacao_negativa' | 'nico'; titulo: string; detalhe: string; url: string; ts: string; novo: boolean }
-export interface Tag { id: string; name: string; color: string; descricao: string; usos: number; createdAt: string }
+export type PapelTag = 'gatilho' | 'adiciona' | 'remove' | 'condicao' | 'espera' | 'segmento';
+export interface AutomacaoComTag { id: string; nome: string; status: string; papeis: PapelTag[] }
+/** `contatos`/`automacoes` = cruzamento ao vivo (ADR-0055). `usos` = contatos (contrato antigo). */
+export interface Tag { id: string; name: string; color: string; descricao: string; usos: number; createdAt: string; contatos?: number; automacoes?: AutomacaoComTag[] }
+export interface CruzamentoTags {
+  totais: { catalogo: number; emContatos: number; emAutomacoes: number; contatosComTag: number };
+  foraDoCatalogoEmContatos: { tag: string; contatos: number }[];
+  foraDoCatalogoEmAutomacoes: { tag: string; automacoes: AutomacaoComTag[] }[];
+  parecidas: { grupo: string[]; contatos: number }[];
+  semUso: string[];
+  gatilhosSemOrigem: { tag: string; automacoes: AutomacaoComTag[] }[];
+  adicionaERemove: { tag: string; adicionam: AutomacaoComTag[]; removem: AutomacaoComTag[] }[];
+}
 export interface ApiKey { id: string; name: string; keyPrefix: string; scopes: string[]; lastUsedAt: string | null; revokedAt: string | null; createdAt: string }
 /** A chave em claro (`key`) só existe na resposta da criação. */
 export interface ApiKeyCreated extends ApiKey { key: string }
@@ -55,7 +67,10 @@ export const settingsApi = {
   // Tags do CRM
   tags: () => req<Tag[]>('settings/tags'),
   createTag: (d: { name: string; color?: string; descricao?: string }) => req<Tag>('settings/tags', { method: 'POST', body: JSON.stringify(d) }),
-  updateTag: (id: string, d: Partial<{ name: string; color: string; descricao: string }>) => req<Tag>(`settings/tags/${id}`, { method: 'PATCH', body: JSON.stringify(d) }),
+  updateTag: (id: string, d: Partial<{ name: string; color: string; descricao: string }>) =>
+    req<Tag & { contatosAtualizados?: number; automacoesParaRevisar?: AutomacaoComTag[] }>(`settings/tags/${id}`, { method: 'PATCH', body: JSON.stringify(d) }),
+  cruzamentoTags: () => req<CruzamentoTags>('settings/tags/cruzamento'),
+  sincronizarTags: () => req<{ adicionadas: string[] }>('settings/tags/sincronizar', { method: 'POST' }),
   deleteTag: (id: string) => req<{ ok: boolean }>(`settings/tags/${id}`, { method: 'DELETE' }),
 
   // Private Integrations (API keys) — a chave em claro só volta na criação
