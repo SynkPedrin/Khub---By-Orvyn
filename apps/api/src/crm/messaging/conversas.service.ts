@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DomainEventsService } from '../../events/domain-events.service';
@@ -138,5 +138,42 @@ export class ConversasService {
     });
     this.eventos.publicar(tenantId, 'conversation.updated', { id: r.id, naoLidas: r.naoLidas });
     return r;
+  }
+
+  /**
+   * Exclui conversas do KHUB (não apaga nada no WhatsApp/Instagram do cliente).
+   * Mensagens, notas internas, fila e execuções da IA saem junto (FK em cascata,
+   * db/003, 030, 034, 055); o contato e os negócios ficam. Se o contato voltar a
+   * escrever, a ingestão abre uma conversa nova (busca por contato+canal).
+   * A auditoria guarda quem excluiu e o tamanho do que saiu, nunca o conteúdo.
+   */
+  async excluir(tenantId: string, ids: string[], identityId: string) {
+    const unicos = [...new Set(ids)];
+    if (!unicos.length) throw new BadRequestException('nenhuma conversa informada');
+    const r = await this.prisma.withTenant(tenantId, async (tx) => {
+      const convs = await tx.conversation.findMany({ where: { id: { in: unicos } }, select: { id: true, nome: true, canal: true, contactId: true } });
+      if (!convs.length) throw new NotFoundException('conversa inexistente');
+      const existentes = convs.map((c) => c.id);
+      const msgs = await tx.$queryRaw<{ conversation_id: string; total: bigint }[]>`
+        SELECT conversation_id, count(*)::bigint AS total FROM messages WHERE conversation_id = ANY(${existentes}::uuid[]) GROUP BY conversation_id`;
+      const porConversa = new Map(msgs.map((m) => [m.conversation_id, Number(m.total)]));
+      try {
+        await tx.conversation.deleteMany({ where: { id: { in: existentes } } });
+      } catch (e) {
+        // Banco sem db/081: a trava de tenant barra a cascata de conversa com histórico da IA.
+        if (e instanceof Error && e.message.includes('related resource not found')) {
+          throw new ConflictException('Não foi possível excluir esta conversa agora: o banco precisa da atualização 081. Avise o suporte.');
+        }
+        throw e;
+      }
+      for (const c of convs) {
+        await tx.$executeRaw`INSERT INTO audit_logs (tenant_id, actor_type, actor_id, acao, entidade, entidade_id, payload)
+          VALUES (${tenantId}::uuid, 'humano', ${identityId}, 'conversa.excluida', 'conversation', ${c.id},
+            ${JSON.stringify({ nome: c.nome, canal: c.canal, contactId: c.contactId, mensagens: porConversa.get(c.id) ?? 0 })}::jsonb)`;
+      }
+      return { excluidas: existentes, mensagens: [...porConversa.values()].reduce((a, b) => a + b, 0) };
+    });
+    for (const id of r.excluidas) this.eventos.publicar(tenantId, 'conversation.updated', { id, excluida: true });
+    return { excluidas: r.excluidas.length, ids: r.excluidas, mensagens: r.mensagens };
   }
 }

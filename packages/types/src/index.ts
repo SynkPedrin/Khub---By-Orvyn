@@ -81,6 +81,8 @@ export interface RealtimeEvents {
     agentId?: string | null;
     assigneeId?: string | null;
     handoffMotivo?: string | null;
+    /** A conversa foi excluída do KHUB: some da lista e fecha se estiver aberta. */
+    excluida?: boolean;
   };
   'deal.moved': { id: string; stageId: string; stageAnterior: string | null };
   'deal.created': { id: string; stageId: string };

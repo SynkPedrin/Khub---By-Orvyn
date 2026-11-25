@@ -12,7 +12,7 @@ import { settingsApi } from '@/lib/settings';
 import { useAuth } from '@/lib/auth';
 import { ApiError } from '@/lib/api-error';
 import { useRealtime } from '@/lib/realtime';
-import { Drawer, Menu, useToast, type MenuEntry } from '@/components/kit';
+import { Confirm, Drawer, Menu, useToast, type MenuEntry } from '@/components/kit';
 import { corpoDaMidia, inbox, lerBase64, tipoDoArquivo, type ContagensConversas, type ContextoConversa, type ItemThread } from '@/lib/inbox';
 import { FILTRO_INICIAL, ORDEM_CANAIS, STATUS_LISTA, filtrarBusca, mesmoFiltro, queryDaLista, type FiltroLista } from '@/lib/conversas-filtro';
 import { Composer } from './Composer';
@@ -177,6 +177,11 @@ export function InboxAtendimento() {
   const [painelMobile, setPainelMobile] = useState(false);
   const [rascunho, setRascunho] = useState<{ texto: string; n: number } | null>(null);
   const [marcando, setMarcando] = useState(false);
+  // Excluir conversas (gestor+): uma pelo cabeçalho ou várias pelo modo "Selecionar".
+  const [selecionando, setSelecionando] = useState(false);
+  const [marcadas, setMarcadas] = useState<Set<string>>(() => new Set());
+  const [exclusao, setExclusao] = useState<{ ids: string[]; nome?: string; mensagens?: number } | null>(null);
+  const [excluindo, setExcluindo] = useState(false);
   const filtroRef = useRef<FiltroLista>(FILTRO_INICIAL);
   const cacheSel = useRef<Conversa | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -341,7 +346,14 @@ export function InboxAtendimento() {
 
   const { conectado } = useRealtime({
     'message.created': () => void sincronizar(),
-    'conversation.updated': () => void sincronizar(),
+    'conversation.updated': (d) => {
+      // Outra pessoa excluiu a conversa que está aberta aqui: fecha em vez de mostrar erro.
+      if (d.excluida && d.id === selRef.current) {
+        setSel(null);
+        toast.info('Esta conversa foi excluída por outra pessoa da equipe.');
+      }
+      void sincronizar();
+    },
     // Nota interna não mexe em `updated_at` da conversa (não sobe na lista): força a releitura.
     'conversation.note_created': (d) => {
       if (d.conversationId === selRef.current) void sincronizar(true);
@@ -414,6 +426,39 @@ export function InboxAtendimento() {
       toast.error('Não consegui marcar a conversa', { description: e instanceof ApiError && e.message ? e.message : undefined });
     } finally {
       setMarcando(false);
+    }
+  };
+
+  const podeExcluir = ['owner', 'admin', 'manager'].includes(user?.role ?? '');
+  const alternarMarcada = (id: string) =>
+    setMarcadas((m) => {
+      const n = new Set(m);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  const sairDaSelecao = () => {
+    setSelecionando(false);
+    setMarcadas(new Set());
+  };
+  const excluir = async () => {
+    if (!exclusao || excluindo) return;
+    setExcluindo(true);
+    try {
+      const r = exclusao.ids.length === 1 ? await inbox.excluir(exclusao.ids[0]) : await inbox.excluirVarias(exclusao.ids);
+      const foram = new Set(r.ids);
+      setConvs((cs) => cs?.filter((c) => !foram.has(c.id)) ?? cs);
+      if (selRef.current && foram.has(selRef.current)) setSel(null);
+      toast.success(r.excluidas === 1 ? 'Conversa excluída' : `${r.excluidas} conversas excluídas`, {
+        description: `${r.mensagens.toLocaleString('pt-BR')} mensagem(ns) removida(s) do KHUB. O contato continua no CRM.`,
+      });
+      setExclusao(null);
+      sairDaSelecao();
+      inbox.contagens().then(setContagens).catch(() => undefined);
+    } catch (e) {
+      toast.error('Não consegui excluir', { description: e instanceof ApiError && e.message ? e.message : undefined });
+    } finally {
+      setExcluindo(false);
     }
   };
 
@@ -604,7 +649,36 @@ export function InboxAtendimento() {
             <button type="button" className="btn btn-soft btn-icon btn-sm h-9 w-9" aria-label="Nova conversa" title="Nova conversa" onClick={() => setNovaConversa(true)}>
               <Icon name="plus" size={15} />
             </button>
+            {podeExcluir && (
+              <button
+                type="button"
+                className={cx('btn btn-icon btn-sm h-9 w-9', selecionando && 'btn-soft')}
+                aria-label={selecionando ? 'Sair da seleção' : 'Selecionar conversas para excluir'}
+                aria-pressed={selecionando}
+                title={selecionando ? 'Sair da seleção' : 'Selecionar conversas'}
+                onClick={() => (selecionando ? sairDaSelecao() : setSelecionando(true))}
+              >
+                <Icon name={selecionando ? 'close' : 'check2'} size={15} />
+              </button>
+            )}
           </div>
+          {selecionando && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-line-strong bg-surface2 px-3 py-2">
+              <span className="text-[13px] font-semibold text-fg">{marcadas.size} selecionada(s)</span>
+              <button
+                type="button"
+                className="text-[12.5px] font-semibold text-fg underline-offset-2 hover:underline"
+                onClick={() => setMarcadas(marcadas.size === visiveis.length ? new Set() : new Set(visiveis.map((c) => c.id)))}
+              >
+                {marcadas.size === visiveis.length && visiveis.length > 0 ? 'Limpar' : `Todas (${visiveis.length})`}
+              </button>
+              <span className="flex-1" />
+              <button type="button" className="btn btn-sm btn-ghost" onClick={sairDaSelecao}>Cancelar</button>
+              <button type="button" className="btn btn-sm btn-danger" disabled={!marcadas.size} onClick={() => setExclusao({ ids: [...marcadas] })}>
+                <Icon name="trash" size={14} /> Excluir
+              </button>
+            </div>
+          )}
           <div className="mt-2 flex gap-4" role="tablist" aria-label="Status das conversas">
             {ABAS.map((a) => (
               <button
@@ -644,17 +718,27 @@ export function InboxAtendimento() {
           )}
           {visiveis.map((c) => {
             const ativa = c.id === sel;
+            const marcada = selecionando && marcadas.has(c.id);
             return (
               <li key={c.id}>
                 <button
                   type="button"
-                  onClick={() => void abrir(c.id)}
-                  aria-current={ativa ? 'true' : undefined}
+                  onClick={() => (selecionando ? alternarMarcada(c.id) : void abrir(c.id))}
+                  aria-current={ativa && !selecionando ? 'true' : undefined}
+                  aria-pressed={selecionando ? marcada : undefined}
                   className={cx(
                     'flex w-full items-start gap-3 border-b border-line px-3 py-3 text-left transition-colors',
-                    ativa ? 'bg-[color-mix(in_srgb,var(--brand)_8%,transparent)]' : 'hover:bg-[var(--fill-4)]',
+                    marcada ? 'bg-danger-soft' : ativa && !selecionando ? 'bg-[color-mix(in_srgb,var(--brand)_8%,transparent)]' : 'hover:bg-[var(--fill-4)]',
                   )}
                 >
+                  {selecionando && (
+                    <span
+                      aria-hidden
+                      className={cx('mt-2.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border-2', marcada ? 'border-danger bg-danger text-white' : 'border-line-strong bg-surface')}
+                    >
+                      {marcada && <Icon name="check" size={12} />}
+                    </span>
+                  )}
                   <span className="relative shrink-0">
                     <AvatarContato nome={c.nome} fotoUrl={c.contato?.fotoUrl} contatoId={c.contato?.id} temFoto={c.contato?.temFoto} size={40} />
                     <SeloCanal canal={c.canal} />
@@ -770,6 +854,18 @@ export function InboxAtendimento() {
                     { id: 'nao_lida', label: 'Não lida', icon: 'eyeOff', onSelect: () => void marcar('nao_lida') },
                   ]}
                 />
+                {podeExcluir && (
+                  <button
+                    type="button"
+                    className="btn btn-sm !w-auto gap-1.5 !px-3 hover:!border-danger hover:!text-danger"
+                    title="Excluir conversa"
+                    aria-label="Excluir conversa"
+                    onClick={() => setExclusao({ ids: [conversa.id], nome: conversa.nome, mensagens: total })}
+                  >
+                    <Icon name="trash" size={14} />
+                    <span className="hidden sm:inline">Excluir</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   className="btn btn-ghost btn-icon btn-sm hidden 2xl:inline-flex"
@@ -956,6 +1052,15 @@ export function InboxAtendimento() {
       </Drawer>
       {drawerCanais}
       {modalNova}
+      <Confirm
+        open={!!exclusao}
+        onClose={() => (excluindo ? undefined : setExclusao(null))}
+        onConfirm={excluir}
+        loading={excluindo}
+        title={exclusao?.ids.length === 1 ? `Excluir a conversa${exclusao.nome ? ` com ${exclusao.nome}` : ''}?` : `Excluir ${exclusao?.ids.length ?? 0} conversas?`}
+        description={`${exclusao?.ids.length === 1 && exclusao.mensagens ? `As ${exclusao.mensagens.toLocaleString('pt-BR')} mensagens, as` : 'As mensagens, as'} notas internas e o histórico da IA saem do KHUB e não dá para desfazer. Nada é apagado no WhatsApp ou Instagram do cliente; o contato e os negócios continuam. Se ele escrever de novo, abre uma conversa nova.`}
+        confirmLabel={exclusao?.ids.length === 1 ? 'Excluir conversa' : 'Excluir conversas'}
+      />
     </div>
   );
 }

@@ -165,6 +165,14 @@ Em F0 (Bloco 4) esses arquivos serão movidos/copiados para `packages/ui/assets/
   - TypeScript **5.5.4** (strict) · Postgres alvo **pg16 + pgvector** (imagem `pgvector/pgvector:pg16` no compose)
 - **Consequências:** `prisma generate` OK gerando o modelo com `Unsupported("vector(1024)")` (R0.3). Migrações do RAG continuam em SQL puro (`db/`), não no Prisma Migrate. `packages/ui` fica como dívida pequena (web tem seus componentes locais). Turbo `tasks` (schema v2). **Verificado:** `pnpm build` → 2/2 apps; API sobe e responde `/v1/health` (db:false sem Postgres) e 404 em `application/problem+json`.
 
+### ADR-0056 — Excluir conversa do KHUB (exclusão definitiva, gestor+)
+- **Status:** Aceito (product owner, 2026-11-24: "permita apagar as conversas").
+- **Decisão:** exclusão **definitiva** no banco do KHUB (não arquivamento): a conversa, mensagens, notas internas, fila e execuções da IA saem por FK em cascata (db/003, 030, 034, 055); fatos/memórias que apontavam para ela ficam com a referência nula. **Contato e negócios ficam.** Nada é apagado no WhatsApp/Instagram do cliente. Se o contato voltar a escrever, a ingestão abre uma conversa nova (busca por contato+canal).
+- **Quem:** `conversations.delete` = manager, admin, owner (atendente/membro só responde; viewer só lê). Uma pelo cabeçalho da conversa ou várias pelo modo "Selecionar" da lista (até 200 por chamada).
+- **Auditoria:** `audit_logs` `conversa.excluida` com nome, canal, contato e nº de mensagens — **nunca o conteúdo**.
+- **Pré-requisito:** db/081 — a trava de tenant (`khub_check_tenant_reference`) passa a conferir só a referência que mudou num UPDATE; sem isso o `ON DELETE SET NULL` da cascata reconferia referências a linhas sendo apagadas e a exclusão falhava (23503) em toda conversa com histórico da IA.
+- **Fora do escopo (dívida):** arquivos de mídia no storage não são apagados (o bucket é privado e só se lê por URL assinada a partir da chave, que some com a mensagem); limpeza de objetos órfãos fica para a política de retenção (Banco.md §7).
+
 ### ADR-0055 — Tags: catálogo único cruzado com contatos e automações
 - **Status:** Aceito (product owner, 2026-11-24: "colocar uma tag que não existe automaticamente cria a tag… quando eu for adicionar o contato eu consiga… sistema de cruzamento de informações… análise completa").
 - **Problema:** o catálogo `crm_tags` (Configurações › Tags) só recebia tag nova por editar contato, criar lead e ação em massa. Tag digitada num nó de automação só existia depois de um contato passar pelo fluxo; importação (planilha, GHL, Avec) gravava tag no contato sem catálogo; `usos` ficava sempre 0; renomear não mexia nos contatos.

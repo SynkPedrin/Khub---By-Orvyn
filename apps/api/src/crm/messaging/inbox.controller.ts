@@ -28,6 +28,9 @@ class IniciarConversaDto {
 class MarcarDto {
   @IsIn(['resolvida', 'aberta', 'nao_lida']) acao!: 'resolvida' | 'aberta' | 'nao_lida';
 }
+class ExcluirConversasDto {
+  @IsArray() @ArrayMaxSize(200) @IsUUID('all', { each: true }) ids!: string[];
+}
 class RespostaDto {
   @IsString() @MinLength(1) @MaxLength(33) atalho!: string;
   @IsString() @MinLength(1) @MaxLength(80) titulo!: string;
@@ -66,6 +69,21 @@ export class InboxController {
   marcar(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: MarcarDto) {
     if (user.role === 'viewer') throw new ForbiddenException('perfil somente leitura');
     return this.conversas.marcar(user.tenantId, id, dto.acao, user.identityId);
+  }
+
+  /** Exclui a conversa do KHUB (gestor+, `conversations.delete`). O serviço audita (`conversa.excluida`). */
+  @SkipAudit()
+  @Delete('conversations/:id')
+  excluir(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.conversas.excluir(user.tenantId, [id], user.identityId);
+  }
+
+  /** Exclusão em lote (até 200 por vez), mesma regra da individual. */
+  @SkipAudit()
+  @HttpCode(200)
+  @Post('conversations/excluir')
+  excluirVarias(@CurrentUser() user: AuthUser, @Body() dto: ExcluirConversasDto) {
+    return this.conversas.excluir(user.tenantId, dto.ids, user.identityId);
   }
 
   /** Sugestões da IA: rascunhos para o atendente revisar (nada é enviado nem gravado). */

@@ -110,6 +110,8 @@ export interface SugestaoIA {
   texto: string;
 }
 
+export interface ResultadoExclusao { excluidas: number; ids: string[]; mensagens: number }
+
 export const inbox = {
   contagens: () => req<ContagensConversas>('conversations/contagens'),
   marcar: (conversationId: string, acao: 'resolvida' | 'aberta' | 'nao_lida') =>
@@ -121,6 +123,9 @@ export const inbox = {
     req<ResultadoMidia>(`conversations/${conversationId}/midia`, { method: 'POST', headers: { ...json, 'idempotency-key': key }, body: JSON.stringify(corpo) }),
   criarNota: (conversationId: string, corpo: string, mencoes: string[]) =>
     req<ItemThread>(`conversations/${conversationId}/notas`, { method: 'POST', headers: json, body: JSON.stringify({ corpo, mencoes }) }),
+  /** Exclui do KHUB (mensagens, notas e histórico da IA); não mexe no WhatsApp do cliente. Gestor+. */
+  excluir: (conversationId: string) => req<ResultadoExclusao>(`conversations/${conversationId}`, { method: 'DELETE' }),
+  excluirVarias: (ids: string[]) => req<ResultadoExclusao>('conversations/excluir', { method: 'POST', headers: json, body: JSON.stringify({ ids }) }),
   iniciarConversa: (entrada: string | { contactId?: string; telefone?: string; nome?: string }) =>
     req<{ id: string; criada: boolean }>('conversations', {
       method: 'POST',

@@ -52,6 +52,8 @@ export function permissionFor(controller: string, route: string, method: string)
     if (route.startsWith('custom-fields')) return read ? 'contacts.read' : 'organization.manage';
     // Motivos de perda (Q2.1) são configuração do funil: manager+ escreve, quem lê o pipeline lê.
     if (route.startsWith('lost-reasons')) return read ? 'pipeline.read' : 'pipeline.configure';
+    // Excluir conversa apaga o histórico de mensagens: gestor+ (INBOX-EXCLUIR).
+    if (route.startsWith('conversations') && (method === 'DELETE' || route === 'conversations/excluir')) return 'conversations.delete';
     const domain = /^(pipeline|stages|deals|proposals)/.test(route) ? 'pipeline' : route.startsWith('conversations') ? 'conversations' : 'contacts';
     return `${domain}.${read ? 'read' : domain === 'conversations' ? 'reply' : 'write'}`;
   }
@@ -70,7 +72,7 @@ const member = new Set(['profile.read', 'contacts.read', 'contacts.write', 'pipe
 export function hasPermission(user: AuthUser, permission: string): boolean {
   if (user.role === 'api') return !['users.manage', 'organization.manage'].includes(permission) && !!user.scopes?.some(s => s === '*' || s === permission);
   if (['owner', 'admin'].includes(user.role)) return true;
-  if (user.role === 'manager') return member.has(permission) || ['automations.write', 'pipeline.configure', 'contacts.import', 'google.view', 'financeiro.read'].includes(permission);
+  if (user.role === 'manager') return member.has(permission) || ['automations.write', 'pipeline.configure', 'contacts.import', 'conversations.delete', 'google.view', 'financeiro.read'].includes(permission);
   if (user.role === 'member') return member.has(permission);
   if (user.role === 'viewer') return permission.endsWith('.read');
   return false;

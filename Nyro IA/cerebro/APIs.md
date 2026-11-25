@@ -225,6 +225,14 @@ Erros: 409 `genna_nao_conectado` (sem conexão ou acesso expirado), 403 `genna_s
 | `PATCH /v1/settings/tags/:id` | owner/admin | renomear propaga aos contatos → `+ {contatosAtualizados, automacoesParaRevisar}` |
 | `DELETE /v1/settings/tags/:id` | owner/admin | tira só do catálogo |
 
+### 5.4 Excluir conversas ([[Arquitetura|ADR-0056]])
+| Rota | Papel | Uso |
+|---|---|---|
+| `DELETE /v1/crm/conversations/:id` | `conversations.delete` (manager/admin/owner) | exclui do KHUB → `{excluidas, ids, mensagens}` |
+| `POST /v1/crm/conversations/excluir` | `conversations.delete` | lote `{ids: uuid[] ≤200}` → mesmo retorno; ids de outro tenant são ignorados (RLS) |
+
+Evento `conversation.updated` com `excluida: true` fecha a conversa nas telas abertas. 409 = banco sem db/081.
+
 > ⚠️ LACUNA: TTL do access/refresh token, formato/algoritmo de assinatura JWT (HS256 vs RS256), rotação de refresh e revogação não estão no PRD. Definir no Bloco 3 e registrar ADR se estrutural.
 
 ---

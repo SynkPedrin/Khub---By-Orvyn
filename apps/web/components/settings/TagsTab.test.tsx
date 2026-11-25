@@ -5,6 +5,9 @@ const api = vi.hoisted(() => ({
   tags: vi.fn(),
   createTag: vi.fn(),
   deleteTag: vi.fn(),
+  updateTag: vi.fn(),
+  cruzamentoTags: vi.fn(),
+  sincronizarTags: vi.fn(),
 }));
 vi.mock('@/lib/settings', () => ({ settingsApi: api }));
 
@@ -13,14 +16,19 @@ import { ApiError } from '@/lib/api-error';
 
 const tag = { id: 't1', name: 'cliente-vip', color: '#7B2EFF', descricao: '', usos: 3, createdAt: '2026-10-01' };
 
-beforeEach(() => { api.tags.mockResolvedValue([tag]); api.createTag.mockResolvedValue(tag); api.deleteTag.mockResolvedValue(undefined); });
+const cruzamento = {
+  totais: { catalogo: 1, emContatos: 1, emAutomacoes: 0, contatosComTag: 3 },
+  foraDoCatalogoEmContatos: [], foraDoCatalogoEmAutomacoes: [], parecidas: [], semUso: [], gatilhosSemOrigem: [], adicionaERemove: [],
+};
+
+beforeEach(() => { api.cruzamentoTags.mockResolvedValue(cruzamento); api.tags.mockResolvedValue([tag]); api.createTag.mockResolvedValue(tag); api.deleteTag.mockResolvedValue(undefined); });
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe('aba Tags (regressão: o botão "Criar tag" lia `scopes`, que só existe na aba de chaves de API, e derrubava a aba com ReferenceError)', () => {
   it('renderiza sem lançar e lista as tags existentes', async () => {
     render(<TagsTab />);
     expect(await screen.findByText('cliente-vip')).toBeTruthy();
-    expect(screen.getByText('3 uso(s)')).toBeTruthy();
+    expect(screen.getByText('3 contato(s)')).toBeTruthy(); // ADR-0055: uso = contatos com a tag agora
   });
 
   it('"Criar tag" começa desabilitado e habilita ao digitar o nome (sem depender de escopos)', async () => {
