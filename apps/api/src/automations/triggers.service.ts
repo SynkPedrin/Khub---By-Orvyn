@@ -314,6 +314,24 @@ export class TriggersService {
         const d = await tx.deal.findUnique({ where: { id: dealId } });
         if (d) ctx.negocio = negocioDoRegistro(d);
       }
+      // Gatilho de contato/mensagem/tag/agenda/formulário não traz negócio: usa o
+      // negócio ABERTO mais recente do contato. Sem isso "Mover etapa" falhava
+      // em todo fluxo que não começa por evento de negócio (ADR-0060).
+      if (!ctx.negocio && ctx.contato) {
+        // `?.`: tx falso de testes antigos não tem `deal.findFirst` (mesmo padrão do linkRastreado).
+        const aberto = await tx.deal?.findFirst?.({ where: { contactId: ctx.contato.id, status: 'aberto' }, orderBy: { updatedAt: 'desc' } });
+        if (aberto) ctx.negocio = negocioDoRegistro(aberto);
+      }
+      // Contato criado pela 1ª mensagem: a mensagem já está gravada quando o
+      // evento chega. Sem ela, condição sobre {{mensagem.texto}} nunca batia.
+      if (job.evento === 'contact.created' && !ctx.mensagem && ctx.contato) {
+        const primeira = await tx.message?.findFirst?.({
+          where: { autorTipo: 'contato', conversation: { contactId: ctx.contato.id } },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true, corpo: true, conversation: { select: { canal: true } } },
+        });
+        if (primeira) ctx.mensagem = { id: primeira.id, texto: primeira.corpo, de: 'contato', canal: primeira.conversation.canal };
+      }
 
       // Sem contato não há a quem automatizar: melhor não abrir run do que abrir
       // uma que vai falhar no primeiro nó de ação.

@@ -594,8 +594,17 @@ export class ExecutorService {
     const conv = await this.prisma.withTenant(tenantId, (tx) =>
       tx.conversation.findFirst({ where: { contactId }, orderBy: { updatedAt: 'desc' }, select: { id: true } }),
     );
-    if (!conv) throw new UnrecoverableError('o contato não tem conversa para este nó de atendimento');
-    return conv.id;
+    if (conv) return conv.id;
+    // ADR-0060: contato sem conversa (cadastrado à mão, importado, formulário).
+    // Com telefone, abre a conversa de WhatsApp para a IA/equipe assumir; sem
+    // telefone não há canal, e aí sim é erro de configuração.
+    const criada = await this.prisma.withTenant(tenantId, async (tx) => {
+      const c = await tx.contact.findUnique({ where: { id: contactId }, select: { nome: true, telefone: true } });
+      if (!c?.telefone) return null;
+      return tx.conversation.create({ data: { tenantId, contactId, nome: c.nome, canal: 'WhatsApp', atendimento: 'humano' }, select: { id: true } });
+    });
+    if (!criada) throw new UnrecoverableError('o contato não tem conversa nem telefone para este nó de atendimento');
+    return criada.id;
   }
 
   /**
@@ -790,9 +799,24 @@ export class ExecutorService {
 
   private async moverEtapa(tenantId: string, no: No, ctx: Contexto): Promise<ResultadoNo> {
     const { stageId } = no.config as { stageId: string };
-    if (!ctx.negocio) throw new Error('nó "mover etapa" sem negócio no contexto');
-    await this.crm.moveDeal(tenantId, ctx.negocio.id, stageId);
-    return { saida: { dealId: ctx.negocio.id, stageId }, contexto: { negocio: { ...ctx.negocio, stageId } } };
+    if (!ctx.negocio) {
+      // ADR-0060: contato sem negócio no contexto. Usa o aberto mais recente dele
+      // ou cria o negócio já nesta etapa: lead sempre entra no funil.
+      if (!ctx.contato) throw new Error('nó "mover etapa" sem negócio e sem contato no contexto');
+      const contato = ctx.contato;
+      const aberto = await this.prisma.withTenant(tenantId, (tx) =>
+        tx.deal.findFirst({ where: { contactId: contato.id, status: 'aberto' }, orderBy: { updatedAt: 'desc' }, select: { id: true, titulo: true, valor: true, origem: true } }),
+      );
+      if (!aberto) {
+        const titulo = contato.nome || 'Novo negócio';
+        const r = await this.crm.createDeal(tenantId, { titulo, stageId, contactId: contato.id, valor: 0, origem: 'Automação' });
+        return { saida: { dealId: r.id, stageId, criado: true }, contexto: { negocio: { id: r.id, titulo, valor: 0, stageId, origem: 'Automação' } } };
+      }
+      ctx = { ...ctx, negocio: { id: aberto.id, titulo: aberto.titulo, valor: Number(aberto.valor ?? 0), stageId, origem: aberto.origem ?? null } };
+    }
+    const negocio = ctx.negocio!;
+    await this.crm.moveDeal(tenantId, negocio.id, stageId);
+    return { saida: { dealId: negocio.id, stageId }, contexto: { negocio: { ...negocio, stageId } } };
   }
 
   private async criarTarefa(tenantId: string, no: No, ctx: Contexto): Promise<ResultadoNo> {

@@ -40,7 +40,7 @@ function ambiente(opts?: { dripCount?: number; lastInboundAt?: Date | null; ulti
       work({
         conversation: { findFirst: jest.fn(async () => ({ id: 'conv1' })), create: jest.fn(async () => ({ id: 'conv1' })) },
         contact: { findUnique: jest.fn(async () => ({ lastInboundAt: opts?.lastInboundAt ?? null })) },
-        deal: { findUnique: jest.fn(async () => null) },
+        deal: { findUnique: jest.fn(async () => null), findFirst: jest.fn(async () => null) },
         message: { findFirst: jest.fn(async () => (opts?.ultimaMsg ? { id: 'm9', corpo: opts.ultimaMsg } : null)) },
         // drip: o UPSERT devolve a nova contagem da janela (controlável no teste)
         $queryRaw: jest.fn(async () => [{ count: opts?.dripCount ?? 1 }]),
@@ -296,6 +296,39 @@ describe('ExecutorService — ações', () => {
   });
 });
 
+describe('mover etapa sem negócio no contexto (ADR-0060)', () => {
+  const S2 = '22222222-2222-4222-8222-222222222222';
+  const S3 = '33333333-3333-4333-8333-333333333333';
+  const semNegocio: Contexto = { contato: CTX.contato };
+  it('contato sem negócio aberto: cria o negócio já na etapa (lead entra no funil)', async () => {
+    const { svc, chamadas } = ambiente();
+    const r = await svc.executar(TENANT, no('acao.mover_etapa', { stageId: S2 }), semNegocio, GRAFO);
+    expect(chamadas.createDeal[0]).toMatchObject({ t: TENANT, input: { titulo: 'Marina Alves', stageId: S2, contactId: 'c1', origem: 'Automação' } });
+    expect(chamadas.moveDeal).toHaveLength(0);
+    expect(r.saida).toMatchObject({ dealId: 'novo-deal', stageId: S2, criado: true });
+    expect(r.contexto?.negocio).toMatchObject({ id: 'novo-deal', stageId: S2 });
+  });
+  it('contato com negócio aberto: move esse negócio', async () => {
+    const { svc, chamadas } = ambienteComNegocioAberto();
+    await svc.executar(TENANT, no('acao.mover_etapa', { stageId: S3 }), semNegocio, GRAFO);
+    expect(chamadas.moveDeal[0]).toMatchObject({ id: 'd-aberto', stageId: S3 });
+    expect(chamadas.createDeal).toHaveLength(0);
+  });
+  it('sem contato e sem negócio continua erro claro', async () => {
+    const { svc } = ambiente();
+    await expect(svc.executar(TENANT, no('acao.mover_etapa', { stageId: S2 }), {}, GRAFO)).rejects.toThrow(/sem negócio e sem contato/);
+  });
+});
+
+function ambienteComNegocioAberto() {
+  const a = ambiente();
+  const prisma = (a.svc as unknown as { prisma: { withTenant: jest.Mock } }).prisma;
+  prisma.withTenant.mockImplementation(async (_t: string, work: (tx: unknown) => Promise<unknown>) =>
+    work({ deal: { findFirst: jest.fn(async () => ({ id: 'd-aberto', titulo: 'Consulta', valor: 0, origem: 'WhatsApp' })) } }),
+  );
+  return a;
+}
+
 describe('ExecutorService — notificar equipe e saudação (importação do GHL)', () => {
   const comChave: Contexto = { ...CTX, executionKey: 'run1:0:n1' };
 
@@ -352,14 +385,18 @@ describe('ExecutorService — resposta que chegou ANTES da espera marcar (corrid
 import { BadRequestException } from '@nestjs/common';
 import type { AtendimentoService } from '../crm/messaging/atendimento.service';
 
-function montarAtendimento(atendimento: Record<string, jest.Mock>, semConversa = false) {
+function montarAtendimento(atendimento: Record<string, jest.Mock>, semConversa = false, telefone: string | null = null) {
+  const criar = jest.fn(async () => ({ id: 'conv-nova' }));
   const prisma = {
     withTenant: jest.fn(async (_t: string, work: (tx: unknown) => Promise<unknown>) =>
-      work({ conversation: { findFirst: jest.fn(async () => (semConversa ? null : { id: 'conv1' })) } }),
+      work({
+        conversation: { findFirst: jest.fn(async () => (semConversa ? null : { id: 'conv1' })), create: criar },
+        contact: { findUnique: jest.fn(async () => ({ nome: 'Marina Alves', telefone })) },
+      }),
     ),
   } as unknown as PrismaService;
   const svc = new ExecutorService(prisma, new ConfigService(), {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, undefined, atendimento as unknown as AtendimentoService);
-  return { svc, atendimento };
+  return { svc, atendimento, criar };
 }
 
 const NO_ATIVAR: No = { id: 'n1', tipo: 'acao.ativar_ia', posicao: { x: 0, y: 0 }, config: {} };
@@ -382,9 +419,18 @@ describe('nó Ativar IA na conversa', () => {
     expect(at.ativarIaSistema).toHaveBeenCalledWith(TENANT, 'conv1', AG);
   });
 
-  it('contato sem conversa é erro de configuração (DLQ direta, sem retentar)', async () => {
+  it('contato sem conversa COM telefone: abre a conversa de WhatsApp e liga a IA nela (ADR-0060)', async () => {
+    const at = { ativarIaSistema: jest.fn(async () => ({ id: 'conv-nova', atendimento: 'ia', agentId: 'ag1', assigneeId: null, handoffMotivo: null })) };
+    const { svc, criar } = montarAtendimento(at, true, '+5518999990000');
+    const r = await svc.executar(TENANT, NO_ATIVAR, CTX, GRAFO);
+    expect(criar).toHaveBeenCalledWith({ data: expect.objectContaining({ contactId: 'c1', canal: 'WhatsApp', atendimento: 'humano' }), select: { id: true } });
+    expect(at.ativarIaSistema).toHaveBeenCalledWith(TENANT, 'conv-nova', undefined);
+    expect(r.saida).toMatchObject({ conversationId: 'conv-nova' });
+  });
+
+  it('contato sem conversa e sem telefone é erro de configuração (DLQ direta, sem retentar)', async () => {
     const at = { ativarIaSistema: jest.fn() };
-    const { svc } = montarAtendimento(at, true);
+    const { svc } = montarAtendimento(at, true, null);
     await expect(svc.executar(TENANT, NO_ATIVAR, CTX, GRAFO)).rejects.toThrow(UnrecoverableError);
     expect(at.ativarIaSistema).not.toHaveBeenCalled();
   });

@@ -189,3 +189,30 @@ describe('TriggersService · gatilhos de agenda', () => {
     expect(bate('gatilho.lembrete_agendamento', { tipo: 'visita', responsavelId: 'u1' }, { tipo: 'visita', responsavelId: null })).toBe(false);
   });
 });
+
+describe('ADR-0060: contexto do gatilho conversa com o funil e com a 1ª mensagem', () => {
+  const contato = { id: 'c1', tenantId: 't', nome: 'Marina', email: null, telefone: '+5518999990000', empresa: null, tag: 'Lead', tags: [], valorEstimado: null, camposCustom: {}, ownerId: null, origem: 'WhatsApp', optedOutAt: null };
+  const negocioAberto = { id: 'd1', titulo: 'Consulta', valor: 0, stageId: 's1', origem: 'WhatsApp', status: 'aberto', ownerId: null, camposCustom: {} };
+  const montar = (tx: Record<string, unknown>) => {
+    const prisma = { withTenant: jest.fn(async (_t: string, work: (t: unknown) => Promise<unknown>) => work(tx)) } as unknown as PrismaService;
+    const s = new TriggersService(prisma, {} as RunsService);
+    return (job: Record<string, unknown>) => (s as unknown as { montarContexto: (j: unknown) => Promise<Record<string, unknown> | null> }).montarContexto({ tenantId: 't', dedupeKey: 'k', ...job });
+  };
+
+  it('gatilho de tag carrega o negócio ABERTO do contato (mover etapa deixa de falhar)', async () => {
+    const findFirst = jest.fn(async () => negocioAberto);
+    const ctx = await montar({ contact: { findUnique: jest.fn(async () => contato) }, deal: { findFirst } })({ evento: 'contact.tagged', dados: { id: 'c1', tag: 'testia' } });
+    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { contactId: 'c1', status: 'aberto' } }));
+    expect(ctx?.negocio).toMatchObject({ id: 'd1', stageId: 's1' });
+  });
+
+  it('contato criado pela 1ª mensagem traz {{mensagem.texto}} (condição "contém Black" passa a bater)', async () => {
+    const ctx = await montar({
+      contact: { findUnique: jest.fn(async () => contato) },
+      deal: { findFirst: jest.fn(async () => null) },
+      message: { findFirst: jest.fn(async () => ({ id: 'm1', corpo: 'Vi a Black e quero saber o valor', conversation: { canal: 'WhatsApp' } })) },
+    })({ evento: 'contact.created', dados: { id: 'c1', origem: 'WhatsApp' } });
+    expect(ctx?.mensagem).toMatchObject({ texto: 'Vi a Black e quero saber o valor', de: 'contato', canal: 'WhatsApp' });
+    expect(ctx?.negocio).toBeUndefined();
+  });
+});
