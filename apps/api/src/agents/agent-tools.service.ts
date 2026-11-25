@@ -17,6 +17,7 @@ import { FinanceiroService } from '../financeiro/financeiro.service';
 import { SalaoAgendaService } from './salao/salao-agenda.service';
 import { fusoPadrao } from '../common/hora';
 import { diaFechado } from './salao/agenda-salao';
+import { isoLocal } from './engines/agenda-intent';
 
 /**
  * Contexto da execução. `contactId` e `tenantId` vêm da CONVERSA e da sessão
@@ -354,7 +355,11 @@ export class AgentToolsService {
         const durPadrao = await this.duracaoConsultaConservadora(ctx.tenantId);
         const duracao = typeof a.duracaoMin === 'number' ? a.duracaoMin : durPadrao;
         const slots = a.data ? await this.slotsDoDia(ctx, String(a.data), duracao) : undefined;
-        const livres = slots?.map((s) => ({ inicio: s.inicio, fim: s.fim, ...(s.ultimaOpcao ? { ultimaOpcao: true } : {}) }));
+        // Horários no fuso do agente (ex.: 2026-12-03T12:00:00-03:00), nunca em
+        // UTC: com "…T15:00:00.000Z" o modelo lia 15h e oferecia horário errado.
+        const fuso = ctx.horario?.fuso ?? 'America/Sao_Paulo';
+        const livres = slots?.map((s) => ({ inicio: isoLocal(s.inicio, fuso), fim: isoLocal(s.fim, fuso), ...(s.ultimaOpcao ? { ultimaOpcao: true } : {}) }));
+        const compromissos = proximos.map((c) => ({ ...c, inicio: isoLocal(c.inicio.toISOString(), fuso), fim: isoLocal(c.fim.toISOString(), fuso) }));
         // Horário pedido pelo contato: responde se está livre e ordena as
         // alternativas pela proximidade dele (a escolha do contato manda).
         let solicitado: { horario: string; disponivel: boolean } | undefined;
@@ -369,7 +374,7 @@ export class AgentToolsService {
         }
         // Preferidos primeiro, mas sem cortar o fim da tarde nem esconder as
         // últimas opções: o teto de 20 cabe na grade de um dia inteiro.
-        return { ok: true, dados: { compromissos: proximos, ...(livres ? { horariosLivres: livres.slice(0, 20), duracaoMinConsiderada: duracao, ...(solicitado ? { solicitado } : {}) } : {}) } };
+        return { ok: true, dados: { compromissos, ...(livres ? { horariosLivres: livres.slice(0, 20), duracaoMinConsiderada: duracao, ...(solicitado ? { solicitado } : {}) } : {}) } };
       }
       case 'solicitar_agendamento': {
         const id = this.exigirContato(ctx);

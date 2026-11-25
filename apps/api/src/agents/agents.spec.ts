@@ -294,9 +294,12 @@ describe('ferramentas de agenda respeitam o horário do agente', () => {
     const f = ferramentas();
     const data = proximoDiaDaSemana(1);
     const r = await f.svc.executar('ver_agendamentos', { data, duracaoMin: 60 }, { ...CTX, horario: horarioPadrao() }, TODAS);
-    const livres = (r.dados as { horariosLivres: { inicio: string }[] }).horariosLivres;
+    const livres = (r.dados as { horariosLivres: { inicio: string; fim: string }[] }).horariosLivres;
     expect(livres.length).toBeGreaterThan(0);
     expect(horaLocalSP(livres[0].inicio)).toBe('08:00');
+    // O modelo lê a hora direto do texto: nada em UTC ("…Z"), sempre no fuso local.
+    expect(livres[0].inicio).toBe(`${data}T08:00:00-03:00`);
+    for (const s of livres) expect(`${s.inicio} ${s.fim}`).not.toMatch(/Z/);
     for (const s of livres) {
       const [h] = horaLocalSP(s.inicio).split(':').map(Number);
       expect(h).toBeGreaterThanOrEqual(8);
