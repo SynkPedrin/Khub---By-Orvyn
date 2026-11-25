@@ -40,4 +40,15 @@ CREATE POLICY tenant_rw ON links_rastreados FOR ALL
   USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid)
   WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
 -- ==SPLIT==
-GRANT SELECT, INSERT, UPDATE, DELETE ON links_rastreados TO orvyn_app, orvyn_service;
+-- Os papéis foram renomeados na db/035 (orvyn_* -> khub_*): GRANT fixo em
+-- orvyn_app falhava em banco novo e deixava khub_app sem acesso (corrigido em
+-- produção pela db/084). Concede a quem existir, como a 083.
+DO $$
+DECLARE r text;
+BEGIN
+ FOREACH r IN ARRAY ARRAY['khub_app','khub_service','orvyn_app','orvyn_service'] LOOP
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
+   EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON links_rastreados TO %I', r);
+  END IF;
+ END LOOP;
+END $$;
