@@ -78,7 +78,7 @@ export function SeletorPostInstagram({ onEscolher }: { onEscolher: (post: PostIg
                 {TIPO_ROTULO[p.tipo] ?? p.tipo}
               </span>
               {p.metricas.engajamento != null && (
-                <span className="absolute right-1.5 top-1.5 rounded-full bg-brand px-2 py-0.5 text-2xs font-bold text-black shadow">
+                <span className="absolute right-1.5 top-1.5 rounded-full bg-brand px-2 py-0.5 text-2xs font-bold text-on-brand shadow">
                   {p.metricas.engajamento.toFixed(1)}% eng.
                 </span>
               )}
@@ -92,7 +92,7 @@ export function SeletorPostInstagram({ onEscolher }: { onEscolher: (post: PostIg
               </p>
             </div>
             <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 backdrop-blur-[1px] transition-opacity group-hover:opacity-100">
-              <span className="rounded-full bg-brand px-3 py-1.5 text-xs font-bold text-black">Usar como criativo</span>
+              <span className="rounded-full bg-brand px-3 py-1.5 text-xs font-bold text-on-brand">Usar como criativo</span>
             </span>
           </motion.button>
         ))}

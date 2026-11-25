@@ -244,7 +244,7 @@ function CartaoCriativo({ c, r, vencedor, i }: { c: ResultadoCriativo; r: Result
       className={`relative rounded-2xl border p-4 ${vencedor ? 'border-brand/50 bg-brand/[0.05]' : 'border-line bg-surface2/60'}`}
     >
       {vencedor && (
-        <motion.span initial={{ scale: 0, rotate: -12 }} animate={{ scale: 1, rotate: 0 }} transition={{ delay: 0.5, type: 'spring', stiffness: 500, damping: 18 }} className="absolute -top-2.5 right-3 flex items-center gap-1 rounded-full bg-brand px-2 py-0.5 text-2xs font-bold text-black shadow">
+        <motion.span initial={{ scale: 0, rotate: -12 }} animate={{ scale: 1, rotate: 0 }} transition={{ delay: 0.5, type: 'spring', stiffness: 500, damping: 18 }} className="absolute -top-2.5 right-3 flex items-center gap-1 rounded-full bg-brand px-2 py-0.5 text-2xs font-bold text-on-brand shadow">
           <Icon name="trophy" size={11} /> Vencedor provável
         </motion.span>
       )}

@@ -506,5 +506,6 @@ Critério de sucesso da fase (PRD §16): **um cliente real da agência operando 
 
 ## TAGS: catálogo único e cruzamento (pedido do product owner em 2026-11-24)
 - [x] **TAGS-CRUZAMENTO**: tag nova digitada num nó de automação é criada no sistema na hora e aparece para marcar contatos; publicação e importação garantem o catálogo; Configurações › Tags mostra contatos e automações de cada tag, renomear propaga aos contatos, e a análise completa (fora do catálogo, parecidas, sem uso, gatilho sem origem, adiciona×remove) com "Sincronizar catálogo" ([[Arquitetura|ADR-0055]], BUG-053).
+- [x] **UI-LEGIBILIDADE-FUNIS**: Funis e etapas com "Voltar ao funil de vendas", "Salvar alterações"/"Descartar" (rascunho marcado, confirmação ao sair) e controles legíveis; botão principal legível no tema claro e texto sobre `bg-brand` por token `--brand-ink` (BUG-054, BUG-055).
   - Verificado: jest 742/742 (automations, settings, crm, auth, common; `tags-catalogo.spec.ts` novo), tsc api+web, lint, vitest; SQL validado no Postgres de dev em BEGIN…ROLLBACK (renomear `kroma-ads` atualizou 377/377 contatos); cruzamento executado nos dados de dev do Studio.
 

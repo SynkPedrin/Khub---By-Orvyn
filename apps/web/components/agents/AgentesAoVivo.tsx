@@ -126,7 +126,7 @@ export function AgentesAoVivo({ atividades }: { atividades: Dashboard['ultimasAt
                 return (
                   <li key={`${p.rotulo}-${i}`}>
                     <button type="button" onClick={() => clicarPasso(i)} aria-expanded={aberto} className={cx('flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-surface2', aberto && 'bg-brand/[0.07]')}>
-                      <span className={cx('grid h-6 w-6 shrink-0 place-items-center rounded-full border', p.ok ? 'border-brand bg-brand text-[#0e1a04]' : 'border-danger text-danger')}><Icon name={p.ok ? 'check2' : 'close'} size={12} /></span>
+                      <span className={cx('grid h-6 w-6 shrink-0 place-items-center rounded-full border', p.ok ? 'border-brand bg-brand text-on-brand' : 'border-danger text-danger')}><Icon name={p.ok ? 'check2' : 'close'} size={12} /></span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[12.5px] font-medium text-fg">{p.rotulo}</span>
                         {p.detalhe && !aberto && <span className="block truncate text-[11px] text-muted">{p.detalhe}</span>}
@@ -158,7 +158,7 @@ export function AgentesAoVivo({ atividades }: { atividades: Dashboard['ultimasAt
                 const ia = m.de === 'ia';
                 return (
                   <div key={m.id} className={cx('flex', minha ? 'justify-end' : 'justify-start')}>
-                    <div className={cx('max-w-[88%] rounded-2xl px-3 py-2 text-[12.5px] leading-snug', !minha && 'rounded-bl-md bg-surface3 text-fg', minha && !ia && 'rounded-br-md bg-brand text-[#0b0b0b]', ia && 'rounded-br-md bg-brand/15 text-fg shadow-[inset_0_0_0_1px_var(--brand-border)]')}>
+                    <div className={cx('max-w-[88%] rounded-2xl px-3 py-2 text-[12.5px] leading-snug', !minha && 'rounded-bl-md bg-surface3 text-fg', minha && !ia && 'rounded-br-md bg-brand text-on-brand', ia && 'rounded-br-md bg-brand/15 text-fg shadow-[inset_0_0_0_1px_var(--brand-border)]')}>
                       {ia && <span className="mb-0.5 block text-[10px] font-semibold text-brand">{m.agentNome ?? 'Agente'}</span>}
                       <span className="whitespace-pre-wrap break-words">{m.texto}</span>
                       <span className="mt-0.5 block text-right text-[10px] text-faint">{m.hora ?? ''}</span>

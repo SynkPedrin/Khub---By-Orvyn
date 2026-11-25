@@ -695,13 +695,20 @@ a {
   font-variant-numeric: tabular-nums;
 }
 
-/* Texto sobre preenchimento de marca: tinta escura sobre o lime (dark);
-   branco sobre o verde acessível #4c7a00 que --brand assume no claro. */
-.text-on-brand {
-  color: var(--lime-ink);
+/* Texto sobre preenchimento de marca (bg-brand): tinta escura sobre o lime
+   (escuro); branco sobre o violeta #7b2eff que --brand assume no claro.
+   `--brand-ink` serve onde a classe não alcança (ex.: file:). */
+:root {
+  --brand-ink: var(--lime-ink);
 }
-:root[data-theme='light'] .text-on-brand {
-  color: #ffffff;
+:root[data-theme='light'] {
+  --brand-ink: #ffffff;
+}
+:root[data-theme='light'] .sidebar-shell {
+  --brand-ink: var(--lime-ink);
+}
+.text-on-brand {
+  color: var(--brand-ink);
 }
 
 .text-muted {
@@ -1337,9 +1344,11 @@ a {
       inset 0 1px 0 rgba(255, 255, 255, 0.2),
       0 1px 2px rgba(0, 0, 0, 0.2);
   }
-  /* Claro: --brand é #4c7a00 (escuro) — texto branco mantém AA. */
+  /* Claro: o preenchimento continua lime (#b6ff00) — texto branco ficava
+     ilegível (~1.2:1, BUG-054). Tinta escura e borda marcada nos dois temas. */
   :root[data-theme='light'] .btn-primary {
-    color: #ffffff;
+    color: var(--lime-ink);
+    border-color: color-mix(in srgb, var(--lime-500) 40%, #1a2200);
   }
 
   .btn-soft {

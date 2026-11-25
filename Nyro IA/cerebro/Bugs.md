@@ -9,6 +9,16 @@ Status: `aberto` · `em correção` · `corrigido` · `não reproduz`.
 
 ## Abertos
 
+### BUG-055 — Funis e etapas sem botão de salvar nem de voltar (S2) — corrigido 2026-11-24
+- **Reprodução:** Funil de vendas › Configurar funis e etapas → renomear uma etapa: não havia botão "Salvar" (salvava ao sair do campo, sem aviso) nem botão para voltar ao funil (só um link pequeno "Funil de vendas" acima do título).
+- **Causa raiz:** a tela salvava no `onBlur` sem nenhum sinal visual; nada indicava que o nome era editável nem que a alteração tinha sido gravada.
+- **Correção:** botão "Voltar ao funil de vendas"; nomes viram rascunho marcado "não salvo" com barra fixa "N alterações não salvas · Descartar · Salvar alterações" (Enter também salva); sair ou fechar a aba com pendência pede confirmação; cor, ordem, etapa nova e exclusão continuam imediatas, agora com aviso de "salvo"; setas, lixeira e bolinha de cor maiores e com borda.
+
+### BUG-054 — Botão principal ilegível no tema claro (texto branco sobre lima) (S2) — corrigido 2026-11-24
+- **Reprodução:** tema claro → "Nova oportunidade" (Funil de vendas) e qualquer `.btn-primary`: texto branco sobre verde-lima, contraste ~1,2:1.
+- **Causa raiz:** regra `:root[data-theme='light'] .btn-primary { color: #fff }` supunha `--brand` verde-escuro, mas o botão usa `--lime-400/500` (lima claro) nos dois temas. Pílulas/bolhas com `bg-brand` usavam `text-black` fixo, ilegível sobre o violeta do claro.
+- **Correção:** tinta escura `--lime-ink` no `.btn-primary` claro com borda marcada; token `--brand-ink` (lima-ink no escuro e na sidebar, branco no claro) usado por `.text-on-brand`; pílulas do simulador de anúncios, mensagens do agente ao vivo, NyroMensagens e o botão de arquivo da importação financeira passaram a usá-lo.
+
 ### BUG-053 — Tag criada em automação/importação não aparecia para marcar contato; contador de uso sempre 0 (S2) — corrigido 2026-11-24 (ADR-0055)
 - **Reprodução:** nó "Tag adicionada" com a tag `teste ia` (nova) → a tag não aparecia no editor de tags do contato nem em Configurações › Tags; importação trouxe `metaads`, `kroma-ads` etc. fora do catálogo; Configurações › Tags mostrava "0 uso(s)" em todas.
 - **Causa raiz:** só três caminhos gravavam no catálogo `crm_tags`; o nó de automação era texto livre e a importação gravava direto em `contacts.tags`; a coluna `usos` nunca era atualizada.
