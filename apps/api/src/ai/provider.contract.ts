@@ -202,7 +202,8 @@ export const AGENT_LLM = Symbol('AGENT_LLM');
 export class ErroProvedorIA extends Error {
   constructor(
     message: string,
-    readonly causa: 'credencial' | 'limite' | 'indisponivel' | 'requisicao' | 'desconhecida',
+    /** `credito`: teto de crédito da operação atingido (CreditoIaService); não retentável. */
+    readonly causa: 'credencial' | 'limite' | 'indisponivel' | 'requisicao' | 'credito' | 'desconhecida',
     readonly provedor: string,
     readonly status?: number,
   ) {

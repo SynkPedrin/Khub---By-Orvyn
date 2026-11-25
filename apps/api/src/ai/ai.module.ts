@@ -6,6 +6,7 @@ import { AiProviderRegistry } from './provider.registry';
 import { AGENT_LLM, AI_PROVIDER, type AIProvider } from './provider.contract';
 import { AgentLlmService } from './agent-llm.service';
 import { AiService } from './ai.service';
+import { CreditoIaService } from './credito-ia.service';
 
 /**
  * Camada de IA compartilhada (ADR-0019). `@Global`: tanto o motor de automações
@@ -21,6 +22,7 @@ import { AiService } from './ai.service';
 @Global()
 @Module({
   providers: [
+    CreditoIaService,
     AnthropicProvider,
     OpenAiProvider,
     OllamaProvider,
@@ -34,6 +36,6 @@ import { AiService } from './ai.service';
     { provide: AGENT_LLM, useExisting: AgentLlmService },
     AiService,
   ],
-  exports: [AI_PROVIDER, AGENT_LLM, AiProviderRegistry, AiService, AnthropicProvider],
+  exports: [AI_PROVIDER, AGENT_LLM, AiProviderRegistry, AiService, AnthropicProvider, CreditoIaService],
 })
 export class AiModule {}

@@ -16,6 +16,7 @@ const MENSAGEM_PROVEDOR: Record<ErroProvedorIA['causa'], string> = {
   limite: 'A IA está com limite de uso no momento. Tente de novo em instantes.',
   indisponivel: 'A IA está fora do ar agora. Tente de novo em instantes.',
   requisicao: 'A IA recusou o pedido (erro de configuração do servidor). O detalhe está no log da API.',
+  credito: 'O crédito de IA desta operação chegou ao teto. Quem administra precisa liberar mais crédito.',
   desconhecida: 'Não consegui falar com a NICO agora.',
 };
 class AnexoDto {

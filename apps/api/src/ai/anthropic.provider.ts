@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '../config/config.service';
+import { CreditoIaService } from './credito-ia.service';
 import { consumirNdjsonOllama, consumirSseAnthropic, type RespostaAnthropicStream, type RespostaOllamaStream } from './stream-parsers';
 import { CircuitBreaker } from '../common/circuit-breaker';
 import {
@@ -158,7 +159,10 @@ export class AnthropicProvider implements AIProvider {
   // Anthropic caída nem prende a latência de todos os tenants).
   private readonly circuito = new CircuitBreaker({ nome: 'Anthropic', limiteFalhas: 5, cooldownMs: 30_000 });
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    @Optional() private readonly credito?: CreditoIaService,
+  ) {
     // ANTHROPIC_BASE_URL (convenção dos SDKs): gateway corporativo ou, no stack
     // de QA, o servidor de teste roteirizado. Em produção só https.
     const base = (config.get('ANTHROPIC_BASE_URL') || 'https://api.anthropic.com').replace(/\/+$/, '');
@@ -207,6 +211,8 @@ export class AnthropicProvider implements AIProvider {
       return this.conversarOllama(input);
     }
     this.exigirCredencial();
+    // Teto de crédito da operação: recusa ANTES de gastar (ANTHROPIC_CREDITO_USD).
+    await this.credito?.verificar();
     const chave = this.config.get('ANTHROPIC_API_KEY')!;
     // Política de custo do deploy (modelo forçado e teto de esforço).
     const politica = aplicarPoliticaDeCusto(input.modelo, input.effort);
@@ -281,12 +287,14 @@ export class AnthropicProvider implements AIProvider {
 
     // Com fallback, quem atendeu pode ser outro modelo: o custo segue `j.model`.
     const modelo = j.model ?? input.modelo;
+    const custoUsd = this.custo(modelo, entrada, saida, cache);
+    this.credito?.registrar(custoUsd);
     return {
       texto,
       toolCalls,
       pararPor: j.stop_reason,
       modelo,
-      uso: { entrada, saida, cache, custoUsd: this.custo(modelo, entrada, saida, cache) },
+      uso: { entrada, saida, cache, custoUsd },
       blocos: j.content,
     };
   }

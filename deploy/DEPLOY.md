@@ -55,6 +55,9 @@ Copia as subcontas listadas em `SUBCONTAS` com tudo (contatos, conversas, mensag
    | `AI_PROVIDER` | `anthropic` |
    | `ANTHROPIC_MODEL_FORCE` | `claude-haiku-5-5` (toda chamada de IA usa o modelo mais barato: US$ 0,10 / 0,50 por milhão de tokens) |
    | `ANTHROPIC_EFFORT_MAX` | `low` (raciocínio curto; é cobrado como saída) |
+   | `ANTHROPIC_CREDITO_USD` | crédito disponível no console da Anthropic no momento da configuração (ex.: `78.17`). Liga o teto de crédito (`apps/api/src/ai/credito-ia.service.ts`); sem ela, sem teto |
+   | `ANTHROPIC_CREDITO_DESDE` | data/hora ISO em que o crédito acima foi lido (ex.: `2026-11-25T15:00:00Z`); só conta gasto a partir dela |
+   | `ANTHROPIC_CREDITO_RESERVA_USD` | opcional, padrão `5`: margem para chamadas que não registram uso. Bloqueia quando gasto ≥ crédito menos reserva |
    | `DISPAROS_APROVACAO_ACIMA`, `DISPAROS_LIMITE_DIARIO_WHATSAPP`, `DISPAROS_LIMITE_DIARIO_EMAIL` | opcionais (padrões 50, 300 e 2000) |
 
    O `JWT_SECRET` é gerado pelo próprio Render. As integrações (`ANTHROPIC_API_KEY`, `STEVO_*`/`EVOLUTION_*`, `META_*`, `STRIPE_*`, `SMTP_URL` ou `RESEND_API_KEY`, `S3_*`) são opcionais: sem a chave, o módulo responde `config_required` e a tela mostra "Conectar".
@@ -63,6 +66,8 @@ Copia as subcontas listadas em `SUBCONTAS` com tudo (contatos, conversas, mensag
 4. Em **Settings → Custom Domains** do `khub-api`, adicione `api.kromads.com.br`. O Render mostra o destino do CNAME (algo como `khub-api.onrender.com`); crie esse CNAME no Registro.br (seção DNS abaixo). O serviço está pronto quando `GET https://<khub-api>.onrender.com/v1/ready` responde `{"status":"ready"}`.
 
 > Gasto de IA: no Console da Anthropic (console.anthropic.com → Limits / Spend limits), defina um limite mensal do workspace (ex.: US$ 15/mês). Ao atingir o limite, a API recusa e os agentes passam a conversa para a equipe, sem deixar o cliente sem resposta.
+>
+> Só crédito promocional: a Anthropic não tem essa opção; o promocional é consumido antes do saldo pago. Mantenha saldo pago em zero, **recarga automática desligada** no Billing e o teto `ANTHROPIC_CREDITO_*` ligado. No teto, toda chamada à Anthropic é recusada com causa `credito` (log `CreditoIA`), os agentes transferem para a equipe e a NICO avisa. Ao comprar ou ganhar crédito novo, atualize `ANTHROPIC_CREDITO_USD` e `ANTHROPIC_CREDITO_DESDE` e faça Manual Deploy.
 
 > Plano gratuito: a instância dorme por inatividade (jobs e follow-ups param enquanto dorme) e o Redis gratuito não persiste a fila. Serve para validação online, não para atendimento 24 horas.
 
