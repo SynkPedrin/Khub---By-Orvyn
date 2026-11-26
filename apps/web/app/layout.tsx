@@ -7,6 +7,7 @@ import { AuthProvider } from '@/lib/auth';
 import { LocaleProvider } from '@/lib/locale';
 import { AgencyProvider } from '@/components/agency/AgencyProvider';
 import { GlassLight } from '@/components/shell/GlassLight';
+import { RegistrarServiceWorker } from '@/components/pwa/RegistrarServiceWorker';
 
 /**
  * Identidade Kroma (ADR-0043): Manrope na interface inteira e Instrument
@@ -38,15 +39,19 @@ export const metadata: Metadata = {
     ],
     apple: { url: '/apple-touch-icon.png', sizes: '180x180' },
   },
+  // App mobile (PWA): na tela inicial do iPhone abre sem a barra do Safari.
+  appleWebApp: { capable: true, title: 'KHUB', statusBarStyle: 'black-translucent' },
 };
 
 export const viewport: Viewport = {
   themeColor: '#050505',
   width: 'device-width',
   initialScale: 1,
+  // Ocupa a tela toda no iPhone (notch); o app mobile respeita a safe-area.
+  viewportFit: 'cover',
 };
 
-const TEMA_ANTES_DE_PINTAR = `(function(){try{var p=location.pathname;if(/^\\/(login|signup|esqueci-senha|redefinir-senha|agency-invite|privacidade|termos)?(\\/|$)/.test(p))return;var t=localStorage.getItem('khub-theme');if(t==='system')t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';if(t==='light')document.documentElement.setAttribute('data-theme','light');}catch(e){}})();`;
+const TEMA_ANTES_DE_PINTAR = `(function(){try{var p=location.pathname;if(/^\\/(login|signup|esqueci-senha|redefinir-senha|agency-invite|privacidade|termos|baixar)?(\\/|$)/.test(p))return;var t=localStorage.getItem('khub-theme');if(t==='system')t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';if(t==='light')document.documentElement.setAttribute('data-theme','light');}catch(e){}})();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -59,6 +64,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <GlassLight />
+        <RegistrarServiceWorker />
         <AuthProvider>
           <LocaleProvider><AgencyProvider>{children}</AgencyProvider></LocaleProvider>
         </AuthProvider>

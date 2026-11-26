@@ -8,6 +8,7 @@ import { Container } from '@/components/marketing/ui/Container';
 import { FrequencyField } from '@/components/landing/FrequencyField';
 import { LP_EASE } from '@/lib/marketing/motion';
 import { LOGIN_URL, SIGNUP_URL } from '@/lib/marketing/env';
+import { BotaoBaixarApp, IconeBaixarApp } from '@/components/marketing/ui/BaixarApp';
 
 /**
  * Hero do KHUB com a identidade visual da Kroma (ADR-0043): headline
@@ -96,6 +97,9 @@ export function Hero() {
               <Link href={LOGIN_URL} className="lp-cta-quiet">
                 Entrar
               </Link>
+              <BotaoBaixarApp className="lp-cta-quiet gap-2">
+                <IconeBaixarApp /> Baixar app
+              </BotaoBaixarApp>
             </motion.div>
           </div>
         </div>

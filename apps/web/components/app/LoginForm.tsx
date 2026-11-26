@@ -34,6 +34,9 @@ export function LoginForm() {
       const next = params.get('next');
       if (next) {
         router.replace(next);
+      } else if (window.matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true) {
+        // App mobile instalado (PWA): volta sempre para o app do cliente.
+        router.replace('/m');
       } else {
         // identidade de agência (Pedro etc.) entra pela Agency Home, não
         // por um tenant "de bootstrap" escondido — cliente direto (contexto

@@ -11,7 +11,7 @@ import { ACCESS, API, REFRESH, clearSession, setSession } from './lib/server-aut
 // mora em "/dashboard" (protegido, como qualquer outra rota fora de PUBLIC).
 // "/f" (formulário público, Q4.1) e "/b" (agendamento público, Q4.2) são
 // páginas que o VISITANTE do cliente abre sem conta; o tenant sai do slug.
-const PUBLIC = ['/', '/login', '/signup', '/agency-invite', '/esqueci-senha', '/redefinir-senha', '/termos', '/privacidade', '/f', '/b', '/r', '/w'];
+const PUBLIC = ['/', '/login', '/signup', '/agency-invite', '/esqueci-senha', '/redefinir-senha', '/termos', '/privacidade', '/f', '/b', '/r', '/w', '/baixar'];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -58,7 +58,8 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   // exclui API, assets internos e arquivos estáticos (imagem, VÍDEO, fonte).
+  // PWA: service worker, manifest e página offline precisam abrir sem sessão.
   // Sem o vídeo aqui, o middleware de auth redireciona /fundo-animado.mp4 (307)
   // e o plano de fundo nunca carrega — mesma armadilha que a logo já teve.
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpe?g|gif|svg|webp|ico|avif|mp4|webm|mov|woff2?|ttf)$).*)'],
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|offline\\.html|.*\\.(?:png|jpe?g|gif|svg|webp|ico|avif|mp4|webm|mov|woff2?|ttf)$).*)'],
 };

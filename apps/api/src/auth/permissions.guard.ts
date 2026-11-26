@@ -65,10 +65,19 @@ export function permissionFor(controller: string, route: string, method: string)
   if (controller === 'avaliacoes') return read ? 'contacts.read' : route.startsWith('pedidos') ? 'contacts.write' : 'organization.manage';
   // Redes sociais (db/068): ver é leitura; publicar/cancelar é de manager+. Conectar conta fica em `integrations/redes` (integrations.manage).
   if (controller === 'redes' || controller === 'redes/instagram') return read ? 'contacts.read' : 'automations.write';
+  // Notificações no celular (PWA): cada pessoa cuida dos próprios aparelhos.
+  if (controller === 'push') return 'profile.read';
+  // Aprovações (db/085): ver é leitura; aprovar/pedir ajuste/comentar é do cliente
+  // (qualquer membro da subconta); montar, anexar, enviar e apagar é da equipe (manager+).
+  if (controller === 'aprovacoes') {
+    if (read) return 'contacts.read';
+    if (/(^|\/)(responder|comentarios)$/.test(route)) return 'aprovacoes.responder';
+    return 'automations.write';
+  }
   return read ? 'contacts.read' : 'organization.manage';
 }
 
-const member = new Set(['profile.read', 'contacts.read', 'contacts.write', 'pipeline.read', 'pipeline.write', 'conversations.read', 'conversations.reply', 'automations.read', 'agenda.write']);
+const member = new Set(['profile.read', 'contacts.read', 'contacts.write', 'pipeline.read', 'pipeline.write', 'conversations.read', 'conversations.reply', 'automations.read', 'agenda.write', 'aprovacoes.responder']);
 export function hasPermission(user: AuthUser, permission: string): boolean {
   if (user.role === 'api') return !['users.manage', 'organization.manage'].includes(permission) && !!user.scopes?.some(s => s === '*' || s === permission);
   if (['owner', 'admin'].includes(user.role)) return true;

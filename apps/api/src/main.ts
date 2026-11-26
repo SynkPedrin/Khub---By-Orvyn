@@ -20,7 +20,7 @@ if (process.env.SENTRY_DSN) {
 
 /** Rotas com corpo grande (ver o parser por rota em `bootstrap`). Exportadas para teste. */
 export const ROTAS_WEBHOOK = /^\/v1\/(webhooks|hooks)\//;
-export const ROTAS_UPLOAD = /^\/v1\/(agents\/[0-9a-f-]{36}\/conhecimento|crm\/import\/contacts|nyro\/chat|nyro\/chat\/stream|crm\/conversations\/[0-9a-f-]{36}\/midia|ads\/simulador\/analisar)$/;
+export const ROTAS_UPLOAD = /^\/v1\/(agents\/[0-9a-f-]{36}\/conhecimento|crm\/import\/contacts|nyro\/chat|nyro\/chat\/stream|crm\/conversations\/[0-9a-f-]{36}\/midia|ads\/simulador\/analisar|aprovacoes\/[0-9a-f-]{36}\/arquivos)$/;
 
 /** Origens de CORS: CSV explícito; senão libera em dev e restringe ao WEB_URL em prod. */
 function corsOrigins(env: ReturnType<typeof loadEnv>): true | string[] {

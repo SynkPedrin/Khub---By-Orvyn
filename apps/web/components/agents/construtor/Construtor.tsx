@@ -422,7 +422,7 @@ function BlocoPublico({ agente, onAtualizado }: Pick<SecaoProps, 'agente' | 'onA
     <div className="rounded-xl border border-line p-3">
       <label htmlFor="publico-tags" className="block text-[13px] font-semibold text-fg">Só atender contatos com estas tags</label>
       <p className="mt-0.5 text-xs text-muted">
-        Para testar sem falar com clientes reais. Preenchido, o agente ignora quem não tem a tag em qualquer modo, inclusive quando uma automação usa "Ativar IA". Vazio = todos os contatos.
+        Para testar sem falar com clientes reais. Preenchido, o agente ignora quem não tem a tag em qualquer modo, inclusive quando uma automação usa “Ativar IA”. Vazio = todos os contatos.
       </p>
       <input
         id="publico-tags"

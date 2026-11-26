@@ -10,6 +10,7 @@ import { Automations } from '@/components/marketing/sections/Automations';
 import { Intelligence } from '@/components/marketing/sections/Intelligence';
 import { Campaigns } from '@/components/marketing/sections/Campaigns';
 import { Analytics } from '@/components/marketing/sections/Analytics';
+import { AppMobile } from '@/components/marketing/sections/AppMobile';
 import { Integrations } from '@/components/marketing/sections/Integrations';
 import { Differentiation } from '@/components/marketing/sections/Differentiation';
 import { Founder } from '@/components/marketing/sections/Founder';
@@ -55,6 +56,7 @@ export default function LandingPage() {
         <Pipeline />
         <Automations />
         <Intelligence />
+        <AppMobile />
         <Campaigns />
         <Analytics />
         <Integrations />

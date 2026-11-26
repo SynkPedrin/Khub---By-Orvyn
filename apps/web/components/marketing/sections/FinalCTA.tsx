@@ -3,6 +3,7 @@ import { Container } from '@/components/marketing/ui/Container';
 import { Reveal } from '@/components/marketing/ui/Reveal';
 import { CrystalMotion } from '@/components/marketing/ui/CrystalMotion';
 import { LOGIN_URL, SIGNUP_URL } from '@/lib/marketing/env';
+import { BotaoBaixarApp, IconeBaixarApp } from '@/components/marketing/ui/BaixarApp';
 
 /**
  * CTA final — off-white, sem card, sem caixa.
@@ -61,6 +62,9 @@ export function FinalCTA() {
                 <Link href={LOGIN_URL} className="lp-cta-quiet">
                   Entrar
                 </Link>
+                <BotaoBaixarApp className="lp-cta-quiet gap-2">
+                  <IconeBaixarApp /> Baixar app
+                </BotaoBaixarApp>
               </div>
             </Reveal>
           </div>

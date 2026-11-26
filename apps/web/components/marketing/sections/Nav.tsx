@@ -5,11 +5,13 @@ import { useEffect, useState } from 'react';
 import { Container } from '@/components/marketing/ui/Container';
 import { Wordmark } from '@/components/marketing/ui/Wordmark';
 import { LOGIN_URL, SIGNUP_URL } from '@/lib/marketing/env';
+import { BotaoBaixarApp, IconeBaixarApp } from '@/components/marketing/ui/BaixarApp';
 
 const LINKS = [
   { href: '#fluxo', label: 'O fluxo' },
   { href: '#produto', label: 'Produto' },
   { href: '#nyro', label: 'NICO' },
+  { href: '#app', label: 'App' },
   { href: '#crm', label: 'CRM vs KHUB' },
 ];
 
@@ -75,7 +77,16 @@ export function Nav() {
           ))}
         </nav>
 
-        <div className="flex shrink-0 items-center gap-1 sm:gap-5">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-5">
+          {/* Baixar app: ícone no celular, texto no desktop. */}
+          <BotaoBaixarApp
+            className="inline-flex h-11 items-center gap-2 rounded-full border px-3.5 text-[13.5px] font-medium transition-colors duration-300 sm:border-transparent sm:px-2"
+            style={{ color: onDark ? 'var(--lp-on-dark-2)' : 'var(--lp-ink-2)', borderColor: 'var(--lp-rule)' }}
+          >
+            <IconeBaixarApp size={17} />
+            <span className="hidden sm:inline">Baixar app</span>
+            <span className="sr-only sm:hidden">Baixar app</span>
+          </BotaoBaixarApp>
           <Link
             href={LOGIN_URL}
             className="hidden px-2 text-[13.5px] font-medium transition-colors duration-300 sm:inline-flex"

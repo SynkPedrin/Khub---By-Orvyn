@@ -99,6 +99,13 @@ const schema = z.object({
   // Base pública do bucket (CDN). Vazio = URLs assinadas (bucket privado).
   S3_PUBLIC_BASE_URL: z.string().url().optional(),
 
+  // Web Push do app mobile (PWA): avisa o cliente no celular quando há peça
+  // para aprovar. Gerar com `npx web-push generate-vapid-keys`. Sem as duas
+  // chaves o push fica desligado (a notificação no sino continua).
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  VAPID_SUBJECT: z.string().optional(),
+
   // E-mail transacional (convites). Sem SMTP_URL o convite volta com link manual.
   SMTP_URL: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),

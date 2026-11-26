@@ -41,6 +41,8 @@ export const PRIMARY_NAV: NavItem[] = [
   { href: '/conversas', label: 'Conversas', icon: 'chat', badge: 'conversas', grupo: 'Operação' },
   { href: '/agenda', label: 'Agenda', icon: 'calendar', grupo: 'Operação' },
   { href: '/tarefas', label: 'Tarefas', icon: 'check2', grupo: 'Operação' },
+  // Artes e roteiros que o cliente aprova pelo app no celular (db/085).
+  { href: '/aprovacoes', label: 'Aprovações', icon: 'eye', grupo: 'Operação' },
   { href: '/automacoes', label: 'Automações', icon: 'zap', grupo: 'Crescimento' },
   { href: '/campanhas', label: 'Campanhas', icon: 'send', grupo: 'Crescimento' },
   // Instagram, TikTok e YouTube da subconta (db/068).

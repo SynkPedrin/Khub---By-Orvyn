@@ -23,7 +23,7 @@ export interface ConviteEntregue {
 export interface Invite { id: string; email: string; role: string; modulos: string[] | null; expiresAt: string; createdAt: string }
 export interface AuditRow { id: string; actorType: string; actorId: string | null; acao: string; entidade: string | null; entidadeId: string | null; ts: string }
 
-export interface NotificationItem { id: string; tipo: 'mensagem' | 'integracao' | 'mencao' | 'disparo_aprovacao' | 'avaliacao_negativa' | 'nico'; titulo: string; detalhe: string; url: string; ts: string; novo: boolean }
+export interface NotificationItem { id: string; tipo: 'mensagem' | 'integracao' | 'mencao' | 'disparo_aprovacao' | 'avaliacao_negativa' | 'nico' | 'aprovacao_pendente' | 'aprovacao_respondida'; titulo: string; detalhe: string; url: string; ts: string; novo: boolean }
 export type PapelTag = 'gatilho' | 'adiciona' | 'remove' | 'condicao' | 'espera' | 'segmento';
 export interface AutomacaoComTag { id: string; nome: string; status: string; papeis: PapelTag[] }
 /** `contatos`/`automacoes` = cruzamento ao vivo (ADR-0055). `usos` = contatos (contrato antigo). */

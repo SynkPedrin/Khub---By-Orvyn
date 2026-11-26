@@ -9,7 +9,7 @@
  *  - PERSISTIDAS (`notifications`, ex.: @menção): "lida" = `lida_em`.
  */
 
-export type TipoNotificacao = 'mensagem' | 'integracao' | 'mencao' | 'disparo_aprovacao' | 'avaliacao_negativa' | 'nico';
+export type TipoNotificacao = 'mensagem' | 'integracao' | 'mencao' | 'disparo_aprovacao' | 'avaliacao_negativa' | 'nico' | 'aprovacao_pendente' | 'aprovacao_respondida';
 
 export interface NotificationItem {
   id: string;
@@ -41,7 +41,7 @@ export interface Persistida {
   tipo?: string;
 }
 
-const PERSISTIDAS = new Set<TipoNotificacao>(['mencao', 'disparo_aprovacao', 'avaliacao_negativa', 'nico']);
+const PERSISTIDAS = new Set<TipoNotificacao>(['mencao', 'disparo_aprovacao', 'avaliacao_negativa', 'nico', 'aprovacao_pendente', 'aprovacao_respondida']);
 function tipoPersistida(t: string | undefined): TipoNotificacao {
   return t && PERSISTIDAS.has(t as TipoNotificacao) ? (t as TipoNotificacao) : 'mencao';
 }

@@ -4,7 +4,7 @@ import type { Prisma } from '@prisma/client';
 type Tx = Prisma.TransactionClient;
 
 /** Tipos persistidos: @menção (Q2.6), disparo aguardando aprovação (Q4.3), avaliação negativa (Q4.4). */
-export type TipoPersistida = 'mencao' | 'disparo_aprovacao' | 'avaliacao_negativa';
+export type TipoPersistida = 'mencao' | 'disparo_aprovacao' | 'avaliacao_negativa' | 'aprovacao_pendente' | 'aprovacao_respondida';
 
 export interface NovaNotificacao {
   /** Destinatário (identities.id), já validado como membro do tenant por quem chama. */
