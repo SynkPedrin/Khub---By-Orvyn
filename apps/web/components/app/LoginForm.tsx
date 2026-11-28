@@ -10,6 +10,7 @@ import { PasswordInput } from './PasswordInput';
 import { SocialAuth } from './SocialAuth';
 import { useAuth } from '@/lib/auth';
 import { agency } from '@/lib/agency';
+import { ehCelular } from '@/lib/dispositivo';
 
 export function LoginForm() {
   const { refreshMe } = useAuth();
@@ -34,8 +35,9 @@ export function LoginForm() {
       const next = params.get('next');
       if (next) {
         router.replace(next);
-      } else if (window.matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true) {
-        // App mobile instalado (PWA): volta sempre para o app do cliente.
+      } else if (ehCelular() && (window.matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true)) {
+        // App instalado no CELULAR: volta para o app do cliente. No computador
+        // o app instalado segue o fluxo normal (KHUB completo).
         router.replace('/m');
       } else {
         // identidade de agência (Pedro etc.) entra pela Agency Home, não

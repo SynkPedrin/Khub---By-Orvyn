@@ -1,12 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Icon } from '../icons';
 import { cx } from '../ui';
 import { aprovacoes, ROTULO_STATUS, type StatusAprovacao } from '@/lib/aprovacoes';
 import { ativarPush, ehAppInstalado, ehIOS, estadoPush, type EstadoPush } from '@/lib/push';
+import { agency } from '@/lib/agency';
+import { ehCelular, rotaDesktopDe } from '@/lib/dispositivo';
 
 type IconName = Parameters<typeof Icon>[0]['name'];
 
@@ -64,6 +66,19 @@ const ABAS: { href: string; label: string; icon: IconName }[] = [
 
 export function MobileShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? '/m';
+  const router = useRouter();
+  // App instalado aberto no COMPUTADOR (ou pelo atalho do app, ?origem=app):
+  // o /m é a versão de celular — leva para a tela equivalente do KHUB completo.
+  // Aberto de propósito numa aba do navegador do PC, o /m continua acessível.
+  const [noComputador, setNoComputador] = useState(false);
+  useEffect(() => {
+    const doApp = ehAppInstalado() || new URLSearchParams(window.location.search).get('origem') === 'app';
+    if (!doApp || ehCelular()) return;
+    setNoComputador(true);
+    const destino = rotaDesktopDe(window.location.pathname);
+    if (destino) router.replace(destino);
+    else agency.meuContexto().catch(() => null).then((ctx) => router.replace(ctx ? '/agency' : '/dashboard'));
+  }, [router]);
   const [pendentes, setPendentes] = useState(0);
   const carregar = useCallback(() => {
     aprovacoes.resumo('cliente').then((r) => setPendentes(r.pendente)).catch(() => undefined);
@@ -82,6 +97,7 @@ export function MobileShell({ children }: { children: ReactNode }) {
   }, [pendentes]);
 
   const ativa = (href: string) => (href === '/m' ? pathname === '/m' : pathname.startsWith(href));
+  if (noComputador) return <div className="min-h-[100dvh] bg-bg" aria-busy="true" />;
   return (
     <div className="m-app flex min-h-[100dvh] flex-col bg-bg text-fg">
       <main className="mx-auto w-full max-w-md flex-1 px-4 pb-[calc(6.5rem+env(safe-area-inset-bottom))] pt-[calc(0.75rem+env(safe-area-inset-top))]">{children}</main>
