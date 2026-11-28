@@ -43,3 +43,12 @@ export function variacoesDeTag(publico: readonly string[]): string[] {
   }
   return [...v];
 }
+
+/**
+ * Público valendo para o agente: o da configuração VIVA tem precedência (trava
+ * de segurança, vale na hora sem publicar); sem ele, o da versão publicada.
+ */
+export function publicoValendo(configViva: unknown, configPublicada: unknown): string[] {
+  const vivo = publicoDoAgente(configViva);
+  return vivo.length ? vivo : publicoDoAgente(configPublicada);
+}

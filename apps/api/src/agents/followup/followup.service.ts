@@ -21,6 +21,7 @@ import { contextoDinamico, promptEstavel } from '../intelligence/prompt';
 import { ProfileService, type PerfilContexto } from '../intelligence/profile.service';
 import { MemoryService } from '../intelligence/memory.service';
 import { VersioningService } from '../versioning/versioning.service';
+import { contatoNoPublico, publicoValendo } from '../../common/publico-agente';
 
 /** Proatividade tem limite: sem resposta do contato há mais que isso, só reativação/perda reabrem. */
 const MAX_DIAS_SEM_INBOUND = 90;
@@ -270,7 +271,7 @@ export class FollowupService {
     const ctx = await this.prisma.withTenant(tenantId, async (tx) => ({
       regra: await tx.agentFollowupRule.findUnique({ where: { id: fu.ruleId } }),
       agente: await tx.agent.findUnique({ where: { id: fu.agentId } }),
-      contato: await tx.contact.findUnique({ where: { id: fu.contactId }, select: { nome: true, optedOutAt: true, lastInboundAt: true } }),
+      contato: await tx.contact.findUnique({ where: { id: fu.contactId }, select: { nome: true, optedOutAt: true, lastInboundAt: true, tags: true } }),
       conv: await tx.conversation.findUnique({ where: { id: fu.conversationId }, select: { atendimento: true, assigneeId: true } }),
       compromisso: await tx.agendaCompromisso.findFirst({ where: { contactId: fu.contactId, createdAt: { gt: fu.createdAt }, status: { in: ['agendado', 'confirmado'] } }, select: { id: true } }),
       enviadosHoje: await tx.agentFollowup.count({ where: { contactId: fu.contactId, status: 'enviado', executadoEm: { gte: new Date(Date.now() - 24 * 3_600_000) } } }),
@@ -305,6 +306,11 @@ export class FollowupService {
     if (!this.llm.configured()) return this.finalizar(tenantId, fu.id, 'pulado', `IA não configurada (falta ${this.llm.missing().join(', ')})`);
 
     const efetivo = await this.prisma.withTenant(tenantId, (tx) => this.versoes.efetivo(tx, ctx.agente!));
+    // Público por tag (ADR-0059): follow-up também é fala da IA. Contato que saiu
+    // do público (tag removida, trava ligada depois do agendamento) não recebe.
+    if (!contatoNoPublico(ctx.contato?.tags, publicoValendo(ctx.agente!.config, efetivo.config))) {
+      return this.finalizar(tenantId, fu.id, 'cancelado', 'contato fora do público do agente (tags)');
+    }
     const memoria = await this.memoria.contexto(tenantId, fu.conversationId, fu.contactId, efetivo.config.memoria);
     const cat = CATALOGO_ESTRATEGIAS[fu.estrategia as Estrategia];
     const transcricao = ctx.historico.reverse().map((m) => `${m.autorTipo === 'contato' ? 'CONTATO' : m.autorTipo === 'ia' ? 'AGENTE' : 'EQUIPE'}: ${m.corpo.slice(0, 500)}`).join('\n');

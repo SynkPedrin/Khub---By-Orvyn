@@ -13,7 +13,7 @@ import { eventosDoTurno, LearningService } from './learning/learning.service';
 import { VersioningService } from './versioning/versioning.service';
 import { MessagesService } from '../crm/messaging/messages.service';
 import { avaliarHorario, mensagemForaDoHorario } from './config/horario';
-import { contatoNoPublico, publicoDoAgente } from '../common/publico-agente';
+import { contatoNoPublico, publicoValendo } from '../common/publico-agente';
 
 export const FILA_AGENTES = 'agent-replies';
 export const MOTIVO_FORA_DO_PUBLICO = 'contato fora do público do agente (tags)';
@@ -305,8 +305,7 @@ export class AgentRuntimeService {
    * segurança, vale na hora sem publicar); sem ele, o da versão publicada.
    */
   private publicoEfetivo(configViva: unknown, configPublicada: unknown): string[] {
-    const vivo = publicoDoAgente(configViva);
-    return vivo.length ? vivo : publicoDoAgente(configPublicada);
+    return publicoValendo(configViva, configPublicada);
   }
 
   /** Cria o run; `null` se esta mensagem já foi processada (idempotência). */

@@ -1,6 +1,6 @@
 import { AgentsService } from './agents.service';
 import { AtendimentoService } from '../crm/messaging/atendimento.service';
-import { contatoNoPublico, publicoDoAgente } from '../common/publico-agente';
+import { contatoNoPublico, publicoDoAgente, publicoValendo } from '../common/publico-agente';
 import { agentConfigSchema, mesclarConfig, configPadrao } from './config/agent-config';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { AgentLlm } from '../ai/provider.contract';
@@ -34,6 +34,12 @@ describe('publicoDoAgente / contatoNoPublico', () => {
     expect(contatoNoPublico(['agendart'], ['testia'])).toBe(false);
     expect(contatoNoPublico([], ['testia'])).toBe(false);
     expect(contatoNoPublico(null, ['testia'])).toBe(false);
+  });
+  it('público valendo: o da config viva manda; sem ele, o da versão publicada (vale também para o follow-up)', () => {
+    expect(publicoValendo({ publico: { tags: ['testia'] } }, { publico: { tags: ['outra'] } })).toEqual(['testia']);
+    expect(publicoValendo({}, { publico: { tags: ['Pacientes IA'] } })).toEqual(['pacientes ia']);
+    expect(publicoValendo({}, {})).toEqual([]);
+    expect(contatoNoPublico(['lead'], publicoValendo({ publico: { tags: ['testia'] } }, {}))).toBe(false);
   });
   it('o schema aceita e mescla o público por seção', () => {
     expect(agentConfigSchema.parse({}).publico).toEqual({ tags: [] });
