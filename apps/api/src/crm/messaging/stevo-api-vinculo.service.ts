@@ -38,8 +38,8 @@ export class StevoApiVinculoService {
     const integ = await this.prisma.withTenant(tenantId, async (tx) => {
       const r = await tx.integration.upsert({
         where: { tenantId_provider_externalBusinessId: { tenantId, provider: 'stevo_api', externalBusinessId: instanciaId } },
-        create: { tenantId, provider: 'stevo_api', externalBusinessId: instanciaId, status, health: pareada ? 'ok' : 'error', scopes: [], connectedBy: actorIdentityId, connectedAt: new Date(), lastSyncAt: new Date() },
-        update: { status, health: pareada ? 'ok' : 'error', erro: pareada ? null : 'WhatsApp não pareado (logged_in=false)', lastSyncAt: new Date(), updatedAt: new Date() },
+        create: { tenantId, provider: 'stevo_api', externalBusinessId: instanciaId, status, health: pareada ? 'ok' : 'down', scopes: [], connectedBy: actorIdentityId, connectedAt: new Date(), lastSyncAt: new Date() },
+        update: { status, health: pareada ? 'ok' : 'down', erro: pareada ? null : 'WhatsApp não pareado (logged_in=false)', lastSyncAt: new Date(), updatedAt: new Date() },
         select: { id: true, status: true },
       });
       await tx.$executeRaw`INSERT INTO audit_logs (tenant_id, actor_type, actor_id, acao, entidade, entidade_id, payload)
@@ -72,7 +72,7 @@ export class StevoApiVinculoService {
     await this.prisma.withTenant(tenantId, (tx) =>
       tx.integration.updateMany({
         where: { tenantId, provider: 'stevo_api', externalBusinessId: integ.externalBusinessId },
-        data: { status: pareada ? 'connected' : 'disconnected', health: pareada ? 'ok' : 'error', erro: pareada ? null : 'WhatsApp não pareado (logged_in=false)', lastSyncAt: new Date() },
+        data: { status: pareada ? 'connected' : 'disconnected', health: pareada ? 'ok' : 'down', erro: pareada ? null : 'WhatsApp não pareado (logged_in=false)', lastSyncAt: new Date() },
       }),
     );
 

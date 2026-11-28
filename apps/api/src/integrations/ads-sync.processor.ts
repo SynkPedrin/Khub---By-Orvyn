@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AdsSyncService } from './ads-sync.service';
 import { ADS_CONNECTORS, type AdsConnector } from './ads-connector';
 import { AvecAgendaService } from './avec/avec-agenda.service';
+import { WhatsappSaudeService } from '../crm/messaging/whatsapp-saude.service';
 
 interface SyncJob {
   tenantId: string;
@@ -26,11 +27,14 @@ export class AdsSyncProcessor extends WorkerHost {
     private readonly prisma: PrismaService,
     @Inject(ADS_CONNECTORS) private readonly connectors: Record<string, AdsConnector>,
     private readonly avec: AvecAgendaService,
+    private readonly whatsapp: WhatsappSaudeService,
   ) {
     super();
   }
 
-  async process(job: Job<SyncJob>): Promise<{ records: number } | ResultadoSyncTodos | { saloes: number; falhas: number }> {
+  async process(job: Job<SyncJob>): Promise<{ records: number } | ResultadoSyncTodos | { saloes: number; falhas: number } | { instancias: number; mudancas: number; falhas: number }> {
+    // Saúde do WhatsApp (Stevo): mesma fila, nenhuma conexão Redis a mais.
+    if (job.name === 'whatsapp-saude') return this.whatsapp.verificarTodos();
     // Agenda do Avec (ADR-0052) divide a fila de sync: nenhuma conexão Redis a mais.
     if (job.name === 'avec-agenda') return this.avec.sincronizarTodos();
     // 'sync-todos' vem do agendador periódico (ads-sync.scheduler.ts); o resto

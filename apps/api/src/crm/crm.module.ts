@@ -32,6 +32,7 @@ import { AtendimentoService } from './messaging/atendimento.service';
 import { StevoApiProvider } from './messaging/stevo-api.provider';
 import { StevoApiEventosService } from './messaging/stevo-api-eventos.service';
 import { StevoApiVinculoService } from './messaging/stevo-api-vinculo.service';
+import { WhatsappSaudeService } from './messaging/whatsapp-saude.service';
 import { StevoApiWebhookController } from './messaging/stevo-api-webhook.controller';
 import { MessagesService } from './messaging/messages.service';
 import { StevoProvider } from './messaging/stevo.provider';
@@ -83,6 +84,7 @@ import { PublicRateLimiter } from '../common/public-request';
     StevoApiProvider,
     StevoApiEventosService,
     StevoApiVinculoService,
+    WhatsappSaudeService,
     StevoProvider,
     EvolutionProvider,
     WhatsAppConnectionService,
@@ -107,6 +109,6 @@ import { PublicRateLimiter } from '../common/public-request';
   ],
   // superfície pública do CRM: quem age em nome do usuário (automations,
   // integrations, e a Nyro em F) entra por aqui — nunca no banco direto.
-  exports: [CrmService, AtribuicaoService, AvatarContatoService, MessagesService, CanaisIngestaoService, AtendimentoService, StevoApiProvider, StevoApiEventosService, StevoApiVinculoService, OpenWaEventosService, LeadsService, TasksService, CompaniesService, NotesService, CustomFieldsService],
+  exports: [CrmService, AtribuicaoService, AvatarContatoService, MessagesService, CanaisIngestaoService, AtendimentoService, StevoApiProvider, StevoApiEventosService, StevoApiVinculoService, WhatsappSaudeService, OpenWaEventosService, LeadsService, TasksService, CompaniesService, NotesService, CustomFieldsService],
 })
 export class CrmModule {}

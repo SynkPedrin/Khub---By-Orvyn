@@ -79,7 +79,7 @@ const APPS: App[] = [
 ];
 
 export function IntegrationsMarketplace() {
-  const [rows, setRows] = useState<{ provider: string; status: string; health: string; lastSyncAt: string | null }[] | null>(null);
+  const [rows, setRows] = useState<{ provider: string; status: string; health: string; lastSyncAt: string | null; erro?: string | null }[] | null>(null);
   const [cat, setCat] = useState<Categoria | 'todas'>('todas');
   const [gated, setGated] = useState<{ provider: string; missing: string[] } | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -228,6 +228,10 @@ export function IntegrationsMarketplace() {
                   </Button>
                 )}
               </div>
+              {/* Por que caiu (verificação de saúde a cada 5 min ou evento da Stevo). */}
+              {app.estado === 'qr' && !on && stevoConn?.erro && (
+                <p className="mt-2 rounded-lg bg-red-500/10 px-2.5 py-1.5 text-[11px] leading-snug text-red-600 dark:text-red-400">{stevoConn.erro}</p>
+              )}
             </div>
           );
         })}

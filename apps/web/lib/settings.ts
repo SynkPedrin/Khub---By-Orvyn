@@ -62,7 +62,7 @@ export const settingsApi = {
   removeMember: (identityId: string) => req<{ ok: boolean; sessoesRevogadas: number; conversasLiberadas: number }>(`settings/members/${identityId}`, { method: 'DELETE' }),
   revokeAllSessions: () => req<{ ok: boolean; sessoesRevogadas: number }>('settings/sessions/revoke-all', { method: 'POST' }),
   audit: () => req<AuditRow[]>('settings/audit'),
-  integrations: () => req<{ id: string; provider: string; status: string; health: string; lastSyncAt: string | null }[]>('integrations'),
+  integrations: () => req<{ id: string; provider: string; status: string; health: string; lastSyncAt: string | null; erro?: string | null }[]>('integrations'),
 
   // Tags do CRM
   tags: () => req<Tag[]>('settings/tags'),

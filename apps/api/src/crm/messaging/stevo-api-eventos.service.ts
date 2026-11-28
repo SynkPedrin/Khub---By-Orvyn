@@ -193,7 +193,8 @@ export class StevoApiEventosService {
         where: { provider: 'stevo_api', externalBusinessId: ev.instanciaId, status: { not: 'revoked' } },
         data: {
           status: conectado ? 'connected' : 'disconnected',
-          health: conectado ? 'ok' : 'error',
+          // 'down' é o que o sino de notificações e o card de Integrações leem.
+          health: conectado ? 'ok' : 'down',
           erro: conectado ? null : `${ev.tipo}${ev.motivo ? `: ${ev.motivo}` : ''}`.slice(0, 300),
           lastSyncAt: new Date(),
           updatedAt: new Date(),

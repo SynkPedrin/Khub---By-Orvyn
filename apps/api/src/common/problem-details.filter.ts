@@ -87,9 +87,11 @@ export function erroDeProvedor(e: unknown): { status: number; title: string; cod
   const retryable = x.retryable === true || st === 429 || st >= 500 || st === 0;
   return {
     status: st === 429 || st === 503 ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.BAD_GATEWAY,
-    title: retryable
-      ? 'O provedor do WhatsApp (Stevo) está instável agora. Tente de novo em alguns segundos.'
-      : 'O provedor do WhatsApp (Stevo) recusou a operação.',
+    title: x.codigo === 'not_ready'
+      ? 'A instância do WhatsApp está parada na Stevo. Reinicie a instância no painel da Stevo e tente gerar o QR Code de novo.'
+      : retryable
+        ? 'O provedor do WhatsApp (Stevo) está instável agora. Tente de novo em alguns segundos.'
+        : 'O provedor do WhatsApp (Stevo) recusou a operação.',
     code: `stevo_${typeof x.codigo === 'string' ? x.codigo : 'erro'}`,
     provider: 'stevo_api',
     retryable,
